@@ -445,7 +445,18 @@ test_manyKeys = do
     "large equal keys"
     (Just (3, 3, "duplicate key"))
     (errorOf (decodeNodes ("? " <> large <> "\n: 1\n? " <> large <> "\n: 2\n")))
+  let deep = nestedKey 14 "0"
+  assertEqual
+    "nested equal keys"
+    (Just (3, 3, "duplicate key"))
+    (errorOf (decodeNodes ("? " <> deep <> "\n: 1\n? " <> deep <> "\n: 2\n")))
   where
+    -- Two mappings as keys that differ only in their last value.
+    nestedKey :: Int -> T.Text -> T.Text
+    nestedKey d v
+      | d == 0 = v
+      | otherwise = "{" <> nestedKey (d - 1) "0" <> ": 1, " <> nestedKey (d - 1) "1" <> ": " <> v <> "}"
+
     entries :: Node -> [(Node, Node)]
     entries n = case n.value of
       Mapping kvs -> kvs

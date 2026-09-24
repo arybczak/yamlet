@@ -23,10 +23,11 @@ import Yamlet.Schema
 -- every mapping are unique. The input is for error messages.
 compose :: T.Text -> S.Document -> Either Error Node
 compose input doc
-  | hasAlias doc.root = fst . fst <$> go (Numbering M.empty M.empty) doc.root
+  | needsNumbering doc.root = fst . fst <$> go (Numbering M.empty M.empty) doc.root
   | otherwise = plain doc.root
   where
-    -- Without aliases the anchors do not matter.
+    -- Without aliases the anchors do not matter, and without collection keys
+    -- only scalar keys compare.
     plain :: S.Node -> Either Error Node
     plain sn =
       let off = sn.offset; props = sn.props
@@ -170,9 +171,10 @@ compose input doc
       String t -> "duplicate key " ++ show t
       _ -> "duplicate key"
 
--- | The state of the composition of a document with aliases. Equal nodes get
--- the same number, so that keys compare in constant time, even if they come
--- from aliases that expand to huge nodes.
+-- | The state of the composition of a document with aliases or collection
+-- keys. Equal nodes get the same number, so that keys compare in constant
+-- time, even if they are large collections or come from aliases that expand
+-- to huge nodes.
 data Numbering = Numbering
   { anchors :: !(M.Map T.Text (Maybe (Node, Int)))
   -- ^ An anchor maps to Nothing while its node is composed.
@@ -187,12 +189,19 @@ data Shape
   | MappingShape !T.Text [(Int, Int)]
   deriving stock (Eq, Ord)
 
-hasAlias :: S.Node -> Bool
-hasAlias n = case n.content of
+-- | The node has an alias or a collection key inside it.
+needsNumbering :: S.Node -> Bool
+needsNumbering n = case n.content of
   S.Scalar {} -> False
-  S.Sequence _ xs -> any hasAlias xs
-  S.Mapping _ kvs -> any (\(k, v) -> hasAlias k || hasAlias v) kvs
+  S.Sequence _ xs -> any needsNumbering xs
+  S.Mapping _ kvs -> any (\(k, v) -> isCollection k || needsNumbering k || needsNumbering v) kvs
   S.Alias {} -> True
+  where
+    isCollection :: S.Node -> Bool
+    isCollection k = case k.content of
+      S.Sequence {} -> True
+      S.Mapping {} -> True
+      _ -> False
 
 -- | The first key that is equal to an earlier one.
 duplicate :: [Node] -> Maybe Node
@@ -212,64 +221,38 @@ duplicate keys = case keys of
     pairwise seen = \case
       [] -> Nothing
       k : ks
-        | any (sameNode k) seen -> Just k
+        | any (\s -> Key k == Key s) seen -> Just k
         | otherwise -> pairwise (k : seen) ks
 
+-- | A scalar node that ignores its offset. The instances are for scalars only,
+-- because a document with a collection key gets numbers for its keys.
 newtype Key = Key Node
 
+-- | It is faster than the order for the few keys of most mappings.
 instance Eq Key where
-  Key a == Key b = sameNode a b
+  Key (Node _ tagA valueA) == Key (Node _ tagB valueB) = tagA == tagB && valueA == valueB
 
 instance Ord Key where
-  compare (Key a) (Key b) = compareNodes a b
+  -- A pattern binds the evaluated fields, a selector would give new thunks.
+  compare (Key (Node _ tagA valueA)) (Key (Node _ tagB valueB)) =
+    -- The values of keys differ more often than their tags.
+    compareValues valueA valueB <> compare tagA tagB
+    where
+      compareValues :: Value -> Value -> Ordering
+      compareValues x y = case (x, y) of
+        (Null, Null) -> EQ
+        (Bool p, Bool q) -> compare p q
+        (Int i, Int j) -> compare i j
+        (Float f, Float g) -> compare f g
+        (String s, String t) -> compare s t
+        _ -> compare (rank x) (rank y)
 
--- | Equality of nodes that ignores their offsets. It is faster than
--- 'compareNodes' for the few keys of most mappings.
-sameNode :: Node -> Node -> Bool
-sameNode a@(Node _ tagA valueA) b@(Node _ tagB valueB) =
-  tagA == tagB && case (valueA, valueB) of
-    (Sequence xs, Sequence ys) -> length xs == length ys && and (zipWith sameNode xs ys)
-    -- The order sorts the entries, so large mappings do not take quadratic
-    -- time.
-    (Mapping xs, Mapping ys) -> length xs == length ys && compareNodes a b == EQ
-    (x, y) -> x == y
-
--- | An order of nodes that ignores their offsets and the order of the entries
--- of a mapping. It takes time in the size of the nodes, so it is only for
--- nodes without aliases, which share no parts.
-compareNodes :: Node -> Node -> Ordering
--- A pattern binds the evaluated fields, a selector would give new thunks.
-compareNodes (Node _ tagA valueA) (Node _ tagB valueB) =
-  -- The values of keys differ more often than their tags.
-  compareValues valueA valueB <> compare tagA tagB
-  where
-    compareValues :: Value -> Value -> Ordering
-    compareValues x y = case (x, y) of
-      (Null, Null) -> EQ
-      (Bool p, Bool q) -> compare p q
-      (Int i, Int j) -> compare i j
-      (Float f, Float g) -> compare f g
-      (String s, String t) -> compare s t
-      (Sequence xs, Sequence ys) ->
-        compare (length xs) (length ys) <> mconcat (zipWith compareNodes xs ys)
-      (Mapping xs, Mapping ys) ->
-        compare (length xs) (length ys) <> mconcat (zipWith compareEntries (sorted xs) (sorted ys))
-      _ -> compare (rank x) (rank y)
-
-    -- The keys of a mapping are unique, so their order is the same for equal
-    -- mappings.
-    sorted :: [(Node, Node)] -> [(Node, Node)]
-    sorted = L.sortBy (\(k, _) (k', _) -> compareNodes k k')
-
-    compareEntries :: (Node, Node) -> (Node, Node) -> Ordering
-    compareEntries (k, v) (k', v') = compareNodes k k' <> compareNodes v v'
-
-    rank :: Value -> Int
-    rank = \case
-      Null -> 0
-      Bool _ -> 1
-      Int _ -> 2
-      Float _ -> 3
-      String _ -> 4
-      Sequence _ -> 5
-      Mapping _ -> 6
+      rank :: Value -> Int
+      rank = \case
+        Null -> 0
+        Bool _ -> 1
+        Int _ -> 2
+        Float _ -> 3
+        String _ -> 4
+        Sequence _ -> 5
+        Mapping _ -> 6
