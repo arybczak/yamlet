@@ -10,9 +10,11 @@ module Yamlet.Encode
   , toSyntax
   ) where
 
+import Data.Containers.ListUtils
 import Data.Int
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
+import Data.Maybe
 import Data.Scientific qualified as Sci
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
@@ -99,7 +101,20 @@ renderDocuments :: [Node] -> T.Text
 renderDocuments docs = TL.toStrict . B.toLazyText . mconcat $ zipWith document [0 :: Int ..] docs
   where
     document :: Int -> Node -> B.Builder
-    document i n = (if i > 0 then "---\n" else mempty) <> topLevel n
+    document i n
+      | null handles = (if i > 0 then "---\n" else mempty) <> topLevel n
+      | otherwise = (if i > 0 then "...\n" else mempty) <> foldMap tagDirective handles <> "---\n" <> topLevel n
+      where
+        -- The handles for the tags that are not valid URIs.
+        handles :: [Char]
+        handles = nubOrd . mapMaybe tagHandle $ tags n []
+
+    tags :: Node -> [T.Text] -> [T.Text]
+    tags n acc =
+      n.tag : case n.value of
+        Sequence xs -> foldr tags acc xs
+        Mapping kvs -> foldr (\(k, v) -> tags k . tags v) acc kvs
+        _ -> acc
 
     topLevel :: Node -> B.Builder
     topLevel n = case n.value of

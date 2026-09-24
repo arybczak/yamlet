@@ -125,7 +125,12 @@ test_tags = do
   exact "!!x"
   exact "tag:yaml.org,2002:a,b é"
   exact "tag:example.com,2000:a%41,[b]"
-  assertEqual "escapes in a global tag" (Right "tag:example.com,2000:a%20b%3E%25") (readBack "tag:example.com,2000:a b>%")
+  exact "tag:example.com,2000:a b>%"
+  exact "foo"
+  assertEqual
+    "directives after a document"
+    (Right [strTag, "foo"])
+    (map (.tag) <$> decodeAllText @Node (encodeAllText [node (String "a"), Node noOffset "foo" (String "b")]))
 
 test_syntax :: Assertion
 test_syntax =

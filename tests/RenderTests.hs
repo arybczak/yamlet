@@ -162,6 +162,24 @@ test_fallbacks = do
           , contentNode (Alias "")
           ]
     )
+  let tagged :: T.Text -> Node
+      tagged t = (plainNode "x") {props = noProps {tag = Tag t}}
+      tagOf :: T.Text -> Either String [Tag]
+      tagOf t = case parseDocumentsText (render (tagged t)) of
+        Right docs -> Right [d.root.props.tag | d <- docs]
+        Left err -> Left (show err)
+  assertEqual "empty tag" "! x\n" (render (tagged ""))
+  assertEqual "global tag" "!<tag:example.com,2000:x> x\n" (render (tagged "tag:example.com,2000:x"))
+  assertEqual "tag with a directive" "%TAG !t74! %74\n--- !t74!ag:x%3Ey x\n" (render (tagged "tag:x>y"))
+  mapM_
+    (\t -> assertEqual ("tag " ++ show t) (Right [Tag t]) (tagOf t))
+    ["tag:x>y", "x%2", "foo", "#a b", "!a b", "tag:x%41", "tag:yaml.org,2002:a%", "\x100\&z"]
+  assertEqual
+    "directives after a document"
+    (Right [(NoTag, Scalar Plain "a"), (Tag "foo", Scalar Plain "x")])
+    ( map (\d -> (d.root.props.tag, d.root.content))
+        <$> parseDocumentsText (renderSyntax defaultRenderOptions [document (plainNode "a"), document (tagged "foo")])
+    )
   assertEqual
     "taken anchor name"
     "- &a_b x\n- &a_b_2 y\n- *a_b_2\n"

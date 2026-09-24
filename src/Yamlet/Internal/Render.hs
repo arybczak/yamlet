@@ -11,6 +11,7 @@ module Yamlet.Internal.Render
   ) where
 
 import Control.Applicative
+import Data.Containers.ListUtils
 import Data.List qualified as L
 import Data.Map.Strict qualified as M
 import Data.Maybe
@@ -144,15 +145,14 @@ document :: RenderOptions -> Bool -> Document -> B.Builder
 document opts afterEnd doc =
   mconcat
     [ lines_ 0 doc.docComments.before
-    , case doc.version of
-        Just v ->
+    , if directives
+        then
           (if afterEnd then mempty else "...\n")
-            <> "%YAML "
-            <> B.fromString (show v.major)
-            <> "."
-            <> B.fromString (show v.minor)
-            <> "\n"
-        Nothing -> mempty
+            <> foldMap
+              (\v -> "%YAML " <> B.fromString (show v.major) <> "." <> B.fromString (show v.minor) <> "\n")
+              doc.version
+            <> foldMap tagDirective handles
+        else mempty
     , body
     , lines_ 0 doc.docComments.after
     , if doc.explicitEnd then "...\n" else mempty
@@ -161,13 +161,27 @@ document opts afterEnd doc =
     r :: Node
     r = doc.root
 
+    -- The handles for the tags that are not valid URIs.
+    handles :: [Char]
+    handles = nubOrd . mapMaybe tagHandle $ tags r []
+
+    tags :: Node -> [T.Text] -> [T.Text]
+    tags n acc =
+      (case n.props.tag of Tag t -> (t :); _ -> id) $ case n.content of
+        Sequence _ xs -> foldr tags acc xs
+        Mapping _ kvs -> foldr (\(k, v) -> tags k . tags v) acc kvs
+        _ -> acc
+
+    directives :: Bool
+    directives = isJust doc.version || not (null handles)
+
     -- A document needs a start marker after another document, after
     -- directives, for a comment on the marker line, and if it is empty. A
     -- block collection has no line of its own for its comment.
     marker :: Bool
     marker =
       doc.explicitStart
-        || isJust doc.version
+        || directives
         || not afterEnd
         || isEmpty r
         || isJust doc.docComments.inline

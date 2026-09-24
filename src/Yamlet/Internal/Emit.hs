@@ -14,6 +14,8 @@ module Yamlet.Internal.Emit
 
     -- * Other
   , tagText
+  , tagHandle
+  , tagDirective
   , isPrintable
   , spaces
   ) where
@@ -163,40 +165,80 @@ line indent l
   | T.null l = "\n"
   | otherwise = "\n" <> spaces indent <> B.fromText l
 
--- | A tag in the shortest form that reads back as the same tag. A character
--- that the form does not allow gets a %XX escape. The parser does not decode
--- the escapes of a verbatim tag, so such a global tag reads back with them.
+-- | A tag in the shortest form that reads back as the same tag. A tag that no
+-- text can hold, e.g. an empty tag, becomes the non-specific tag @!@.
+--
+-- A global tag that is not a valid URI needs the directive of
+-- 'tagDirective' in its document.
 tagText :: T.Text -> B.Builder
 tagText tag
+  | T.null tag = "!"
   | Just suffix <- T.stripPrefix "tag:yaml.org,2002:" tag
   , not (T.null suffix) =
       "!!" <> shorthand suffix
   | Just suffix <- T.stripPrefix "!" tag
   , not (T.null suffix) =
       "!" <> shorthand suffix
-  | otherwise = "!<" <> verbatim (T.unpack tag) <> ">"
+  | Just (c, suffix) <- T.uncons tag
+  , not (isVerbatim tag) =
+      if T.null suffix then "!" else handleText c <> shorthand suffix
+  | otherwise = "!<" <> B.fromText tag <> ">"
+
+-- | The character whose handle a tag needs, if the tag needs a directive.
+tagHandle :: T.Text -> Maybe Char
+tagHandle tag = case T.uncons tag of
+  Just (c, suffix)
+    | c /= '!'
+    , not (T.null suffix)
+    , not ("tag:yaml.org,2002:" `T.isPrefixOf` tag)
+    , not (isVerbatim tag) ->
+        Just c
+  _ -> Nothing
+
+-- | The @%TAG@ directive of the handle for the tags that start with the
+-- character, with the line break. The prefix is always an escape, because
+-- e.g. a @#@ after a space starts a comment.
+tagDirective :: Char -> B.Builder
+tagDirective c = "%TAG " <> handleText c <> " " <> percentEscape c <> "\n"
+
+handleText :: Char -> B.Builder
+handleText c = "!t" <> B.fromString (showHex (ord c) "") <> "!"
+
+-- | A global tag that a verbatim tag holds as it is. The parser does not
+-- decode the escapes of a verbatim tag.
+isVerbatim :: T.Text -> Bool
+isVerbatim tag = hasScheme && uriChars (T.unpack tag)
   where
-    shorthand :: T.Text -> B.Builder
-    shorthand = T.foldr (\c b -> (if isTagChar c then B.singleton c else escape c) <> b) mempty
+    hasScheme :: Bool
+    hasScheme = case T.break (== ':') tag of
+      (scheme, rest) -> case T.uncons scheme of
+        Just (c, cs) ->
+          isAscii c && isAlpha c && T.all (\x -> isAscii x && (isAlphaNum x || x `elem` ("+-." :: String))) cs && not (T.null rest)
+        Nothing -> False
 
-    verbatim :: String -> B.Builder
-    verbatim = \case
-      '%' : a : b : rest
-        | isHexDigit a && isHexDigit b -> B.fromString ['%', a, b] <> verbatim rest
-      c : rest -> (if isUriChar c then B.singleton c else escape c) <> verbatim rest
-      [] -> mempty
-
-    escape :: Char -> B.Builder
-    escape c = mconcat [B.fromString ('%' : hex w) | w <- BS.unpack (T.encodeUtf8 (T.singleton c))]
-      where
-        hex :: Word8 -> String
-        hex w = let s = map toUpper (showHex w "") in if length s < 2 then '0' : s else s
-
-    isTagChar :: Char -> Bool
-    isTagChar c = isAscii c && (isAlphaNum c || c `elem` ("-#;/?:@&=+$_.~*'()" :: String))
+    uriChars :: String -> Bool
+    uriChars = \case
+      '%' : a : b : rest -> isHexDigit a && isHexDigit b && uriChars rest
+      c : rest -> isUriChar c && uriChars rest
+      [] -> True
 
     isUriChar :: Char -> Bool
     isUriChar c = isTagChar c || c `elem` (",[]!" :: String)
+
+-- | The text of a tag suffix or a tag prefix. A character that the form does
+-- not allow gets a %XX escape, which the parser decodes.
+shorthand :: T.Text -> B.Builder
+shorthand = T.foldr (\c b -> (if isTagChar c then B.singleton c else percentEscape c) <> b) mempty
+
+-- | The %XX escapes of the UTF-8 bytes of a character.
+percentEscape :: Char -> B.Builder
+percentEscape c = mconcat [B.fromString ('%' : hex w) | w <- BS.unpack (T.encodeUtf8 (T.singleton c))]
+  where
+    hex :: Word8 -> String
+    hex w = let s = map toUpper (showHex w "") in if length s < 2 then '0' : s else s
+
+isTagChar :: Char -> Bool
+isTagChar c = isAscii c && (isAlphaNum c || c `elem` ("-#;/?:@&=+$_.~*'()" :: String))
 
 -- | c-printable without the line breaks and the byte order mark.
 isPrintable :: Char -> Bool
