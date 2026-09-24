@@ -1,9 +1,9 @@
-{-# OPTIONS_HADDOCK not-home #-}
--- | The core schema of YAML 1.2.2.
+-- | The core schema of YAML 1.2.2: the rules that give a scalar its value.
 --
--- This module is intended for internal use only, and may change without warning
--- in subsequent releases.
-module Yamlet.Internal.Schema
+-- A decoder applies these rules to every scalar. A program that writes YAML
+-- can use them to check how a plain scalar reads back, e.g. @9.10@ is a
+-- number, not a string.
+module Yamlet.Schema
   ( resolvePlain
   , resolveTagged
   ) where
@@ -14,7 +14,9 @@ import Data.Text qualified as T
 
 import Yamlet.Node
 
--- | The value of a plain scalar without a tag.
+-- | The value of a plain scalar without a tag, e.g. @null@, @true@, @12@,
+-- @0x1F@ and @1.5e3@ are not strings. Quoted and block scalars are always
+-- strings.
 resolvePlain :: T.Text -> Value
 resolvePlain t = case T.uncons t of
   Nothing -> Null
@@ -25,8 +27,9 @@ resolvePlain t = case T.uncons t of
         maybe (String t) id $ (Int <$> readInt t) <|> (Float <$> readFloat t)
     | otherwise -> String t
 
--- | The value of a scalar with a tag of the core schema. Return 'Nothing' if
--- the text is not valid for the tag.
+-- | The value of a scalar with the given resolved tag, e.g.
+-- @tag:yaml.org,2002:int@. Return 'Nothing' if the text is not valid for a tag of
+-- the core schema. A scalar with another tag is a string.
 resolveTagged :: T.Text -> T.Text -> Maybe Value
 resolveTagged tag t
   | tag == strTag = Just (String t)

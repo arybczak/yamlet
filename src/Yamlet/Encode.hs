@@ -20,7 +20,7 @@ import Data.Word
 import Numeric
 import Numeric.Natural
 
-import Yamlet.Internal.Schema
+import Yamlet.Schema
 import Yamlet.Node
 
 ----------------------------------------

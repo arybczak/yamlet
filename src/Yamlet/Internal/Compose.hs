@@ -11,7 +11,7 @@ import Data.Map.Strict qualified as M
 import Data.Text qualified as T
 
 import Yamlet.Error
-import Yamlet.Internal.Schema
+import Yamlet.Schema
 import Yamlet.Node
 import Yamlet.Internal.Syntax qualified as S
 

@@ -58,9 +58,9 @@ library
                      Yamlet.Internal.Input
                      Yamlet.Internal.Parser
                      Yamlet.Internal.Parser.Monad
-                     Yamlet.Internal.Schema
                      Yamlet.Internal.Syntax
                      Yamlet.Node
+                     Yamlet.Schema
                      Yamlet.Syntax
 
 test-suite test

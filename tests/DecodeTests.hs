@@ -11,7 +11,7 @@ import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 
 import Yamlet
-import Yamlet.Internal.Schema
+import Yamlet.Schema
 
 decodeTests :: TestTree
 decodeTests = testGroup "Decode"
