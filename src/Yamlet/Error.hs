@@ -74,7 +74,7 @@ errorAt :: T.Text -> Offset -> String -> Error
 errorAt input off msg = Error
   { location = loc
   , message = msg
-  , sourceLine = lineAt input off
+  , sourceLine = T.copy (lineAt input off)
   }
   where
     loc :: Location

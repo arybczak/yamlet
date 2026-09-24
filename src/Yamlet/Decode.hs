@@ -118,9 +118,10 @@ withFloat f = parseNode $ \n -> case n.value of
   Int i -> f (fromInteger i)
   _ -> typeMismatch "a number" n
 
+-- | The text is a copy, so it does not keep the input alive.
 withText :: (T.Text -> Parser a) -> Node -> Parser a
 withText f = parseNode $ \n -> case n.value of
-  String t -> f t
+  String t -> f (T.copy t)
   _ -> typeMismatch "a string" n
 
 ----------------------------------------
@@ -160,7 +161,7 @@ objectEntries o = o.entries
 
 -- | The string keys of the mapping in the order of the input.
 objectKeys :: Object -> [T.Text]
-objectKeys o = [ t | (k, _) <- o.entries, String t <- [k.value] ]
+objectKeys o = [ T.copy t | (k, _) <- o.entries, String t <- [k.value] ]
 
 -- | The value of a string key.
 lookupKey :: T.Text -> Object -> Maybe Node

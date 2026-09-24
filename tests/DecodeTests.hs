@@ -4,6 +4,7 @@ import Data.Int
 import Data.Map.Strict qualified as M
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
+import Data.Text.Internal qualified as T
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
@@ -16,6 +17,7 @@ decodeTests = testGroup "Decode"
   [ testCase "core schema" test_coreSchema
   , testProperty "floats" prop_floats
   , testCase "record" test_record
+  , testCase "copies" test_copies
   , testCase "aliases" test_aliases
   , testCase "empty stream" test_emptyStream
   , testCase "encodings" test_encodings
@@ -74,6 +76,20 @@ test_record = do
     (decodeText "name: x\npaths: [a, b]\njobs: 4\n")
   assertEqual "defaults" (Right (Config "x" [] 1))
     (decodeText "name: x\npaths:\n")
+
+-- | Decoded texts and error lines do not point into the input.
+test_copies :: Assertion
+test_copies = do
+  case decodeText @(M.Map T.Text T.Text) "key: value\nother: text\n" of
+    Left err -> assertFailure (show err)
+    Right m -> assertBool "texts are copies" $ all isCopy (M.keys m ++ M.elems m)
+  case decodeText @Int "a: 1\nb: [\n" of
+    Left err -> assertBool "the source line is a copy" $ isCopy err.sourceLine
+    Right _ -> assertFailure "expected an error"
+  where
+    -- A copy starts at the beginning of its own array.
+    isCopy :: T.Text -> Bool
+    isCopy (T.Text _ off _) = off == 0
 
 test_aliases :: Assertion
 test_aliases = assertEqual "map"

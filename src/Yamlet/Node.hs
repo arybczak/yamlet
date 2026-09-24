@@ -1,6 +1,11 @@
 {-# LANGUAGE DeriveAnyClass #-}
 -- | The representation graph of a YAML document: nodes with resolved tags and
 -- values, and aliases replaced by the nodes that they refer to.
+--
+-- Most texts in the nodes share the memory of the input, so a node keeps the
+-- whole input alive. To keep a text longer than the nodes, copy it with
+-- 'Data.Text.copy'. The functions of "Yamlet.Decode" copy the texts that
+-- they return.
 module Yamlet.Node
   ( -- * Nodes
     Node(..)

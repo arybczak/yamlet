@@ -2,6 +2,10 @@
 -- | The representation of a YAML stream that keeps every detail of the
 -- presentation: the styles of scalars and collections, anchors, aliases and
 -- unresolved tags.
+--
+-- Most texts in the tree share the memory of the input, so a node keeps the
+-- whole input alive. To keep a text longer than the tree, copy it with
+-- 'Data.Text.copy'.
 module Yamlet.Syntax
   ( -- * Documents
     Document(..)
