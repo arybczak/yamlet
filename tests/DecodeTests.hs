@@ -428,6 +428,11 @@ test_longNumbers = do
     (Right (Float (Finite (Sci.scientific (10 ^ (1000000 :: Int) - 1) (-1)))))
     ((.value) <$> decodeText @Node (nines 999999 <> ".9"))
   assertEqual "exponent" (Right (Float Infinity)) ((.value) <$> decodeText @Node ("1e" <> nines 1000000))
+  let zeros = T.replicate 300000 "0"
+  assertEqual
+    "trailing zeros"
+    (Just (1, 600018, "duplicate key"))
+    (errorOf (decodeNodes ("{1" <> zeros <> ".0: a, 1" <> zeros <> ".5: b, 1" <> zeros <> ".00: c}")))
 
 -- | The time of the check for duplicate keys is not quadratic in the number
 -- of keys.

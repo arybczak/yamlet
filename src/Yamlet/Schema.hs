@@ -40,7 +40,7 @@ resolveTagged tag t
   | tag == nullTag = if isNull t then Just Null else Nothing
   | tag == boolTag = Bool <$> readBool t
   | tag == intTag = Int <$> readInt t
-  | tag == floatTag = Float <$> (readFloat t <|> (\i -> Finite (Sci.scientific i 0)) <$> readInt t)
+  | tag == floatTag = Float <$> (readFloat t <|> integerFloat <$> readInt t)
   | otherwise = Just (String t)
 
 -- | A plain scalar with the text is a string, e.g. @9.10.3@ is a string, but
@@ -98,6 +98,41 @@ digitsValue radix t0 = go (T.length t0) t0
               (hi, lo) = T.splitAt (n - k) t
           in go (n - k) hi * radix ^ k + go k lo
 
+-- | The value of an integer as a float.
+integerFloat :: Integer -> FloatValue
+integerFloat i
+  | i < 0 = negateFloat (integerFloat (negate i))
+  | otherwise = decimal (T.pack (show i)) 0
+
+-- | The decimal digits times a power of 10. An exponent out of the range of
+-- Int gives infinity or zero.
+--
+-- The coefficient has no trailing zeros. The comparison of two
+-- 'Sci.Scientific' values removes them one digit at a time, which takes
+-- quadratic time in their number.
+decimal :: T.Text -> Integer -> FloatValue
+decimal ds0 e0
+  | c == 0 = Finite 0
+  | e > toInteger (maxBound @Int) = Infinity
+  | e < toInteger (minBound @Int) = Finite 0
+  | otherwise = Finite (Sci.scientific c (fromInteger e))
+  where
+    ds :: T.Text
+    ds = T.dropWhileEnd (== '0') ds0
+
+    e :: Integer
+    e = e0 + toInteger (T.length ds0 - T.length ds)
+
+    c :: Integer
+    c = digitsValue 10 ds
+
+negateFloat :: FloatValue -> FloatValue
+negateFloat = \case
+  Finite s -> Finite (negate s)
+  Infinity -> NegativeInfinity
+  NegativeInfinity -> Infinity
+  NaN -> NaN
+
 -- | [-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?, [-+]?\.inf or \.nan
 -- in one of three capitalizations.
 readFloat :: T.Text -> Maybe FloatValue
@@ -110,13 +145,6 @@ readFloat t0 = case t0 of
     Just ('+', t) -> unsigned t
     _ -> unsigned t0
   where
-    negateFloat :: FloatValue -> FloatValue
-    negateFloat = \case
-      Finite s -> Finite (negate s)
-      Infinity -> NegativeInfinity
-      NegativeInfinity -> Infinity
-      NaN -> NaN
-
     unsigned :: T.Text -> Maybe FloatValue
     unsigned t
       | t == ".inf" || t == ".Inf" || t == ".INF" = Just Infinity
@@ -132,18 +160,6 @@ readFloat t0 = case t0 of
                    ex <- exponent_ rest'
                    Just $ decimal (int <> frac) (ex - toInteger (T.length frac))
                | otherwise -> Nothing
-
-    -- The digits times a power of 10. An exponent out of the range of Int
-    -- gives infinity or zero.
-    decimal :: T.Text -> Integer -> FloatValue
-    decimal ds e
-      | c == 0 = Finite 0
-      | e > toInteger (maxBound @Int) = Infinity
-      | e < toInteger (minBound @Int) = Finite 0
-      | otherwise = Finite (Sci.scientific c (fromInteger e))
-      where
-        c :: Integer
-        c = digitsValue 10 ds
 
     exponent_ :: T.Text -> Maybe Integer
     exponent_ t = case T.uncons t of
