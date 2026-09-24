@@ -1096,15 +1096,28 @@ closing c w msg = do
   char w <|> if c == FlowKey then failure else throwAt p msg
 
 -- | ns-flow-seq-entry(n,c)
+--
+-- The grammar tries a JSON-like node as the key of a pair and then again as
+-- a node, which takes exponential time for nested flow sequences. So the
+-- parser reads the node once, and it becomes a key if it fits one and a
+-- colon follows.
 nsFlowSeqEntry :: Int -> Ctx -> P Node
-nsFlowSeqEntry n c = pair <|> nsFlowNode n c
+nsFlowSeqEntry n c = do
+  e <- env
+  p <- pos
+  (pair e p <$> nsFlowPair n c) <|> jsonEntry e p <|> nsFlowNode n c
   where
-    pair :: P Node
-    pair = do
-      e <- env
-      p <- pos
-      (k, v) <- nsFlowPair n c
-      pure $ mkNode e p v.endOffset noProps (Mapping Flow [(k, v)])
+    pair :: Env -> Int -> (Node, Node) -> Node
+    pair e p (k, v) = mkNode e p v.endOffset noProps (Mapping Flow [(k, v)])
+
+    jsonEntry :: Env -> Int -> P Node
+    jsonEntry e p = do
+      k <- cFlowJsonNode n c
+      q <- pos
+      let value = optional_ sSeparateInLine >> cNsFlowMapAdjacentValue n c
+      if fitsKey e p q && all (not . isBreak . byteAt e) [p .. q - 1]
+        then (pair e p . (k,) <$> value) <|> pure k
+        else pure k
 
 -- | ns-flow-map-entry(n,c)
 nsFlowMapEntry :: Int -> Ctx -> P (Node, Node)
@@ -1158,9 +1171,10 @@ cNsFlowMapAdjacentValue n c = do
   char COLON
   (optional_ (sSeparate n c) >> nsFlowNode n c) <|> eNode
 
--- | ns-flow-pair(n,c)
+-- | ns-flow-pair(n,c) without c-ns-flow-pair-json-key-entry(n,c), which
+-- 'nsFlowSeqEntry' parses.
 nsFlowPair :: Int -> Ctx -> P (Node, Node)
-nsFlowPair n c = explicit <|> yamlKeyEntry <|> cNsFlowMapEmptyKeyEntry n c <|> jsonKeyEntry
+nsFlowPair n c = explicit <|> yamlKeyEntry <|> cNsFlowMapEmptyKeyEntry n c
   where
     explicit :: P (Node, Node)
     explicit = do
@@ -1172,12 +1186,6 @@ nsFlowPair n c = explicit <|> yamlKeyEntry <|> cNsFlowMapEmptyKeyEntry n c <|> j
     yamlKeyEntry = do
       k <- nsSImplicitYamlKey FlowKey
       v <- cNsFlowMapSeparateValue n c
-      pure (k, v)
-
-    jsonKeyEntry :: P (Node, Node)
-    jsonKeyEntry = do
-      k <- cSImplicitJsonKey FlowKey
-      v <- cNsFlowMapAdjacentValue n c
       pure (k, v)
 
 -- | ns-s-implicit-yaml-key(c)
@@ -1196,14 +1204,19 @@ implicitKey key = do
   p <- pos
   k <- key
   q <- pos
-  guardP $ q - p <= 1024 || countChars e p q <= 1024
+  guardP $ fitsKey e p q
   optional_ sSeparateInLine
   pure k
+
+-- | The input between the indices has at most 1024 characters, the limit of
+-- an implicit key.
+fitsKey :: Env -> Int -> Int -> Bool
+fitsKey e p q = q - p <= 1024 || (q - p <= 4096 && countChars <= 1024)
   where
-    countChars :: Env -> Int -> Int -> Int
-    countChars e i j =
+    countChars :: Int
+    countChars =
       length
-        [() | x <- [i .. j - 1], let w = byteAt e x, w < 0x80 || w >= 0xC0]
+        [() | x <- [p .. q - 1], let w = byteAt e x, w < 0x80 || w >= 0xC0]
 
 ----------------------------------------
 -- Flow nodes

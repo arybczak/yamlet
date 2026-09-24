@@ -1,5 +1,6 @@
 module DecodeTests (decodeTests) where
 
+import Data.Either
 import Data.Int
 import Data.List qualified as L
 import Data.Map.Strict qualified as M
@@ -27,6 +28,7 @@ decodeTests =
     , testCase "copies" test_copies
     , testCase "JSON" test_json
     , testCase "aliases" test_aliases
+    , localOption (mkTimeout 10000000) $ testCase "nesting" test_nesting
     , testCase "optional keys" test_optionalKeys
     , testCase "syntax tree" test_syntaxTree
     , testCase "empty stream" test_emptyStream
@@ -207,6 +209,20 @@ test_aliases = do
     "anchor before a string with a less-than sign"
     (Right (M.fromList [("a", "<x"), ("b", "<x")]))
     (decodeText @(M.Map T.Text T.Text) "a: &x \"<x\"\nb: *x\n")
+
+-- | The time to parse nested flow sequences is linear in the depth.
+test_nesting :: Assertion
+test_nesting = do
+  let nested :: Int -> T.Text -> T.Text
+      nested d t = T.replicate d "[" <> t <> T.replicate d "]"
+      depth :: Node -> Int
+      depth n = case n.value of
+        Sequence [x] -> 1 + depth x
+        Mapping [(k, _)] -> depth k
+        _ -> 0
+  assertEqual "sequences" (Right 100000) (depth <$> decodeText (nested 100000 "x"))
+  assertEqual "key" (Right 101) (depth <$> decodeText ("[" <> nested 100 "x" <> ": y]"))
+  assertBool "key on two lines" (isLeft (decodeText @Node "[[a,\n b]: c]"))
 
 test_optionalKeys :: Assertion
 test_optionalKeys = do
