@@ -247,14 +247,15 @@ data Ctx = BlockOut | BlockIn | FlowOut | FlowIn | BlockKey | FlowKey
 isKeyCtx :: Ctx -> Bool
 isKeyCtx c = c == BlockKey || c == FlowKey
 
--- | ns-plain-safe(c)
-isPlainSafe :: Ctx -> Word8 -> Bool
-isPlainSafe c w
-  | c == FlowIn || c == FlowKey = isNsChar w && not (isFlowIndicator w)
-  | otherwise = isNsChar w
--- With inlining, the loop over a plain scalar tests the context once, not for
--- every byte. GHC 9.10 and older do not inline this function on their own.
-{-# INLINE isPlainSafe #-}
+-- | ns-plain-safe(c), with 'isFlowCtx' of c as the flag. The function takes
+-- the flag, not the context, so that a caller can compute it once for all the
+-- bytes of a scalar.
+isPlainSafe :: Bool -> Word8 -> Bool
+isPlainSafe flow w = isNsChar w && not (flow && isFlowIndicator w)
+
+-- | The flow indicators end a plain scalar in the context.
+isFlowCtx :: Ctx -> Bool
+isFlowCtx c = c == FlowIn || c == FlowKey
 
 -- | in-flow(c)
 inFlow :: Ctx -> Ctx
@@ -974,7 +975,7 @@ nsPlain n c props = withScan $ \e p ->
       firstOk =
         (isNsChar w0 && not (isIndicator w0))
           || ( (w0 == QUESTION || w0 == COLON || w0 == MINUS)
-                 && isPlainSafe c (byteAt e (p + 1))
+                 && isPlainSafe (isFlowCtx c) (byteAt e (p + 1))
              )
   in if not firstOk
        then NoMatch p
@@ -993,8 +994,8 @@ plainLine e c = go
   where
     go :: Int -> Int
     go i
-      | isPlainSafe c w && w /= COLON = go (i + 1)
-      | w == COLON && isPlainSafe c (byteAt e (i + 1)) = go (i + 1)
+      | isPlainSafe flow w && w /= COLON = go (i + 1)
+      | w == COLON && isPlainSafe flow (byteAt e (i + 1)) = go (i + 1)
       | isWhite w =
           let j = skipWhites e i
           in if plainCharAfterWhite j then go (j + 1) else i
@@ -1007,8 +1008,11 @@ plainLine e c = go
     plainCharAfterWhite j =
       let w = byteAt e j
       in w /= HASH
-           && isPlainSafe c w
-           && (w /= COLON || isPlainSafe c (byteAt e (j + 1)))
+           && isPlainSafe flow w
+           && (w /= COLON || isPlainSafe flow (byteAt e (j + 1)))
+
+    flow :: Bool
+    flow = isFlowCtx c
 
 -- | s-ns-plain-next-line(n,c)*. Return the text of the next lines and the
 -- index after them.
@@ -1032,8 +1036,11 @@ plainNextLines e n c = go
     startsPlain t =
       let w = byteAt e t
       in w /= HASH
-           && isPlainSafe c w
-           && (w /= COLON || isPlainSafe c (byteAt e (t + 1)))
+           && isPlainSafe flow w
+           && (w /= COLON || isPlainSafe flow (byteAt e (t + 1)))
+
+    flow :: Bool
+    flow = isFlowCtx c
 
 ----------------------------------------
 -- Flow collections
@@ -1157,7 +1164,7 @@ cNsFlowMapSeparateValue :: Int -> Ctx -> P Node
 cNsFlowMapSeparateValue n c = do
   char COLON
   w <- peek
-  guardP . not $ isPlainSafe c w
+  guardP . not $ isPlainSafe (isFlowCtx c) w
   (sSeparate n c >> nsFlowNode n c) <|> eNode
 
 -- | c-ns-flow-map-adjacent-value(n,c)
