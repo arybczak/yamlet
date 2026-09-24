@@ -32,8 +32,10 @@ testSuiteTests = do
   dir <- maybe "tests/yaml-test-suite" id <$> lookupEnv "YAML_TEST_SUITE"
   exists <- doesDirectoryExist dir
   if not exists
-    then pure . testCase "yaml-test-suite" $ assertFailure $
-      "The test suite is missing, run scripts/fetch-test-suite.sh or set YAML_TEST_SUITE"
+    then
+      pure . testCase "yaml-test-suite"
+        $ assertFailure
+        $ "The test suite is missing, run scripts/fetch-test-suite.sh or set YAML_TEST_SUITE"
     else testGroup "yaml-test-suite" <$> findTests dir dir
 
 findTests :: FilePath -> FilePath -> IO [TestTree]
@@ -44,9 +46,10 @@ findTests root dir = do
     let path = dir </> entry
     isDir <- doesDirectoryExist path
     hasInput <- doesFileExist (path </> "in.yaml")
-    if | isDir && hasInput -> pure [testCase (testName path) (runTest path)]
-       | isDir -> findTests root path
-       | otherwise -> pure []
+    if
+      | isDir && hasInput -> pure [testCase (testName path) (runTest path)]
+      | isDir -> findTests root path
+      | otherwise -> pure []
   where
     testName :: FilePath -> String
     testName path = makeRelative root path
@@ -62,8 +65,11 @@ runTest path = do
       | isError -> pure ()
       | otherwise -> assertFailure $ preface ++ "\nunexpected error: " ++ prettyError "in.yaml" err
     Right docs
-      | isError -> assertFailure $ preface ++ "\nexpected an error, got:\n"
-          ++ unlines (map renderEvent (toEvents docs))
+      | isError ->
+          assertFailure $
+            preface
+              ++ "\nexpected an error, got:\n"
+              ++ unlines (map renderEvent (toEvents docs))
       | otherwise -> do
           expected <- lines . T.unpack . T.decodeUtf8 <$> BS.readFile (path </> "test.event")
           assertEqual preface expected (map renderEvent (toEvents docs))
@@ -91,7 +97,7 @@ toJson n = case n.value of
   Y.Float _ -> J.Null
   Y.String t -> J.String t
   Y.Sequence xs -> J.Array . V.fromList $ map toJson xs
-  Y.Mapping kvs -> J.Object $ KM.fromList [ (key k, toJson v) | (k, v) <- kvs ]
+  Y.Mapping kvs -> J.Object $ KM.fromList [(key k, toJson v) | (k, v) <- kvs]
   where
     key :: Y.Node -> K.Key
     key k = case k.value of
@@ -120,13 +126,14 @@ renderEvent = \case
       Block -> ""
 
     renderProps :: Props -> String
-    renderProps props = concat
-      [ maybe "" (\a -> " &" ++ T.unpack a) props.anchor
-      , case props.tag of
-          NoTag -> ""
-          NonSpecificTag -> " <!>"
-          Tag t -> " <" ++ T.unpack t ++ ">"
-      ]
+    renderProps props =
+      concat
+        [ maybe "" (\a -> " &" ++ T.unpack a) props.anchor
+        , case props.tag of
+            NoTag -> ""
+            NonSpecificTag -> " <!>"
+            Tag t -> " <" ++ T.unpack t ++ ">"
+        ]
 
     styleChar :: ScalarStyle -> Char
     styleChar = \case

@@ -1,4 +1,5 @@
 {-# OPTIONS_HADDOCK not-home #-}
+
 -- | Detection of the encoding of the input.
 --
 -- This module is intended for internal use only, and may change without warning
@@ -47,12 +48,14 @@ decodeInput bs = case map (BS.indexMaybe bs) [0 .. 3] of
       | i >= BS.length bs = i
       | otherwise =
           let w = BS.index bs i
-              k | w < 0x80 = 1
+              k
+                | w < 0x80 = 1
                 | w .&. 0xE0 == 0xC0 = 2
                 | w .&. 0xF0 == 0xE0 = 3
                 | w .&. 0xF8 == 0xF0 = 4
                 | otherwise = 0
-          in if k > 0 && i + k <= BS.length bs
-                && either (const False) (const True) (T.decodeUtf8' (BS.take k (BS.drop i bs)))
+          in if k > 0
+               && i + k <= BS.length bs
+               && either (const False) (const True) (T.decodeUtf8' (BS.take k (BS.drop i bs)))
                then validPrefix (i + k)
                else i

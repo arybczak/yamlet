@@ -41,22 +41,22 @@ module Yamlet.Syntax
 
     -- * Rendering
   , renderSyntax
-  , RenderOptions(..)
+  , RenderOptions (..)
   , defaultRenderOptions
 
     -- * Documents
-  , Document(..)
-  , Version(..)
+  , Document (..)
+  , Version (..)
   , document
 
     -- * Nodes
-  , Node(..)
-  , Content(..)
-  , Props(..)
+  , Node (..)
+  , Content (..)
+  , Props (..)
   , noProps
-  , Tag(..)
-  , ScalarStyle(..)
-  , CollectionStyle(..)
+  , Tag (..)
+  , ScalarStyle (..)
+  , CollectionStyle (..)
 
     -- ** Construction
   , contentNode
@@ -66,12 +66,12 @@ module Yamlet.Syntax
   , mappingNode
 
     -- * Comments
-  , Comments(..)
+  , Comments (..)
   , noComments
-  , Line(..)
+  , Line (..)
 
     -- * Positions
-  , Offset(..)
+  , Offset (..)
   , noOffset
   ) where
 
@@ -99,23 +99,25 @@ parseDocumentsText = parseStream
 
 -- | A document with the given root, without directives, markers and comments.
 document :: Node -> Document
-document n = Document
-  { version = Nothing
-  , explicitStart = False
-  , explicitEnd = False
-  , docComments = noComments
-  , root = n
-  }
+document n =
+  Document
+    { version = Nothing
+    , explicitStart = False
+    , explicitEnd = False
+    , docComments = noComments
+    , root = n
+    }
 
 -- | A node with the given content, without properties and comments.
 contentNode :: Content -> Node
-contentNode c = Node
-  { offset = noOffset
-  , endOffset = noOffset
-  , props = noProps
-  , comments = noComments
-  , content = c
-  }
+contentNode c =
+  Node
+    { offset = noOffset
+    , endOffset = noOffset
+    , props = noProps
+    , comments = noComments
+    , content = c
+    }
 
 -- | A scalar in the given style. If the style cannot hold the text,
 -- 'renderSyntax' uses quotes.
@@ -137,35 +139,39 @@ mappingNode = contentNode . Mapping Block
 -- | Copy every text of a document, so that the document does not keep the
 -- input alive.
 copyDocument :: Document -> Document
-copyDocument doc = doc
-  { docComments = copyComments doc.docComments
-  , root = copyNode doc.root
-  }
+copyDocument doc =
+  doc
+    { docComments = copyComments doc.docComments
+    , root = copyNode doc.root
+    }
 
 -- | Copy every text of a node, so that the node does not keep the input
 -- alive.
 copyNode :: Node -> Node
-copyNode n = n
-  { props = Props
-      { anchor = T.copy <$> n.props.anchor
-      , tag = case n.props.tag of
-          Tag t -> Tag (T.copy t)
-          t -> t
-      }
-  , comments = copyComments n.comments
-  , content = case n.content of
-      Scalar style t -> Scalar style (T.copy t)
-      Sequence style xs -> Sequence style (map copyNode xs)
-      Mapping style kvs -> Mapping style [ (copyNode k, copyNode v) | (k, v) <- kvs ]
-      Alias name -> Alias (T.copy name)
-  }
+copyNode n =
+  n
+    { props =
+        Props
+          { anchor = T.copy <$> n.props.anchor
+          , tag = case n.props.tag of
+              Tag t -> Tag (T.copy t)
+              t -> t
+          }
+    , comments = copyComments n.comments
+    , content = case n.content of
+        Scalar style t -> Scalar style (T.copy t)
+        Sequence style xs -> Sequence style (map copyNode xs)
+        Mapping style kvs -> Mapping style [(copyNode k, copyNode v) | (k, v) <- kvs]
+        Alias name -> Alias (T.copy name)
+    }
 
 copyComments :: Comments -> Comments
-copyComments c = Comments
-  { before = map copyLine c.before
-  , inline = T.copy <$> c.inline
-  , after = map copyLine c.after
-  }
+copyComments c =
+  Comments
+    { before = map copyLine c.before
+    , inline = T.copy <$> c.inline
+    , after = map copyLine c.after
+    }
   where
     copyLine :: Line -> Line
     copyLine = \case

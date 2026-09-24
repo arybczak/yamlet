@@ -3,15 +3,16 @@
 {-# LANGUAGE UnboxedSums #-}
 {-# LANGUAGE UnboxedTuples #-}
 {-# OPTIONS_HADDOCK not-home #-}
+
 -- | A backtracking parser over the bytes of UTF-8 encoded text.
 --
 -- This module is intended for internal use only, and may change without warning
 -- in subsequent releases.
 module Yamlet.Internal.Parser.Monad
   ( -- * Parser
-    P(..)
-  , Env(..)
-  , ParseError(..)
+    P (..)
+  , Env (..)
+  , ParseError (..)
   , runParser
   , runP
 
@@ -40,7 +41,7 @@ module Yamlet.Internal.Parser.Monad
   , char
   , skipWhile
   , scan
-  , Scanned(..)
+  , Scanned (..)
   , withScan
 
     -- * Input access
@@ -73,7 +74,7 @@ data Env = Env
 
 -- | An error that no backtracking can recover from.
 data ParseError = ParseError !Int String
-  deriving stock Show
+  deriving stock (Show)
 
 -- | The result of a parser: a value with the new position, a failure, or an
 -- error. Both the value and the failure carry the furthest position at which
@@ -234,17 +235,18 @@ throwAt i msg = P $ \_ _ _ -> Err# (ParseError i msg)
 
 -- | Run a parser that cannot read past the given index.
 withEnd :: Int -> P a -> P a
-withEnd end (P g) = P $ \e p fu -> g e { end = end } p fu
+withEnd end (P g) = P $ \e p fu -> g e {end = end} p fu
 {-# INLINE withEnd #-}
 
 withHandles :: M.Map T.Text T.Text -> P a -> P a
-withHandles hs (P g) = P $ \e p fu -> g e { handles = hs } p fu
+withHandles hs (P g) = P $ \e p fu -> g e {handles = hs} p fu
 {-# INLINE withHandles #-}
 
 char :: Word8 -> P ()
-char w = P $ \e p fu -> if byteAt e (I# p) == w
-  then OK# () (p +# 1#) fu
-  else Fail# (if isTrue# (p ># fu) then p else fu)
+char w = P $ \e p fu ->
+  if byteAt e (I# p) == w
+    then OK# () (p +# 1#) fu
+    else Fail# (if isTrue# (p ># fu) then p else fu)
 {-# INLINE char #-}
 
 skipWhile :: (Word8 -> Bool) -> P ()
@@ -255,12 +257,12 @@ skipWhile f = P $ \e p fu ->
 
 -- | The result of a scanning loop.
 data Scanned a
-  = Done !Int a
-  -- ^ The value and the index after it.
-  | NoMatch !Int
-  -- ^ The input does not match. The index is the location of the mismatch.
-  | Failed !Int String
-  -- ^ An error at the index.
+  = -- | The value and the index after it.
+    Done !Int a
+  | -- | The input does not match. The index is the location of the mismatch.
+    NoMatch !Int
+  | -- | An error at the index.
+    Failed !Int String
 
 -- | Run a pure loop over the input from the current position.
 withScan :: (Env -> Int -> Scanned a) -> P a

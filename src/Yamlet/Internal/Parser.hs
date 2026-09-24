@@ -1,5 +1,6 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# OPTIONS_HADDOCK not-home #-}
+
 -- | The parser of YAML 1.2.2 streams.
 --
 -- The functions follow the productions of the specification and keep their
@@ -39,12 +40,13 @@ parseStream input@(T.Text arr off len) = case prescan e start of
     Right (Nothing, _, fu) -> let (i, msg) = unexpected e fu in Left $ errorAt input (toOffset e i) msg
   where
     e :: Env
-    e = Env
-      { array = arr
-      , base = off
-      , end = off + len
-      , handles = defaultHandles
-      }
+    e =
+      Env
+        { array = arr
+        , base = off
+        , end = off + len
+        , handles = defaultHandles
+        }
 
     start :: Int
     start = if isBom e off then off + 3 else off
@@ -59,17 +61,19 @@ prescan e start = go start (if isMarker e start then [start] else [])
     go i acc
       | i >= e.end = Right (reverse acc)
       | otherwise =
-        let w = A.unsafeIndex e.array i
-        in if | w >= 0x20 && w < 0x7F -> go (i + 1) acc
-              | w == LF || (w == CR && byteAt e (i + 1) /= LF) ->
-                  go (i + 1) (if isMarker e (i + 1) then i + 1 : acc else acc)
-              | w == CR || w == TAB -> go (i + 1) acc
-              | w < 0x20 || w == 0x7F -> Left i
-              -- C1 control characters except NEL.
-              | w == 0xC2 && i + 1 < e.end
-              , let w1 = A.unsafeIndex e.array (i + 1)
-              , w1 >= 0x80 && w1 <= 0x9F && w1 /= 0x85 -> Left i
-              | otherwise -> go (i + 1) acc
+          let w = A.unsafeIndex e.array i
+          in if
+               | w >= 0x20 && w < 0x7F -> go (i + 1) acc
+               | w == LF || (w == CR && byteAt e (i + 1) /= LF) ->
+                   go (i + 1) (if isMarker e (i + 1) then i + 1 : acc else acc)
+               | w == CR || w == TAB -> go (i + 1) acc
+               | w < 0x20 || w == 0x7F -> Left i
+               -- C1 control characters except NEL.
+               | w == 0xC2 && i + 1 < e.end
+               , let w1 = A.unsafeIndex e.array (i + 1)
+               , w1 >= 0x80 && w1 <= 0x9F && w1 /= 0x85 ->
+                   Left i
+               | otherwise -> go (i + 1) acc
 
 -- | The location and the message of the error for the furthest position at
 -- which the parser failed.
@@ -78,7 +82,8 @@ unexpected e i = case indentationTab (i - 1) Nothing of
   Just tab -> (tab, "tabs cannot be used for indentation")
   Nothing -> (i,) $ case byteAt e i of
     0 -> "unexpected end of input"
-    w | indented -> "unexpected indentation"
+    w
+      | indented -> "unexpected indentation"
       | isBreak w -> "unexpected end of line"
       | w == COLON && valueColon ->
           "unexpected ':', quote the value if it contains \": \""
@@ -88,8 +93,9 @@ unexpected e i = case indentationTab (i - 1) Nothing of
     -- A colon that ends a word and precedes white space, as in an unquoted
     -- value like "Error: file not found".
     valueColon :: Bool
-    valueColon = isNsChar (byteBefore e i)
-      && (let w = byteAt e (i + 1) in w == 0 || isWhite w || isBreak w)
+    valueColon =
+      isNsChar (byteBefore e i)
+        && (let w = byteAt e (i + 1) in w == 0 || isWhite w || isBreak w)
 
     -- Only spaces precede the index on its line.
     indented :: Bool
@@ -110,7 +116,8 @@ unexpected e i = case indentationTab (i - 1) Nothing of
       | otherwise = case A.unsafeIndex e.array j of
           SPACE -> indentationTab (j - 1) tab
           TAB -> indentationTab (j - 1) (Just j)
-          w | isBreak w -> tab'
+          w
+            | isBreak w -> tab'
             | otherwise -> Nothing
       where
         tab' :: Maybe Int
@@ -119,9 +126,32 @@ unexpected e i = case indentationTab (i - 1) Nothing of
 ----------------------------------------
 -- Characters
 
-pattern TAB, LF, CR, SPACE, EXCL, DQUOTE, HASH, PERCENT, AMP, SQUOTE, COMMA,
-  MINUS, DOT, COLON, LESS, GREATER, QUESTION, LBRACKET, BACKSLASH, RBRACKET, LBRACE,
-  PIPE, RBRACE, STAR :: Word8
+pattern
+  TAB
+  , LF
+  , CR
+  , SPACE
+  , EXCL
+  , DQUOTE
+  , HASH
+  , PERCENT
+  , AMP
+  , SQUOTE
+  , COMMA
+  , MINUS
+  , DOT
+  , COLON
+  , LESS
+  , GREATER
+  , QUESTION
+  , LBRACKET
+  , BACKSLASH
+  , RBRACKET
+  , LBRACE
+  , PIPE
+  , RBRACE
+  , STAR
+    :: Word8
 pattern TAB = 0x09
 pattern LF = 0x0A
 pattern CR = 0x0D
@@ -162,8 +192,12 @@ isNsChar w = w > SPACE && w /= 0x7F
 {-# INLINE isNsChar #-}
 
 isFlowIndicator :: Word8 -> Bool
-isFlowIndicator w = w == COMMA || w == LBRACKET || w == RBRACKET
-                 || w == LBRACE || w == RBRACE
+isFlowIndicator w =
+  w == COMMA
+    || w == LBRACKET
+    || w == RBRACKET
+    || w == LBRACE
+    || w == RBRACE
 {-# INLINE isFlowIndicator #-}
 
 isIndicator :: Word8 -> Bool
@@ -186,8 +220,11 @@ hexValue w
   | otherwise = fromIntegral w - 0x57
 
 isWordChar :: Word8 -> Bool
-isWordChar w = isDecDigit w || (w >= 0x41 && w <= 0x5A) || (w >= 0x61 && w <= 0x7A)
-            || w == MINUS
+isWordChar w =
+  isDecDigit w
+    || (w >= 0x41 && w <= 0x5A)
+    || (w >= 0x61 && w <= 0x7A)
+    || w == MINUS
 
 -- | ns-uri-char without the escaped characters.
 isUriChar :: Word8 -> Bool
@@ -211,7 +248,7 @@ isBom e i = byteAt e i == 0xEF && byteAt e (i + 1) == 0xBB && byteAt e (i + 2) =
 -- Contexts
 
 data Ctx = BlockOut | BlockIn | FlowOut | FlowIn | BlockKey | FlowKey
-  deriving stock Eq
+  deriving stock (Eq)
 
 isKeyCtx :: Ctx -> Bool
 isKeyCtx c = c == BlockKey || c == FlowKey
@@ -247,9 +284,11 @@ isStartOfLine :: Env -> Int -> Bool
 isStartOfLine e i
   | i <= e.base = True
   | isBreak (byteBefore e i) = True
-  | i - 3 >= e.base && A.unsafeIndex e.array (i - 3) == 0xEF
-    && A.unsafeIndex e.array (i - 2) == 0xBB && A.unsafeIndex e.array (i - 1) == 0xBF
-    = isStartOfLine e (i - 3)
+  | i - 3 >= e.base
+      && A.unsafeIndex e.array (i - 3) == 0xEF
+      && A.unsafeIndex e.array (i - 2) == 0xBB
+      && A.unsafeIndex e.array (i - 1) == 0xBF =
+      isStartOfLine e (i - 3)
   | otherwise = False
 
 -- | Skip the empty lines of a flow scalar after a line break and the line
@@ -264,10 +303,11 @@ flowFold e n = go 0
       let s = skipSpaces e i
           indented = s - i >= n
           w = skipWhites e s
-      in if | indented && isBreak (byteAt e w) -> go (k + 1) (breakEnd e w)
-            | not indented && isBreak (byteAt e s) -> go (k + 1) (breakEnd e s)
-            | indented -> Just (k, w)
-            | otherwise -> Nothing
+      in if
+           | indented && isBreak (byteAt e w) -> go (k + 1) (breakEnd e w)
+           | not indented && isBreak (byteAt e s) -> go (k + 1) (breakEnd e s)
+           | indented -> Just (k, w)
+           | otherwise -> Nothing
 
 -- | The text of a line folding with the given number of empty lines.
 foldText :: Int -> T.Text
@@ -381,10 +421,10 @@ isMarker :: Env -> Int -> Bool
 isMarker e i =
   let w = byteAt e i
   in (w == MINUS || w == DOT)
-     && byteAt e (i + 1) == w
-     && byteAt e (i + 2) == w
-     && (let w3 = byteAt e (i + 3) in w3 == 0 || isWhite w3 || isBreak w3)
-     && isStartOfLine e i
+       && byteAt e (i + 1) == w
+       && byteAt e (i + 2) == w
+       && (let w3 = byteAt e (i + 3) in w3 == 0 || isWhite w3 || isBreak w3)
+       && isStartOfLine e i
 
 -- | l-yaml-stream. The markers are the indices of the lines that start with
 -- a document marker.
@@ -400,20 +440,21 @@ lYamlStream markers0 = do
     documents markers afterEnd prefix = do
       e <- env
       p <- pos
-      if | p >= e.end -> pure []
-         | isMarker e p && byteAt e p == DOT -> do
-             lDocumentSuffix
-             lDocumentPrefix
-             documents markers True prefix
-         | isMarker e p -> document markers Nothing defaultHandles prefix
-         | afterEnd && byteAt e p == PERCENT -> do
-             (version, hs) <- directives
-             q <- pos
-             unless (isMarker e q && byteAt e q == MINUS) $
-               throwAt q "expected a document start marker (---) after the directives"
-             document markers version hs prefix
-         | afterEnd -> bareDocument markers prefix
-         | otherwise -> throwAt p "expected a document start marker (---)"
+      if
+        | p >= e.end -> pure []
+        | isMarker e p && byteAt e p == DOT -> do
+            lDocumentSuffix
+            lDocumentPrefix
+            documents markers True prefix
+        | isMarker e p -> document markers Nothing defaultHandles prefix
+        | afterEnd && byteAt e p == PERCENT -> do
+            (version, hs) <- directives
+            q <- pos
+            unless (isMarker e q && byteAt e q == MINUS) $
+              throwAt q "expected a document start marker (---) after the directives"
+            document markers version hs prefix
+        | afterEnd -> bareDocument markers prefix
+        | otherwise -> throwAt p "expected a document start marker (---)"
 
     document :: [Int] -> Maybe Version -> M.Map T.Text T.Text -> Int -> P [Document]
     document markers version hs prefix = do
@@ -422,8 +463,9 @@ lYamlStream markers0 = do
       p <- pos
       e <- env
       let (limit, markers') = nextMarker e markers p
-      root <- withEnd limit . withHandles hs $
-        lBareDocument <|> (eNode <* sLComments)
+      root <-
+        withEnd limit . withHandles hs $
+          lBareDocument <|> (eNode <* sLComments)
       finishDocument markers' version prefix (Just m) limit root
 
     bareDocument :: [Int] -> Int -> P [Document]
@@ -431,9 +473,10 @@ lYamlStream markers0 = do
       p <- pos
       e <- env
       let (limit, markers') = nextMarker e markers p
-      root <- withEnd limit lBareDocument <|> do
-        fu <- furthest
-        throwUnexpected fu
+      root <-
+        withEnd limit lBareDocument <|> do
+          fu <- furthest
+          throwUnexpected fu
       finishDocument markers' Nothing prefix Nothing limit root
 
     -- The end of the document that starts at the index, and the markers
@@ -455,13 +498,19 @@ lYamlStream markers0 = do
       let explicitEnd = isMarker e p && byteAt e p == DOT
       when explicitEnd lDocumentSuffix
       q <- pos
-      let doc = attachComments e prefix marker q Document
-            { version = version
-            , explicitStart = isJust marker
-            , explicitEnd = explicitEnd
-            , docComments = noComments
-            , root = root
-            }
+      let doc =
+            attachComments
+              e
+              prefix
+              marker
+              q
+              Document
+                { version = version
+                , explicitStart = isJust marker
+                , explicitEnd = explicitEnd
+                , docComments = noComments
+                , root = root
+                }
       if explicitEnd
         then do
           lDocumentPrefix
@@ -515,8 +564,9 @@ directives = go Nothing defaultHandles M.empty
               go (Just v) hs defined
             "TAG" -> do
               (handle, prefix) <- tagDirective p
-              when (handle `M.member` defined) $
-                throwAt p $ "duplicate %TAG directive for " ++ T.unpack handle
+              when (handle `M.member` defined)
+                $ throwAt p
+                $ "duplicate %TAG directive for " ++ T.unpack handle
               sLComments <|> throwAt p "invalid %TAG directive"
               go version (M.insert handle prefix hs) (M.insert handle () defined)
             _ -> do
@@ -550,8 +600,9 @@ directives = go Nothing defaultHandles M.empty
       minor <- number
       w' <- peek
       when (isNsChar w') $ throwAt p "invalid %YAML directive"
-      when (major /= 1) $ throwAt p $
-        "unsupported YAML version " ++ show major ++ "." ++ show minor
+      when (major /= 1)
+        $ throwAt p
+        $ "unsupported YAML version " ++ show major ++ "." ++ show minor
       pure $ Version major minor
       where
         number :: P Int
@@ -607,8 +658,8 @@ cTagHandle = do
 uriChars :: Env -> Int -> Int
 uriChars e i
   | isUriChar w = uriChars e (i + 1)
-  | w == PERCENT && isHexDigit' (byteAt e (i + 1)) && isHexDigit' (byteAt e (i + 2))
-    = uriChars e (i + 3)
+  | w == PERCENT && isHexDigit' (byteAt e (i + 1)) && isHexDigit' (byteAt e (i + 2)) =
+      uriChars e (i + 3)
   | otherwise = i
   where
     w :: Word8
@@ -618,8 +669,8 @@ uriChars e i
 tagChars :: Env -> Int -> Int
 tagChars e i
   | isTagChar w = tagChars e (i + 1)
-  | w == PERCENT && isHexDigit' (byteAt e (i + 1)) && isHexDigit' (byteAt e (i + 2))
-    = tagChars e (i + 3)
+  | w == PERCENT && isHexDigit' (byteAt e (i + 1)) && isHexDigit' (byteAt e (i + 2)) =
+      tagChars e (i + 3)
   | otherwise = i
   where
     w :: Word8
@@ -763,11 +814,13 @@ cDoubleQuoted n c props = withScan $ \e p ->
           | otherwise -> case escape e (i + 1) of
               Just (t, j) -> go j j (t : slice e seg i : acc)
               Nothing -> Failed i "invalid escape sequence"
-        w | isWhite w ->
+        w
+          | isWhite w ->
               let j = skipWhites e i
                   w' = byteAt e j
-              in if | isBreak w' -> fold i j acc
-                    | otherwise -> go seg j acc
+              in if
+                   | isBreak w' -> fold i j acc
+                   | otherwise -> go seg j acc
           | isBreak w -> fold i i acc
           | i >= e.end -> unterminated i
           | otherwise -> go seg (i + 1) acc
@@ -787,8 +840,10 @@ cDoubleQuoted n c props = withScan $ \e p ->
       badIndent :: Int -> Scanned T.Text
       badIndent i
         | nextContent i >= e.end || not (hasClosingQuote e DQUOTE (nextContent i)) = unterminated i
-        | otherwise = Failed (nextContent i)
-            "invalid indentation of a line in a double-quoted scalar"
+        | otherwise =
+            Failed
+              (nextContent i)
+              "invalid indentation of a line in a double-quoted scalar"
 
       nextContent :: Int -> Int
       nextContent i = skipWhites e (skipBlankLines e i)
@@ -805,7 +860,8 @@ cSingleQuoted n c props = withScan $ \e p ->
         SQUOTE
           | byteAt e (i + 1) == SQUOTE -> go (i + 2) (i + 2) ("'" : slice e seg i : acc)
           | otherwise -> Done (i + 1) (finish (slice e seg i : acc))
-        w | isWhite w ->
+        w
+          | isWhite w ->
               let j = skipWhites e i
               in if isBreak (byteAt e j) then fold i j acc else go seg j acc
           | isBreak w -> fold i i acc
@@ -827,8 +883,10 @@ cSingleQuoted n c props = withScan $ \e p ->
       badIndent :: Int -> Scanned T.Text
       badIndent i
         | nextContent i >= e.end || not (hasClosingQuote e SQUOTE (nextContent i)) = unterminated i
-        | otherwise = Failed (nextContent i)
-            "invalid indentation of a line in a single-quoted scalar"
+        | otherwise =
+            Failed
+              (nextContent i)
+              "invalid indentation of a line in a single-quoted scalar"
 
       nextContent :: Int -> Int
       nextContent i = skipWhites e (skipBlankLines e i)
@@ -847,7 +905,8 @@ skipBlankLines e i =
 -- with a wrong indentation more likely follows a missing quote.
 hasClosingQuote :: Env -> Word8 -> Int -> Bool
 hasClosingQuote e quote i = case byteAt e i of
-  w | w == quote -> True
+  w
+    | w == quote -> True
     | w == BACKSLASH && quote == DQUOTE -> hasClosingQuote e quote (i + 2)
     | w == 0 || isBreak w -> False
     | otherwise -> hasClosingQuote e quote (i + 1)
@@ -887,8 +946,8 @@ escape e i = case chr (fromIntegral (byteAt e i)) of
       , byteAt e (i + 5) == BACKSLASH
       , byteAt e (i + 6) == 0x75
       , Just lo <- hexAt (i + 7) 4
-      , lo >= 0xDC00 && lo <= 0xDFFF
-      -> fromCodePoint (0x10000 + (hi - 0xD800) * 0x400 + (lo - 0xDC00)) (i + 11)
+      , lo >= 0xDC00 && lo <= 0xDFFF ->
+          fromCodePoint (0x10000 + (hi - 0xD800) * 0x400 + (lo - 0xDC00)) (i + 11)
     _ -> codePoint 4
   'U' -> codePoint 8
   _ -> Nothing
@@ -917,9 +976,11 @@ escape e i = case chr (fromIntegral (byteAt e i)) of
 nsPlain :: Int -> Ctx -> Props -> P Node
 nsPlain n c props = withScan $ \e p ->
   let w0 = byteAt e p
-      firstOk = (isNsChar w0 && not (isIndicator w0))
-             || ((w0 == QUESTION || w0 == COLON || w0 == MINUS)
-                 && isPlainSafe c (byteAt e (p + 1)))
+      firstOk =
+        (isNsChar w0 && not (isIndicator w0))
+          || ( (w0 == QUESTION || w0 == COLON || w0 == MINUS)
+                 && isPlainSafe c (byteAt e (p + 1))
+             )
   in if not firstOk
        then NoMatch p
        else
@@ -950,8 +1011,9 @@ plainLine e c = go
     plainCharAfterWhite :: Int -> Bool
     plainCharAfterWhite j =
       let w = byteAt e j
-      in w /= HASH && isPlainSafe c w
-         && (w /= COLON || isPlainSafe c (byteAt e (j + 1)))
+      in w /= HASH
+           && isPlainSafe c w
+           && (w /= COLON || isPlainSafe c (byteAt e (j + 1)))
 
 -- | s-ns-plain-next-line(n,c)*. Return the text of the next lines and the
 -- index after them.
@@ -974,8 +1036,9 @@ plainNextLines e n c = go
     startsPlain :: Int -> Bool
     startsPlain t =
       let w = byteAt e t
-      in w /= HASH && isPlainSafe c w
-         && (w /= COLON || isPlainSafe c (byteAt e (t + 1)))
+      in w /= HASH
+           && isPlainSafe c w
+           && (w /= COLON || isPlainSafe c (byteAt e (t + 1)))
 
 ----------------------------------------
 -- Flow collections
@@ -1138,20 +1201,23 @@ implicitKey key = do
   pure k
   where
     countChars :: Env -> Int -> Int -> Int
-    countChars e i j = length
-      [ () | x <- [i .. j - 1], let w = byteAt e x, w < 0x80 || w >= 0xC0 ]
+    countChars e i j =
+      length
+        [() | x <- [i .. j - 1], let w = byteAt e x, w < 0x80 || w >= 0xC0]
 
 ----------------------------------------
 -- Flow nodes
 
 -- | ns-flow-yaml-node(n,c)
 nsFlowYamlNode :: Int -> Ctx -> P Node
-nsFlowYamlNode n c = peek >>= \case
-  STAR -> cNsAliasNode
-  w | w == EXCL || w == AMP -> do
-        props <- cNsProperties n c
-        (sSeparate n c >> nsPlain n c props) <|> empty props
-    | otherwise -> nsPlain n c noProps
+nsFlowYamlNode n c =
+  peek >>= \case
+    STAR -> cNsAliasNode
+    w
+      | w == EXCL || w == AMP -> do
+          props <- cNsProperties n c
+          (sSeparate n c >> nsPlain n c props) <|> empty props
+      | otherwise -> nsPlain n c noProps
   where
     -- Properties before JSON-like content belong to c-flow-json-node, which
     -- ordered choice would not try after an empty node.
@@ -1171,36 +1237,40 @@ cFlowJsonNode n c = do
 
 -- | ns-flow-node(n,c)
 nsFlowNode :: Int -> Ctx -> P Node
-nsFlowNode n c = peek >>= \case
-  STAR -> cNsAliasNode
-  w | w == EXCL || w == AMP -> do
-        props <- cNsProperties n c
-        (sSeparate n c >> nsFlowContent n c props) <|> eScalar props
-    | otherwise -> nsFlowContent n c noProps
+nsFlowNode n c =
+  peek >>= \case
+    STAR -> cNsAliasNode
+    w
+      | w == EXCL || w == AMP -> do
+          props <- cNsProperties n c
+          (sSeparate n c >> nsFlowContent n c props) <|> eScalar props
+      | otherwise -> nsFlowContent n c noProps
 
 -- | ns-flow-content(n,c)
 nsFlowContent :: Int -> Ctx -> Props -> P Node
-nsFlowContent n c props = peek >>= \case
-  LBRACKET -> cFlowSequence n c props
-  LBRACE -> cFlowMapping n c props
-  SQUOTE -> cSingleQuoted n c props
-  DQUOTE -> cDoubleQuoted n c props
-  _ -> nsPlain n c props
+nsFlowContent n c props =
+  peek >>= \case
+    LBRACKET -> cFlowSequence n c props
+    LBRACE -> cFlowMapping n c props
+    SQUOTE -> cSingleQuoted n c props
+    DQUOTE -> cDoubleQuoted n c props
+    _ -> nsPlain n c props
 
 -- | c-flow-json-content(n,c)
 cFlowJsonContent :: Int -> Ctx -> Props -> P Node
-cFlowJsonContent n c props = peek >>= \case
-  LBRACKET -> cFlowSequence n c props
-  LBRACE -> cFlowMapping n c props
-  SQUOTE -> cSingleQuoted n c props
-  DQUOTE -> cDoubleQuoted n c props
-  _ -> failure
+cFlowJsonContent n c props =
+  peek >>= \case
+    LBRACKET -> cFlowSequence n c props
+    LBRACE -> cFlowMapping n c props
+    SQUOTE -> cSingleQuoted n c props
+    DQUOTE -> cDoubleQuoted n c props
+    _ -> failure
 
 ----------------------------------------
 -- Block scalars
 
 data Chomping = Strip | Clip | Keep
-  deriving stock Eq
+  deriving stock (Eq)
 
 -- | c-l+literal(n) and c-l+folded(n).
 cLBlockScalar :: Int -> Props -> P Node
@@ -1216,8 +1286,10 @@ cLBlockScalar n props = do
     Just m -> pure $ max 0 n + m
     Nothing -> case detectIndent e n q of
       Right m -> pure m
-      Left i -> throwAt i
-        "a leading empty line of a block scalar has more spaces than the first non-empty line"
+      Left i ->
+        throwAt
+          i
+          "a leading empty line of a block scalar has more spaces than the first non-empty line"
   let (lines_, trailing, r) = blockLines e indent q
       text = case indicator of
         PIPE -> literalText lines_
@@ -1271,11 +1343,12 @@ detectIndent e n = go 0 Nothing
       let s = skipSpaces e i
           k = s - i
           w = byteAt e s
-      in if | isBreak w || (s >= e.end && k > 0) ->
-                go (max maxEmpty k) (if k > maxEmpty then Just s else maxAt) (breakEnd e s)
-            | s >= e.end || k <= n -> Right (max (n + 1) (max maxEmpty 1))
-            | maxEmpty > k, Just j <- maxAt -> Left j
-            | otherwise -> Right k
+      in if
+           | isBreak w || (s >= e.end && k > 0) ->
+               go (max maxEmpty k) (if k > maxEmpty then Just s else maxAt) (breakEnd e s)
+           | s >= e.end || k <= n -> Right (max (n + 1) (max maxEmpty 1))
+           | maxEmpty > k, Just j <- maxAt -> Left j
+           | otherwise -> Right k
 
 -- | A content line of a block scalar: the number of empty lines before it and
 -- its text after the indentation.
@@ -1290,17 +1363,18 @@ blockLines e indent = go 0 []
     go !empties acc i
       | i >= e.end = (reverse acc, empties, i)
       | otherwise =
-        let s = skipSpacesMax i
-            w = byteAt e s
-        in if | isBreak w -> go (empties + 1) acc (breakEnd e s)
-              | s >= e.end -> (reverse acc, empties + 1, s)
-              | s - i == indent ->
-                  let t = lineEnd s
-                      acc' = BlockLine empties (slice e s t) : acc
-                  in if t >= e.end
-                       then (reverse acc', 0, t)
-                       else go 0 acc' (breakEnd e t)
-              | otherwise -> (reverse acc, empties, i)
+          let s = skipSpacesMax i
+              w = byteAt e s
+          in if
+               | isBreak w -> go (empties + 1) acc (breakEnd e s)
+               | s >= e.end -> (reverse acc, empties + 1, s)
+               | s - i == indent ->
+                   let t = lineEnd s
+                       acc' = BlockLine empties (slice e s t) : acc
+                   in if t >= e.end
+                        then (reverse acc', 0, t)
+                        else go 0 acc' (breakEnd e t)
+               | otherwise -> (reverse acc, empties, i)
 
     -- At most indent spaces.
     skipSpacesMax :: Int -> Int
@@ -1334,8 +1408,9 @@ foldedText = \case
       [] -> []
       BlockLine k t : rest ->
         let spaced = isSpaced t
-            sep | not prevSpaced && not spaced = foldText k
-                | otherwise = T.replicate (k + 1) "\n"
+            sep
+              | not prevSpaced && not spaced = foldText k
+              | otherwise = T.replicate (k + 1) "\n"
         in sep : t : go spaced rest
 
     isSpaced :: T.Text -> Bool
@@ -1409,7 +1484,8 @@ sLBlockIndented n c = compact <|> sLBlockNode n c <|> (eNode <* sLComments)
         go :: Int -> Bool
         go i = case byteAt e i of
           COLON -> True
-          w | w == 0 || isBreak w -> False
+          w
+            | w == 0 || isBreak w -> False
             | otherwise -> go (i + 1)
 
 -- | ns-l-compact-sequence(n)
@@ -1497,10 +1573,18 @@ sLBlockNode n c = do
     -- Block content starts with a property, an indicator of a block scalar or
     -- the end of the line. Other content on the same line is a flow node.
     flowOnly :: Env -> Int -> Bool
-    flowOnly e p = not (isStartOfLine e p) &&
-      let w = byteAt e (skipWhites e p)
-      in not (w == 0 || isBreak w || w == HASH || w == PIPE || w == GREATER
-              || w == EXCL || w == AMP)
+    flowOnly e p =
+      not (isStartOfLine e p)
+        && let w = byteAt e (skipWhites e p)
+           in not
+                ( w == 0
+                    || isBreak w
+                    || w == HASH
+                    || w == PIPE
+                    || w == GREATER
+                    || w == EXCL
+                    || w == AMP
+                )
 
 -- | s-l+flow-in-block(n)
 sLFlowInBlock :: Int -> P Node
@@ -1535,15 +1619,17 @@ sLBlockCollection n c = do
       (cNsProperties (n + 1) c <* sLComments) <|> (oneProperty <* sLComments)
 
     oneProperty :: P Props
-    oneProperty = (Props Nothing <$> cNsTagProperty)
-              <|> ((\a -> Props (Just a) NoTag) <$> cNsAnchorProperty)
+    oneProperty =
+      (Props Nothing <$> cNsTagProperty)
+        <|> ((\a -> Props (Just a) NoTag) <$> cNsAnchorProperty)
 
 -- | A node without comments from the given index to the given offset.
 mkNode :: Env -> Int -> Offset -> Props -> Content -> Node
-mkNode e p end props c = Node
-  { offset = toOffset e p
-  , endOffset = end
-  , props = props
-  , comments = noComments
-  , content = c
-  }
+mkNode e p end props c =
+  Node
+    { offset = toOffset e p
+    , endOffset = end
+    , props = props
+    , comments = noComments
+    , content = c
+    }

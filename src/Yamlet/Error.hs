@@ -1,9 +1,10 @@
 {-# LANGUAGE DeriveAnyClass #-}
+
 -- | Errors with the position in the input that caused them.
 module Yamlet.Error
   ( -- * Errors
-    Error(..)
-  , Location(..)
+    Error (..)
+  , Location (..)
   , prettyError
 
     -- * Construction
@@ -12,11 +13,11 @@ module Yamlet.Error
   ) where
 
 import Control.DeepSeq
-import Data.Word
-import GHC.Generics
 import Data.Text qualified as T
 import Data.Text.Array qualified as A
 import Data.Text.Internal qualified as T
+import Data.Word
+import GHC.Generics
 
 import Yamlet.Internal.Syntax
 
@@ -28,7 +29,7 @@ data Error = Error
   -- ^ The line of the input that contains the location.
   }
   deriving stock (Eq, Show, Generic)
-  deriving anyclass NFData
+  deriving anyclass (NFData)
 
 -- | A position in the input. Lines and columns count from 1, and a column
 -- counts characters, not bytes.
@@ -38,7 +39,7 @@ data Location = Location
   , column :: !Int
   }
   deriving stock (Eq, Show, Generic)
-  deriving anyclass NFData
+  deriving anyclass (NFData)
 
 -- | Render an error in the format that editors recognize. The result does not
 -- end with a line break.
@@ -50,13 +51,27 @@ data Location = Location
 --   |     ^
 -- @
 prettyError :: FilePath -> Error -> String
-prettyError file err = concat
-  [ file, ":", show err.location.line, ":", show err.location.column, ": "
-  , err.message, "\n"
-  , pad, " |\n"
-  , lineNo, " | ", T.unpack err.sourceLine, "\n"
-  , pad, " | ", caret, "^"
-  ]
+prettyError file err =
+  concat
+    [ file
+    , ":"
+    , show err.location.line
+    , ":"
+    , show err.location.column
+    , ": "
+    , err.message
+    , "\n"
+    , pad
+    , " |\n"
+    , lineNo
+    , " | "
+    , T.unpack err.sourceLine
+    , "\n"
+    , pad
+    , " | "
+    , caret
+    , "^"
+    ]
   where
     lineNo :: String
     lineNo = show err.location.line
@@ -66,17 +81,19 @@ prettyError file err = concat
 
     -- A tab before the column keeps the caret aligned in a terminal.
     caret :: String
-    caret = map (\c -> if c == '\t' then '\t' else ' ')
-          . take (err.location.column - 1)
-          $ T.unpack err.sourceLine
+    caret =
+      map (\c -> if c == '\t' then '\t' else ' ')
+        . take (err.location.column - 1)
+        $ T.unpack err.sourceLine
 
 -- | Create an error at the given offset of the input.
 errorAt :: T.Text -> Offset -> String -> Error
-errorAt input off msg = Error
-  { location = loc
-  , message = msg
-  , sourceLine = T.copy (lineAt input off)
-  }
+errorAt input off msg =
+  Error
+    { location = loc
+    , message = msg
+    , sourceLine = T.copy (lineAt input off)
+    }
   where
     loc :: Location
     loc = locate input off
@@ -90,21 +107,24 @@ locate (T.Text arr base len) (Offset off0) = go base 1 base
 
     go :: Int -> Int -> Int -> Location
     go i !ln lineStart
-      | i >= off = Location
-        { offset = Offset (off - base)
-        , line = ln
-        , column = 1 + countChars lineStart off
-        }
+      | i >= off =
+          Location
+            { offset = Offset (off - base)
+            , line = ln
+            , column = 1 + countChars lineStart off
+            }
       | otherwise = case A.unsafeIndex arr i of
           10 -> go (i + 1) (ln + 1) (i + 1)
-          13 | i + 1 < base + len && A.unsafeIndex arr (i + 1) == 10 ->
-                 go (i + 1) ln lineStart
-             | otherwise -> go (i + 1) (ln + 1) (i + 1)
+          13
+            | i + 1 < base + len && A.unsafeIndex arr (i + 1) == 10 ->
+                go (i + 1) ln lineStart
+            | otherwise -> go (i + 1) (ln + 1) (i + 1)
           _ -> go (i + 1) ln lineStart
 
     countChars :: Int -> Int -> Int
-    countChars i0 i1 = length
-      [ () | i <- [i0 .. i1 - 1], A.unsafeIndex arr i < 0x80 || A.unsafeIndex arr i >= 0xC0 ]
+    countChars i0 i1 =
+      length
+        [() | i <- [i0 .. i1 - 1], A.unsafeIndex arr i < 0x80 || A.unsafeIndex arr i >= 0xC0]
 
 -- | The line of the input that contains the offset, without the line break.
 lineAt :: T.Text -> Offset -> T.Text

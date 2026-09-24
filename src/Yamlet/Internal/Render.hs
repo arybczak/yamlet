@@ -1,10 +1,11 @@
 {-# OPTIONS_HADDOCK not-home #-}
+
 -- | Rendering of the syntax tree.
 --
 -- This module is intended for internal use only, and may change without warning
 -- in subsequent releases.
 module Yamlet.Internal.Render
-  ( RenderOptions(..)
+  ( RenderOptions (..)
   , defaultRenderOptions
   , renderSyntax
   ) where
@@ -27,9 +28,10 @@ newtype RenderOptions = RenderOptions
 
 -- | The collection styles of the tree.
 defaultRenderOptions :: RenderOptions
-defaultRenderOptions = RenderOptions
-  { forceBlock = False
-  }
+defaultRenderOptions =
+  RenderOptions
+    { forceBlock = False
+    }
 
 -- | Render documents with their comments and empty lines.
 --
@@ -49,8 +51,13 @@ renderSyntax opts = emptyLines . TL.toStrict . B.toLazyText . go True
     -- lines at the start or the end of the output to no node. So they go
     -- away, but not the empty lines in the content of a block scalar.
     emptyLines :: T.Text -> T.Text
-    emptyLines t = T.unlines . map (\l -> if l == emptyLine then "" else l)
-      . dropEnd . dropWhile (== emptyLine) . collapse $ T.lines t
+    emptyLines t =
+      T.unlines
+        . map (\l -> if l == emptyLine then "" else l)
+        . dropEnd
+        . dropWhile (== emptyLine)
+        . collapse
+        $ T.lines t
 
     collapse :: [T.Text] -> [T.Text]
     collapse = \case
@@ -69,16 +76,22 @@ renderSyntax opts = emptyLines . TL.toStrict . B.toLazyText . go True
 -- | A document. The flag tells if it starts the stream or follows a document
 -- end marker.
 document :: RenderOptions -> Bool -> Document -> B.Builder
-document opts afterEnd doc = mconcat
-  [ lines_ 0 doc.docComments.before
-  , case doc.version of
-      Just v -> (if afterEnd then mempty else "...\n")
-        <> "%YAML " <> B.fromString (show v.major) <> "." <> B.fromString (show v.minor) <> "\n"
-      Nothing -> mempty
-  , body
-  , lines_ 0 doc.docComments.after
-  , if doc.explicitEnd then "...\n" else mempty
-  ]
+document opts afterEnd doc =
+  mconcat
+    [ lines_ 0 doc.docComments.before
+    , case doc.version of
+        Just v ->
+          (if afterEnd then mempty else "...\n")
+            <> "%YAML "
+            <> B.fromString (show v.major)
+            <> "."
+            <> B.fromString (show v.minor)
+            <> "\n"
+        Nothing -> mempty
+    , body
+    , lines_ 0 doc.docComments.after
+    , if doc.explicitEnd then "...\n" else mempty
+    ]
   where
     r :: Node
     r = doc.root
@@ -87,9 +100,13 @@ document opts afterEnd doc = mconcat
     -- directives, for a comment on the marker line, and if it is empty. A
     -- block collection has no line of its own for its comment.
     marker :: Bool
-    marker = doc.explicitStart || isJust doc.version || not afterEnd || isEmpty r
-      || isJust doc.docComments.inline
-      || (isBlock opts r && isJust r.comments.inline)
+    marker =
+      doc.explicitStart
+        || isJust doc.version
+        || not afterEnd
+        || isEmpty r
+        || isJust doc.docComments.inline
+        || (isBlock opts r && isJust r.comments.inline)
 
     -- The marker line holds one comment. The comment of a block collection
     -- goes below it if the document has one too.
@@ -99,21 +116,32 @@ document opts afterEnd doc = mconcat
 
     body :: B.Builder
     body
-      | isBlock opts r = mconcat
-          [ if marker
-              then "---" <> maybe mempty (" " <>) (props r) <> comment markerComment <> "\n"
-                <> lines_ 0 rootLines
-              else lines_ 0 (rootLines ++ (if isJust (props r) then firstLines opts r else []))
-                <> maybe mempty (<> "\n") (props r)
-          , block opts 0 0 True (not marker && isJust (props r)) r
-          ]
+      | isBlock opts r =
+          mconcat
+            [ if marker
+                then
+                  "---"
+                    <> maybe mempty (" " <>) (props r)
+                    <> comment markerComment
+                    <> "\n"
+                    <> lines_ 0 rootLines
+                else
+                  lines_ 0 (rootLines ++ (if isJust (props r) then firstLines opts r else []))
+                    <> maybe mempty (<> "\n") (props r)
+            , block opts 0 0 True (not marker && isJust (props r)) r
+            ]
       | isEmpty r = case (doc.docComments.inline, r.comments.inline) of
           (Just dc, Just rc) -> "---" <> comment (Just dc) <> "\n" <> lines_ 0 (r.comments.before ++ [Comment rc])
           (dc, rc) -> "---" <> comment (dc <|> rc) <> "\n" <> lines_ 0 r.comments.before
       | marker && null r.comments.before && isNothing doc.docComments.inline =
           "--- " <> inline opts InValue 2 r (r.comments.inline) <> "\n"
-      | marker = "---" <> comment doc.docComments.inline <> "\n"
-          <> lines_ 0 r.comments.before <> inline opts InValue 2 r r.comments.inline <> "\n"
+      | marker =
+          "---"
+            <> comment doc.docComments.inline
+            <> "\n"
+            <> lines_ 0 r.comments.before
+            <> inline opts InValue 2 r r.comments.inline
+            <> "\n"
       | otherwise = lines_ 0 r.comments.before <> inline opts InValue 2 r r.comments.inline <> "\n"
 
 -- | The entries of a block collection at the given indentation, and the lines
@@ -140,8 +168,14 @@ block opts indent afterColumn atLineStart hoisted n = case n.content of
       Just key ->
         let (above, lineComment, below) = entryComments opts k v
         in start i above <> key <> ":" <> value opts indent v lineComment below
-      Nothing -> start i (aboveIndicator opts k) <> "?" <> after opts indent k
-        <> lines_ indent (aboveIndicator opts v) <> spaces indent <> ":" <> after opts indent v
+      Nothing ->
+        start i (aboveIndicator opts k)
+          <> "?"
+          <> after opts indent k
+          <> lines_ indent (aboveIndicator opts v)
+          <> spaces indent
+          <> ":"
+          <> after opts indent v
 
 -- | The lines above an indicator of a sequence item or an explicit entry. The
 -- lines above the first entry of a block collection after the indicator go
@@ -179,7 +213,7 @@ value :: RenderOptions -> Int -> Node -> Maybe T.Text -> [Line] -> B.Builder
 value opts indent v lineComment extra
   | isBlock opts v = case v.content of
       Sequence _ xs
-        | null [ () | Comment _ <- v.comments.after ] || not (endsWithBlockScalar xs) ->
+        | null [() | Comment _ <- v.comments.after] || not (endsWithBlockScalar xs) ->
             header <> lines_ indent below <> block opts indent (indent + 2) True False v
         -- A block scalar as the last item would take in the lines after an
         -- indentless sequence.
@@ -196,8 +230,8 @@ value opts indent v lineComment extra
 
     endsWithBlockScalar :: [Node] -> Bool
     endsWithBlockScalar xs = case reverse xs of
-      Node { content = Scalar Literal t } : _ -> isJust (literalBlock False 0 t)
-      Node { content = Scalar Folded t } : _ -> isJust (foldedBlock 0 t)
+      Node {content = Scalar Literal t} : _ -> isJust (literalBlock False 0 t)
+      Node {content = Scalar Folded t} : _ -> isJust (foldedBlock 0 t)
       _ -> False
 
 -- | A node after the indicator of a sequence item or an explicit entry, with
@@ -207,15 +241,17 @@ after opts indent n
   | isBlock opts n =
       if isNothing (props n) && isNothing n.comments.inline
         then " " <> block opts (indent + 2) (indent + 2) False True n
-        else maybe mempty (" " <>) (props n) <> comment n.comments.inline <> "\n"
-          <> block opts (indent + 2) (indent + 2) True True n
+        else
+          maybe mempty (" " <>) (props n)
+            <> comment n.comments.inline
+            <> "\n"
+            <> block opts (indent + 2) (indent + 2) True True n
   | isEmpty n = comment n.comments.inline <> "\n"
   | otherwise = " " <> inline opts InValue (indent + 2) n n.comments.inline <> "\n"
 
-
 -- | Where an inline node is.
 data Position = InValue | InKey | InFlow
-  deriving stock Eq
+  deriving stock (Eq)
 
 -- | A node on one line with the given comment at its end, except a block
 -- scalar, whose content lines are at the given indentation.
@@ -228,8 +264,9 @@ inline opts pos indent n lineComment = case n.content of
   where
     withProps :: B.Builder -> B.Builder
     withProps b = case props n of
-      Just p | isEmpty' -> p
-             | otherwise -> p <> " " <> b
+      Just p
+        | isEmpty' -> p
+        | otherwise -> p <> " " <> b
       Nothing -> b
 
     isEmpty' :: Bool
@@ -249,21 +286,23 @@ inline opts pos indent n lineComment = case n.content of
       Scalar style t -> scalar pos style t
       Sequence _ xs -> "[" <> commas (map (\x -> inline opts InFlow indent (flowItem x) Nothing) xs) <> "]"
       Mapping _ kvs -> "{" <> commas (map flowEntry kvs) <> "}"
-      Alias{} -> mempty
+      Alias {} -> mempty
 
     -- An empty scalar cannot be an item of a flow sequence.
     flowItem :: Node -> Node
     flowItem x = case x.content of
-      Scalar Plain "" | Props Nothing NoTag <- x.props ->
-        x { props = Props Nothing (Tag "tag:yaml.org,2002:null") }
+      Scalar Plain ""
+        | Props Nothing NoTag <- x.props ->
+            x {props = Props Nothing (Tag "tag:yaml.org,2002:null")}
       _ -> x
 
     flowEntry :: (Node, Node) -> B.Builder
-    flowEntry (k, v) = mconcat
-      [ inline opts InFlow indent k Nothing
-      , if endsWithName k then " :" else ":"
-      , if isEmpty v then mempty else " " <> inline opts InFlow indent v Nothing
-      ]
+    flowEntry (k, v) =
+      mconcat
+        [ inline opts InFlow indent k Nothing
+        , if endsWithName k then " :" else ":"
+        , if isEmpty v then mempty else " " <> inline opts InFlow indent v Nothing
+        ]
 
     commas :: [B.Builder] -> B.Builder
     commas = \case
@@ -307,10 +346,11 @@ isBlock opts n = case n.content of
 -- | The node or a node inside it has a comment, other than the lines above
 -- the node and its inline comment, which fit outside a flow collection.
 hasComments :: Node -> Bool
-hasComments n = not (null (commentLines n.comments.after)) || case n.content of
-  Sequence _ xs -> any inner xs
-  Mapping _ kvs -> any (\(k, v) -> inner k || inner v) kvs
-  _ -> False
+hasComments n =
+  not (null (commentLines n.comments.after)) || case n.content of
+    Sequence _ xs -> any inner xs
+    Mapping _ kvs -> any (\(k, v) -> inner k || inner v) kvs
+    _ -> False
   where
     inner :: Node -> Bool
     inner x = not (null (commentLines x.comments.before)) || isJust x.comments.inline || hasComments x
@@ -328,14 +368,14 @@ isEmpty n = case (n.props, n.content) of
 -- would be part of the name.
 endsWithName :: Node -> Bool
 endsWithName n = case n.content of
-  Alias{} -> True
+  Alias {} -> True
   Scalar Plain t -> T.null t && (isJust n.props.anchor || n.props.tag /= NoTag)
   _ -> False
 
 -- | The anchor and the tag of a node.
 props :: Node -> Maybe B.Builder
 props n = case n.content of
-  Alias{} -> Nothing
+  Alias {} -> Nothing
   _ -> case (anchor, tag) of
     (Nothing, Nothing) -> Nothing
     (Just a, Nothing) -> Just a
@@ -367,8 +407,9 @@ lines_ indent = mconcat . map line
     line :: Line -> B.Builder
     line = \case
       EmptyLine -> B.fromText emptyLine <> "\n"
-      Comment t -> mconcat . map commentLine
-        $ T.splitOn "\n" (T.replace "\r" "\n" (T.replace "\r\n" "\n" (printable t)))
+      Comment t ->
+        mconcat . map commentLine $
+          T.splitOn "\n" (T.replace "\r" "\n" (T.replace "\r\n" "\n" (printable t)))
 
     commentLine :: T.Text -> B.Builder
     commentLine l

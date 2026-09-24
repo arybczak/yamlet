@@ -13,7 +13,7 @@ description:
   A YAML 1.2.2 parser and emitter written in Haskell, with error messages that
   point to the line and the column of the problem. It has few dependencies.
 
-extra-source-files:
+extra-doc-files:
   CHANGELOG.md
   README.md
 

@@ -47,7 +47,7 @@ module Yamlet
   , module Yamlet.Decode
 
     -- * Conversion to nodes
-  , ToYAML(..)
+  , ToYAML (..)
   , (.=)
   , mapping
 
@@ -78,10 +78,11 @@ decodeAll bs = decodeInput bs >>= decodeAllText
 
 -- | Decode a stream with one document. An empty stream is null.
 decodeText :: FromYAML a => T.Text -> Either Error a
-decodeText input = decodeNodes input >>= \case
-  [] -> convert input (Node (Offset 0) nullTag Null)
-  [n] -> convert input n
-  _ : n : _ -> Left $ errorAt input n.offset "expected a single document"
+decodeText input =
+  decodeNodes input >>= \case
+    [] -> convert input (Node (Offset 0) nullTag Null)
+    [n] -> convert input n
+    _ : n : _ -> Left $ errorAt input n.offset "expected a single document"
 
 -- | Decode every document of a stream.
 decodeAllText :: FromYAML a => T.Text -> Either Error [a]

@@ -1,4 +1,5 @@
 {-# OPTIONS_HADDOCK not-home #-}
+
 -- | Composition of the representation graph from the syntax tree.
 --
 -- This module is intended for internal use only, and may change without warning
@@ -11,9 +12,9 @@ import Data.Map.Strict qualified as M
 import Data.Text qualified as T
 
 import Yamlet.Error
-import Yamlet.Schema
-import Yamlet.Node
 import Yamlet.Internal.Syntax qualified as S
+import Yamlet.Node
+import Yamlet.Schema
 
 -- | Resolve the tags and the aliases of a document and check that the keys of
 -- every mapping are unique. The input is for error messages.
@@ -24,42 +25,50 @@ compose input doc
   where
     -- Without aliases the anchors do not matter.
     plain :: S.Node -> Either Error Node
-    plain sn = let off = sn.offset; props = sn.props in case sn.content of
-      S.Scalar style t -> scalar off props style t
-      S.Sequence _ xs -> do
-        tag <- collectionTag off props seqTag
-        ns <- mapM plain xs
-        Right $ Node off tag (Sequence ns)
-      S.Mapping _ kvs -> do
-        tag <- collectionTag off props mapTag
-        entries <- mapM (\(k, v) -> (,) <$> plain k <*> plain v) kvs
-        checkUniqueKeys entries
-        Right $ Node off tag (Mapping entries)
-      S.Alias _ -> Left $ errorAt input off "unexpected alias"
+    plain sn =
+      let off = sn.offset; props = sn.props
+      in case sn.content of
+           S.Scalar style t -> scalar off props style t
+           S.Sequence _ xs -> do
+             tag <- collectionTag off props seqTag
+             ns <- mapM plain xs
+             Right $ Node off tag (Sequence ns)
+           S.Mapping _ kvs -> do
+             tag <- collectionTag off props mapTag
+             entries <- mapM (\(k, v) -> (,) <$> plain k <*> plain v) kvs
+             checkUniqueKeys entries
+             Right $ Node off tag (Mapping entries)
+           S.Alias _ -> Left $ errorAt input off "unexpected alias"
 
     -- An anchor maps to Nothing while the parser composes its node.
     go :: M.Map T.Text (Maybe Node) -> S.Node -> Either Error (Node, M.Map T.Text (Maybe Node))
-    go anchors sn = let off = sn.offset; props = sn.props in case sn.content of
-      S.Alias name -> case M.lookup name anchors of
-        Just (Just n) -> Right (Node off n.tag n.value, anchors)
-        Just Nothing -> Left $ errorAt input off $
-          "the alias *" ++ T.unpack name ++ " refers to a node that contains it"
-        Nothing -> Left $ errorAt input off $
-          "undefined alias *" ++ T.unpack name
-      S.Scalar style t -> do
-        n <- scalar off props style t
-        Right (n, define props n anchors)
-      S.Sequence _ xs -> do
-        tag <- collectionTag off props seqTag
-        (ns, anchors') <- goList (open props anchors) xs
-        let n = Node off tag (Sequence ns)
-        Right (n, define props n anchors')
-      S.Mapping _ kvs -> do
-        tag <- collectionTag off props mapTag
-        (entries, anchors') <- goPairs (open props anchors) kvs
-        checkUniqueKeys entries
-        let n = Node off tag (Mapping entries)
-        Right (n, define props n anchors')
+    go anchors sn =
+      let off = sn.offset; props = sn.props
+      in case sn.content of
+           S.Alias name -> case M.lookup name anchors of
+             Just (Just n) -> Right (Node off n.tag n.value, anchors)
+             Just Nothing ->
+               Left
+                 $ errorAt input off
+                 $ "the alias *" ++ T.unpack name ++ " refers to a node that contains it"
+             Nothing ->
+               Left
+                 $ errorAt input off
+                 $ "undefined alias *" ++ T.unpack name
+           S.Scalar style t -> do
+             n <- scalar off props style t
+             Right (n, define props n anchors)
+           S.Sequence _ xs -> do
+             tag <- collectionTag off props seqTag
+             (ns, anchors') <- goList (open props anchors) xs
+             let n = Node off tag (Sequence ns)
+             Right (n, define props n anchors')
+           S.Mapping _ kvs -> do
+             tag <- collectionTag off props mapTag
+             (entries, anchors') <- goPairs (open props anchors) kvs
+             checkUniqueKeys entries
+             let n = Node off tag (Mapping entries)
+             Right (n, define props n anchors')
 
     goList
       :: M.Map T.Text (Maybe Node)
@@ -101,12 +110,16 @@ compose input doc
         | otherwise -> Right $ Node off strTag (String t)
       S.NonSpecificTag -> Right $ Node off strTag (String t)
       S.Tag tag
-        | tag == seqTag || tag == mapTag -> Left $ errorAt input off $
-            "the tag !!" ++ T.unpack (T.drop 18 tag) ++ " cannot be used on a scalar"
+        | tag == seqTag || tag == mapTag ->
+            Left
+              $ errorAt input off
+              $ "the tag !!" ++ T.unpack (T.drop 18 tag) ++ " cannot be used on a scalar"
         | otherwise -> case resolveTagged tag t of
             Just v -> Right $ Node off tag v
-            Nothing -> Left $ errorAt input off $
-              "invalid value for the tag !!" ++ T.unpack (T.drop 18 tag)
+            Nothing ->
+              Left
+                $ errorAt input off
+                $ "invalid value for the tag !!" ++ T.unpack (T.drop 18 tag)
       where
         node' :: Value -> Node
         node' v = Node off (defaultTag v) v
@@ -117,9 +130,13 @@ compose input doc
       S.NonSpecificTag -> Right def
       S.Tag tag
         | tag == def || not (isCoreTag tag) -> Right tag
-        | otherwise -> Left $ errorAt input off $
-            "the tag !!" ++ T.unpack (T.drop 18 tag) ++ " cannot be used on a "
-            ++ (if def == seqTag then "sequence" else "mapping")
+        | otherwise ->
+            Left
+              $ errorAt input off
+              $ "the tag !!"
+                ++ T.unpack (T.drop 18 tag)
+                ++ " cannot be used on a "
+                ++ (if def == seqTag then "sequence" else "mapping")
 
     isCoreTag :: T.Text -> Bool
     isCoreTag tag = tag `elem` [nullTag, boolTag, intTag, floatTag, strTag, seqTag, mapTag]
@@ -133,10 +150,10 @@ compose input doc
 
 hasAlias :: S.Node -> Bool
 hasAlias n = case n.content of
-  S.Scalar{} -> False
+  S.Scalar {} -> False
   S.Sequence _ xs -> any hasAlias xs
   S.Mapping _ kvs -> any (\(k, v) -> hasAlias k || hasAlias v) kvs
-  S.Alias{} -> True
+  S.Alias {} -> True
 
 -- | The first key that is equal to an earlier one.
 duplicate :: [Node] -> Maybe Node
@@ -186,11 +203,11 @@ scalarKey = \case
 
 -- | Equality of nodes that ignores their offsets.
 sameNode :: Node -> Node -> Bool
-sameNode a b = a.tag == b.tag && case (a.value, b.value) of
-  (Sequence xs, Sequence ys) -> length xs == length ys && and (zipWith sameNode xs ys)
-  (Mapping xs, Mapping ys) -> length xs == length ys && all (\(k, v) -> any (samePair k v) ys) xs
-  (x, y) -> x == y
+sameNode a b =
+  a.tag == b.tag && case (a.value, b.value) of
+    (Sequence xs, Sequence ys) -> length xs == length ys && and (zipWith sameNode xs ys)
+    (Mapping xs, Mapping ys) -> length xs == length ys && all (\(k, v) -> any (samePair k v) ys) xs
+    (x, y) -> x == y
   where
     samePair :: Node -> Node -> (Node, Node) -> Bool
     samePair k v (k', v') = sameNode k k' && sameNode v v'
-

@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveAnyClass #-}
+
 -- | The representation graph of a YAML document: nodes with resolved tags and
 -- values, and aliases replaced by the nodes that they refer to.
 --
@@ -8,9 +9,9 @@
 -- they return.
 module Yamlet.Node
   ( -- * Nodes
-    Node(..)
-  , Value(..)
-  , FloatValue(..)
+    Node (..)
+  , Value (..)
+  , FloatValue (..)
   , floatToDouble
   , doubleToFloat
   , describe
@@ -18,7 +19,7 @@ module Yamlet.Node
     -- * Construction
   , node
   , S.noOffset
-  , S.Offset(..)
+  , S.Offset (..)
 
     -- * Tags
   , nullTag
@@ -48,7 +49,7 @@ data Node = Node
   , value :: !Value
   }
   deriving stock (Eq, Show, Generic)
-  deriving anyclass NFData
+  deriving anyclass (NFData)
 
 -- | The value of a node.
 --
@@ -61,10 +62,10 @@ data Value
   | Float !FloatValue
   | String !T.Text
   | Sequence [Node]
-  | Mapping [(Node, Node)]
-  -- ^ The entries of a mapping in the order of the input. The keys are unique.
+  | -- | The entries of a mapping in the order of the input. The keys are unique.
+    Mapping [(Node, Node)]
   deriving stock (Eq, Show, Generic)
-  deriving anyclass NFData
+  deriving anyclass (NFData)
 
 -- | The value of a floating-point number. A finite value is exact, e.g. @0.1@
 -- is exactly one tenth.
@@ -78,7 +79,7 @@ data FloatValue
   | NegativeInfinity
   | NaN
   deriving stock (Eq, Ord, Show, Generic)
-  deriving anyclass NFData
+  deriving anyclass (NFData)
 
 -- | The nearest double, infinite if the value is out of its range.
 floatToDouble :: FloatValue -> Double
@@ -109,11 +110,12 @@ describe = \case
 
 -- | A node with the default tag for its value.
 node :: Value -> Node
-node v = Node
-  { offset = S.noOffset
-  , tag = defaultTag v
-  , value = v
-  }
+node v =
+  Node
+    { offset = S.noOffset
+    , tag = defaultTag v
+    , value = v
+    }
 
 nullTag, boolTag, intTag, floatTag, strTag, seqTag, mapTag :: T.Text
 nullTag = "tag:yaml.org,2002:null"

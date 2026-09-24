@@ -1,7 +1,7 @@
 -- | A YAML stream as a sequence of events, the representation that the YAML
 -- specification uses to describe the result of parsing.
 module Events
-  ( Event(..)
+  ( Event (..)
   , toEvents
   ) where
 
@@ -12,10 +12,10 @@ import Yamlet.Syntax
 data Event
   = StreamStart
   | StreamEnd
-  | DocumentStart !Bool
-  -- ^ The document starts with a @---@ marker.
-  | DocumentEnd !Bool
-  -- ^ The document ends with a @...@ marker.
+  | -- | The document starts with a @---@ marker.
+    DocumentStart !Bool
+  | -- | The document ends with a @...@ marker.
+    DocumentEnd !Bool
   | SequenceStart !Props !CollectionStyle
   | SequenceEnd
   | MappingStart !Props !CollectionStyle
@@ -29,8 +29,9 @@ toEvents :: [Document] -> [Event]
 toEvents docs = StreamStart : foldr documentEvents [StreamEnd] docs
   where
     documentEvents :: Document -> [Event] -> [Event]
-    documentEvents doc rest = DocumentStart doc.explicitStart
-      : node doc.root (DocumentEnd doc.explicitEnd : rest)
+    documentEvents doc rest =
+      DocumentStart doc.explicitStart
+        : node doc.root (DocumentEnd doc.explicitEnd : rest)
 
     node :: Node -> [Event] -> [Event]
     node n rest = case n.content of

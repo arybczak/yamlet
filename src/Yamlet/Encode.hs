@@ -1,7 +1,7 @@
 -- | Conversion of Haskell values to nodes and rendering of nodes as YAML.
 module Yamlet.Encode
   ( -- * Class
-    ToYAML(..)
+    ToYAML (..)
   , (.=)
   , mapping
 
@@ -21,8 +21,8 @@ import Data.Word
 import Numeric.Natural
 
 import Yamlet.Internal.Emit
-import Yamlet.Schema
 import Yamlet.Node
+import Yamlet.Schema
 import Yamlet.Syntax qualified as S
 
 ----------------------------------------
@@ -82,7 +82,7 @@ instance ToYAML a => ToYAML (Maybe a) where
   toYAML = maybe (node Null) toYAML
 
 instance (ToYAML k, ToYAML v) => ToYAML (M.Map k v) where
-  toYAML m = mapping [ (toYAML k, toYAML v) | (k, v) <- M.toList m ]
+  toYAML m = mapping [(toYAML k, toYAML v) | (k, v) <- M.toList m]
 
 instance (ToYAML a, ToYAML b) => ToYAML (a, b) where
   toYAML (a, b) = node $ Sequence [toYAML a, toYAML b]
@@ -117,16 +117,17 @@ renderDocuments docs = TL.toStrict . B.toLazyText . mconcat $ zipWith document [
 -- scalars or to add comments before 'S.renderSyntax' writes it. The styles
 -- are the ones that 'renderDocuments' uses.
 toSyntax :: Node -> S.Node
-toSyntax n = sn { S.props = S.Props Nothing tag }
+toSyntax n = sn {S.props = S.Props Nothing tag}
   where
     tag :: S.Tag
-    tag | n.tag == defaultTag n.value = S.NoTag
-        | otherwise = S.Tag n.tag
+    tag
+      | n.tag == defaultTag n.value = S.NoTag
+      | otherwise = S.Tag n.tag
 
     sn :: S.Node
     sn = case n.value of
       Sequence xs -> S.sequenceNode (map toSyntax xs)
-      Mapping kvs -> S.mappingNode [ (toSyntax k, toSyntax v) | (k, v) <- kvs ]
+      Mapping kvs -> S.mappingNode [(toSyntax k, toSyntax v) | (k, v) <- kvs]
       String t
         | isPlainSafe t -> S.plainNode t
         | T.any (== '\n') t -> S.scalarNode S.Literal t
@@ -165,9 +166,10 @@ blockMapping indent atLineStart n = case n.value of
   _ -> mempty
   where
     entry :: Int -> (Node, Node) -> B.Builder
-    entry i (k, v) = (if i > 0 || atLineStart then spaces indent else mempty) <> case implicitKey k of
-      Just key -> key <> ":" <> value v
-      Nothing -> "?" <> explicit k <> spaces indent <> ":" <> explicit v
+    entry i (k, v) =
+      (if i > 0 || atLineStart then spaces indent else mempty) <> case implicitKey k of
+        Just key -> key <> ":" <> value v
+        Nothing -> "?" <> explicit k <> spaces indent <> ":" <> explicit v
 
     value :: Node -> B.Builder
     value v = case v.value of
@@ -190,7 +192,8 @@ implicitKey :: Node -> Maybe B.Builder
 implicitKey k = case k.value of
   Sequence _ -> Nothing
   Mapping _ -> Nothing
-  _ | TL.length (B.toLazyText key) > 1024 -> Nothing
+  _
+    | TL.length (B.toLazyText key) > 1024 -> Nothing
     | otherwise -> Just key
   where
     key :: B.Builder

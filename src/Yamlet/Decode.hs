@@ -2,7 +2,7 @@
 -- node that caused them.
 module Yamlet.Decode
   ( -- * Class
-    FromYAML(..)
+    FromYAML (..)
 
     -- * Parser
   , Parser
@@ -93,8 +93,9 @@ failAt n msg = Parser $ \_ -> Left (n.offset, msg)
 -- | Fail with an error about the kind of the node, e.g. "expected a list, but
 -- got a string".
 typeMismatch :: String -> Node -> Parser a
-typeMismatch expected n = failAt n $
-  "expected " ++ expected ++ ", but got " ++ describe n.value
+typeMismatch expected n =
+  failAt n $
+    "expected " ++ expected ++ ", but got " ++ describe n.value
 
 ----------------------------------------
 -- Scalars
@@ -156,11 +157,12 @@ data Object = Object
   }
 
 mkObject :: Node -> [(Node, Node)] -> Object
-mkObject n kvs = Object
-  { node = n
-  , entries = kvs
-  , index = M.fromList [ (t, kv) | kv@(k, _) <- kvs, String t <- [k.value] ]
-  }
+mkObject n kvs =
+  Object
+    { node = n
+    , entries = kvs
+    , index = M.fromList [(t, kv) | kv@(k, _) <- kvs, String t <- [k.value]]
+    }
 
 -- | The node of the mapping.
 objectNode :: Object -> Node
@@ -172,7 +174,7 @@ objectEntries o = o.entries
 
 -- | The string keys of the mapping in the order of the input.
 objectKeys :: Object -> [T.Text]
-objectKeys o = [ T.copy t | (k, _) <- o.entries, String t <- [k.value] ]
+objectKeys o = [T.copy t | (k, _) <- o.entries, String t <- [k.value]]
 
 -- | The value of a string key.
 lookupKey :: T.Text -> Object -> Maybe Node
@@ -213,8 +215,12 @@ rejectUnknownKeys :: [T.Text] -> Object -> Parser ()
 rejectUnknownKeys known o = forM_ o.entries $ \(k, _) -> case k.value of
   String t
     | t `elem` known -> pure ()
-    | otherwise -> failAt k $ "unknown key " ++ show t
-      ++ ", expected one of: " ++ L.intercalate ", " (map T.unpack known)
+    | otherwise ->
+        failAt k $
+          "unknown key "
+            ++ show t
+            ++ ", expected one of: "
+            ++ L.intercalate ", " (map T.unpack known)
   _ -> typeMismatch "a string" k
 
 ----------------------------------------
@@ -241,9 +247,10 @@ instance FromYAML Integer where
   parseYAML = withInt pure
 
 instance FromYAML Natural where
-  parseYAML = withInt $ \i -> if i < 0
-    then fail "expected a non-negative integer"
-    else pure (fromInteger i)
+  parseYAML = withInt $ \i ->
+    if i < 0
+      then fail "expected a non-negative integer"
+      else pure (fromInteger i)
 
 instance FromYAML Int where parseYAML = bounded
 instance FromYAML Int8 where parseYAML = bounded
@@ -260,8 +267,12 @@ instance FromYAML Word64 where parseYAML = bounded
 bounded :: forall a. (Bounded a, Integral a) => Node -> Parser a
 bounded = withInt $ \i ->
   if i < toInteger (minBound @a) || i > toInteger (maxBound @a)
-    then fail $ "the integer is out of the range from "
-      ++ show (toInteger (minBound @a)) ++ " to " ++ show (toInteger (maxBound @a))
+    then
+      fail $
+        "the integer is out of the range from "
+          ++ show (toInteger (minBound @a))
+          ++ " to "
+          ++ show (toInteger (maxBound @a))
     else pure (fromInteger i)
 
 instance FromYAML Double where
@@ -300,8 +311,11 @@ instance FromYAML a => FromYAML (Maybe a) where
     _ -> Just <$> parseYAML n
 
 instance (Ord k, FromYAML k, FromYAML v) => FromYAML (M.Map k v) where
-  parseYAML = withMapping $ \o -> M.fromList <$> forM o.entries
-    (\(k, v) -> (,) <$> parseNode parseYAML k <*> parseNode parseYAML v)
+  parseYAML = withMapping $ \o ->
+    M.fromList
+      <$> forM
+        o.entries
+        (\(k, v) -> (,) <$> parseNode parseYAML k <*> parseNode parseYAML v)
 
 instance (FromYAML a, FromYAML b) => FromYAML (a, b) where
   parseYAML = withSequence $ \case
@@ -310,6 +324,9 @@ instance (FromYAML a, FromYAML b) => FromYAML (a, b) where
 
 instance (FromYAML a, FromYAML b, FromYAML c) => FromYAML (a, b, c) where
   parseYAML = withSequence $ \case
-    [a, b, c] -> (,,) <$> parseNode parseYAML a <*> parseNode parseYAML b
-                      <*> parseNode parseYAML c
+    [a, b, c] ->
+      (,,)
+        <$> parseNode parseYAML a
+        <*> parseNode parseYAML b
+        <*> parseNode parseYAML c
     _ -> fail "expected a list of 3 elements"

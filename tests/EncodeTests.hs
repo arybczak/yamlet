@@ -12,50 +12,54 @@ import Yamlet
 import Yamlet.Syntax qualified as S
 
 encodeTests :: TestTree
-encodeTests = testGroup "Encode"
-  [ testCase "block style" test_blockStyle
-  , testCase "quoting" test_quoting
-  , testCase "floats" test_floats
-  , testCase "literal block scalars" test_literal
-  , testCase "tags" test_tags
-  , testCase "syntax tree" test_syntax
-  , testProperty "round trip" prop_roundTrip
-  , testProperty "syntax round trip" prop_syntaxRoundTrip
-  ]
+encodeTests =
+  testGroup
+    "Encode"
+    [ testCase "block style" test_blockStyle
+    , testCase "quoting" test_quoting
+    , testCase "floats" test_floats
+    , testCase "literal block scalars" test_literal
+    , testCase "tags" test_tags
+    , testCase "syntax tree" test_syntax
+    , testProperty "round trip" prop_roundTrip
+    , testProperty "syntax round trip" prop_syntaxRoundTrip
+    ]
 
 test_blockStyle :: Assertion
 test_blockStyle = assertEqual "output" expected (encodeText value)
   where
     value :: Node
-    value = mapping
-      [ "source_paths" .= ["." :: T.Text]
-      , "exclude_paths" .= ["dist" :: T.Text, "dist-newstyle"]
-      , "language" .= ("Haskell2010" :: T.Text)
-      , "nested" .= mapping ["a" .= (1 :: Int), "b" .= [[True, False]]]
-      , "records" .= [mapping ["x" .= (1.5 :: Double), "y" .= ()]]
-      , "empty_list" .= ([] :: [Int])
-      , "empty_map" .= mapping []
-      ]
+    value =
+      mapping
+        [ "source_paths" .= ["." :: T.Text]
+        , "exclude_paths" .= ["dist" :: T.Text, "dist-newstyle"]
+        , "language" .= ("Haskell2010" :: T.Text)
+        , "nested" .= mapping ["a" .= (1 :: Int), "b" .= [[True, False]]]
+        , "records" .= [mapping ["x" .= (1.5 :: Double), "y" .= ()]]
+        , "empty_list" .= ([] :: [Int])
+        , "empty_map" .= mapping []
+        ]
 
     expected :: T.Text
-    expected = T.unlines
-      [ "source_paths:"
-      , "- ."
-      , "exclude_paths:"
-      , "- dist"
-      , "- dist-newstyle"
-      , "language: Haskell2010"
-      , "nested:"
-      , "  a: 1"
-      , "  b:"
-      , "  - - true"
-      , "    - false"
-      , "records:"
-      , "- x: 1.5"
-      , "  y: null"
-      , "empty_list: []"
-      , "empty_map: {}"
-      ]
+    expected =
+      T.unlines
+        [ "source_paths:"
+        , "- ."
+        , "exclude_paths:"
+        , "- dist"
+        , "- dist-newstyle"
+        , "language: Haskell2010"
+        , "nested:"
+        , "  a: 1"
+        , "  b:"
+        , "  - - true"
+        , "    - false"
+        , "records:"
+        , "- x: 1.5"
+        , "  y: null"
+        , "empty_list: []"
+        , "empty_map: {}"
+        ]
 
 test_quoting :: Assertion
 test_quoting = do
@@ -90,7 +94,9 @@ test_floats = do
   assertEqual "integral double" "12.0\n" (encodeText (12 :: Double))
   assertEqual "double" "0.1\n" (encodeText (0.1 :: Double))
   assertEqual "large scientific" "1.0e30\n" (encodeText (Sci.scientific 1 30))
-  assertEqual "exact scientific" "1.2345678901234567890123e19\n"
+  assertEqual
+    "exact scientific"
+    "1.2345678901234567890123e19\n"
     (encodeText (Sci.scientific 12345678901234567890123 (-3)))
   assertEqual "infinity" "-.inf\n" (encodeText (-1 / 0 :: Double))
   assertEqual "not a number" ".nan\n" (encodeText (0 / 0 :: Double))
@@ -110,8 +116,11 @@ test_tags = do
   assertEqual "tagged scalar" "- !name foo\n" (encodeText [str])
 
 test_syntax :: Assertion
-test_syntax = assertEqual "output" expected $ S.renderSyntax S.defaultRenderOptions
-  [S.document (edit (toSyntax value))]
+test_syntax =
+  assertEqual "output" expected $
+    S.renderSyntax
+      S.defaultRenderOptions
+      [S.document (edit (toSyntax value))]
   where
     value :: Node
     value = mapping ["name" .= ("x" :: T.Text), "paths" .= ["a" :: T.Text, "b"]]
@@ -119,12 +128,15 @@ test_syntax = assertEqual "output" expected $ S.renderSyntax S.defaultRenderOpti
     -- Add a comment above the first key and use the flow style for the list.
     edit :: S.Node -> S.Node
     edit n = case n.content of
-      S.Mapping style [(k1, v1), (k2, v2)] -> n
-        { S.content = S.Mapping style
-          [ (k1 { S.comments = S.noComments { S.before = [S.Comment "The name."] } }, v1)
-          , (k2, v2 { S.content = flow v2.content })
-          ]
-        }
+      S.Mapping style [(k1, v1), (k2, v2)] ->
+        n
+          { S.content =
+              S.Mapping
+                style
+                [ (k1 {S.comments = S.noComments {S.before = [S.Comment "The name."]}}, v1)
+                , (k2, v2 {S.content = flow v2.content})
+                ]
+          }
       _ -> n
 
     flow :: S.Content -> S.Content
@@ -156,11 +168,11 @@ readsBack output n = case decodeNodes output of
     strip :: Node -> Node
     strip x = Node noOffset x.tag $ case x.value of
       Sequence xs -> Sequence (map strip xs)
-      Mapping kvs -> Mapping [ (strip k, strip v) | (k, v) <- kvs ]
+      Mapping kvs -> Mapping [(strip k, strip v) | (k, v) <- kvs]
       v -> v
 
 newtype Doc = Doc Node
-  deriving stock Show
+  deriving stock (Show)
 
 instance Arbitrary Doc where
   arbitrary = Doc <$> sized genNode
@@ -168,12 +180,13 @@ instance Arbitrary Doc where
 genNode :: Int -> Gen Node
 genNode size
   | size <= 1 = genScalar
-  | otherwise = frequency
-    [ (3, genScalar)
-    , (1, node . Sequence <$> genList)
-    , (1, node . Mapping <$> genEntries)
-    , (1, tagged <$> genScalar)
-    ]
+  | otherwise =
+      frequency
+        [ (3, genScalar)
+        , (1, node . Sequence <$> genList)
+        , (1, node . Mapping <$> genEntries)
+        , (1, tagged <$> genScalar)
+        ]
   where
     genList :: Gen [Node]
     genList = do
@@ -188,37 +201,86 @@ genNode size
 
     tagged :: Node -> Node
     tagged n = case n.value of
-      String _ -> n { tag = "!custom" }
+      String _ -> n {tag = "!custom"}
       _ -> n
 
 genScalar :: Gen Node
-genScalar = node <$> oneof
-  [ pure Null
-  , Bool <$> arbitrary
-  , Int <$> arbitrary
-  , Float <$> elements (map Finite [0, 1.5, -2.25e-10, 123456.789, 1e30, 12] ++ [Infinity, NegativeInfinity, NaN])
-  , String <$> genText
-  ]
+genScalar =
+  node
+    <$> oneof
+      [ pure Null
+      , Bool <$> arbitrary
+      , Int <$> arbitrary
+      , Float <$> elements (map Finite [0, 1.5, -2.25e-10, 123456.789, 1e30, 12] ++ [Infinity, NegativeInfinity, NaN])
+      , String <$> genText
+      ]
 
 genText :: Gen T.Text
-genText = oneof
-  [ elements tricky
-  , T.pack <$> listOf genChar
-  , T.intercalate "\n" <$> listOf (T.pack <$> listOf genChar)
-  ]
+genText =
+  oneof
+    [ elements tricky
+    , T.pack <$> listOf genChar
+    , T.intercalate "\n" <$> listOf (T.pack <$> listOf genChar)
+    ]
   where
     tricky :: [T.Text]
     tricky =
-      [ "", " ", "-", "- a", "? a", ": a", "a: b", "a:b", "#", "a #b", "true", "null"
-      , "1", "0x1F", "0o7", ".5", "~", "---", "...", "@x", "`x", "foo\n", "\nfoo"
-      , "  lead", "trail  ", "a\n\nb\n\n", "\t", "é", "\x85", "\x2028", "\xFEFF"
-      , "\n", "\n\n", " \n", "a\n ", "|", ">", "%x", "&a", "*a", "!a", "{}", "[]"
-      , "a, b", "key:", "'quoted'", "\"dq\"", "\r\n", "\\", "a\tb"
+      [ ""
+      , " "
+      , "-"
+      , "- a"
+      , "? a"
+      , ": a"
+      , "a: b"
+      , "a:b"
+      , "#"
+      , "a #b"
+      , "true"
+      , "null"
+      , "1"
+      , "0x1F"
+      , "0o7"
+      , ".5"
+      , "~"
+      , "---"
+      , "..."
+      , "@x"
+      , "`x"
+      , "foo\n"
+      , "\nfoo"
+      , "  lead"
+      , "trail  "
+      , "a\n\nb\n\n"
+      , "\t"
+      , "é"
+      , "\x85"
+      , "\x2028"
+      , "\xFEFF"
+      , "\n"
+      , "\n\n"
+      , " \n"
+      , "a\n "
+      , "|"
+      , ">"
+      , "%x"
+      , "&a"
+      , "*a"
+      , "!a"
+      , "{}"
+      , "[]"
+      , "a, b"
+      , "key:"
+      , "'quoted'"
+      , "\"dq\""
+      , "\r\n"
+      , "\\"
+      , "a\tb"
       ]
 
     genChar :: Gen Char
-    genChar = frequency
-      [ (10, elements "abc xyz-:#,[]{}'\"!&*?|>%@`\\")
-      , (2, elements "\t\r\x85\xA0\x2028\xFEFF\x01\x7F")
-      , (1, arbitrary)
-      ]
+    genChar =
+      frequency
+        [ (10, elements "abc xyz-:#,[]{}'\"!&*?|>%@`\\")
+        , (2, elements "\t\r\x85\xA0\x2028\xFEFF\x01\x7F")
+        , (1, arbitrary)
+        ]

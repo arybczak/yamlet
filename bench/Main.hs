@@ -16,15 +16,17 @@ import Yamlet
 import Yamlet.Syntax qualified as S
 
 main :: IO ()
-main = defaultMain
-  [ input "records" $ records 5000
-  , input "flow" $ flow 5000
-  , input "text" $ text 2000
-  ]
+main =
+  defaultMain
+    [ input "records" $ records 5000
+    , input "flow" $ flow 5000
+    , input "text" $ text 2000
+    ]
 
 input :: String -> T.Text -> Benchmark
 input name t = env (pure (bs, bl)) $ \ ~(strict, lazy) ->
-  bgroup (name ++ " (" ++ show (BS.length bs `div` 1024) ++ " KiB)")
+  bgroup
+    (name ++ " (" ++ show (BS.length bs `div` 1024) ++ " KiB)")
     [ bench "yamlet (syntax)" $ nf S.parseDocuments strict
     , bench "yamlet (nodes)" $ nf (decodeInput >=> decodeNodes) strict
     , bench "HsYAML (events)" $ nf HE.parseEvents lazy
@@ -43,48 +45,54 @@ records :: Int -> T.Text
 records n = T.concat $ map record [1 .. n]
   where
     record :: Int -> T.Text
-    record i = T.unlines
-      [ "- name: item " <> num i
-      , "  id: " <> num i
-      , "  tags: [alpha, beta, gamma]"
-      , "  description: \"an \\\"escaped\\\" string\\twith a tab\""
-      , "  path: /usr/local/share/item-" <> num i
-      , "  enabled: true"
-      , "  nested:"
-      , "    x: 1.5"
-      , "    y: -3"
-      , "    list:"
-      , "      - one"
-      , "      - 'two'"
-      ]
+    record i =
+      T.unlines
+        [ "- name: item " <> num i
+        , "  id: " <> num i
+        , "  tags: [alpha, beta, gamma]"
+        , "  description: \"an \\\"escaped\\\" string\\twith a tab\""
+        , "  path: /usr/local/share/item-" <> num i
+        , "  enabled: true"
+        , "  nested:"
+        , "    x: 1.5"
+        , "    y: -3"
+        , "    list:"
+        , "      - one"
+        , "      - 'two'"
+        ]
 
 -- | JSON-like flow collections.
 flow :: Int -> T.Text
 flow n = "[" <> T.intercalate ",\n " (map record [1 .. n]) <> "]\n"
   where
     record :: Int -> T.Text
-    record i = T.concat
-      [ "{\"id\": ", num i, ", \"name\": \"item ", num i
-      , "\", \"values\": [1, 2.5, true, null], \"child\": {\"a\": \"b\"}}"
-      ]
+    record i =
+      T.concat
+        [ "{\"id\": "
+        , num i
+        , ", \"name\": \"item "
+        , num i
+        , "\", \"values\": [1, 2.5, true, null], \"child\": {\"a\": \"b\"}}"
+        ]
 
 -- | Block scalars and multi-line plain scalars.
 text :: Int -> T.Text
 text n = T.concat $ map entry [1 .. n]
   where
     entry :: Int -> T.Text
-    entry i = T.unlines
-      [ "key" <> num i <> ": |"
-      , "  Lorem ipsum dolor sit amet, consectetur adipiscing elit."
-      , "  Sed do eiusmod tempor incididunt ut labore et dolore."
-      , ""
-      , "    Ut enim ad minim veniam, quis nostrud exercitation."
-      , "folded" <> num i <> ": >-"
-      , "  Duis aute irure dolor in reprehenderit in voluptate velit"
-      , "  esse cillum dolore eu fugiat nulla pariatur."
-      , "plain" <> num i <> ": Excepteur sint occaecat cupidatat non proident,"
-      , "  sunt in culpa qui officia deserunt mollit anim id est laborum."
-      ]
+    entry i =
+      T.unlines
+        [ "key" <> num i <> ": |"
+        , "  Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+        , "  Sed do eiusmod tempor incididunt ut labore et dolore."
+        , ""
+        , "    Ut enim ad minim veniam, quis nostrud exercitation."
+        , "folded" <> num i <> ": >-"
+        , "  Duis aute irure dolor in reprehenderit in voluptate velit"
+        , "  esse cillum dolore eu fugiat nulla pariatur."
+        , "plain" <> num i <> ": Excepteur sint occaecat cupidatat non proident,"
+        , "  sunt in culpa qui officia deserunt mollit anim id est laborum."
+        ]
 
 num :: Int -> T.Text
 num = T.pack . show

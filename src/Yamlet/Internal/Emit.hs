@@ -1,4 +1,5 @@
 {-# OPTIONS_HADDOCK not-home #-}
+
 -- | Building blocks of the YAML output.
 --
 -- This module is intended for internal use only, and may change without warning
@@ -30,13 +31,13 @@ plainSyntax inFlow t = case T.uncons t of
   Nothing -> False
   Just (c, rest) ->
     firstOk c rest
-    && T.all isPlainChar t
-    && not (isWhite (T.last t))
-    && T.last t /= ':'
-    && not (": " `T.isInfixOf` t)
-    && not (" #" `T.isInfixOf` t)
-    && not ("---" `T.isPrefixOf` t)
-    && not ("..." `T.isPrefixOf` t)
+      && T.all isPlainChar t
+      && not (isWhite (T.last t))
+      && T.last t /= ':'
+      && not (": " `T.isInfixOf` t)
+      && not (" #" `T.isInfixOf` t)
+      && not ("---" `T.isPrefixOf` t)
+      && not ("..." `T.isPrefixOf` t)
   where
     firstOk :: Char -> T.Text -> Bool
     firstOk c rest
@@ -46,8 +47,9 @@ plainSyntax inFlow t = case T.uncons t of
       | otherwise = not (isWhite c) && c `notElem` ("-?:,[]{}#&*!|>'\"%@`" :: String)
 
     isPlainChar :: Char -> Bool
-    isPlainChar c = (c == ' ' || (isPrintable c && c /= '\t'))
-      && not (inFlow && c `elem` (",[]{}" :: String))
+    isPlainChar c =
+      (c == ' ' || (isPrintable c && c /= '\t'))
+        && not (inFlow && c `elem` (",[]{}" :: String))
 
     isWhite :: Char -> Bool
     isWhite c = c == ' ' || c == '\t'
@@ -71,7 +73,8 @@ doubleQuoted t = "\"" <> T.foldr (\c b -> escape c <> b) mempty t <> "\""
       '\t' -> "\\t"
       '\r' -> "\\r"
       '\0' -> "\\0"
-      c | isPrintable c -> B.singleton c
+      c
+        | isPrintable c -> B.singleton c
         | ord c <= 0xFF -> "\\x" <> hex 2 (ord c)
         | ord c <= 0xFFFF -> "\\u" <> hex 4 (ord c)
         | otherwise -> "\\U" <> hex 8 (ord c)
@@ -85,8 +88,9 @@ doubleQuoted t = "\"" <> T.foldr (\c b -> escape c <> b) mempty t <> "\""
 literalBlock :: Bool -> Int -> T.Text -> Maybe (B.Builder, B.Builder)
 literalBlock allowKeep indent t = do
   (header, body, trailing) <- blockParts allowKeep t
-  let content = mconcat (map (line indent) (T.splitOn "\n" body))
-        <> B.fromText (T.replicate (trailing - 1) "\n")
+  let content =
+        mconcat (map (line indent) (T.splitOn "\n" body))
+          <> B.fromText (T.replicate (trailing - 1) "\n")
   Just ("|" <> header, content)
 
 -- | The header and the content lines of a folded block scalar, with the
@@ -161,12 +165,12 @@ tagText :: T.Text -> B.Builder
 tagText tag
   | Just suffix <- T.stripPrefix "tag:yaml.org,2002:" tag
   , not (T.null suffix)
-  , T.all isTagChar suffix
-  = "!!" <> B.fromText suffix
+  , T.all isTagChar suffix =
+      "!!" <> B.fromText suffix
   | Just suffix <- T.stripPrefix "!" tag
   , not (T.null suffix)
-  , T.all isTagChar suffix
-  = "!" <> B.fromText suffix
+  , T.all isTagChar suffix =
+      "!" <> B.fromText suffix
   | otherwise = "!<" <> B.fromText tag <> ">"
   where
     isTagChar :: Char -> Bool

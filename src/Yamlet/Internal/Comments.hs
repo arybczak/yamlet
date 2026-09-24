@@ -1,4 +1,5 @@
 {-# OPTIONS_HADDOCK not-home #-}
+
 -- | Attachment of comments and empty lines to the nodes of a document.
 --
 -- The rules are in the documentation of "Yamlet.Syntax". The parser skips
@@ -36,18 +37,21 @@ attachComments :: Env -> Int -> Maybe Int -> Int -> Document -> Document
 attachComments e start marker end doc
   | not (mayHaveItems e start end) = doc
   | null items = doc
-  | otherwise = doc
-      { docComments = Comments
-          { before = dropWhile (== EmptyLine) (map (.line) docItems)
-          , inline = markerComment
-          , after = map (.line) leftover
-          }
-      , root = root'
-      }
+  | otherwise =
+      doc
+        { docComments =
+            Comments
+              { before = dropWhile (== EmptyLine) (map (.line) docItems)
+              , inline = markerComment
+              , after = map (.line) leftover
+              }
+        , root = root'
+        }
   where
     items :: [Item]
-    items = (if isJust marker then id else dropWhile (\i -> isEmptyLine i && i.at < offsetOf doc.root.offset))
-      $ scanItems e start end (skipRanges e doc.root)
+    items =
+      (if isJust marker then id else dropWhile (\i -> isEmptyLine i && i.at < offsetOf doc.root.offset)) $
+        scanItems e start end (skipRanges e doc.root)
 
     (docItems, afterMarker) = case marker of
       Just m -> span (\i -> i.at < m - e.base) items
@@ -59,8 +63,8 @@ attachComments e start marker end doc
         | not i.own
         , i.lineStart == m - e.base
         , lineOf e (offsetOf doc.root.offset) /= m - e.base
-        , Comment t <- i.line
-        -> (Just t, is)
+        , Comment t <- i.line ->
+            (Just t, is)
       _ -> (Nothing, afterMarker)
 
     (root', leftover) = attachNode e (end - e.base) 0 doc.root rest
@@ -78,11 +82,13 @@ offsetOf (Offset o) = o
 -- after the last entry of a block collection.
 attachNode :: Env -> Int -> Int -> Node -> [Item] -> (Node, [Item])
 attachNode e limit minColumn n items0 =
-  ( n { comments = Comments
-          { before = [ i.line | i <- pre, not (isFallback i) ]
-          , inline = fallback <|> header <|> trailing
-          , after = afterLines
-          }
+  ( n
+      { comments =
+          Comments
+            { before = [i.line | i <- pre, not (isFallback i)]
+            , inline = fallback <|> header <|> trailing
+            , after = afterLines
+            }
       , content = content'
       }
   , items5
@@ -111,8 +117,8 @@ attachNode e limit minColumn n items0 =
       (Scalar style _, i : is)
         | style == Literal || style == Folded
         , not i.own
-        , i.lineStart == lineOf e s
-        -> (comment i, is)
+        , i.lineStart == lineOf e s ->
+            (comment i, is)
       _ -> (Nothing, items1)
 
     (content', items3) = case n.content of
@@ -129,8 +135,8 @@ attachNode e limit minColumn n items0 =
         , i.at >= en
         , i.at < limit
         , i.lineStart <= en
-        , T.all (`elem` (" \t,:" :: String)) (between en i.at)
-        -> (comment i, is)
+        , T.all (`elem` (" \t,:" :: String)) (between en i.at) ->
+            (comment i, is)
       _ -> (Nothing, items3)
 
     (afterLines, items5) = case n.content of
@@ -220,7 +226,8 @@ mayHaveItems e = go True
       | i >= stop = False
       | otherwise = case A.unsafeIndex e.array i of
           0x23 -> True
-          w | isBreak w -> blank || go True (i + 1) stop
+          w
+            | isBreak w -> blank || go True (i + 1) stop
             | isWhite w -> go blank (i + 1) stop
             | otherwise -> go False (i + 1) stop
 
@@ -259,17 +266,21 @@ scanItems e start stop = go start start False False
     go :: Int -> Int -> Bool -> Bool -> [(Int, Int)] -> [Item]
     go i ls content prevEmpty ranges
       | i >= stop = []
-      | (rs, re) : rest <- ranges, rs <= i =
+      | (rs, re) : rest <- ranges
+      , rs <= i =
           if re > i
             -- A block scalar can end at the start of a line.
             then let ls' = lineBefore i re ls in go re ls' (ls' /= re) False rest
             else go i ls content prevEmpty rest
       | otherwise = case A.unsafeIndex e.array i of
-          w | isBreak w ->
-                let next = if w == 0x0D && i + 1 < stop && A.unsafeIndex e.array (i + 1) == 0x0A
-                             then i + 2 else i + 1
+          w
+            | isBreak w ->
+                let next =
+                      if w == 0x0D && i + 1 < stop && A.unsafeIndex e.array (i + 1) == 0x0A
+                        then i + 2
+                        else i + 1
                     blank = not content
-                    item = [ Item (ls - e.base) (ls - e.base) True EmptyLine | blank, not prevEmpty ]
+                    item = [Item (ls - e.base) (ls - e.base) True EmptyLine | blank, not prevEmpty]
                 in item ++ go next next False blank ranges
             | w == 0x23 && (i == ls || isWhite (A.unsafeIndex e.array (i - 1))) ->
                 let eol = lineEnd i

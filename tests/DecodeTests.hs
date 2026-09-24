@@ -16,26 +16,29 @@ import Yamlet.Schema
 import Yamlet.Syntax qualified as S
 
 decodeTests :: TestTree
-decodeTests = testGroup "Decode"
-  [ testCase "core schema" test_coreSchema
-  , testProperty "floats" prop_floats
-  , testCase "exact floats" test_exactFloats
-  , testCase "plain scalars" test_plainSafe
-  , testCase "record" test_record
-  , testCase "copies" test_copies
-  , testCase "JSON" test_json
-  , testCase "aliases" test_aliases
-  , testCase "optional keys" test_optionalKeys
-  , testCase "syntax tree" test_syntaxTree
-  , testCase "empty stream" test_emptyStream
-  , testCase "encodings" test_encodings
-  , testGroup "errors"
-    [ testCase "syntax" test_syntaxErrors
-    , testCase "types" test_typeErrors
-    , testCase "keys" test_keyErrors
-    , testCase "pretty" test_prettyError
+decodeTests =
+  testGroup
+    "Decode"
+    [ testCase "core schema" test_coreSchema
+    , testProperty "floats" prop_floats
+    , testCase "exact floats" test_exactFloats
+    , testCase "plain scalars" test_plainSafe
+    , testCase "record" test_record
+    , testCase "copies" test_copies
+    , testCase "JSON" test_json
+    , testCase "aliases" test_aliases
+    , testCase "optional keys" test_optionalKeys
+    , testCase "syntax tree" test_syntaxTree
+    , testCase "empty stream" test_emptyStream
+    , testCase "encodings" test_encodings
+    , testGroup
+        "errors"
+        [ testCase "syntax" test_syntaxErrors
+        , testCase "types" test_typeErrors
+        , testCase "keys" test_keyErrors
+        , testCase "pretty" test_prettyError
+        ]
     ]
-  ]
 
 test_coreSchema :: Assertion
 test_coreSchema = do
@@ -43,12 +46,28 @@ test_coreSchema = do
       values = decodeText "[null, ~, '', true, False, 12, -0, 0o17, 0x1f, 1.5, -.inf, .nan, 1e3, +12, .5, a, '1']"
   case values of
     Left err -> assertFailure (show err)
-    Right ns -> assertEqual "values"
-      [ Null, Null, String "", Bool True, Bool False, Int 12, Int 0, Int 15, Int 31
-      , Float (Finite 1.5), Float NegativeInfinity, Float NaN, Float (Finite 1000), Int 12
-      , Float (Finite 0.5), String "a", String "1"
-      ]
-      (map (.value) ns)
+    Right ns ->
+      assertEqual
+        "values"
+        [ Null
+        , Null
+        , String ""
+        , Bool True
+        , Bool False
+        , Int 12
+        , Int 0
+        , Int 15
+        , Int 31
+        , Float (Finite 1.5)
+        , Float NegativeInfinity
+        , Float NaN
+        , Float (Finite 1000)
+        , Int 12
+        , Float (Finite 0.5)
+        , String "a"
+        , String "1"
+        ]
+        (map (.value) ns)
 
 test_plainSafe :: Assertion
 test_plainSafe = do
@@ -89,14 +108,20 @@ prop_floats = forAll genDecimal $ \s ->
 test_exactFloats :: Assertion
 test_exactFloats = do
   assertEqual "one tenth" (Right (Sci.scientific 1 (-1))) (decodeText @Sci.Scientific "0.1")
-  assertEqual "more digits than a double holds" (Right (Sci.scientific 12345678901234567890123 (-3)))
+  assertEqual
+    "more digits than a double holds"
+    (Right (Sci.scientific 12345678901234567890123 (-3)))
     (decodeText @Sci.Scientific "12345678901234567890.123")
   assertEqual "integer as a scientific" (Right (Sci.scientific 42 0)) (decodeText @Sci.Scientific "42")
   assertEqual "huge exponent" (Right (Sci.scientific 1 1000000000)) (decodeText @Sci.Scientific "1e1000000000")
   assertEqual "huge exponent as a double" (Right (1 / 0)) (decodeText @Double "1e1000000000")
-  assertEqual "exponent beyond Int" (Right [Float Infinity, Float (Finite 0)])
+  assertEqual
+    "exponent beyond Int"
+    (Right [Float Infinity, Float (Finite 0)])
     (map (.value) <$> decodeText @[Node] "[1e99999999999999999999, 1e-99999999999999999999]")
-  assertEqual "infinity as a scientific" (Just (1, 1, "expected a finite number"))
+  assertEqual
+    "infinity as a scientific"
+    (Just (1, 1, "expected a finite number"))
     (errorOf (decodeText @Sci.Scientific ".inf"))
 
 data Config = Config
@@ -113,9 +138,13 @@ instance FromYAML Config where
 
 test_record :: Assertion
 test_record = do
-  assertEqual "full" (Right (Config "x" ["a", "b"] 4))
+  assertEqual
+    "full"
+    (Right (Config "x" ["a", "b"] 4))
     (decodeText "name: x\npaths: [a, b]\njobs: 4\n")
-  assertEqual "defaults" (Right (Config "x" [] 1))
+  assertEqual
+    "defaults"
+    (Right (Config "x" [] 1))
     (decodeText "name: x\npaths:\n")
 
 -- | Decoded texts and error lines do not point into the input.
@@ -129,8 +158,9 @@ test_copies = do
     Right _ -> assertFailure "expected an error"
   case S.parseDocumentsText "key: &a value\nother: *a\n" of
     Left err -> assertFailure (show err)
-    Right docs -> assertBool "syntax texts are copies" . all isCopy $
-      concatMap (texts . (.root) . S.copyDocument) docs
+    Right docs ->
+      assertBool "syntax texts are copies" . all isCopy $
+        concatMap (texts . (.root) . S.copyDocument) docs
   where
     -- A copy starts at the beginning of its own array.
     isCopy :: T.Text -> Bool
@@ -146,32 +176,44 @@ test_copies = do
 -- | JSON is valid YAML, including the escapes that JSON encoders write.
 test_json :: Assertion
 test_json = do
-  assertEqual "document"
+  assertEqual
+    "document"
     (Right (M.fromList [("a", [1.5, -2e3]), ("b\tc", [])]))
     (decodeText @(M.Map T.Text [Double]) "{\"a\":[1.5,-2E3],\n\t\"b\\tc\": []}")
-  assertEqual "surrogate pair" (Right ["\x1F600", "a\x10000z"])
+  assertEqual
+    "surrogate pair"
+    (Right ["\x1F600", "a\x10000z"])
     (decodeText @[T.Text] "[\"\\ud83d\\ude00\", \"a\\uD800\\uDC00z\"]")
-  assertEqual "lone high surrogate" (Just (1, 3, "invalid escape sequence"))
+  assertEqual
+    "lone high surrogate"
+    (Just (1, 3, "invalid escape sequence"))
     (errorOf (decodeText @[T.Text] "[\"\\ud83d\"]"))
-  assertEqual "high surrogate without a low one" (Just (1, 3, "invalid escape sequence"))
+  assertEqual
+    "high surrogate without a low one"
+    (Just (1, 3, "invalid escape sequence"))
     (errorOf (decodeText @[T.Text] "[\"\\ud83d\\u0041\"]"))
-  assertEqual "lone low surrogate" (Just (1, 3, "invalid escape sequence"))
+  assertEqual
+    "lone low surrogate"
+    (Just (1, 3, "invalid escape sequence"))
     (errorOf (decodeText @[T.Text] "[\"\\ude00\"]"))
 
 test_aliases :: Assertion
 test_aliases = do
-  assertEqual "map"
+  assertEqual
+    "map"
     (Right (M.fromList [("a", [1, 2]), ("b", [1, 2 :: Int])]))
     (decodeText @(M.Map T.Text [Int]) "a: &x [1, 2]\nb: *x\n")
-  assertEqual "anchor before a string with a less-than sign"
+  assertEqual
+    "anchor before a string with a less-than sign"
     (Right (M.fromList [("a", "<x"), ("b", "<x")]))
     (decodeText @(M.Map T.Text T.Text) "a: &x \"<x\"\nb: *x\n")
 
 test_optionalKeys :: Assertion
 test_optionalKeys = do
   let check :: String -> (Maybe (Maybe Int), Maybe (Maybe Int)) -> T.Text -> Assertion
-      check preface expected input = assertEqual preface (Right (Right expected)) $
-        runParser (withMapping $ \o -> (,) <$> o .:? "a" <*> o .:! "a") <$> decodeText input
+      check preface expected input =
+        assertEqual preface (Right (Right expected)) $
+          runParser (withMapping $ \o -> (,) <$> o .:? "a" <*> o .:! "a") <$> decodeText input
   check "missing" (Nothing, Nothing) "b: 1\n"
   check "null" (Nothing, Just Nothing) "a: null\n"
   check "value" (Just (Just 1), Just (Just 1)) "a: 1\n"
@@ -182,12 +224,15 @@ test_syntaxTree = do
   case S.parseDocumentsText input of
     Right [doc] -> do
       assertEqual "parsed" (Right (Config "x" [] 4)) (decodeDocument input doc)
-      let changed = doc { S.root = S.mappingNode [(S.plainNode "name", S.plainNode "y")] }
+      let changed = doc {S.root = S.mappingNode [(S.plainNode "name", S.plainNode "y")]}
       assertEqual "changed" (Right (Config "y" [] 1)) (decodeDocument input changed)
     r -> assertFailure (show r)
   case S.parseDocumentsText "name: x\njobs: many\n" of
-    Right [doc] -> assertEqual "type error" (Just (2, 7, "expected an integer, but got a string"))
-      (errorOf (decodeDocument @Config "name: x\njobs: many\n" doc))
+    Right [doc] ->
+      assertEqual
+        "type error"
+        (Just (2, 7, "expected an integer, but got a string"))
+        (errorOf (decodeDocument @Config "name: x\njobs: many\n" doc))
     r -> assertFailure (show r)
   let key = S.plainNode "a"
       built = S.document (S.mappingNode [(key, key), (key, key)])
@@ -224,10 +269,14 @@ test_syntaxErrors = do
   let check :: String -> (Int, Int, String) -> T.Text -> Assertion
       check preface expected input = assertEqual preface (Just expected) (errorOf (decodeNodes input))
   check "bad indentation" (3, 2, "unexpected indentation") "a:\n  b: 1\n c: 2\n"
-  check "mapping in a plain scalar" (1, 11, "unexpected ':', quote the value if it contains \": \"")
+  check
+    "mapping in a plain scalar"
+    (1, 11, "unexpected ':', quote the value if it contains \": \"")
     "key: value: other\n"
   check "missing closing quote" (1, 7, "unterminated double-quoted scalar") "name: \"abc\nnext: value\n"
-  check "badly indented quoted line" (2, 1, "invalid indentation of a line in a single-quoted scalar")
+  check
+    "badly indented quoted line"
+    (2, 1, "invalid indentation of a line in a single-quoted scalar")
     "name: 'abc\nnext'\n"
   check "end of line" (2, 8, "unexpected end of line") "- key: value\n  other\n"
   check "tab indentation" (2, 1, "tabs cannot be used for indentation") "a:\n\tb: 1\n"
@@ -241,15 +290,25 @@ test_syntaxErrors = do
 
 test_typeErrors :: Assertion
 test_typeErrors = do
-  assertEqual "list instead of string" (Just (1, 7, "expected a string, but got a list"))
+  assertEqual
+    "list instead of string"
+    (Just (1, 7, "expected a string, but got a list"))
     (errorOf (decodeText @Config "name: [a]\n"))
-  assertEqual "number instead of list" (Just (2, 8, "expected a list, but got an integer"))
+  assertEqual
+    "number instead of list"
+    (Just (2, 8, "expected a list, but got an integer"))
     (errorOf (decodeText @Config "name: x\npaths: 42\n"))
-  assertEqual "element of a list" (Just (2, 12, "expected a string, but got a boolean"))
+  assertEqual
+    "element of a list"
+    (Just (2, 12, "expected a string, but got a boolean"))
     (errorOf (decodeText @Config "name: x\npaths: [a, true]\n"))
-  assertEqual "out of range" (Just (1, 1, "the integer is out of the range from -128 to 127"))
+  assertEqual
+    "out of range"
+    (Just (1, 1, "the integer is out of the range from -128 to 127"))
     (errorOf (decodeText @Int8 "300"))
-  assertEqual "custom failure" (Just (1, 5, "not a vowel"))
+  assertEqual
+    "custom failure"
+    (Just (1, 5, "not a vowel"))
     (errorOf (decodeText @[Vowel] "[a, x]"))
 
 newtype Vowel = Vowel Char
@@ -261,9 +320,13 @@ instance FromYAML Vowel where
 
 test_keyErrors :: Assertion
 test_keyErrors = do
-  assertEqual "missing key" (Just (1, 1, "missing key \"name\""))
+  assertEqual
+    "missing key"
+    (Just (1, 1, "missing key \"name\""))
     (errorOf (decodeText @Config "jobs: 1\n"))
-  assertEqual "unknown key" (Just (2, 1, "unknown key \"job\", expected one of: name, paths, jobs"))
+  assertEqual
+    "unknown key"
+    (Just (2, 1, "unknown key \"job\", expected one of: name, paths, jobs"))
     (errorOf (decodeText @Config "name: x\njob: 1\n"))
 
 test_prettyError :: Assertion
@@ -272,9 +335,11 @@ test_prettyError = case decodeText @Config "name: x\npaths: 42\n" of
   Right _ -> assertFailure "expected an error"
   where
     expected :: String
-    expected = L.intercalate "\n"
-      [ "config.yaml:2:8: expected a list, but got an integer"
-      , "  |"
-      , "2 | paths: 42"
-      , "  |        ^"
-      ]
+    expected =
+      L.intercalate
+        "\n"
+        [ "config.yaml:2:8: expected a list, but got an integer"
+        , "  |"
+        , "2 | paths: 42"
+        , "  |        ^"
+        ]

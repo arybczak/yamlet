@@ -85,7 +85,6 @@ readInt t
           Just $ T.foldl' (\acc d -> acc * radix + toInteger (digitToInt d)) 0 ds
       | otherwise = Nothing
 
-
 -- | [-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?, [-+]?\.inf or \.nan
 -- in one of three capitalizations.
 readFloat :: T.Text -> Maybe FloatValue
@@ -114,11 +113,12 @@ readFloat t0 = case t0 of
                 Just ('.', r) -> T.span isDigit r
                 _ -> ("", rest)
               hasDot = T.isPrefixOf "." rest
-          in if | T.null int && T.null frac -> Nothing
-                | not (T.null int) || hasDot -> do
-                    ex <- exponent_ rest'
-                    Just $ decimal (int <> frac) (ex - toInteger (T.length frac))
-                | otherwise -> Nothing
+          in if
+               | T.null int && T.null frac -> Nothing
+               | not (T.null int) || hasDot -> do
+                   ex <- exponent_ rest'
+                   Just $ decimal (int <> frac) (ex - toInteger (T.length frac))
+               | otherwise -> Nothing
 
     -- The digits times a power of 10. An exponent out of the range of Int
     -- gives infinity or zero.

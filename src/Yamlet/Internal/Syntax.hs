@@ -1,30 +1,31 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# OPTIONS_HADDOCK not-home #-}
+
 -- | The types of the syntax tree.
 --
 -- This module is intended for internal use only, and may change without warning
 -- in subsequent releases.
 module Yamlet.Internal.Syntax
   ( -- * Documents
-    Document(..)
-  , Version(..)
+    Document (..)
+  , Version (..)
 
     -- * Nodes
-  , Node(..)
-  , Content(..)
-  , Props(..)
+  , Node (..)
+  , Content (..)
+  , Props (..)
   , noProps
-  , Tag(..)
-  , ScalarStyle(..)
-  , CollectionStyle(..)
+  , Tag (..)
+  , ScalarStyle (..)
+  , CollectionStyle (..)
 
     -- * Comments
-  , Comments(..)
+  , Comments (..)
   , noComments
-  , Line(..)
+  , Line (..)
 
     -- * Positions
-  , Offset(..)
+  , Offset (..)
   , noOffset
   ) where
 
@@ -46,7 +47,7 @@ data Document = Document
   , root :: !Node
   }
   deriving stock (Eq, Show, Generic)
-  deriving anyclass NFData
+  deriving anyclass (NFData)
 
 -- | The version of YAML that a document declares.
 data Version = Version
@@ -54,7 +55,7 @@ data Version = Version
   , minor :: !Int
   }
   deriving stock (Eq, Ord, Show, Generic)
-  deriving anyclass NFData
+  deriving anyclass (NFData)
 
 -- | A node of a document.
 data Node = Node
@@ -67,17 +68,17 @@ data Node = Node
   , content :: !Content
   }
   deriving stock (Eq, Show, Generic)
-  deriving anyclass NFData
+  deriving anyclass (NFData)
 
 -- | The content of a node.
 data Content
   = Scalar !ScalarStyle !T.Text
   | Sequence !CollectionStyle [Node]
   | Mapping !CollectionStyle [(Node, Node)]
-  | Alias !T.Text
-  -- ^ An alias has no properties.
+  | -- | An alias has no properties.
+    Alias !T.Text
   deriving stock (Eq, Show, Generic)
-  deriving anyclass NFData
+  deriving anyclass (NFData)
 
 -- | The properties of a node.
 data Props = Props
@@ -85,7 +86,7 @@ data Props = Props
   , tag :: !Tag
   }
   deriving stock (Eq, Show, Generic)
-  deriving anyclass NFData
+  deriving anyclass (NFData)
 
 -- | No anchor and no tag.
 noProps :: Props
@@ -93,14 +94,14 @@ noProps = Props Nothing NoTag
 
 -- | The tag of a node after the tag handles are expanded.
 data Tag
-  = NoTag
-  -- ^ The node has no tag.
-  | NonSpecificTag
-  -- ^ The @!@ tag.
-  | Tag !T.Text
-  -- ^ A specific tag, e.g. @tag:yaml.org,2002:str@ for @!!str@.
+  = -- | The node has no tag.
+    NoTag
+  | -- | The @!@ tag.
+    NonSpecificTag
+  | -- | A specific tag, e.g. @tag:yaml.org,2002:str@ for @!!str@.
+    Tag !T.Text
   deriving stock (Eq, Ord, Show, Generic)
-  deriving anyclass NFData
+  deriving anyclass (NFData)
 
 data ScalarStyle
   = Plain
@@ -109,13 +110,13 @@ data ScalarStyle
   | Literal
   | Folded
   deriving stock (Eq, Ord, Show, Enum, Bounded, Generic)
-  deriving anyclass NFData
+  deriving anyclass (NFData)
 
 data CollectionStyle
   = Block
   | Flow
   deriving stock (Eq, Ord, Show, Enum, Bounded, Generic)
-  deriving anyclass NFData
+  deriving anyclass (NFData)
 
 -- | The comments and the empty lines that belong to a node.
 data Comments = Comments
@@ -127,7 +128,7 @@ data Comments = Comments
   -- ^ The lines after the last entry of a collection.
   }
   deriving stock (Eq, Show, Generic)
-  deriving anyclass NFData
+  deriving anyclass (NFData)
 
 noComments :: Comments
 noComments = Comments [] Nothing []
@@ -135,10 +136,10 @@ noComments = Comments [] Nothing []
 -- | A line of comments. Several empty lines in a row count as one.
 data Line
   = EmptyLine
-  | Comment !T.Text
-  -- ^ The text after the @#@ and one space.
+  | -- | The text after the @#@ and one space.
+    Comment !T.Text
   deriving stock (Eq, Show, Generic)
-  deriving anyclass NFData
+  deriving anyclass (NFData)
 
 -- | The offset of a byte in the UTF-8 encoded input.
 newtype Offset = Offset Int

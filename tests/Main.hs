@@ -10,9 +10,11 @@ import TestSuite
 main :: IO ()
 main = do
   suite <- testSuiteTests
-  defaultMain $ testGroup "yamlet"
-    [ decodeTests
-    , encodeTests
-    , renderTests
-    , suite
-    ]
+  defaultMain $
+    testGroup
+      "yamlet"
+      [ decodeTests
+      , encodeTests
+      , renderTests
+      , suite
+      ]
