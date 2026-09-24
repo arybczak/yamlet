@@ -11,7 +11,10 @@ module Yamlet.Internal.Render
   ) where
 
 import Control.Applicative
+import Data.List qualified as L
+import Data.Map.Strict qualified as M
 import Data.Maybe
+import Data.Set qualified as S
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Builder qualified as B
@@ -44,6 +47,9 @@ defaultRenderOptions =
 -- A comment that has no place at its node moves to a place that has one,
 -- e.g. the lines above the value of a key go above the key if the value is
 -- on the line of the key.
+--
+-- An anchor name with a character that YAML does not allow in it, e.g. a
+-- space, becomes a new name in the anchor and in its aliases.
 renderSyntax :: RenderOptions -> [Document] -> T.Text
 renderSyntax opts = emptyLines . TL.toStrict . B.toLazyText . go True
   where
@@ -71,7 +77,66 @@ renderSyntax opts = emptyLines . TL.toStrict . B.toLazyText . go True
     go :: Bool -> [Document] -> B.Builder
     go afterEnd = \case
       [] -> mempty
-      doc : docs -> document opts afterEnd doc <> go doc.explicitEnd docs
+      doc : docs -> document opts afterEnd (validAnchors doc) <> go doc.explicitEnd docs
+
+-- | The document with anchor names that read back. A name that an anchor
+-- cannot have becomes a name that no other anchor of the document has, in
+-- its anchors and in its aliases.
+validAnchors :: Document -> Document
+validAnchors doc
+  | all isAnchorName names = doc
+  | otherwise = doc {root = rename doc.root}
+  where
+    names :: [T.Text]
+    names = collect doc.root []
+
+    collect :: Node -> [T.Text] -> [T.Text]
+    collect n acc =
+      maybe id (:) n.props.anchor $ case n.content of
+        Alias a -> a : acc
+        Sequence _ xs -> foldr collect acc xs
+        Mapping _ kvs -> foldr (\(k, v) -> collect k . collect v) acc kvs
+        Scalar _ _ -> acc
+
+    newNames :: M.Map T.Text T.Text
+    newNames = snd $ L.foldl' add (S.fromList (filter isAnchorName names), M.empty) names
+
+    add :: (S.Set T.Text, M.Map T.Text T.Text) -> T.Text -> (S.Set T.Text, M.Map T.Text T.Text)
+    add (used, m) a
+      | isAnchorName a || M.member a m = (used, m)
+      | otherwise =
+          let base = if T.null a then "anchor" else T.map (\c -> if isAnchorChar c then c else '_') a
+              new = fresh used base (2 :: Int)
+          in (S.insert new used, M.insert a new m)
+
+    fresh :: S.Set T.Text -> T.Text -> Int -> T.Text
+    fresh used base i
+      | S.notMember base used = base
+      | S.notMember candidate used = candidate
+      | otherwise = fresh used base (i + 1)
+      where
+        candidate :: T.Text
+        candidate = base <> "_" <> T.pack (show i)
+
+    rename :: Node -> Node
+    rename n =
+      n
+        { props = n.props {anchor = newName <$> n.props.anchor}
+        , content = case n.content of
+            Alias a -> Alias (newName a)
+            Sequence style xs -> Sequence style (map rename xs)
+            Mapping style kvs -> Mapping style (map (\(k, v) -> (rename k, rename v)) kvs)
+            c -> c
+        }
+
+    newName :: T.Text -> T.Text
+    newName a = M.findWithDefault a a newNames
+
+    isAnchorName :: T.Text -> Bool
+    isAnchorName a = not (T.null a) && T.all isAnchorChar a
+
+    isAnchorChar :: Char -> Bool
+    isAnchorChar c = isPrintable c && c /= ' ' && c `notElem` (",[]{}" :: String)
 
 -- | A document. The flag tells if it starts the stream or follows a document
 -- end marker.

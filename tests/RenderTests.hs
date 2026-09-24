@@ -146,6 +146,26 @@ test_fallbacks = do
     "[!!null, a]\n"
     (render (contentNode (Sequence Flow [plainNode "", plainNode "a"])))
   assertEqual "empty key" "?\n: a\n" (render (mappingNode [(plainNode "", plainNode "a")]))
+  let anchored :: T.Text -> Node -> Node
+      anchored a n = n {props = noProps {anchor = Just a}}
+  assertEqual
+    "invalid anchor names"
+    "[&a_b x, *a_b, &a_b_2 y, *a_b_2, &anchor z, *anchor]\n"
+    ( render . contentNode $
+        Sequence
+          Flow
+          [ anchored "a b" (plainNode "x")
+          , contentNode (Alias "a b")
+          , anchored "a]b" (plainNode "y")
+          , contentNode (Alias "a]b")
+          , anchored "" (plainNode "z")
+          , contentNode (Alias "")
+          ]
+    )
+  assertEqual
+    "taken anchor name"
+    "- &a_b x\n- &a_b_2 y\n- *a_b_2\n"
+    (render (sequenceNode [anchored "a_b" (plainNode "x"), anchored "a b" (plainNode "y"), contentNode (Alias "a b")]))
 
 test_forceBlock :: Assertion
 test_forceBlock =
