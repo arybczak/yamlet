@@ -100,6 +100,9 @@ test_floats = do
     (encodeText (Sci.scientific 12345678901234567890123 (-3)))
   assertEqual "infinity" "-.inf\n" (encodeText (-1 / 0 :: Double))
   assertEqual "not a number" ".nan\n" (encodeText (0 / 0 :: Double))
+  assertEqual "float" "0.1\n" (encodeText @Float 0.1)
+  assertEqual "float infinity" "-.inf\n" (encodeText @Float (-1 / 0))
+  assertEqual "float not a number" ".nan\n" (encodeText @Float (0 / 0))
 
 test_literal :: Assertion
 test_literal = do

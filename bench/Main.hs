@@ -209,7 +209,7 @@ instance J.FromJSON FlowRecord where
 instance FromYAML Item where
   parseYAML n = case n.value of
     Int i -> pure $ ItemNumber (fromInteger i)
-    Float f -> pure $ ItemNumber (floatToDouble f)
+    Float f -> pure $ ItemNumber (floatValueToDouble f)
     Bool b -> pure $ ItemBool b
     Null -> pure ItemNull
     _ -> typeMismatch "a number, a boolean or null" n

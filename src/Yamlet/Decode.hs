@@ -121,7 +121,7 @@ withInt f = parseNode $ \n -> case n.value of
 -- | The nearest double. An integer counts as a floating-point number too.
 withFloat :: (Double -> Parser a) -> Node -> Parser a
 withFloat f = parseNode $ \n -> case n.value of
-  Float v -> f (floatToDouble v)
+  Float v -> f (floatValueToDouble v)
   Int i -> f (fromInteger i)
   _ -> typeMismatch "a number" n
 
@@ -295,10 +295,7 @@ instance FromYAML Sci.Scientific where
 -- | The nearest float. A conversion by way of 'Double' could round twice.
 instance FromYAML Float where
   parseYAML = parseNode $ \n -> case n.value of
-    Float (Finite s) -> pure (Sci.toRealFloat s)
-    Float Infinity -> pure (1 / 0)
-    Float NegativeInfinity -> pure (-1 / 0)
-    Float NaN -> pure (0 / 0)
+    Float v -> pure (floatValueToFloat v)
     Int i -> pure (fromInteger i)
     _ -> typeMismatch "a number" n
 

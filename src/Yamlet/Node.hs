@@ -19,8 +19,10 @@ module Yamlet.Node
     Node (..)
   , Value (..)
   , FloatValue (..)
-  , floatToDouble
-  , doubleToFloat
+  , floatValueToDouble
+  , doubleToFloatValue
+  , floatValueToFloat
+  , floatToFloatValue
   , describe
 
     -- * Construction
@@ -79,7 +81,7 @@ data Value
 --
 -- Arithmetic on a 'Sci.Scientific' with a huge exponent, e.g. @1e1000000000@,
 -- can use all memory. Convert a value from an untrusted input with
--- 'floatToDouble' or with the bounded conversions of "Data.Scientific".
+-- 'floatValueToDouble' or with the bounded conversions of "Data.Scientific".
 data FloatValue
   = Finite !Sci.Scientific
   | Infinity
@@ -89,17 +91,32 @@ data FloatValue
   deriving anyclass (NFData)
 
 -- | The nearest double, infinite if the value is out of its range.
-floatToDouble :: FloatValue -> Double
-floatToDouble = \case
+floatValueToDouble :: FloatValue -> Double
+floatValueToDouble = toRealFloat
+
+-- | The value of a double. A finite double becomes the shortest decimal that
+-- reads back as the same double, e.g. @0.1@.
+doubleToFloatValue :: Double -> FloatValue
+doubleToFloatValue = fromRealFloat
+
+-- | The nearest float, infinite if the value is out of its range.
+floatValueToFloat :: FloatValue -> Float
+floatValueToFloat = toRealFloat
+
+-- | The value of a float. A finite float becomes the shortest decimal that
+-- reads back as the same float, e.g. @0.1@.
+floatToFloatValue :: Float -> FloatValue
+floatToFloatValue = fromRealFloat
+
+toRealFloat :: RealFloat a => FloatValue -> a
+toRealFloat = \case
   Finite s -> Sci.toRealFloat s
   Infinity -> 1 / 0
   NegativeInfinity -> -1 / 0
   NaN -> 0 / 0
 
--- | The value of a double. A finite double becomes the shortest decimal that
--- reads back as the same double, e.g. @0.1@.
-doubleToFloat :: Double -> FloatValue
-doubleToFloat d
+fromRealFloat :: RealFloat a => a -> FloatValue
+fromRealFloat d
   | isNaN d = NaN
   | isInfinite d = if d > 0 then Infinity else NegativeInfinity
   | otherwise = Finite (Sci.fromFloatDigits d)
