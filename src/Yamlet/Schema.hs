@@ -81,9 +81,22 @@ readInt t
   where
     digits :: Integer -> (Char -> Bool) -> T.Text -> Maybe Integer
     digits radix valid ds
-      | not (T.null ds) && T.all valid ds =
-          Just $ T.foldl' (\acc d -> acc * radix + toInteger (digitToInt d)) 0 ds
+      | not (T.null ds) && T.all valid ds = Just $ digitsValue radix ds
       | otherwise = Nothing
+
+-- | The value of the digits in the radix. A multiplication for each digit
+-- takes quadratic time in the number of digits, so the halves of a long text
+-- are read apart.
+digitsValue :: Integer -> T.Text -> Integer
+digitsValue radix t0 = go (T.length t0) t0
+  where
+    go :: Int -> T.Text -> Integer
+    go n t
+      | n <= 40 = T.foldl' (\acc d -> acc * radix + toInteger (digitToInt d)) 0 t
+      | otherwise =
+          let k = n `div` 2
+              (hi, lo) = T.splitAt (n - k) t
+          in go (n - k) hi * radix ^ k + go k lo
 
 -- | [-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?, [-+]?\.inf or \.nan
 -- in one of three capitalizations.
@@ -130,7 +143,7 @@ readFloat t0 = case t0 of
       | otherwise = Finite (Sci.scientific c (fromInteger e))
       where
         c :: Integer
-        c = T.foldl' (\acc d -> acc * 10 + toInteger (digitToInt d)) 0 ds
+        c = digitsValue 10 ds
 
     exponent_ :: T.Text -> Maybe Integer
     exponent_ t = case T.uncons t of
@@ -142,6 +155,6 @@ readFloat t0 = case t0 of
                   Just ('+', d) -> (id, d)
                   _ -> (id, r)
             in if not (T.null ds) && T.all isDigit ds
-                 then Just . sign $ T.foldl' (\acc d -> acc * 10 + toInteger (digitToInt d)) 0 ds
+                 then Just . sign $ digitsValue 10 ds
                  else Nothing
         | otherwise -> Nothing

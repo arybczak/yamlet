@@ -32,6 +32,7 @@ decodeTests =
     , localOption (mkTimeout 10000000) $ testCase "nesting" test_nesting
     , localOption (mkTimeout 10000000) $ testCase "many keys" test_manyKeys
     , localOption (mkTimeout 10000000) $ testCase "alias keys" test_aliasKeys
+    , localOption (mkTimeout 10000000) $ testCase "long numbers" test_longNumbers
     , testCase "optional keys" test_optionalKeys
     , testCase "syntax tree" test_syntaxTree
     , testCase "empty stream" test_emptyStream
@@ -399,6 +400,20 @@ test_aliasKeys = do
             ++ ["- ? *a40", "  : 1", "  ? *b40", "  : 2"]
   assertEqual "equal chains" (Just (85, 5, "duplicate key")) (errorOf (decodeNodes (chains "x" "x")))
   assertEqual "different chains" Nothing (errorOf (decodeNodes (chains "x" "y")))
+
+-- | The time to read a number is not quadratic in the number of its digits.
+test_longNumbers :: Assertion
+test_longNumbers = do
+  let nines :: Int -> T.Text
+      nines k = T.replicate k "9"
+  assertEqual "integer" (Right (10 ^ (1000000 :: Int) - 1)) (decodeText @Integer (nines 1000000))
+  assertEqual "hexadecimal" (Right (16 ^ (100 :: Int) - 1)) (decodeText @Integer ("0x" <> T.replicate 100 "f"))
+  assertEqual "octal" (Right (8 ^ (100 :: Int) - 1)) (decodeText @Integer ("0o" <> T.replicate 100 "7"))
+  assertEqual
+    "float"
+    (Right (Float (Finite (Sci.scientific (10 ^ (1000000 :: Int) - 1) (-1)))))
+    ((.value) <$> decodeText @Node (nines 999999 <> ".9"))
+  assertEqual "exponent" (Right (Float Infinity)) ((.value) <$> decodeText @Node ("1e" <> nines 1000000))
 
 -- | The time of the check for duplicate keys is not quadratic in the number
 -- of keys.
