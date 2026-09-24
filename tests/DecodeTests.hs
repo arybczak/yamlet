@@ -25,6 +25,7 @@ decodeTests = testGroup "Decode"
   , testCase "copies" test_copies
   , testCase "JSON" test_json
   , testCase "aliases" test_aliases
+  , testCase "optional keys" test_optionalKeys
   , testCase "syntax tree" test_syntaxTree
   , testCase "empty stream" test_emptyStream
   , testCase "encodings" test_encodings
@@ -165,6 +166,15 @@ test_aliases = do
   assertEqual "anchor before a string with a less-than sign"
     (Right (M.fromList [("a", "<x"), ("b", "<x")]))
     (decodeText @(M.Map T.Text T.Text) "a: &x \"<x\"\nb: *x\n")
+
+test_optionalKeys :: Assertion
+test_optionalKeys = do
+  let check :: String -> (Maybe (Maybe Int), Maybe (Maybe Int)) -> T.Text -> Assertion
+      check preface expected input = assertEqual preface (Right (Right expected)) $
+        runParser (withMapping $ \o -> (,) <$> o .:? "a" <*> o .:! "a") <$> decodeText input
+  check "missing" (Nothing, Nothing) "b: 1\n"
+  check "null" (Nothing, Just Nothing) "a: null\n"
+  check "value" (Just (Just 1), Just (Just 1)) "a: 1\n"
 
 test_syntaxTree :: Assertion
 test_syntaxTree = do

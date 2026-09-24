@@ -29,6 +29,7 @@ module Yamlet.Decode
   , lookupKey
   , (.:)
   , (.:?)
+  , (.:!)
   , (.!=)
   , rejectUnknownKeys
   ) where
@@ -192,11 +193,19 @@ o .:? key = case M.lookup key o.index of
     _ -> Just <$> parseNode parseYAML v
   Nothing -> pure Nothing
 
+-- | The value of a key, or 'Nothing' if the key is missing. Unlike '.:?', a
+-- null value goes to the parser of the value, e.g. @'Maybe' a@ gives
+-- @'Just' 'Nothing'@ for a null value.
+(.:!) :: FromYAML a => Object -> T.Text -> Parser (Maybe a)
+o .:! key = case M.lookup key o.index of
+  Just (_, v) -> Just <$> parseNode parseYAML v
+  Nothing -> pure Nothing
+
 -- | A default for an optional value.
 (.!=) :: Parser (Maybe a) -> a -> Parser a
 p .!= def = maybe def id <$> p
 
-infixl 9 .:, .:?
+infixl 9 .:, .:?, .:!
 infixl 8 .!=
 
 -- | Fail at the first key that is not in the list.
