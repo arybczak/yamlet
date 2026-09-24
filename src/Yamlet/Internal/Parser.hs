@@ -795,9 +795,31 @@ cNsTagProperty = do
       scan uriChars
       r <- pos
       w <- peek
-      when (r == q || w /= GREATER) $ throwAt p "invalid verbatim tag"
+      let t = slice e q r
+      when (w /= GREATER || not (isLocal t || isGlobal t)) $ throwAt p "invalid verbatim tag"
       advance 1
-      pure . Tag $ slice e q r
+      pure $ Tag t
+
+    -- A local tag has a name after the "!".
+    isLocal :: T.Text -> Bool
+    isLocal t = case T.uncons t of
+      Just ('!', rest) -> not (T.null rest)
+      _ -> False
+
+    -- A global tag is a URI, which starts with a scheme.
+    isGlobal :: T.Text -> Bool
+    isGlobal t = case T.uncons t of
+      Just (c, rest) ->
+        isAsciiLetter c && case T.uncons (T.dropWhile isSchemeChar rest) of
+          Just (':', _) -> True
+          _ -> False
+      Nothing -> False
+
+    isAsciiLetter :: Char -> Bool
+    isAsciiLetter c = isAscii c && isAlpha c
+
+    isSchemeChar :: Char -> Bool
+    isSchemeChar c = isAscii c && (isAlphaNum c || c == '+' || c == '-' || c == '.')
 
     shorthand :: Env -> Int -> P Tag
     shorthand e p = do

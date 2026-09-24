@@ -353,6 +353,13 @@ test_syntaxErrors = do
   check "duplicate key" (3, 1, "duplicate key \"a\"") "a: 1\nb: 2\na: 3\n"
   check "undefined tag handle" (1, 1, "undefined tag handle !e!") "!e!foo bar\n"
   check "invalid character" (1, 4, "invalid character") "a: \x01\n"
+  check "verbatim tag without a name" (1, 1, "invalid verbatim tag") "!<!> a\n"
+  check "verbatim tag without a scheme" (1, 1, "invalid verbatim tag") "!<$:?> a\n"
+  check "empty verbatim tag" (1, 1, "invalid verbatim tag") "!<> a\n"
+  assertEqual
+    "valid verbatim tags"
+    (Right ["!bar", "tag:yaml.org,2002:str"])
+    (map (.tag) <$> decodeText @[Node] "[!<!bar> a, !<tag:yaml.org,2002:str> b]")
   check "noncharacter U+FFFE" (1, 4, "invalid character") "a: \xFFFE\n"
   check "noncharacter U+FFFF" (1, 5, "invalid character") "a: b\xFFFF\n"
 
