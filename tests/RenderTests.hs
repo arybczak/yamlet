@@ -276,15 +276,18 @@ configuration = T.unlines
   , "jobs: 2"
   ]
 
--- | Rendering keeps every comment at its node, and a second round trip
--- gives the same text.
+-- | Rendering keeps every comment, and a second round trip gives the same
+-- text. The end comments of an indentless sequence belong to its last item
+-- after the round trip.
 test_commentRoundTrip :: Assertion
 test_commentRoundTrip = case parseDocumentsText configuration of
   Right docs -> do
     let out = renderSyntax defaultRenderOptions docs
+        texts :: Document -> [T.Text]
+        texts d = [ t | (_, _, t) <- commentsOf d ]
     case parseDocumentsText out of
       Right docs' -> do
-        assertEqual ("comments\n" ++ T.unpack out) (map commentsOf docs) (map commentsOf docs')
+        assertEqual ("comments\n" ++ T.unpack out) (map texts docs) (map texts docs')
         assertEqual "text" out (renderSyntax defaultRenderOptions docs')
       Left err -> assertFailure (T.unpack out ++ "\n" ++ show err)
   Left err -> assertFailure (show err)
@@ -306,6 +309,17 @@ test_movedComments = do
     (render (mappingNode [(plainNode "a", contentNode (Sequence Flow [withInline "c" (plainNode "1"), plainNode "2"]))]))
   assertEqual "comment on a block root" "--- # c\na: 1\n"
     (render (withInline "c" (mappingNode [(plainNode "a", plainNode "1")])))
+  let withAfter :: T.Text -> Node -> Node
+      withAfter t n = n { comments = n.comments { after = [Comment t] } }
+      list :: Node -> Node
+      list item = mappingNode
+        [ (plainNode "a", withAfter "c" (sequenceNode [item]))
+        , (plainNode "b", plainNode "2")
+        ]
+  assertEqual "end of an indentless list" "a:\n- x: 1\n  # c\nb: 2\n"
+    (render (list (mappingNode [(plainNode "x", plainNode "1")])))
+  assertEqual "end of a list with a block scalar" "a:\n  - |\n    x\n  # c\nb: 2\n"
+    (render (list (scalarNode Literal "x\n")))
 
 -- | Rendering a tree and parsing the result gives the same tree, except for
 -- the styles, the offsets and the places of the comments. Every comment

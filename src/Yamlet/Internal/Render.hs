@@ -178,10 +178,11 @@ entryComments opts k v
 value :: RenderOptions -> Int -> Node -> Maybe T.Text -> [Line] -> B.Builder
 value opts indent v lineComment extra
   | isBlock opts v = case v.content of
-      Sequence{}
-        | null [ () | Comment _ <- v.comments.after ] ->
+      Sequence _ xs
+        | null [ () | Comment _ <- v.comments.after ] || not (endsWithBlockScalar xs) ->
             header <> lines_ indent below <> block opts indent (indent + 2) True False v
-        -- The lines after an indented sequence are unambiguous.
+        -- A block scalar as the last item would take in the lines after an
+        -- indentless sequence.
         | otherwise -> header <> lines_ (indent + 2) below <> block opts (indent + 2) (indent + 2) True False v
       _ -> header <> lines_ (indent + 2) below <> block opts (indent + 2) (indent + 2) True False v
   | isEmpty v = comment lineComment <> "\n"
@@ -192,6 +193,12 @@ value opts indent v lineComment extra
 
     below :: [Line]
     below = extra ++ v.comments.before
+
+    endsWithBlockScalar :: [Node] -> Bool
+    endsWithBlockScalar xs = case reverse xs of
+      Node { content = Scalar Literal t } : _ -> isJust (literalBlock False 0 t)
+      Node { content = Scalar Folded t } : _ -> isJust (foldedBlock 0 t)
+      _ -> False
 
 -- | A node after the indicator of a sequence item or an explicit entry, with
 -- the line break. A block collection starts on the same line if it can.
