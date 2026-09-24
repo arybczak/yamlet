@@ -1,6 +1,7 @@
 module DecodeTests (decodeTests) where
 
 import Data.Int
+import Data.List qualified as L
 import Data.Map.Strict qualified as M
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
@@ -175,7 +176,7 @@ test_prettyError = case decodeText @Config "name: x\npaths: 42\n" of
   Right _ -> assertFailure "expected an error"
   where
     expected :: String
-    expected = unlines
+    expected = L.intercalate "\n"
       [ "config.yaml:2:8: expected a list, but got an integer"
       , "  |"
       , "2 | paths: 42"

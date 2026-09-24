@@ -40,10 +40,11 @@ data Location = Location
   deriving stock (Eq, Show, Generic)
   deriving anyclass NFData
 
--- | Render an error in the format that editors recognize:
+-- | Render an error in the format that editors recognize. The result does not
+-- end with a line break.
 --
 -- @
--- config.yaml:3:5: expected a list, but got a number
+-- config.yaml:3:5: expected a list, but got an integer
 --   |
 -- 3 |   - 42
 --   |     ^
@@ -54,7 +55,7 @@ prettyError file err = concat
   , err.message, "\n"
   , pad, " |\n"
   , lineNo, " | ", T.unpack err.sourceLine, "\n"
-  , pad, " | ", caret, "^\n"
+  , pad, " | ", caret, "^"
   ]
   where
     lineNo :: String

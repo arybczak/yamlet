@@ -17,7 +17,7 @@
 -- main = do
 --   input <- BS.readFile "config.yaml"
 --   case decode input of
---     Left err -> putStr $ prettyError "config.yaml" err
+--     Left err -> putStrLn $ prettyError "config.yaml" err
 --     Right config -> ...
 -- @
 module Yamlet
