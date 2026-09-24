@@ -25,7 +25,7 @@ import Data.Word
 
 import Yamlet.Error
 import Yamlet.Internal.Parser.Monad
-import Yamlet.Syntax
+import Yamlet.Internal.Syntax
 
 -- | Parse all documents of a stream.
 parseStream :: T.Text -> Either Error [Document]

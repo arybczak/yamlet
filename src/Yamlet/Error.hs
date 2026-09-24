@@ -18,7 +18,7 @@ import Data.Text qualified as T
 import Data.Text.Array qualified as A
 import Data.Text.Internal qualified as T
 
-import Yamlet.Syntax
+import Yamlet.Internal.Syntax
 
 -- | An error of the parser or the decoder.
 data Error = Error

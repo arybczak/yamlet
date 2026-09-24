@@ -32,7 +32,7 @@ import Control.DeepSeq
 import Data.Text qualified as T
 import GHC.Generics
 
-import Yamlet.Syntax qualified as S
+import Yamlet.Internal.Syntax qualified as S
 
 -- | A node of a document.
 data Node = Node

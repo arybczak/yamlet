@@ -58,7 +58,7 @@ import Data.Text.Internal qualified as T
 import Data.Word
 import GHC.Exts
 
-import Yamlet.Syntax
+import Yamlet.Internal.Syntax
 
 -- | The input of the parser.
 data Env = Env

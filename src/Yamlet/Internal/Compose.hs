@@ -13,7 +13,7 @@ import Data.Text qualified as T
 import Yamlet.Error
 import Yamlet.Internal.Schema
 import Yamlet.Node
-import Yamlet.Syntax qualified as S
+import Yamlet.Internal.Syntax qualified as S
 
 -- | Resolve the tags and the aliases of a document and check that the keys of
 -- every mapping are unique. The input is for error messages.

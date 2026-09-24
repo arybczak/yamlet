@@ -7,7 +7,7 @@ module Yamlet.Event
 
 import Data.Text qualified as T
 
-import Yamlet.Syntax
+import Yamlet.Internal.Syntax
 
 data Event
   = StreamStart

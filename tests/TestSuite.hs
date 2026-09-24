@@ -23,7 +23,6 @@ import Test.Tasty.HUnit
 import Yamlet qualified as Y
 import Yamlet.Error
 import Yamlet.Event
-import Yamlet.Internal.Parser
 import Yamlet.Syntax
 
 -- | The tests of the suite. The directory with the data branch of the
@@ -58,7 +57,7 @@ runTest path = do
   isError <- doesFileExist (path </> "error")
   name <- T.strip . T.decodeUtf8 <$> BS.readFile (path </> "===")
   let preface = T.unpack name ++ "\n" ++ T.unpack input
-  case parseStream input of
+  case parseDocumentsText input of
     Left err
       | isError -> pure ()
       | otherwise -> assertFailure $ preface ++ "\nunexpected error: " ++ prettyError "in.yaml" err

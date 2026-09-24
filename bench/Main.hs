@@ -13,7 +13,7 @@ import Data.Yaml qualified as Y
 import Test.Tasty.Bench
 
 import Yamlet
-import Yamlet.Internal.Parser
+import Yamlet.Syntax qualified as S
 
 main :: IO ()
 main = defaultMain
@@ -25,7 +25,7 @@ main = defaultMain
 input :: String -> T.Text -> Benchmark
 input name t = env (pure (bs, bl)) $ \ ~(strict, lazy) ->
   bgroup (name ++ " (" ++ show (BS.length bs `div` 1024) ++ " KiB)")
-    [ bench "yamlet (syntax)" $ nf (parseStream . T.decodeUtf8) strict
+    [ bench "yamlet (syntax)" $ nf S.parseDocuments strict
     , bench "yamlet (nodes)" $ nf (decodeInput >=> decodeNodes) strict
     , bench "HsYAML (events)" $ nf HE.parseEvents lazy
     , bench "HsYAML (nodes)" $ nf (either (const ()) (foldMap (\(H.Doc n) -> forceNode n)) . H.decodeNode) lazy
