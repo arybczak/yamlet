@@ -1,5 +1,6 @@
 module DecodeTests (decodeTests) where
 
+import Data.ByteString qualified as BS
 import Data.Either
 import Data.Int
 import Data.List qualified as L
@@ -271,6 +272,13 @@ test_encodings = do
   case decodeInput "a: b\n\xFF\n" of
     Left err -> assertEqual "invalid UTF-8" (2, 1) (err.location.line, err.location.column)
     Right _ -> assertFailure "expected an error"
+  let invalid :: String -> T.Text -> BS.ByteString -> Assertion
+      invalid preface msg bytes =
+        assertEqual preface (Just (2, 3, T.unpack msg)) (errorOf (decodeInput bytes))
+  invalid "lone surrogate in UTF-16LE" "invalid UTF-16" (T.encodeUtf16LE "a\nbc" <> "\x00\xD8" <> "d\0")
+  invalid "odd length of UTF-16BE" "invalid UTF-16" (T.encodeUtf16BE "a\nbc" <> "\0")
+  invalid "surrogate in UTF-32BE" "invalid UTF-32" (T.encodeUtf32BE "a\nbc" <> "\0\0\xDC\0")
+  invalid "code point beyond Unicode in UTF-32LE" "invalid UTF-32" (T.encodeUtf32LE "a\nbc" <> "\0\0\x11\0")
   where
     stripBom :: T.Text -> Either Error T.Text
     stripBom = Right . T.dropWhile (== '\xFEFF')
