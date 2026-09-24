@@ -7,6 +7,13 @@
 -- whole input alive. To keep a text longer than the nodes, copy it with
 -- 'Data.Text.copy'. The functions of "Yamlet.Decode" copy the texts that
 -- they return.
+--
+-- An alias shares the memory of the node that it refers to, so a small input
+-- with many aliases gives a small graph. But a function that visits every
+-- node, e.g. 'Control.DeepSeq.force' or a 'Yamlet.FromYAML' instance for a
+-- list, visits a node once for each alias path to it. For an untrusted input,
+-- the time and the memory of such a function can be exponential in the size
+-- of the input.
 module Yamlet.Node
   ( -- * Nodes
     Node (..)
