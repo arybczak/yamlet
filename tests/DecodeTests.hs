@@ -426,6 +426,11 @@ test_manyKeys = do
   assertEqual "one collection key" (Right 100001) (count ("[c]" : keys))
   assertEqual "collection keys" (Right 100000) (count (map (\k -> "[" <> k <> "]") keys))
   assertEqual "mapping keys" (Right 100000) (count (map (\k -> "{a: " <> k <> "}") keys))
+  let large = "{" <> T.intercalate ", " (map (<> ": 1") keys) <> "}"
+  assertEqual
+    "large equal keys"
+    (Just (3, 3, "duplicate key"))
+    (errorOf (decodeNodes ("? " <> large <> "\n: 1\n? " <> large <> "\n: 2\n")))
   where
     entries :: Node -> [(Node, Node)]
     entries n = case n.value of

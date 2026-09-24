@@ -226,14 +226,13 @@ instance Ord Key where
 -- | Equality of nodes that ignores their offsets. It is faster than
 -- 'compareNodes' for the few keys of most mappings.
 sameNode :: Node -> Node -> Bool
-sameNode (Node _ tagA valueA) (Node _ tagB valueB) =
+sameNode a@(Node _ tagA valueA) b@(Node _ tagB valueB) =
   tagA == tagB && case (valueA, valueB) of
     (Sequence xs, Sequence ys) -> length xs == length ys && and (zipWith sameNode xs ys)
-    (Mapping xs, Mapping ys) -> length xs == length ys && all (\(k, v) -> any (samePair k v) ys) xs
+    -- The order sorts the entries, so large mappings do not take quadratic
+    -- time.
+    (Mapping xs, Mapping ys) -> length xs == length ys && compareNodes a b == EQ
     (x, y) -> x == y
-  where
-    samePair :: Node -> Node -> (Node, Node) -> Bool
-    samePair k v (k', v') = sameNode k k' && sameNode v v'
 
 -- | An order of nodes that ignores their offsets and the order of the entries
 -- of a mapping. It takes time in the size of the nodes, so it is only for
