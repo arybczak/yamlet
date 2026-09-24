@@ -29,6 +29,7 @@ decodeTests =
     , testCase "JSON" test_json
     , testCase "aliases" test_aliases
     , localOption (mkTimeout 10000000) $ testCase "nesting" test_nesting
+    , localOption (mkTimeout 10000000) $ testCase "many keys" test_manyKeys
     , testCase "optional keys" test_optionalKeys
     , testCase "syntax tree" test_syntaxTree
     , testCase "empty stream" test_emptyStream
@@ -344,6 +345,33 @@ test_keyErrors = do
     "unknown key"
     (Just (2, 1, "unknown key \"job\", expected one of: name, paths, jobs"))
     (errorOf (decodeText @Config "name: x\njob: 1\n"))
+  let withKeys :: [T.Text] -> T.Text
+      withKeys ks = T.unlines $ map (<> ": 1") ks ++ [T.pack ("k" ++ show i ++ ": 1") | i <- [1 .. 10 :: Int]]
+  assertEqual
+    "duplicate scalar key after a collection key"
+    (Just (3, 1, "duplicate key \"a\""))
+    (errorOf (decodeNodes (withKeys ["a", "[b]", "a"])))
+  assertEqual
+    "duplicate collection key"
+    (Just (2, 1, "duplicate key"))
+    (errorOf (decodeNodes (withKeys ["{c: [d]}", "{c: [d]}"])))
+
+-- | The time of the check for duplicate keys is not quadratic in the number
+-- of keys if one key is a collection.
+test_manyKeys :: Assertion
+test_manyKeys =
+  assertEqual
+    "keys"
+    (Right 100001)
+    (length . entries <$> decodeText @Node input)
+  where
+    input :: T.Text
+    input = T.unlines $ "[c]: 1" : [T.pack ("k" ++ show i ++ ": 1") | i <- [1 .. 100000 :: Int]]
+
+    entries :: Node -> [(Node, Node)]
+    entries n = case n.value of
+      Mapping kvs -> kvs
+      _ -> []
 
 test_prettyError :: Assertion
 test_prettyError = case decodeText @Config "name: x\npaths: 42\n" of

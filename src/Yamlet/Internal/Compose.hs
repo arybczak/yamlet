@@ -157,25 +157,23 @@ hasAlias n = case n.content of
 
 -- | The first key that is equal to an earlier one.
 duplicate :: [Node] -> Maybe Node
-duplicate keys
-  | all isScalar keys = case keys of
-      -- Comparing all pairs is faster for few keys.
-      _ : _ : _ : _ : _ : _ : _ : _ : _ -> viaMap M.empty keys
-      _ -> pairwise [] keys
-  | otherwise = pairwise [] keys
+duplicate keys = case keys of
+  -- Comparing all pairs is faster for few keys.
+  _ : _ : _ : _ : _ : _ : _ : _ : _ -> viaMap M.empty [] keys
+  _ -> pairwise [] keys
   where
-    isScalar :: Node -> Bool
-    isScalar k = case k.value of
-      Sequence _ -> False
-      Mapping _ -> False
-      _ -> True
-
-    viaMap :: M.Map (T.Text, ScalarKey) () -> [Node] -> Maybe Node
-    viaMap seen = \case
+    -- A scalar key cannot be equal to a collection key, so only the
+    -- collection keys need the pairwise comparison.
+    viaMap :: M.Map (T.Text, ScalarKey) () -> [Node] -> [Node] -> Maybe Node
+    viaMap seen collections = \case
       [] -> Nothing
-      k : ks ->
-        let key = (k.tag, scalarKey k.value)
-        in if M.member key seen then Just k else viaMap (M.insert key () seen) ks
+      k : ks -> case scalarKey k.value of
+        Just sk ->
+          let key = (k.tag, sk)
+          in if M.member key seen then Just k else viaMap (M.insert key () seen) collections ks
+        Nothing
+          | any (sameNode k) collections -> Just k
+          | otherwise -> viaMap seen (k : collections) ks
 
     pairwise :: [Node] -> [Node] -> Maybe Node
     pairwise seen = \case
@@ -192,14 +190,15 @@ data ScalarKey
   | KString !T.Text
   deriving stock (Eq, Ord)
 
-scalarKey :: Value -> ScalarKey
+scalarKey :: Value -> Maybe ScalarKey
 scalarKey = \case
-  Null -> KNull
-  Bool b -> KBool b
-  Int i -> KInt i
-  Float d -> KFloat d
-  String t -> KString t
-  _ -> KNull
+  Null -> Just KNull
+  Bool b -> Just (KBool b)
+  Int i -> Just (KInt i)
+  Float d -> Just (KFloat d)
+  String t -> Just (KString t)
+  Sequence _ -> Nothing
+  Mapping _ -> Nothing
 
 -- | Equality of nodes that ignores their offsets.
 sameNode :: Node -> Node -> Bool
