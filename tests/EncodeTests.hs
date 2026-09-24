@@ -9,6 +9,7 @@ import Test.Tasty.QuickCheck
 
 import Yamlet
 import Yamlet.Encode
+import Yamlet.Schema
 
 encodeTests :: TestTree
 encodeTests = testGroup "Encode"
@@ -93,6 +94,10 @@ test_plainSafe = do
   assertBool "comment" . not $ isPlainSafe "a #b"
   assertBool "indicator" . not $ isPlainSafe "*a"
   assertBool "line break" . not $ isPlainSafe "a\nb"
+  assertBool "string" $ isPlainString "9.10.3"
+  assertBool "string with a colon and a space" $ isPlainString "a: b"
+  assertBool "string number" . not $ isPlainString "9.10"
+  assertBool "string null" . not $ isPlainString "~"
 
 test_literal :: Assertion
 test_literal = do

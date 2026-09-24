@@ -208,12 +208,6 @@ scalarText n = case n.value of
   Sequence _ -> "[]"
   Mapping _ -> "{}"
 
--- | The string reads back as the same string if it is a plain scalar in the
--- block style, as a value or as a key. In a flow collection the characters
--- @,[]{}@ need quotes too, so the check does not apply there.
-isPlainSafe :: T.Text -> Bool
-isPlainSafe t = plainSyntax False t && resolvePlain t == String t
-
 -- | A literal block scalar for a string with line breaks.
 literal :: Int -> T.Text -> Maybe B.Builder
 literal indent t

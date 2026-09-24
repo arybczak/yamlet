@@ -9,6 +9,7 @@ module Yamlet.Syntax
   ( -- * Parsing
     parseDocuments
   , parseDocumentsText
+  , decodeInput
   , copyDocument
   , copyNode
 
@@ -54,6 +55,10 @@ import Yamlet.Internal.Syntax
 
 -- | Parse the documents of a stream. The encoding is UTF-8, UTF-16 or UTF-32,
 -- detected as the YAML specification describes.
+--
+-- 'errorAt' needs the text of the input. To report errors of your own, e.g.
+-- for a key that the program does not know, decode the input with
+-- 'decodeInput' and parse it with 'parseDocumentsText'.
 parseDocuments :: BS.ByteString -> Either Error [Document]
 parseDocuments bs = decodeInput bs >>= parseStream
 

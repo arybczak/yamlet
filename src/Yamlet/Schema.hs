@@ -6,12 +6,15 @@
 module Yamlet.Schema
   ( resolvePlain
   , resolveTagged
+  , isPlainString
+  , isPlainSafe
   ) where
 
 import Control.Applicative
 import Data.Char
 import Data.Text qualified as T
 
+import Yamlet.Internal.Emit
 import Yamlet.Node
 
 -- | The value of a plain scalar without a tag, e.g. @null@, @true@, @12@,
@@ -38,6 +41,20 @@ resolveTagged tag t
   | tag == intTag = Int <$> readInt t
   | tag == floatTag = Float <$> (readFloat t <|> fromInteger <$> readInt t)
   | otherwise = Just (String t)
+
+-- | A plain scalar with the text is a string, e.g. @9.10.3@ is a string, but
+-- @9.10@ and @true@ are not. The check ignores the syntax, so e.g. @a: b@
+-- passes. For both checks, use 'isPlainSafe'.
+isPlainString :: T.Text -> Bool
+isPlainString t = case resolvePlain t of
+  String _ -> True
+  _ -> False
+
+-- | The string reads back as the same string if it is a plain scalar in the
+-- block style, as a value or as a key. In a flow collection the characters
+-- @,[]{}@ need quotes too, so the check does not apply there.
+isPlainSafe :: T.Text -> Bool
+isPlainSafe t = plainSyntax False t && isPlainString t
 
 isNull :: T.Text -> Bool
 isNull t = T.null t || t == "~" || t == "null" || t == "Null" || t == "NULL"
