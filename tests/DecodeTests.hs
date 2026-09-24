@@ -121,6 +121,12 @@ test_exactFloats = do
   assertEqual "integer as a scientific" (Right (Sci.scientific 42 0)) (decodeText @Sci.Scientific "42")
   assertEqual "huge exponent" (Right (Sci.scientific 1 1000000000)) (decodeText @Sci.Scientific "1e1000000000")
   assertEqual "huge exponent as a double" (Right (1 / 0)) (decodeText @Double "1e1000000000")
+  -- 1 + 2^-24 + 2^-60 is nearest to the float 1 + 2^-23, but the nearest
+  -- double is 1 + 2^-24, a tie between two floats that rounds to 1.
+  assertEqual
+    "float without double rounding"
+    (Right (1 + 2 ^^ (-23 :: Int)))
+    (decodeText @Float "1.000000059604644776257986737988403547205962240695953369140625")
   assertEqual
     "exponent beyond Int"
     (Right [Float Infinity, Float (Finite 0)])

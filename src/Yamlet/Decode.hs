@@ -292,8 +292,15 @@ instance FromYAML Double where
 instance FromYAML Sci.Scientific where
   parseYAML = withScientific pure
 
+-- | The nearest float. A conversion by way of 'Double' could round twice.
 instance FromYAML Float where
-  parseYAML = withFloat (pure . realToFrac)
+  parseYAML = parseNode $ \n -> case n.value of
+    Float (Finite s) -> pure (Sci.toRealFloat s)
+    Float Infinity -> pure (1 / 0)
+    Float NegativeInfinity -> pure (-1 / 0)
+    Float NaN -> pure (0 / 0)
+    Int i -> pure (fromInteger i)
+    _ -> typeMismatch "a number" n
 
 instance FromYAML T.Text where
   parseYAML = withText pure
