@@ -128,7 +128,10 @@ decimal ds0 e0
 
 negateFloat :: FloatValue -> FloatValue
 negateFloat = \case
-  Finite s -> Finite (negate s)
+  Finite s
+    | s == 0 -> NegativeZero
+    | otherwise -> Finite (negate s)
+  NegativeZero -> Finite 0
   Infinity -> NegativeInfinity
   NegativeInfinity -> Infinity
   NaN -> NaN

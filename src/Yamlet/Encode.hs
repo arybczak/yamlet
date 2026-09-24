@@ -250,6 +250,7 @@ plainText = \case
   -- back as a float, not as an integer.
   Float (Finite s) -> T.pack (Sci.formatScientific Sci.Generic Nothing s)
   Float Infinity -> ".inf"
+  Float NegativeZero -> "-0.0"
   Float NegativeInfinity -> "-.inf"
   Float NaN -> ".nan"
   String t -> t

@@ -103,6 +103,8 @@ test_floats = do
   assertEqual "float" "0.1\n" (encodeText @Float 0.1)
   assertEqual "float infinity" "-.inf\n" (encodeText @Float (-1 / 0))
   assertEqual "float not a number" ".nan\n" (encodeText @Float (0 / 0))
+  assertEqual "negative zero" "-0.0\n" (encodeText @Double (-0))
+  assertEqual "float negative zero" "-0.0\n" (encodeText @Float (-0))
 
 test_literal :: Assertion
 test_literal = do

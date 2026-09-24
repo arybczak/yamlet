@@ -83,7 +83,10 @@ data Value
 -- can use all memory. Convert a value from an untrusted input with
 -- 'floatValueToDouble' or with the bounded conversions of "Data.Scientific".
 data FloatValue
-  = Finite !Sci.Scientific
+  = -- | A finite value other than negative zero.
+    Finite !Sci.Scientific
+  | -- | Negative zero, e.g. @-0.0@, which a 'Sci.Scientific' cannot hold.
+    NegativeZero
   | Infinity
   | NegativeInfinity
   | NaN
@@ -111,6 +114,7 @@ floatToFloatValue = fromRealFloat
 toRealFloat :: RealFloat a => FloatValue -> a
 toRealFloat = \case
   Finite s -> Sci.toRealFloat s
+  NegativeZero -> -0
   Infinity -> 1 / 0
   NegativeInfinity -> -1 / 0
   NaN -> 0 / 0
@@ -119,6 +123,7 @@ fromRealFloat :: RealFloat a => a -> FloatValue
 fromRealFloat d
   | isNaN d = NaN
   | isInfinite d = if d > 0 then Infinity else NegativeInfinity
+  | isNegativeZero d = NegativeZero
   | otherwise = Finite (Sci.fromFloatDigits d)
 
 -- | The kind of a value in plain words, for error messages, e.g. "a list".

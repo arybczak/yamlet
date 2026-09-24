@@ -129,6 +129,7 @@ withFloat f = parseNode $ \n -> case n.value of
 withScientific :: (Sci.Scientific -> Parser a) -> Node -> Parser a
 withScientific f = parseNode $ \n -> case n.value of
   Float (Finite s) -> f s
+  Float NegativeZero -> f 0
   Int i -> f (Sci.scientific i 0)
   Float _ -> fail "expected a finite number"
   _ -> typeMismatch "a number" n

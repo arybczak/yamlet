@@ -132,6 +132,16 @@ test_exactFloats = do
     (Right [Float Infinity, Float (Finite 0)])
     (map (.value) <$> decodeText @[Node] "[1e99999999999999999999, 1e-99999999999999999999]")
   assertEqual
+    "negative zero"
+    (Right [Float NegativeZero, Float NegativeZero, Float (Finite 0), Int 0])
+    (map (.value) <$> decodeText @[Node] "[-0.0, !!float -0, 0.0, -0]")
+  assertEqual "negative zero as a double" (Right True) (isNegativeZero <$> decodeText @Double "-0.0")
+  assertEqual "negative zero as a scientific" (Right 0) (decodeText @Sci.Scientific "-0.0")
+  assertEqual
+    "negative and positive zero keys"
+    (Right [Float (Finite 0), Float NegativeZero])
+    ((\n -> case n.value of Mapping kvs -> [k.value | (k, _) <- kvs]; v -> [v]) <$> decodeText @Node "{0.0: a, -0.0: b}")
+  assertEqual
     "infinity as a scientific"
     (Just (1, 1, "expected a finite number"))
     (errorOf (decodeText @Sci.Scientific ".inf"))
