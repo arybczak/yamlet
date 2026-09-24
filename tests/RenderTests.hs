@@ -135,8 +135,8 @@ test_fallbacks = do
   assertEqual "single-quoted line break" "\"a\\nb\"\n" (render (scalarNode SingleQuoted "a\nb"))
   assertEqual
     "keep indicator"
-    "- \"a\\n\\n\"\n- b\n"
-    (render (sequenceNode [scalarNode Literal "a\n\n", plainNode "b"]))
+    "- |+\n  a\n\n- b\n"
+    (render (sequenceNode [scalarNode Literal "a\n\n", (plainNode "b") {comments = noComments {before = [EmptyLine]}}]))
   assertEqual
     "block scalar in a flow collection"
     "[\"a\\n\"]\n"

@@ -112,6 +112,11 @@ test_literal = do
   assertEqual "strip" "key: |-\n  a\n  b\n" (encodeText (mapping ["key" .= ("a\nb" :: T.Text)]))
   assertEqual "keep" "key: |+\n  a\n\n" (encodeText (mapping ["key" .= ("a\n\n" :: T.Text)]))
   assertEqual "indentation indicator" "- |2-\n    a\n  b\n" (encodeText ["  a\nb" :: T.Text])
+  let keep = mapping ["key" .= ("a\n\n" :: T.Text), "next" .= ("b" :: T.Text)]
+  assertEqual
+    "keep in a syntax tree"
+    (encodeText keep)
+    (S.renderSyntax S.defaultRenderOptions [S.document (toSyntax keep)])
 
 test_tags :: Assertion
 test_tags = do

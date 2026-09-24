@@ -40,8 +40,8 @@ defaultRenderOptions =
 -- | Render documents with their comments and empty lines.
 --
 -- A scalar keeps its style if the style can hold its text, otherwise it gets
--- quotes. A block scalar never keeps trailing empty lines with the @+@
--- indicator, because a line after it would become part of its value. A flow
+-- quotes. An empty line from the comments after a block scalar with the @+@
+-- indicator goes away, because it would become part of the scalar. A flow
 -- collection with comments inside becomes a block collection, so that every
 -- comment has a line.
 --
@@ -56,7 +56,9 @@ renderSyntax opts = emptyLines . TL.toStrict . B.toLazyText . go True
   where
     -- The parser reads several empty lines in a row as one, and gives empty
     -- lines at the start or the end of the output to no node. So they go
-    -- away, but not the empty lines in the content of a block scalar.
+    -- away, but not the empty lines in the content of a block scalar. Only
+    -- the content of a block scalar with the keep indicator ends with an
+    -- empty line.
     emptyLines :: T.Text -> T.Text
     emptyLines t =
       T.unlines
@@ -68,7 +70,7 @@ renderSyntax opts = emptyLines . TL.toStrict . B.toLazyText . go True
 
     collapse :: [T.Text] -> [T.Text]
     collapse = \case
-      a : b : rest | a == emptyLine && b == emptyLine -> collapse (b : rest)
+      a : b : rest | b == emptyLine && (a == emptyLine || T.null a) -> collapse (a : rest)
       a : rest -> a : collapse rest
       [] -> []
 
@@ -309,7 +311,7 @@ value opts indent v lineComment extra
 
     endsWithBlockScalar :: [Node] -> Bool
     endsWithBlockScalar xs = case reverse xs of
-      Node {content = Scalar Literal t} : _ -> isJust (literalBlock False 0 t)
+      Node {content = Scalar Literal t} : _ -> isJust (literalBlock True 0 t)
       Node {content = Scalar Folded t} : _ -> isJust (foldedBlock 0 t)
       _ -> False
 
@@ -356,7 +358,7 @@ inline opts pos indent n lineComment = case n.content of
     -- The comment goes on the line of the header.
     blockScalar :: ScalarStyle -> T.Text -> B.Builder
     blockScalar style t = case style of
-      Literal | Just (h, b) <- literalBlock False indent t -> h <> comment lineComment <> b
+      Literal | Just (h, b) <- literalBlock True indent t -> h <> comment lineComment <> b
       Folded | Just (h, b) <- foldedBlock indent t -> h <> comment lineComment <> b
       _ -> doubleQuoted t <> comment lineComment
 
