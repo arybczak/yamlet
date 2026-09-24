@@ -171,9 +171,9 @@ mkObject n kvs = do
   where
     insert :: M.Map T.Text (Node, Node) -> (Node, Node) -> Parser (M.Map T.Text (Node, Node))
     insert m kv@(k, _) = case k.value of
-      String t
-        | t `M.member` m -> failAt k $ "duplicate key " ++ show t
-        | otherwise -> pure $ M.insert t kv m
+      String t -> case M.insertLookupWithKey (\_ _ old -> old) t kv m of
+        (Just _, _) -> failAt k $ "duplicate key " ++ show t
+        (Nothing, m') -> pure m'
       _ -> pure m
 
 -- | The node of the mapping.
