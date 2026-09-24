@@ -9,6 +9,7 @@ import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 
 import Yamlet
+import Yamlet.Syntax qualified as S
 
 encodeTests :: TestTree
 encodeTests = testGroup "Encode"
@@ -17,7 +18,9 @@ encodeTests = testGroup "Encode"
   , testCase "floats" test_floats
   , testCase "literal block scalars" test_literal
   , testCase "tags" test_tags
+  , testCase "syntax tree" test_syntax
   , testProperty "round trip" prop_roundTrip
+  , testProperty "syntax round trip" prop_syntaxRoundTrip
   ]
 
 test_blockStyle :: Assertion
@@ -106,11 +109,49 @@ test_tags = do
   let str = Node noOffset "!name" (String "foo")
   assertEqual "tagged scalar" "- !name foo\n" (encodeText [str])
 
+test_syntax :: Assertion
+test_syntax = assertEqual "output" expected $ S.renderSyntax S.defaultRenderOptions
+  [S.Document Nothing False False S.noComments (edit (toSyntax value))]
+  where
+    value :: Node
+    value = mapping ["name" .= ("x" :: T.Text), "paths" .= ["a" :: T.Text, "b"]]
+
+    -- Add a comment above the first key and use the flow style for the list.
+    edit :: S.Node -> S.Node
+    edit n = case n.content of
+      S.Mapping style [(k1, v1), (k2, v2)] -> n
+        { S.content = S.Mapping style
+          [ (k1 { S.comments = S.noComments { S.before = [S.Comment "The name."] } }, v1)
+          , (k2, v2 { S.content = flow v2.content })
+          ]
+        }
+      _ -> n
+
+    flow :: S.Content -> S.Content
+    flow = \case
+      S.Sequence _ xs -> S.Sequence S.Flow xs
+      c -> c
+
+    expected :: T.Text
+    expected = T.unlines ["# The name.", "name: x", "paths: [a, b]"]
+
 -- | Encoding a node and decoding the result gives the same node.
 prop_roundTrip :: Doc -> Property
-prop_roundTrip (Doc n) = case decodeNodes (encodeText n) of
-  Right [n'] -> counterexample (T.unpack (encodeText n)) $ strip n' === strip n
-  r -> counterexample (T.unpack (encodeText n) ++ "\n" ++ show r) False
+prop_roundTrip (Doc n) = readsBack (encodeText n) n
+
+-- | Rendering the syntax tree of a node and decoding the result gives the same
+-- node.
+prop_syntaxRoundTrip :: Doc -> Property
+prop_syntaxRoundTrip (Doc n) = readsBack output n
+  where
+    output :: T.Text
+    output = S.renderSyntax S.defaultRenderOptions
+      [S.Document Nothing False False S.noComments (toSyntax n)]
+
+readsBack :: T.Text -> Node -> Property
+readsBack output n = case decodeNodes output of
+  Right [n'] -> counterexample (T.unpack output) $ strip n' === strip n
+  r -> counterexample (T.unpack output ++ "\n" ++ show r) False
   where
     -- Drop the offsets.
     strip :: Node -> Node

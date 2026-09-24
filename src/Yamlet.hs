@@ -32,6 +32,7 @@ module Yamlet
     -- * Syntax trees
   , decodeDocument
   , resolveDocument
+  , toSyntax
 
     -- * Encoding
   , encode

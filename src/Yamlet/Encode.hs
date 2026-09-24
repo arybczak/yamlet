@@ -7,6 +7,7 @@ module Yamlet.Encode
 
     -- * Rendering
   , renderDocuments
+  , toSyntax
   ) where
 
 import Data.Int
@@ -22,6 +23,7 @@ import Numeric.Natural
 import Yamlet.Internal.Emit
 import Yamlet.Schema
 import Yamlet.Node
+import Yamlet.Syntax qualified as S
 
 ----------------------------------------
 -- Class
@@ -111,6 +113,26 @@ renderDocuments docs = TL.toStrict . B.toLazyText . mconcat $ zipWith document [
       Just t -> t <> "\n"
       Nothing -> mempty
 
+-- | Convert a node to a node of a syntax tree, e.g. to set the styles of its
+-- scalars or to add comments before 'S.renderSyntax' writes it. The styles
+-- are the ones that 'renderDocuments' uses.
+toSyntax :: Node -> S.Node
+toSyntax n = sn { S.props = S.Props Nothing tag }
+  where
+    tag :: S.Tag
+    tag | n.tag == defaultTag n.value = S.NoTag
+        | otherwise = S.Tag n.tag
+
+    sn :: S.Node
+    sn = case n.value of
+      Sequence xs -> S.sequenceNode (map toSyntax xs)
+      Mapping kvs -> S.mappingNode [ (toSyntax k, toSyntax v) | (k, v) <- kvs ]
+      String t
+        | isPlainSafe t -> S.plainNode t
+        | T.any (== '\n') t -> S.scalarNode S.Literal t
+        | otherwise -> S.scalarNode S.DoubleQuoted t
+      v -> S.plainNode (plainText v)
+
 -- | A block sequence. The first entry does not start with indentation if the
 -- sequence continues a line.
 blockSequence :: Int -> Bool -> Node -> B.Builder
@@ -196,18 +218,23 @@ tagPrefix n
 -- | A scalar on one line.
 scalarText :: Node -> B.Builder
 scalarText n = case n.value of
+  String t | not (isPlainSafe t) -> doubleQuoted t
+  v -> B.fromText (plainText v)
+
+-- | The text of a value without quotes, or an empty collection in the flow
+-- style.
+plainText :: Value -> T.Text
+plainText = \case
   Null -> "null"
   Bool b -> if b then "true" else "false"
-  Int i -> B.fromString (show i)
+  Int i -> T.pack (show i)
   -- The generic format always has a dot or an exponent, so the number reads
   -- back as a float, not as an integer.
-  Float (Finite s) -> B.fromString (Sci.formatScientific Sci.Generic Nothing s)
+  Float (Finite s) -> T.pack (Sci.formatScientific Sci.Generic Nothing s)
   Float Infinity -> ".inf"
   Float NegativeInfinity -> "-.inf"
   Float NaN -> ".nan"
-  String t
-    | isPlainSafe t -> B.fromText t
-    | otherwise -> doubleQuoted t
+  String t -> t
   Sequence _ -> "[]"
   Mapping _ -> "{}"
 
