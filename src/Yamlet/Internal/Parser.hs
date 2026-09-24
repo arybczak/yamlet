@@ -864,6 +864,7 @@ cDoubleQuoted n c props = withScan $ \e p ->
                 else case flowFold e n (breakEnd e (i + 1)) of
                   Just (k, j) -> go j j (T.replicate k "\n" : slice e seg i : acc)
                   Nothing -> badIndent (i + 1)
+          | i + 1 >= e.end -> unterminated i
           | otherwise -> case escape e (i + 1) of
               Just (t, j) -> go j j (t : slice e seg i : acc)
               Nothing -> Failed i "invalid escape sequence"

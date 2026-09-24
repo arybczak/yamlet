@@ -383,6 +383,8 @@ test_syntaxErrors = do
   check "duplicate key" (3, 1, "duplicate key \"a\"") "a: 1\nb: 2\na: 3\n"
   check "undefined tag handle" (1, 1, "undefined tag handle !e!") "!e!foo bar\n"
   check "invalid character" (1, 4, "invalid character") "a: \x01\n"
+  check "backslash at the end of the input" (1, 4, "unterminated double-quoted scalar") "a: \"b\\"
+  check "backslash at the end of a key" (1, 2, "unterminated double-quoted scalar") "[\"a\\"
   check "unsupported version" (1, 1, "unsupported YAML version 2.0") "%YAML 2.0\n--- a\n"
   check "version beyond Int" (1, 1, "unsupported YAML version") "%YAML 18446744073709551617.2\n--- a\n"
   check "minor version beyond Int" (1, 1, "unsupported YAML version") ("%YAML 1." <> T.replicate 100000 "9" <> "\n--- a\n")
