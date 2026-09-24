@@ -141,7 +141,9 @@ data Line
   deriving stock (Eq, Show, Generic)
   deriving anyclass (NFData)
 
--- | The offset of a byte in the UTF-8 encoded input.
+-- | The offset of a byte in the input text, in its UTF-8 encoding. For an
+-- input in UTF-16 or UTF-32, the offset counts the bytes of the text after
+-- 'Yamlet.Syntax.decodeInput', not the bytes of the input.
 newtype Offset = Offset Int
   deriving newtype (Eq, Ord, Show, NFData)
 
