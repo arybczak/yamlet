@@ -18,9 +18,12 @@ module Yamlet.Internal.Emit
   , spaces
   ) where
 
+import Data.ByteString qualified as BS
 import Data.Char
 import Data.Text qualified as T
+import Data.Text.Encoding qualified as T
 import Data.Text.Lazy.Builder qualified as B
+import Data.Word
 import Numeric
 
 -- | The text reads back as the same text if it is a plain scalar on one line,
@@ -160,21 +163,40 @@ line indent l
   | T.null l = "\n"
   | otherwise = "\n" <> spaces indent <> B.fromText l
 
--- | A tag in the shortest form that reads back as the same tag.
+-- | A tag in the shortest form that reads back as the same tag. A character
+-- that the form does not allow gets a %XX escape. The parser does not decode
+-- the escapes of a verbatim tag, so such a global tag reads back with them.
 tagText :: T.Text -> B.Builder
 tagText tag
   | Just suffix <- T.stripPrefix "tag:yaml.org,2002:" tag
-  , not (T.null suffix)
-  , T.all isTagChar suffix =
-      "!!" <> B.fromText suffix
+  , not (T.null suffix) =
+      "!!" <> shorthand suffix
   | Just suffix <- T.stripPrefix "!" tag
-  , not (T.null suffix)
-  , T.all isTagChar suffix =
-      "!" <> B.fromText suffix
-  | otherwise = "!<" <> B.fromText tag <> ">"
+  , not (T.null suffix) =
+      "!" <> shorthand suffix
+  | otherwise = "!<" <> verbatim (T.unpack tag) <> ">"
   where
+    shorthand :: T.Text -> B.Builder
+    shorthand = T.foldr (\c b -> (if isTagChar c then B.singleton c else escape c) <> b) mempty
+
+    verbatim :: String -> B.Builder
+    verbatim = \case
+      '%' : a : b : rest
+        | isHexDigit a && isHexDigit b -> B.fromString ['%', a, b] <> verbatim rest
+      c : rest -> (if isUriChar c then B.singleton c else escape c) <> verbatim rest
+      [] -> mempty
+
+    escape :: Char -> B.Builder
+    escape c = mconcat [B.fromString ('%' : hex w) | w <- BS.unpack (T.encodeUtf8 (T.singleton c))]
+      where
+        hex :: Word8 -> String
+        hex w = let s = map toUpper (showHex w "") in if length s < 2 then '0' : s else s
+
     isTagChar :: Char -> Bool
     isTagChar c = isAscii c && (isAlphaNum c || c `elem` ("-#;/?:@&=+$_.~*'()" :: String))
+
+    isUriChar :: Char -> Bool
+    isUriChar c = isTagChar c || c `elem` (",[]!" :: String)
 
 -- | c-printable without the line breaks and the byte order mark.
 isPrintable :: Char -> Bool

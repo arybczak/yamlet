@@ -114,6 +114,15 @@ test_tags = do
   assertEqual "local tag" "!point\nx: 1\n" (encodeText local)
   let str = Node noOffset "!name" (String "foo")
   assertEqual "tagged scalar" "- !name foo\n" (encodeText [str])
+  let readBack :: T.Text -> Either Error T.Text
+      readBack t = (.tag) <$> decodeText @Node (encodeText (Node noOffset t (String "x")))
+      exact :: T.Text -> Assertion
+      exact t = assertEqual (T.unpack t) (Right t) (readBack t)
+  exact "!a b!c%"
+  exact "!!x"
+  exact "tag:yaml.org,2002:a,b é"
+  exact "tag:example.com,2000:a%41,[b]"
+  assertEqual "escapes in a global tag" (Right "tag:example.com,2000:a%20b%3E%25") (readBack "tag:example.com,2000:a b>%")
 
 test_syntax :: Assertion
 test_syntax =
