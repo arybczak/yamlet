@@ -21,6 +21,7 @@ decodeTests = testGroup "Decode"
   , testCase "plain scalars" test_plainSafe
   , testCase "record" test_record
   , testCase "copies" test_copies
+  , testCase "JSON" test_json
   , testCase "aliases" test_aliases
   , testCase "empty stream" test_emptyStream
   , testCase "encodings" test_encodings
@@ -121,6 +122,21 @@ test_copies = do
       S.Sequence _ _ _ xs -> concatMap texts xs
       S.Mapping _ _ _ kvs -> concatMap (\(k, v) -> texts k ++ texts v) kvs
       S.Alias _ name -> [name]
+
+-- | JSON is valid YAML, including the escapes that JSON encoders write.
+test_json :: Assertion
+test_json = do
+  assertEqual "document"
+    (Right (M.fromList [("a", [1.5, -2e3]), ("b\tc", [])]))
+    (decodeText @(M.Map T.Text [Double]) "{\"a\":[1.5,-2E3],\n\t\"b\\tc\": []}")
+  assertEqual "surrogate pair" (Right ["\x1F600", "a\x10000z"])
+    (decodeText @[T.Text] "[\"\\ud83d\\ude00\", \"a\\uD800\\uDC00z\"]")
+  assertEqual "lone high surrogate" (Just (1, 3, "invalid escape sequence"))
+    (errorOf (decodeText @[T.Text] "[\"\\ud83d\"]"))
+  assertEqual "high surrogate without a low one" (Just (1, 3, "invalid escape sequence"))
+    (errorOf (decodeText @[T.Text] "[\"\\ud83d\\u0041\"]"))
+  assertEqual "lone low surrogate" (Just (1, 3, "invalid escape sequence"))
+    (errorOf (decodeText @[T.Text] "[\"\\ude00\"]"))
 
 test_aliases :: Assertion
 test_aliases = assertEqual "map"

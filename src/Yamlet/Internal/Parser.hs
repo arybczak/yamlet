@@ -866,24 +866,40 @@ escape e i = case chr (fromIntegral (byteAt e i)) of
   '_' -> simple '\xA0'
   'L' -> simple '\x2028'
   'P' -> simple '\x2029'
-  'x' -> hex 2
-  'u' -> hex 4
-  'U' -> hex 8
+  'x' -> codePoint 2
+  'u' -> case hexAt (i + 1) 4 of
+    -- JSON escapes a character outside the Basic Multilingual Plane as a
+    -- pair of surrogates.
+    Just hi
+      | hi >= 0xD800 && hi <= 0xDBFF
+      , byteAt e (i + 5) == BACKSLASH
+      , byteAt e (i + 6) == 0x75
+      , Just lo <- hexAt (i + 7) 4
+      , lo >= 0xDC00 && lo <= 0xDFFF
+      -> fromCodePoint (0x10000 + (hi - 0xD800) * 0x400 + (lo - 0xDC00)) (i + 11)
+    _ -> codePoint 4
+  'U' -> codePoint 8
   _ -> Nothing
   where
     simple :: Char -> Maybe (T.Text, Int)
     simple ch = Just (T.singleton ch, i + 1)
 
-    hex :: Int -> Maybe (T.Text, Int)
-    hex k
-      | all (isHexDigit' . byteAt e) [i + 1 .. i + k]
-      , cp <= 0x10FFFF
-      , cp < 0xD800 || cp > 0xDFFF
-      = Just (T.singleton (chr cp), i + 1 + k)
+    codePoint :: Int -> Maybe (T.Text, Int)
+    codePoint k = do
+      cp <- hexAt (i + 1) k
+      fromCodePoint cp (i + 1 + k)
+
+    fromCodePoint :: Int -> Int -> Maybe (T.Text, Int)
+    fromCodePoint cp next
+      | cp <= 0x10FFFF && (cp < 0xD800 || cp > 0xDFFF) = Just (T.singleton (chr cp), next)
       | otherwise = Nothing
-      where
-        cp :: Int
-        cp = foldl (\acc j -> acc * 16 + hexValue (byteAt e j)) 0 [i + 1 .. i + k]
+
+    -- The value of k hex digits at the index.
+    hexAt :: Int -> Int -> Maybe Int
+    hexAt j k
+      | all (isHexDigit' . byteAt e) [j .. j + k - 1] =
+          Just $ foldl (\acc x -> acc * 16 + hexValue (byteAt e x)) 0 [j .. j + k - 1]
+      | otherwise = Nothing
 
 -- | ns-plain(n,c)
 nsPlain :: Int -> Ctx -> Props -> P Node
