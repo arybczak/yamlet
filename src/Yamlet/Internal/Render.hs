@@ -363,6 +363,8 @@ inline opts pos indent n lineComment = case n.content of
     content_ :: B.Builder
     content_ = case n.content of
       Scalar style t -> scalar pos style t
+      Sequence _ [] | hasEndLines n -> "[\n" <> lines_ indent n.comments.after <> spaces indent <> "]"
+      Mapping _ [] | hasEndLines n -> "{\n" <> lines_ indent n.comments.after <> spaces indent <> "}"
       Sequence _ xs -> "[" <> commas (map (\x -> inline opts InFlow indent (flowItem x) Nothing) xs) <> "]"
       Mapping _ kvs -> "{" <> commas (map flowEntry kvs) <> "}"
       Alias {} -> mempty
@@ -409,6 +411,7 @@ implicitKey :: RenderOptions -> Node -> Maybe B.Builder
 implicitKey opts k
   | isBlock opts k = Nothing
   | isEmpty k = Nothing
+  | hasEndLines k = Nothing
   | TL.length (B.toLazyText key) > 1024 = Nothing
   | otherwise = Just key
   where
@@ -436,6 +439,17 @@ hasComments n =
 
     commentLines :: [Line] -> [Line]
     commentLines = filter (/= EmptyLine)
+
+-- | The node is an empty collection with comments at its end, which go
+-- between its brackets.
+hasEndLines :: Node -> Bool
+hasEndLines n = case n.content of
+  Sequence _ [] -> hasComment
+  Mapping _ [] -> hasComment
+  _ -> False
+  where
+    hasComment :: Bool
+    hasComment = not (null [() | Comment _ <- n.comments.after])
 
 -- | The node is an empty plain scalar without properties.
 isEmpty :: Node -> Bool
@@ -474,7 +488,7 @@ props n = case n.content of
 comment :: Maybe T.Text -> B.Builder
 comment = \case
   Nothing -> mempty
-  Just t -> " #" <> text (T.map (\c -> if c == '\n' || c == '\r' then ' ' else c) (printable t))
+  Just t -> " #" <> text (T.stripEnd (T.map (\c -> if c == '\n' || c == '\r' then ' ' else c) (printable t)))
   where
     text :: T.Text -> B.Builder
     text t = if T.null t then mempty else " " <> B.fromText t
@@ -490,10 +504,11 @@ lines_ indent = mconcat . map line
         mconcat . map commentLine $
           T.splitOn "\n" (T.replace "\r" "\n" (T.replace "\r\n" "\n" (printable t)))
 
+    -- The parser drops the white space at the end of a comment.
     commentLine :: T.Text -> B.Builder
     commentLine l
-      | T.null l = spaces indent <> "#\n"
-      | otherwise = spaces indent <> "# " <> B.fromText l <> "\n"
+      | T.null (T.stripEnd l) = spaces indent <> "#\n"
+      | otherwise = spaces indent <> "# " <> B.fromText (T.stripEnd l) <> "\n"
 
 -- | The mark of an empty line from the comments. The output has no other NUL
 -- character.

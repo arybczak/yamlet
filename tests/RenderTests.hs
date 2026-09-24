@@ -146,6 +146,25 @@ test_fallbacks = do
     "[!!null, a]\n"
     (render (contentNode (Sequence Flow [plainNode "", plainNode "a"])))
   assertEqual "empty key" "?\n: a\n" (render (mappingNode [(plainNode "", plainNode "a")]))
+  let emptyWithComment = (contentNode (Sequence Block [])) {comments = noComments {after = [Comment "c"]}}
+      commented = mappingNode [(plainNode "k", emptyWithComment)]
+  assertEqual "comment in an empty collection" "k: [\n  # c\n  ]\n" (render commented)
+  assertEqual
+    "comment in an empty collection reads back"
+    (Right [[("/k", "after", "c")]])
+    (map commentsOf <$> parseDocumentsText (render commented))
+  assertEqual
+    "comment in an empty key"
+    "? [\n  # c\n  ]\n: v\n"
+    (render (mappingNode [(emptyWithComment, plainNode "v")]))
+  assertEqual
+    "comment in an empty key reads back"
+    (Right [[("/?:key", "after", "c")]])
+    (map commentsOf <$> parseDocumentsText (render (mappingNode [(emptyWithComment, plainNode "v")])))
+  assertEqual
+    "white space at the end of a comment"
+    "# y\na # x\n"
+    (render (plainNode "a") {comments = noComments {before = [Comment "y\t"], inline = Just "x "}})
   let anchored :: T.Text -> Node -> Node
       anchored a n = n {props = noProps {anchor = Just a}}
   assertEqual

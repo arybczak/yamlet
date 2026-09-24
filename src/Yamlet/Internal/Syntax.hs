@@ -126,9 +126,11 @@ data Comments = Comments
   { before :: [Line]
   -- ^ The lines above the node.
   , inline :: !(Maybe T.Text)
-  -- ^ The comment at the end of the first line of the node.
+  -- ^ The comment at the end of the first line of the node. The renderer
+  -- writes a line break in it as a space.
   , after :: [Line]
-  -- ^ The lines after the last entry of a collection.
+  -- ^ The lines after the last entry of a collection, or between the brackets
+  -- of an empty collection.
   }
   deriving stock (Eq, Show, Generic)
   deriving anyclass (NFData)
@@ -140,7 +142,9 @@ noComments = Comments [] Nothing []
 -- | A line of comments. Several empty lines in a row count as one.
 data Line
   = EmptyLine
-  | -- | The text after the @#@ and one space.
+  | -- | The text after the @#@ and one space, without the white space at its
+    -- end. The renderer writes a text with line breaks as several comment
+    -- lines, and the parser reads them back as several comments.
     Comment !T.Text
   deriving stock (Eq, Show, Generic)
   deriving anyclass (NFData)
