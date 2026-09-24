@@ -27,10 +27,9 @@ A YAML 1.2.2 library written in Haskell, with few dependencies.
 - `Yamlet.Node`: the representation graph, with resolved tags and aliases.
 - `Yamlet.Syntax`: the syntax tree, with styles, anchors and unresolved tags.
   It keeps the comments and the empty lines, each at a node that the rules in
-  its documentation choose, and it has a parser and a renderer for it.
+  its documentation choose. The module has a parser and a renderer for it.
 - `Yamlet.Schema`: the rules of the core schema, e.g. to check how a plain
   scalar reads back.
-- `Yamlet.Event`: the parse events of the specification.
 
 ## Performance
 

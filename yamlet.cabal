@@ -53,7 +53,6 @@ library
                      Yamlet.Decode
                      Yamlet.Encode
                      Yamlet.Error
-                     Yamlet.Event
                      Yamlet.Internal.Comments
                      Yamlet.Internal.Compose
                      Yamlet.Internal.Emit
@@ -95,6 +94,7 @@ test-suite test
 
     other-modules:  DecodeTests
                     EncodeTests
+                    Events
                     RenderTests
                     TestSuite
 

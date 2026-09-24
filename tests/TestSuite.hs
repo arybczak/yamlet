@@ -21,8 +21,9 @@ import Test.Tasty.HUnit
 
 import Yamlet qualified as Y
 import Yamlet.Error
-import Yamlet.Event
 import Yamlet.Syntax
+
+import Events
 
 -- | The tests of the suite. The directory with the data branch of the
 -- repository is in @YAML_TEST_SUITE@, or in @tests/yaml-test-suite@.

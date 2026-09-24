@@ -1,13 +1,13 @@
 -- | A YAML stream as a sequence of events, the representation that the YAML
 -- specification uses to describe the result of parsing.
-module Yamlet.Event
+module Events
   ( Event(..)
   , toEvents
   ) where
 
 import Data.Text qualified as T
 
-import Yamlet.Internal.Syntax
+import Yamlet.Syntax
 
 data Event
   = StreamStart
