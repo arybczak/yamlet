@@ -29,9 +29,9 @@ import Yamlet.Syntax
 
 -- | Parse all documents of a stream.
 parseStream :: T.Text -> Either Error [Document]
-parseStream input@(T.Text arr off len) = case invalidChar e off of
-  Just i -> Left $ errorAt input (toOffset e i) "invalid character"
-  Nothing -> case runParser e start lYamlStream of
+parseStream input@(T.Text arr off len) = case prescan e start of
+  Left i -> Left $ errorAt input (toOffset e i) "invalid character"
+  Right markers -> case runParser e start (lYamlStream markers) of
     Left (ParseError i msg) -> Left $ errorAt input (toOffset e i) msg
     Right (Just docs, _, _) -> Right docs
     Right (Nothing, _, fu) -> let (i, msg) = unexpected e fu in Left $ errorAt input (toOffset e i) msg
@@ -47,22 +47,27 @@ parseStream input@(T.Text arr off len) = case invalidChar e off of
     start :: Int
     start = if isBom e off then off + 3 else off
 
--- | Find a character that YAML does not allow in a stream.
-invalidChar :: Env -> Int -> Maybe Int
-invalidChar e = go
+-- | Check that the input has only characters that YAML allows, and find the
+-- lines that start with a document marker. A document cannot contain such a
+-- line. Return the index of an invalid character on error.
+prescan :: Env -> Int -> Either Int [Int]
+prescan e start = go start (if isMarker e start then [start] else [])
   where
-    go :: Int -> Maybe Int
-    go i
-      | i >= e.end = Nothing
+    go :: Int -> [Int] -> Either Int [Int]
+    go i acc
+      | i >= e.end = Right (reverse acc)
       | otherwise =
         let w = A.unsafeIndex e.array i
-        in if | w < 0x20 && w /= 0x09 && w /= 0x0A && w /= 0x0D -> Just i
-              | w == 0x7F -> Just i
+        in if | w >= 0x20 && w < 0x7F -> go (i + 1) acc
+              | w == LF || (w == CR && byteAt e (i + 1) /= LF) ->
+                  go (i + 1) (if isMarker e (i + 1) then i + 1 : acc else acc)
+              | w == CR || w == TAB -> go (i + 1) acc
+              | w < 0x20 || w == 0x7F -> Left i
               -- C1 control characters except NEL.
               | w == 0xC2 && i + 1 < e.end
               , let w1 = A.unsafeIndex e.array (i + 1)
-              , w1 >= 0x80 && w1 <= 0x9F && w1 /= 0x85 -> Just i
-              | otherwise -> go (i + 1)
+              , w1 >= 0x80 && w1 <= 0x9F && w1 /= 0x85 -> Left i
+              | otherwise -> go (i + 1) acc
 
 -- | The location and the message of the error for the furthest position at
 -- which the parser failed.
@@ -379,72 +384,61 @@ isMarker e i =
      && (let w3 = byteAt e (i + 3) in w3 == 0 || isWhite w3 || isBreak w3)
      && isStartOfLine e i
 
--- | The index of the next line after the index that starts with a marker, or
--- the end of the input. A document cannot contain such a line.
-nextMarker :: Env -> Int -> Int
-nextMarker e = go
-  where
-    go :: Int -> Int
-    go i
-      | i >= e.end = e.end
-      | otherwise = case A.unsafeIndex e.array i of
-          LF -> check (i + 1)
-          CR | byteAt e (i + 1) /= LF -> check (i + 1)
-          _ -> go (i + 1)
-
-    check :: Int -> Int
-    check i = if isMarker e i then i else go i
-
--- | l-yaml-stream
-lYamlStream :: P [Document]
-lYamlStream = do
+-- | l-yaml-stream. The markers are the indices of the lines that start with
+-- a document marker.
+lYamlStream :: [Int] -> P [Document]
+lYamlStream markers0 = do
   lDocumentPrefix
-  documents True
+  documents markers0 True
   where
-    documents :: Bool -> P [Document]
-    documents afterEnd = do
+    documents :: [Int] -> Bool -> P [Document]
+    documents markers afterEnd = do
       e <- env
       p <- pos
       if | p >= e.end -> pure []
          | isMarker e p && byteAt e p == DOT -> do
              lDocumentSuffix
              lDocumentPrefix
-             documents True
-         | isMarker e p -> document Nothing
+             documents markers True
+         | isMarker e p -> document markers Nothing defaultHandles
          | afterEnd && byteAt e p == PERCENT -> do
              (version, hs) <- directives
              q <- pos
              unless (isMarker e q && byteAt e q == MINUS) $
                throwAt q "expected a document start marker (---) after the directives"
-             document' version hs
-         | afterEnd -> bareDocument
+             document markers version hs
+         | afterEnd -> bareDocument markers
          | otherwise -> throwAt p "expected a document start marker (---)"
 
-    document :: Maybe Version -> P [Document]
-    document version = document' version defaultHandles
-
-    document' :: Maybe Version -> M.Map T.Text T.Text -> P [Document]
-    document' version hs = do
-      e <- env
+    document :: [Int] -> Maybe Version -> M.Map T.Text T.Text -> P [Document]
+    document markers version hs = do
       advance 3
       p <- pos
-      let limit = nextMarker e p
+      e <- env
+      let (limit, markers') = nextMarker e markers p
       root <- withEnd limit . withHandles hs $
         lBareDocument <|> (eNode <* sLComments)
-      finishDocument version True limit root
+      finishDocument markers' version True limit root
 
-    bareDocument :: P [Document]
-    bareDocument = do
-      e <- env
+    bareDocument :: [Int] -> P [Document]
+    bareDocument markers = do
       p <- pos
-      let limit = nextMarker e p
+      e <- env
+      let (limit, markers') = nextMarker e markers p
       root <- withEnd limit lBareDocument <|> do
         fu <- furthest
         throwUnexpected fu
-      finishDocument Nothing False limit root
+      finishDocument markers' Nothing False limit root
 
-    finishDocument :: Maybe Version -> Bool -> Int -> Node -> P [Document]
-    finishDocument version explicitStart limit root = do
+    -- The end of the document that starts at the index, and the markers
+    -- after it.
+    nextMarker :: Env -> [Int] -> Int -> (Int, [Int])
+    nextMarker e markers p = case dropWhile (<= p) markers of
+      m : ms -> (m, m : ms)
+      [] -> (e.end, [])
+
+    finishDocument :: [Int] -> Maybe Version -> Bool -> Int -> Node -> P [Document]
+    finishDocument markers version explicitStart limit root = do
       withEnd limit $ many_ lComment
       e <- env
       p <- pos
@@ -462,8 +456,8 @@ lYamlStream = do
         then do
           lDocumentSuffix
           lDocumentPrefix
-          (doc :) <$> documents True
-        else (doc :) <$> documents False
+          (doc :) <$> documents markers True
+        else (doc :) <$> documents markers False
 
 -- | Stop with an error at the furthest failure.
 throwUnexpected :: Int -> P a
@@ -1364,9 +1358,23 @@ sLBlockIndented n c = compact <|> sLBlockNode n c <|> (eNode <* sLComments)
   where
     compact :: P Node
     compact = do
+      e <- env
       m <- countSpaces
       advance m
-      nsLCompactSequence (n + 1 + m) <|> nsLCompactMapping (n + 1 + m)
+      p <- pos
+      if mayStartEntry e p
+        then nsLCompactSequence (n + 1 + m) <|> nsLCompactMapping (n + 1 + m)
+        else nsLCompactSequence (n + 1 + m)
+
+    -- An entry of a mapping has an explicit key or a colon on its first line.
+    mayStartEntry :: Env -> Int -> Bool
+    mayStartEntry e p = byteAt e p == QUESTION || go p
+      where
+        go :: Int -> Bool
+        go i = case byteAt e i of
+          COLON -> True
+          w | w == 0 || isBreak w -> False
+            | otherwise -> go (i + 1)
 
 -- | ns-l-compact-sequence(n)
 nsLCompactSequence :: Int -> P Node
@@ -1443,7 +1451,20 @@ nsLCompactMapping n = do
 
 -- | s-l+block-node(n,c)
 sLBlockNode :: Int -> Ctx -> P Node
-sLBlockNode n c = sLBlockInBlock n c <|> sLFlowInBlock n
+sLBlockNode n c = do
+  e <- env
+  p <- pos
+  if flowOnly e p
+    then sLFlowInBlock n
+    else sLBlockInBlock n c <|> sLFlowInBlock n
+  where
+    -- Block content starts with a property, an indicator of a block scalar or
+    -- the end of the line. Other content on the same line is a flow node.
+    flowOnly :: Env -> Int -> Bool
+    flowOnly e p = not (isStartOfLine e p) &&
+      let w = byteAt e (skipWhites e p)
+      in not (w == 0 || isBreak w || w == HASH || w == PIPE || w == GREATER
+              || w == EXCL || w == AMP)
 
 -- | s-l+flow-in-block(n)
 sLFlowInBlock :: Int -> P Node
