@@ -96,32 +96,26 @@ newtype P a = P (Env -> Int# -> Int# -> Res# a)
 
 runP :: P a -> Env -> Int# -> Int# -> Res# a
 runP (P g) = g
-{-# INLINE runP #-}
 
 instance Functor P where
   fmap f (P g) = P $ \e p fu -> case g e p fu of
     OK# a p' fu' -> OK# (f a) p' fu'
     Fail# fu' -> Fail# fu'
     Err# err -> Err# err
-  {-# INLINE fmap #-}
 
 instance Applicative P where
   pure a = P $ \_ p fu -> OK# a p fu
-  {-# INLINE pure #-}
   (<*>) = ap
-  {-# INLINE (<*>) #-}
   P g *> P h = P $ \e p fu -> case g e p fu of
     OK# _ p' fu' -> h e p' fu'
     Fail# fu' -> Fail# fu'
     Err# err -> Err# err
-  {-# INLINE (*>) #-}
 
 instance Monad P where
   P g >>= k = P $ \e p fu -> case g e p fu of
     OK# a p' fu' -> runP (k a) e p' fu'
     Fail# fu' -> Fail# fu'
     Err# err -> Err# err
-  {-# INLINE (>>=) #-}
 
 -- | Run a parser from the given index. Return the result, the index after it
 -- and the furthest failure.
@@ -141,7 +135,6 @@ infixl 3 <|>
 P g <|> P h = P $ \e p fu -> case g e p fu of
   Fail# fu' -> h e p fu'
   r -> r
-{-# INLINE (<|>) #-}
 
 -- | Zero or more times. Stop if the parser succeeds without input.
 many :: P a -> P [a]
@@ -153,7 +146,6 @@ many (P g) = P $ \e p0 fu0 ->
         Fail# fu' -> OK# (reverse acc) p fu'
         Err# err -> Err# err
   in go [] p0 fu0
-{-# INLINE many #-}
 
 -- | Zero or more times, discard the results.
 many_ :: P a -> P ()
@@ -165,19 +157,15 @@ many_ (P g) = P $ \e p0 fu0 ->
         Fail# fu' -> OK# () p fu'
         Err# err -> Err# err
   in go p0 fu0
-{-# INLINE many_ #-}
 
 optional :: P a -> P (Maybe a)
 optional p = (Just <$> p) <|> pure Nothing
-{-# INLINE optional #-}
 
 optional_ :: P a -> P ()
 optional_ p = void p <|> pure ()
-{-# INLINE optional_ #-}
 
 option :: a -> P a -> P a
 option a p = p <|> pure a
-{-# INLINE option #-}
 
 -- | Succeed without input if the parser fails.
 notFollowedBy :: P a -> P ()
@@ -185,49 +173,39 @@ notFollowedBy (P g) = P $ \e p fu -> case g e p fu of
   OK# _ _ _ -> Fail# (if isTrue# (p ># fu) then p else fu)
   Fail# _ -> OK# () p fu
   Err# _ -> OK# () p fu
-{-# INLINE notFollowedBy #-}
 
 ----------------------------------------
 -- Primitives
 
 env :: P Env
 env = P $ \e p fu -> OK# e p fu
-{-# INLINE env #-}
 
 pos :: P Int
 pos = P $ \_ p fu -> OK# (I# p) p fu
-{-# INLINE pos #-}
 
 setPos :: Int -> P ()
 setPos (I# p) = P $ \_ _ fu -> OK# () p fu
-{-# INLINE setPos #-}
 
 -- | The furthest position at which a parser failed so far.
 furthest :: P Int
 furthest = P $ \_ p fu -> OK# (I# fu) p fu
-{-# INLINE furthest #-}
 
 advance :: Int -> P ()
 advance (I# n) = P $ \_ p fu -> OK# () (p +# n) fu
-{-# INLINE advance #-}
 
 -- | The byte at the current position, 0 at the end of the input.
 peek :: P Word8
 peek = P $ \e p fu -> OK# (byteAt e (I# p)) p fu
-{-# INLINE peek #-}
 
 -- | The byte at the given distance from the current position.
 peekAt :: Int -> P Word8
 peekAt k = P $ \e p fu -> OK# (byteAt e (I# p + k)) p fu
-{-# INLINE peekAt #-}
 
 failure :: P a
 failure = P $ \_ p fu -> Fail# (if isTrue# (p ># fu) then p else fu)
-{-# INLINE failure #-}
 
 guardP :: Bool -> P ()
 guardP b = if b then pure () else failure
-{-# INLINE guardP #-}
 
 -- | Stop with an error at the given index.
 throwAt :: Int -> String -> P a
@@ -236,24 +214,20 @@ throwAt i msg = P $ \_ _ _ -> Err# (ParseError i msg)
 -- | Run a parser that cannot read past the given index.
 withEnd :: Int -> P a -> P a
 withEnd end (P g) = P $ \e p fu -> g e {end = end} p fu
-{-# INLINE withEnd #-}
 
 withHandles :: M.Map T.Text T.Text -> P a -> P a
 withHandles hs (P g) = P $ \e p fu -> g e {handles = hs} p fu
-{-# INLINE withHandles #-}
 
 char :: Word8 -> P ()
 char w = P $ \e p fu ->
   if byteAt e (I# p) == w
     then OK# () (p +# 1#) fu
     else Fail# (if isTrue# (p ># fu) then p else fu)
-{-# INLINE char #-}
 
 skipWhile :: (Word8 -> Bool) -> P ()
 skipWhile f = P $ \e p fu ->
   let go i = if f (byteAt e i) then go (i + 1) else i
   in case go (I# p) of I# p' -> OK# () p' fu
-{-# INLINE skipWhile #-}
 
 -- | The result of a scanning loop.
 data Scanned a
@@ -270,12 +244,10 @@ withScan f = P $ \e p fu -> case f e (I# p) of
   Done (I# q) a -> OK# a q fu
   NoMatch (I# q) -> Fail# (if isTrue# (q ># fu) then q else fu)
   Failed i msg -> Err# (ParseError i msg)
-{-# INLINE withScan #-}
 
 -- | Move to the index that the function computes from the current one.
 scan :: (Env -> Int -> Int) -> P ()
 scan f = P $ \e p fu -> case f e (I# p) of I# p' -> OK# () p' fu
-{-# INLINE scan #-}
 
 ----------------------------------------
 -- Input access
@@ -284,21 +256,17 @@ byteAt :: Env -> Int -> Word8
 byteAt e i
   | i < e.end = A.unsafeIndex e.array i
   | otherwise = 0
-{-# INLINE byteAt #-}
 
 -- | The byte before the index, 0 at the start of the input.
 byteBefore :: Env -> Int -> Word8
 byteBefore e i
   | i > e.base = A.unsafeIndex e.array (i - 1)
   | otherwise = 0
-{-# INLINE byteBefore #-}
 
 slice :: Env -> Int -> Int -> T.Text
 slice e i j
   | j > i = T.Text e.array i (j - i)
   | otherwise = T.empty
-{-# INLINE slice #-}
 
 toOffset :: Env -> Int -> Offset
 toOffset e i = Offset (i - e.base)
-{-# INLINE toOffset #-}
