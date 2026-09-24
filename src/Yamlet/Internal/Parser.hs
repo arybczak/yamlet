@@ -1505,8 +1505,13 @@ sLBlockIndented n c = compact <|> sLBlockNode n c <|> (eNode <* sLComments)
         else nsLCompactSequence (n + 1 + m)
 
     -- An entry of a mapping has an explicit key or a colon on its first line.
+    -- A key cannot start with the indicator of a sequence entry. Without this
+    -- check, each level of a nested sequence would scan the rest of the line.
     mayStartEntry :: Env -> Int -> Bool
-    mayStartEntry e p = byteAt e p == QUESTION || go p
+    mayStartEntry e p
+      | byteAt e p == QUESTION = True
+      | byteAt e p == MINUS && not (isNsChar (byteAt e (p + 1))) = False
+      | otherwise = go p
       where
         go :: Int -> Bool
         go i = case byteAt e i of
