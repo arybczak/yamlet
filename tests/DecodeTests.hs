@@ -25,6 +25,7 @@ decodeTests = testGroup "Decode"
   , testCase "copies" test_copies
   , testCase "JSON" test_json
   , testCase "aliases" test_aliases
+  , testCase "syntax tree" test_syntaxTree
   , testCase "empty stream" test_emptyStream
   , testCase "encodings" test_encodings
   , testGroup "errors"
@@ -164,6 +165,23 @@ test_aliases = do
   assertEqual "anchor before a string with a less-than sign"
     (Right (M.fromList [("a", "<x"), ("b", "<x")]))
     (decodeText @(M.Map T.Text T.Text) "a: &x \"<x\"\nb: *x\n")
+
+test_syntaxTree :: Assertion
+test_syntaxTree = do
+  let input = "# The build.\nname: x\njobs: 4 # At most.\n"
+  case S.parseDocumentsText input of
+    Right [doc] -> do
+      assertEqual "parsed" (Right (Config "x" [] 4)) (decodeDocument input doc)
+      let changed = doc { S.root = S.mappingNode [(S.plainNode "name", S.plainNode "y")] }
+      assertEqual "changed" (Right (Config "y" [] 1)) (decodeDocument input changed)
+    r -> assertFailure (show r)
+  case S.parseDocumentsText "name: x\njobs: many\n" of
+    Right [doc] -> assertEqual "type error" (Just (2, 7, "expected an integer, but got a string"))
+      (errorOf (decodeDocument @Config "name: x\njobs: many\n" doc))
+    r -> assertFailure (show r)
+  let key = S.plainNode "a"
+      built = S.Document Nothing False False S.noComments (S.mappingNode [(key, key), (key, key)])
+  assertEqual "built" (Just (1, 1, "duplicate key \"a\"")) (errorOf (resolveDocument "" built))
 
 test_emptyStream :: Assertion
 test_emptyStream = do

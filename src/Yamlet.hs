@@ -29,6 +29,10 @@ module Yamlet
   , decodeNodes
   , decodeInput
 
+    -- * Syntax trees
+  , decodeDocument
+  , resolveDocument
+
     -- * Encoding
   , encode
   , encodeAll
@@ -60,6 +64,7 @@ import Yamlet.Error
 import Yamlet.Internal.Compose
 import Yamlet.Internal.Input
 import Yamlet.Internal.Parser
+import Yamlet.Internal.Syntax qualified as S
 import Yamlet.Node
 
 -- | Decode a stream with one document. An empty stream is null.
@@ -84,6 +89,23 @@ decodeAllText input = decodeNodes input >>= mapM (convert input)
 -- | Parse a stream into the root nodes of its documents.
 decodeNodes :: T.Text -> Either Error [Node]
 decodeNodes input = parseStream input >>= mapM (compose input)
+
+-- | Decode a document of a syntax tree, e.g. to read the values of a file and
+-- keep its comments from one parse.
+--
+-- The text is the input of the document, for the line in an error. For a
+-- document that the program built, the text can be empty.
+decodeDocument :: FromYAML a => T.Text -> S.Document -> Either Error a
+decodeDocument input doc = resolveDocument input doc >>= convert input
+
+-- | Resolve the tags and the aliases of a document of a syntax tree. The
+-- resolution fails for a duplicate key, an undefined alias or a value that is
+-- not valid for its tag.
+--
+-- The text is the input of the document, for the line in an error. For a
+-- document that the program built, the text can be empty.
+resolveDocument :: T.Text -> S.Document -> Either Error Node
+resolveDocument = compose
 
 convert :: FromYAML a => T.Text -> Node -> Either Error a
 convert input n = case runParser parseYAML n of
