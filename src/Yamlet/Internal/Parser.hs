@@ -179,17 +179,14 @@ pattern RBRACE = 0x7D
 
 isWhite :: Word8 -> Bool
 isWhite w = w == SPACE || w == TAB
-{-# INLINE isWhite #-}
 
 isBreak :: Word8 -> Bool
 isBreak w = w == LF || w == CR
-{-# INLINE isBreak #-}
 
 -- | ns-char. Every byte of a multibyte character counts, because the input
 -- contains printable characters only.
 isNsChar :: Word8 -> Bool
 isNsChar w = w > SPACE && w /= 0x7F
-{-# INLINE isNsChar #-}
 
 isFlowIndicator :: Word8 -> Bool
 isFlowIndicator w =
@@ -198,14 +195,12 @@ isFlowIndicator w =
     || w == RBRACKET
     || w == LBRACE
     || w == RBRACE
-{-# INLINE isFlowIndicator #-}
 
 isIndicator :: Word8 -> Bool
 isIndicator w = w < 0x80 && testBit indicators (fromIntegral w)
   where
     indicators :: Integer
     indicators = foldr (\c acc -> setBit acc (ord c)) 0 ("-?:,[]{}#&*!|>'\"%@`" :: String)
-{-# INLINE isIndicator #-}
 
 isDecDigit :: Word8 -> Bool
 isDecDigit w = w >= 0x30 && w <= 0x39
@@ -239,7 +234,6 @@ isTagChar w = isUriChar w && w /= EXCL && not (isFlowIndicator w)
 
 isAnchorChar :: Word8 -> Bool
 isAnchorChar w = isNsChar w && not (isFlowIndicator w)
-{-# INLINE isAnchorChar #-}
 
 isBom :: Env -> Int -> Bool
 isBom e i = byteAt e i == 0xEF && byteAt e (i + 1) == 0xBB && byteAt e (i + 2) == 0xBF
@@ -252,13 +246,14 @@ data Ctx = BlockOut | BlockIn | FlowOut | FlowIn | BlockKey | FlowKey
 
 isKeyCtx :: Ctx -> Bool
 isKeyCtx c = c == BlockKey || c == FlowKey
-{-# INLINE isKeyCtx #-}
 
 -- | ns-plain-safe(c)
 isPlainSafe :: Ctx -> Word8 -> Bool
 isPlainSafe c w
   | c == FlowIn || c == FlowKey = isNsChar w && not (isFlowIndicator w)
   | otherwise = isNsChar w
+-- With inlining, the loop over a plain scalar tests the context once, not for
+-- every byte. GHC 9.10 and older do not inline this function on their own.
 {-# INLINE isPlainSafe #-}
 
 -- | in-flow(c)
