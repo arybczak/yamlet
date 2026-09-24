@@ -8,11 +8,13 @@ import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 
 import Yamlet
+import Yamlet.Encode
 
 encodeTests :: TestTree
 encodeTests = testGroup "Encode"
   [ testCase "block style" test_blockStyle
   , testCase "quoting" test_quoting
+  , testCase "plain check" test_plainSafe
   , testCase "literal block scalars" test_literal
   , testCase "tags" test_tags
   , testProperty "round trip" prop_roundTrip
@@ -78,6 +80,19 @@ test_quoting = do
   check "\"\\x01\"" "\x01"
   check "\"\\uFEFF\"" "\xFEFF"
   check "zażółć" "zażółć"
+
+test_plainSafe :: Assertion
+test_plainSafe = do
+  assertBool "word with a dash" $ isPlainSafe "dist-newstyle"
+  assertBool "colon without a space" $ isPlainSafe "a:b"
+  assertBool "flow indicators" $ isPlainSafe "a, [b]"
+  assertBool "number" . not $ isPlainSafe "9.10"
+  assertBool "boolean" . not $ isPlainSafe "true"
+  assertBool "empty" . not $ isPlainSafe ""
+  assertBool "colon and a space" . not $ isPlainSafe "a: b"
+  assertBool "comment" . not $ isPlainSafe "a #b"
+  assertBool "indicator" . not $ isPlainSafe "*a"
+  assertBool "line break" . not $ isPlainSafe "a\nb"
 
 test_literal :: Assertion
 test_literal = do

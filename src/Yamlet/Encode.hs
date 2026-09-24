@@ -7,6 +7,7 @@ module Yamlet.Encode
 
     -- * Rendering
   , renderDocuments
+  , isPlainSafe
   ) where
 
 import Data.Char
@@ -218,7 +219,9 @@ scalarText n = case n.value of
   Sequence _ -> "[]"
   Mapping _ -> "{}"
 
--- | A string can be a plain scalar if it reads back as the same string.
+-- | The string reads back as the same string if it is a plain scalar in the
+-- block style, as a value or as a key. In a flow collection the characters
+-- @,[]{}@ need quotes too, so the check does not apply there.
 isPlainSafe :: T.Text -> Bool
 isPlainSafe t = case T.uncons t of
   Nothing -> False
