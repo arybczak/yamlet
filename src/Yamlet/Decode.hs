@@ -148,10 +148,12 @@ withSequence f = parseNode $ \n -> case n.value of
   Sequence xs -> f xs
   _ -> typeMismatch "a list" n
 
--- | The entries of a mapping.
+-- | The entries of a mapping. As for 'withText', the tag of a string key does
+-- not matter, so two string keys with the same text are an error, e.g. @a@
+-- and @!foo a@.
 withMapping :: (Object -> Parser a) -> Node -> Parser a
 withMapping f = parseNode $ \n -> case n.value of
-  Mapping kvs -> f (mkObject n kvs)
+  Mapping kvs -> mkObject n kvs >>= f
   _ -> typeMismatch "a mapping" n
 
 -- | A mapping with fast access to the values of string keys.
@@ -161,13 +163,17 @@ data Object = Object
   , index :: M.Map T.Text (Node, Node)
   }
 
-mkObject :: Node -> [(Node, Node)] -> Object
-mkObject n kvs =
-  Object
-    { node = n
-    , entries = kvs
-    , index = M.fromList [(t, kv) | kv@(k, _) <- kvs, String t <- [k.value]]
-    }
+mkObject :: Node -> [(Node, Node)] -> Parser Object
+mkObject n kvs = do
+  index <- foldM insert M.empty kvs
+  pure Object {node = n, entries = kvs, index = index}
+  where
+    insert :: M.Map T.Text (Node, Node) -> (Node, Node) -> Parser (M.Map T.Text (Node, Node))
+    insert m kv@(k, _) = case k.value of
+      String t
+        | t `M.member` m -> failAt k $ "duplicate key " ++ show t
+        | otherwise -> pure $ M.insert t kv m
+      _ -> pure m
 
 -- | The node of the mapping.
 objectNode :: Object -> Node

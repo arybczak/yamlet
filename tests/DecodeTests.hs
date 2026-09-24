@@ -156,6 +156,10 @@ test_record = do
     "keys of a map that convert to the same key"
     (Just (2, 1, "duplicate key after conversion"))
     (errorOf (decodeText @(M.Map Double Int) "1: 1\n1.0: 2\n"))
+  assertEqual
+    "string keys with the same text"
+    (Just (2, 6, "duplicate key \"name\""))
+    (errorOf (decodeText @Config "name: x\n!foo name: y\n"))
 
 -- | Decoded texts and error lines do not point into the input.
 test_copies :: Assertion
