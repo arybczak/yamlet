@@ -98,7 +98,8 @@ errorAt input off msg =
     loc :: Location
     loc = locate input off
 
--- | Compute the line and the column of an offset.
+-- | Compute the line and the column of an offset. A byte order mark at the
+-- start of a line is not a column, because it is not content.
 locate :: T.Text -> Offset -> Location
 locate (T.Text arr base len) (Offset off0) = go base 1 base
   where
@@ -111,7 +112,7 @@ locate (T.Text arr base len) (Offset off0) = go base 1 base
           Location
             { offset = Offset (off - base)
             , line = ln
-            , column = 1 + countChars lineStart off
+            , column = 1 + countChars (min off (skipBom arr (base + len) lineStart)) off
             }
       | otherwise = case A.unsafeIndex arr i of
           10 -> go (i + 1) (ln + 1) (i + 1)
@@ -126,15 +127,26 @@ locate (T.Text arr base len) (Offset off0) = go base 1 base
       length
         [() | i <- [i0 .. i1 - 1], A.unsafeIndex arr i < 0x80 || A.unsafeIndex arr i >= 0xC0]
 
--- | The line of the input that contains the offset, without the line break.
+-- | The index after a byte order mark at the index, or the index.
+skipBom :: A.Array -> Int -> Int -> Int
+skipBom arr end i
+  | i + 3 <= end
+      && A.unsafeIndex arr i == 0xEF
+      && A.unsafeIndex arr (i + 1) == 0xBB
+      && A.unsafeIndex arr (i + 2) == 0xBF =
+      i + 3
+  | otherwise = i
+
+-- | The line of the input that contains the offset, without the line break
+-- and without a byte order mark at its start.
 lineAt :: T.Text -> Offset -> T.Text
 lineAt (T.Text arr base len) (Offset off0) = T.Text arr start (stop - start)
   where
     end, off, start, stop :: Int
     end = base + len
     off = base + max 0 (min len off0)
-    start = findStart off
-    stop = findStop off
+    start = skipBom arr end (findStart off)
+    stop = max start (findStop off)
 
     findStart :: Int -> Int
     findStart i

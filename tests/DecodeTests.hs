@@ -301,6 +301,17 @@ test_encodings = do
   invalid "odd length of UTF-16BE" "invalid UTF-16" (T.encodeUtf16BE "a\nbc" <> "\0")
   invalid "surrogate in UTF-32BE" "invalid UTF-32" (T.encodeUtf32BE "a\nbc" <> "\0\0\xDC\0")
   invalid "code point beyond Unicode in UTF-32LE" "invalid UTF-32" (T.encodeUtf32LE "a\nbc" <> "\0\0\x11\0")
+  let column :: String -> Int -> BS.ByteString -> Assertion
+      column preface expected bytes =
+        assertEqual preface (Just expected) ((\(_, c, _) -> c) <$> errorOf (decode @Node bytes))
+  column "error after a UTF-8 BOM" 1 "\xEF\xBB\xBF]"
+  column "error after a UTF-16 BOM" 1 "\xFF\xFE]\0"
+  column "invalid UTF-8 after a BOM" 2 "\xEF\xBB\xBF\&b\xFF"
+  column "error after a BOM between documents" 1 "a\n...\n\xEF\xBB\xBF]"
+  assertEqual
+    "source line after a BOM"
+    (Left "]")
+    (either (Left . (.sourceLine)) (const (Right ())) (decode @Node "\xEF\xBB\xBF]"))
   let documents :: String -> [T.Text] -> T.Text -> Assertion
       documents preface expected input = assertEqual preface (Right expected) (decodeAllText input)
   documents "BOM before a marker after a scalar" ["a", "b"] "a\n\xFEFF--- b\n"
