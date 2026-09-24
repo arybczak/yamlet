@@ -692,6 +692,7 @@ cNsTagProperty :: P Tag
 cNsTagProperty = do
   e <- env
   p <- pos
+  peek >>= guardP . (== EXCL)
   w <- peekAt 1
   if w == LESS
     then verbatim e p

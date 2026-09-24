@@ -139,9 +139,13 @@ test_json = do
     (errorOf (decodeText @[T.Text] "[\"\\ude00\"]"))
 
 test_aliases :: Assertion
-test_aliases = assertEqual "map"
-  (Right (M.fromList [("a", [1, 2]), ("b", [1, 2 :: Int])]))
-  (decodeText @(M.Map T.Text [Int]) "a: &x [1, 2]\nb: *x\n")
+test_aliases = do
+  assertEqual "map"
+    (Right (M.fromList [("a", [1, 2]), ("b", [1, 2 :: Int])]))
+    (decodeText @(M.Map T.Text [Int]) "a: &x [1, 2]\nb: *x\n")
+  assertEqual "anchor before a string with a less-than sign"
+    (Right (M.fromList [("a", "<x"), ("b", "<x")]))
+    (decodeText @(M.Map T.Text T.Text) "a: &x \"<x\"\nb: *x\n")
 
 test_emptyStream :: Assertion
 test_emptyStream = do
