@@ -23,6 +23,10 @@ come with GHC.
   class.
 - `Yamlet.Node`: the representation graph, with resolved tags and aliases.
 - `Yamlet.Syntax`: the syntax tree, with styles, anchors and unresolved tags.
+  It has a parser and a renderer that keeps the styles, and it can add empty
+  lines and comments before the entries.
+- `Yamlet.Schema`: the rules of the core schema, e.g. to check how a plain
+  scalar reads back.
 - `Yamlet.Event`: the parse events of the specification.
 
 ## Performance

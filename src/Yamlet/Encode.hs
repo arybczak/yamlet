@@ -10,7 +10,6 @@ module Yamlet.Encode
   , isPlainSafe
   ) where
 
-import Data.Char
 import Data.Int
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
@@ -18,9 +17,9 @@ import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Builder qualified as B
 import Data.Word
-import Numeric
 import Numeric.Natural
 
+import Yamlet.Internal.Emit
 import Yamlet.Schema
 import Yamlet.Node
 
@@ -191,17 +190,7 @@ withTag n b = case tagPrefix n of
 tagPrefix :: Node -> Maybe B.Builder
 tagPrefix n
   | n.tag == defaultTag n.value = Nothing
-  | Just suffix <- T.stripPrefix "tag:yaml.org,2002:" n.tag
-  , T.all isTagChar suffix
-  = Just $ "!!" <> B.fromText suffix
-  | Just suffix <- T.stripPrefix "!" n.tag
-  , not (T.null suffix)
-  , T.all isTagChar suffix
-  = Just $ "!" <> B.fromText suffix
-  | otherwise = Just $ "!<" <> B.fromText n.tag <> ">"
-  where
-    isTagChar :: Char -> Bool
-    isTagChar c = isAscii c && (isAlphaNum c || c `elem` ("-#;/?:@&=+$_.~*'()" :: String))
+  | otherwise = Just (tagText n.tag)
 
 -- | A scalar on one line.
 scalarText :: Node -> B.Builder
@@ -223,98 +212,10 @@ scalarText n = case n.value of
 -- block style, as a value or as a key. In a flow collection the characters
 -- @,[]{}@ need quotes too, so the check does not apply there.
 isPlainSafe :: T.Text -> Bool
-isPlainSafe t = case T.uncons t of
-  Nothing -> False
-  Just (c, rest) ->
-    firstOk c rest
-    && T.all isPlainChar t
-    && not (isWhite (T.last t))
-    && T.last t /= ':'
-    && not (": " `T.isInfixOf` t)
-    && not (" #" `T.isInfixOf` t)
-    && not ("---" `T.isPrefixOf` t)
-    && not ("..." `T.isPrefixOf` t)
-    && resolvePlain t == String t
-  where
-    firstOk :: Char -> T.Text -> Bool
-    firstOk c rest
-      | c `elem` ("-?:" :: String) = case T.uncons rest of
-          Just (c', _) -> not (isWhite c')
-          Nothing -> False
-      | otherwise = not (isWhite c) && c `notElem` ("-?:,[]{}#&*!|>'\"%@`" :: String)
-
-    isPlainChar :: Char -> Bool
-    isPlainChar c = c == ' ' || (isPrintable c && c /= '\t')
-
-    isWhite :: Char -> Bool
-    isWhite c = c == ' ' || c == '\t'
+isPlainSafe t = plainSyntax False t && resolvePlain t == String t
 
 -- | A literal block scalar for a string with line breaks.
 literal :: Int -> T.Text -> Maybe B.Builder
 literal indent t
-  | not (T.any (== '\n') t) = Nothing
-  | T.null body = Nothing
-  | not (T.all (\c -> c == '\n' || c == '\t' || isPrintable c) t) = Nothing
-  | otherwise = Just $ mconcat
-    [ "|"
-    , if leadingSpace then B.fromString (show indentStep) else mempty
-    , case trailing of
-        0 -> "-"
-        1 -> mempty
-        _ -> "+"
-    , mconcat (map line (T.splitOn "\n" body))
-    , B.fromText (T.replicate (trailing - 1) "\n")
-    ]
-  where
-    indentStep :: Int
-    indentStep = 2
-
-    body :: T.Text
-    body = T.dropWhileEnd (== '\n') t
-
-    trailing :: Int
-    trailing = T.length t - T.length body
-
-    leadingSpace :: Bool
-    leadingSpace = case T.uncons (T.dropWhile (== '\n') body) of
-      Just (c, _) -> c == ' '
-      Nothing -> False
-
-    line :: T.Text -> B.Builder
-    line l
-      | T.null l = "\n"
-      | otherwise = "\n" <> spaces indent <> B.fromText l
-
--- | A double-quoted scalar with escapes for the characters that need them.
-doubleQuoted :: T.Text -> B.Builder
-doubleQuoted t = "\"" <> T.foldr (\c b -> escape c <> b) mempty t <> "\""
-  where
-    escape :: Char -> B.Builder
-    escape = \case
-      '"' -> "\\\""
-      '\\' -> "\\\\"
-      '\n' -> "\\n"
-      '\t' -> "\\t"
-      '\r' -> "\\r"
-      '\0' -> "\\0"
-      c | isPrintable c -> B.singleton c
-        | ord c <= 0xFF -> "\\x" <> hex 2 (ord c)
-        | ord c <= 0xFFFF -> "\\u" <> hex 4 (ord c)
-        | otherwise -> "\\U" <> hex 8 (ord c)
-
-    hex :: Int -> Int -> B.Builder
-    hex k i = let s = map toUpper (showHex i "") in B.fromString (replicate (k - length s) '0' ++ s)
-
--- | c-printable without the line breaks and the byte order mark.
-isPrintable :: Char -> Bool
-isPrintable c
-  | c < ' ' = False
-  | c <= '~' = True
-  | c < '\xA0' = False
-  | c == '\xFEFF' = False
-  | c >= '\xD800' && c <= '\xDFFF' = False
-  | c == '\xFFFE' || c == '\xFFFF' = False
-  | otherwise = True
-
-spaces :: Int -> B.Builder
-spaces k = B.fromText (T.replicate k " ")
+  | T.any (== '\n') t = literalBlock True indent t
+  | otherwise = Nothing

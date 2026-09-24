@@ -12,6 +12,13 @@ module Yamlet.Syntax
   , copyDocument
   , copyNode
 
+    -- * Rendering
+  , renderSyntax
+  , RenderOptions(..)
+  , defaultRenderOptions
+  , Segment(..)
+  , ExtraLine(..)
+
     -- * Documents
   , Document(..)
   , Version(..)
@@ -42,6 +49,7 @@ import Data.Text qualified as T
 import Yamlet.Error
 import Yamlet.Internal.Input
 import Yamlet.Internal.Parser
+import Yamlet.Internal.Render
 import Yamlet.Internal.Syntax
 
 -- | Parse the documents of a stream. The encoding is UTF-8, UTF-16 or UTF-32,
@@ -53,7 +61,8 @@ parseDocuments bs = decodeInput bs >>= parseStream
 parseDocumentsText :: T.Text -> Either Error [Document]
 parseDocumentsText = parseStream
 
--- | A scalar in the given style, without properties.
+-- | A scalar in the given style, without properties. If the style cannot hold
+-- the text, 'renderSyntax' uses quotes.
 scalarNode :: ScalarStyle -> T.Text -> Node
 scalarNode = Scalar noOffset noProps
 

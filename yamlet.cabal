@@ -55,9 +55,11 @@ library
                      Yamlet.Error
                      Yamlet.Event
                      Yamlet.Internal.Compose
+                     Yamlet.Internal.Emit
                      Yamlet.Internal.Input
                      Yamlet.Internal.Parser
                      Yamlet.Internal.Parser.Monad
+                     Yamlet.Internal.Render
                      Yamlet.Internal.Syntax
                      Yamlet.Node
                      Yamlet.Schema
@@ -92,6 +94,7 @@ test-suite test
 
     other-modules:  DecodeTests
                     EncodeTests
+                    RenderTests
                     TestSuite
 
 benchmark bench
