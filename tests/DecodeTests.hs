@@ -386,6 +386,19 @@ test_aliasKeys = do
       check preface expected keys = assertEqual preface expected (errorOf (decodeNodes (anchors <> keys)))
   check "different keys" Nothing "? *a9\n: 1\n? [*a8, 1]\n: 2\n? [*a8, 2]\n: 3\n"
   check "duplicate key" (Just (13, 3, "duplicate key")) "? [*a9, 1]\n: 1\n? [*a9, 1]\n: 2\n"
+  -- Keys from two separate chains of anchors are equal only after an
+  -- expansion to 2^40 items.
+  let chains :: T.Text -> T.Text -> T.Text
+      chains x y =
+        T.unlines $
+          ["- &a0 [" <> x <> "]", "- &b0 [" <> y <> "]"]
+            ++ [ T.pack ("- &" ++ c : show i ++ " [*" ++ c : show (i - 1) ++ ", *" ++ c : show (i - 1) ++ "]")
+               | i <- [1 .. 40 :: Int]
+               , c <- "ab"
+               ]
+            ++ ["- ? *a40", "  : 1", "  ? *b40", "  : 2"]
+  assertEqual "equal chains" (Just (85, 5, "duplicate key")) (errorOf (decodeNodes (chains "x" "x")))
+  assertEqual "different chains" Nothing (errorOf (decodeNodes (chains "x" "y")))
 
 -- | The time of the check for duplicate keys is not quadratic in the number
 -- of keys.
