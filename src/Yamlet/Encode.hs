@@ -7,7 +7,6 @@ module Yamlet.Encode
 
     -- * Rendering
   , renderDocuments
-  , isPlainSafe
   ) where
 
 import Data.Int

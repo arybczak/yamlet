@@ -18,6 +18,7 @@ decodeTests :: TestTree
 decodeTests = testGroup "Decode"
   [ testCase "core schema" test_coreSchema
   , testProperty "floats" prop_floats
+  , testCase "plain scalars" test_plainSafe
   , testCase "record" test_record
   , testCase "copies" test_copies
   , testCase "aliases" test_aliases
@@ -42,6 +43,23 @@ test_coreSchema = do
       , Float 1.5, Float (-1 / 0), Float 0, Float 1000, Int 12, Float 0.5, String "a", String "1"
       ]
       (map (\n -> case n.value of Float d | isNaN d -> Float 0; v -> v) ns)
+
+test_plainSafe :: Assertion
+test_plainSafe = do
+  assertBool "word with a dash" $ isPlainSafe "dist-newstyle"
+  assertBool "colon without a space" $ isPlainSafe "a:b"
+  assertBool "flow indicators" $ isPlainSafe "a, [b]"
+  assertBool "number" . not $ isPlainSafe "9.10"
+  assertBool "boolean" . not $ isPlainSafe "true"
+  assertBool "empty" . not $ isPlainSafe ""
+  assertBool "colon and a space" . not $ isPlainSafe "a: b"
+  assertBool "comment" . not $ isPlainSafe "a #b"
+  assertBool "indicator" . not $ isPlainSafe "*a"
+  assertBool "line break" . not $ isPlainSafe "a\nb"
+  assertBool "string" $ isPlainString "9.10.3"
+  assertBool "string with a colon and a space" $ isPlainString "a: b"
+  assertBool "string number" . not $ isPlainString "9.10"
+  assertBool "string null" . not $ isPlainString "~"
 
 -- | A decimal number resolves to the same double as 'read' gives.
 prop_floats :: Property
