@@ -15,9 +15,9 @@ import Data.Set qualified as Set
 import Data.Text qualified as T
 
 import Yamlet.Error
+import Yamlet.Internal.Schema
 import Yamlet.Internal.Syntax qualified as S
 import Yamlet.Node
-import Yamlet.Schema
 
 -- | Resolve the tags and the aliases of a document and check that the keys of
 -- every mapping are unique. The input is for error messages.
@@ -126,7 +126,9 @@ compose input doc
     scalar :: S.Offset -> S.Props -> S.ScalarStyle -> T.Text -> Either Error Node
     scalar off props style t = case props.tag of
       S.NoTag
-        | style == S.Plain -> Right $ node' (resolvePlain t)
+        | style == S.Plain -> case resolvePlainExact t of
+            Right v -> Right $ node' v
+            Left _ -> Left $ errorAt input off inexact
         | otherwise -> Right $ Node off strTag (String t)
       S.NonSpecificTag -> Right $ Node off strTag (String t)
       S.Tag tag
@@ -134,8 +136,9 @@ compose input doc
             Left
               $ errorAt input off
               $ "the tag !!" ++ T.unpack (T.drop 18 tag) ++ " cannot be used on a scalar"
-        | otherwise -> case resolveTagged tag t of
-            Just v -> Right $ Node off tag v
+        | otherwise -> case resolveTaggedExact tag t of
+            Just (Right v) -> Right $ Node off tag v
+            Just (Left _) -> Left $ errorAt input off inexact
             Nothing ->
               Left
                 $ errorAt input off
@@ -143,6 +146,9 @@ compose input doc
       where
         node' :: Value -> Node
         node' v = Node off (defaultTag v) v
+
+        inexact :: String
+        inexact = "the exponent of the number is out of range"
 
     collectionTag :: S.Offset -> S.Props -> T.Text -> Either Error T.Text
     collectionTag off props def = case props.tag of

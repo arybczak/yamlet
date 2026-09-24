@@ -129,8 +129,17 @@ test_exactFloats = do
     (decodeText @Float "1.000000059604644776257986737988403547205962240695953369140625")
   assertEqual
     "exponent beyond Int"
-    (Right [Float Infinity, Float (Finite 0)])
-    (map (.value) <$> decodeText @[Node] "[1e99999999999999999999, 1e-99999999999999999999]")
+    (Just (1, 2, "the exponent of the number is out of range"))
+    (errorOf (decodeText @Sci.Scientific "[1e99999999999999999999]"))
+  assertEqual
+    "negative exponent beyond Int"
+    (Just (1, 9, "the exponent of the number is out of range"))
+    (errorOf (decodeText @Double "!!float 1e-99999999999999999999"))
+  assertEqual
+    "exponent beyond Int in the schema"
+    [Float Infinity, Float (Finite 0), Float (Finite 0)]
+    (map resolvePlain ["1e99999999999999999999", "1e-99999999999999999999", "0e99999999999999999999"])
+  assertEqual "zero with an exponent beyond Int" (Right 0) (decodeText @Double "0e99999999999999999999")
   assertEqual
     "negative zero"
     (Right [Float NegativeZero, Float NegativeZero, Float (Finite 0), Int 0])
@@ -487,7 +496,10 @@ test_longNumbers = do
     "float"
     (Right (Float (Finite (Sci.scientific (10 ^ (1000000 :: Int) - 1) (-1)))))
     ((.value) <$> decodeText @Node (nines 999999 <> ".9"))
-  assertEqual "exponent" (Right (Float Infinity)) ((.value) <$> decodeText @Node ("1e" <> nines 1000000))
+  assertEqual
+    "exponent"
+    (Just (1, 1, "the exponent of the number is out of range"))
+    (errorOf (decodeText @Node ("1e" <> nines 1000000)))
   let zeros = T.replicate 300000 "0"
   assertEqual
     "trailing zeros"

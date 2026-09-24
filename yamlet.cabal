@@ -60,6 +60,7 @@ library
                      Yamlet.Internal.Parser
                      Yamlet.Internal.Parser.Monad
                      Yamlet.Internal.Render
+                     Yamlet.Internal.Schema
                      Yamlet.Internal.Syntax
                      Yamlet.Node
                      Yamlet.Schema
