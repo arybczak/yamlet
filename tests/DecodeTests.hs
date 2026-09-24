@@ -301,9 +301,28 @@ test_encodings = do
   invalid "odd length of UTF-16BE" "invalid UTF-16" (T.encodeUtf16BE "a\nbc" <> "\0")
   invalid "surrogate in UTF-32BE" "invalid UTF-32" (T.encodeUtf32BE "a\nbc" <> "\0\0\xDC\0")
   invalid "code point beyond Unicode in UTF-32LE" "invalid UTF-32" (T.encodeUtf32LE "a\nbc" <> "\0\0\x11\0")
+  let documents :: String -> [T.Text] -> T.Text -> Assertion
+      documents preface expected input = assertEqual preface (Right expected) (decodeAllText input)
+  documents "BOM before a marker after a scalar" ["a", "b"] "a\n\xFEFF--- b\n"
+  assertEqual
+    "BOM before a marker after a mapping"
+    (Right [Mapping [(node (String "a"), node (Int 1))], String "b"])
+    (map (strip . (.value)) <$> decodeAllText @Node "a: 1\n\xFEFF--- b\n")
+  documents "BOM after an end marker" ["a", "b"] "a\n...\n\xFEFF# c\n\xFEFF\&b\n"
+  documents "BOM in a quoted scalar" ["a\xFEFF", "b\xFEFF"] "--- \"a\xFEFF\"\n--- 'b\xFEFF'\n"
+  let bom :: String -> (Int, Int) -> T.Text -> Assertion
+      bom preface (l, c) input = assertEqual preface (Just (l, c, "unexpected byte order mark")) (errorOf (decodeNodes input))
+  bom "BOM at the start of a key" (2, 1) "a: 1\n\xFEFF b: 2\n"
+  bom "BOM in a plain scalar" (1, 5) "a: x\xFEFFy\n"
+  bom "BOM in a block scalar" (2, 3) "a: |\n  \xFEFFx\n"
   where
     stripBom :: T.Text -> Either Error T.Text
     stripBom = Right . T.dropWhile (== '\xFEFF')
+
+    strip :: Value -> Value
+    strip = \case
+      Mapping kvs -> Mapping [(Node noOffset k.tag k.value, Node noOffset v.tag v.value) | (k, v) <- kvs]
+      v -> v
 
 -- | The line, the column and the message of an error.
 errorOf :: Either Error a -> Maybe (Int, Int, String)

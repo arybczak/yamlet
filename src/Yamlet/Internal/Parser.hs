@@ -34,11 +34,30 @@ import Yamlet.Internal.Syntax
 parseStream :: T.Text -> Either Error [Document]
 parseStream input@(T.Text arr off len) = case prescan e start of
   Left i -> Left $ errorAt input (toOffset e i) "invalid character"
-  Right markers -> case runParser e start (lYamlStream markers) of
+  Right (markers, boms) -> case runParser e start (lYamlStream markers) of
     Left (ParseError i msg) -> Left $ errorAt input (toOffset e i) msg
-    Right (Just docs, _, _) -> Right docs
+    Right (Just docs, _, _) -> case filter (not . allowedBom docs) boms of
+      i : _ -> Left $ errorAt input (toOffset e i) "unexpected byte order mark"
+      [] -> Right docs
     Right (Nothing, _, fu) -> let (i, msg) = unexpected e fu in Left $ errorAt input (toOffset e i) msg
   where
+    -- A byte order mark can start a line between documents, or be a
+    -- character of a quoted scalar.
+    allowedBom :: [Document] -> Int -> Bool
+    allowedBom docs i = case M.lookupLE (toOffset e i) (scalarRanges docs) of
+      Just (_, (end, quoted)) | toOffset e i < end -> quoted
+      _ -> isStartOfLine e i
+
+    scalarRanges :: [Document] -> M.Map Offset (Offset, Bool)
+    scalarRanges docs = M.fromList (foldr (\d -> ranges d.root) [] docs)
+      where
+        ranges :: Node -> [(Offset, (Offset, Bool))] -> [(Offset, (Offset, Bool))]
+        ranges n acc = case n.content of
+          Scalar style _ -> (n.offset, (n.endOffset, style == SingleQuoted || style == DoubleQuoted)) : acc
+          Sequence _ xs -> foldr ranges acc xs
+          Mapping _ kvs -> foldr (\(k, v) -> ranges k . ranges v) acc kvs
+          Alias _ -> acc
+
     e :: Env
     e =
       Env
@@ -52,21 +71,25 @@ parseStream input@(T.Text arr off len) = case prescan e start of
     start = if isBom e off then off + 3 else off
 
 -- | Check that the input has only characters that YAML allows, and find the
--- lines that start with a document marker. A document cannot contain such a
--- line. Return the index of an invalid character on error.
-prescan :: Env -> Int -> Either Int [Int]
-prescan e start = go start (if isMarker e start then [start] else [])
+-- lines that start with a document marker, and the byte order marks. A
+-- document cannot contain such a line. The index of a marker after a byte
+-- order mark is the index of the mark. Return the index of an invalid
+-- character on error.
+prescan :: Env -> Int -> Either Int ([Int], [Int])
+prescan e start = go start (if isMarker e start then [start] else []) []
   where
-    go :: Int -> [Int] -> Either Int [Int]
-    go i acc
-      | i >= e.end = Right (reverse acc)
+    go :: Int -> [Int] -> [Int] -> Either Int ([Int], [Int])
+    go i acc boms
+      | i >= e.end = Right (reverse acc, reverse boms)
       | otherwise =
           let w = A.unsafeIndex e.array i
           in if
-               | w >= 0x20 && w < 0x7F -> go (i + 1) acc
+               | w >= 0x20 && w < 0x7F -> go (i + 1) acc boms
                | w == LF || (w == CR && byteAt e (i + 1) /= LF) ->
-                   go (i + 1) (if isMarker e (i + 1) then i + 1 : acc else acc)
-               | w == CR || w == TAB -> go (i + 1) acc
+                   let s = i + 1
+                       marker = isMarker e s || (isBom e s && isMarker e (s + 3))
+                   in go s (if marker then s : acc else acc) boms
+               | w == CR || w == TAB -> go (i + 1) acc boms
                | w < 0x20 || w == 0x7F -> Left i
                -- C1 control characters except NEL.
                | w == 0xC2 && i + 1 < e.end
@@ -79,7 +102,8 @@ prescan e start = go start (if isMarker e start then [start] else [])
                , let w2 = A.unsafeIndex e.array (i + 2)
                , w2 == 0xBE || w2 == 0xBF ->
                    Left i
-               | otherwise -> go (i + 1) acc
+               | w == 0xEF && isBom e i -> go (i + 3) acc (i : boms)
+               | otherwise -> go (i + 1) acc boms
 
 -- | The location and the message of the error for the furthest position at
 -- which the parser failed.
@@ -440,6 +464,8 @@ lYamlStream markers0 = do
     -- document start.
     documents :: [Int] -> Bool -> Int -> P [Document]
     documents markers afterEnd prefix = do
+      -- A byte order mark can come before a marker after a bare document.
+      lDocumentPrefix
       e <- env
       p <- pos
       if
