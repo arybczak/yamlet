@@ -73,6 +73,15 @@ runTest path = do
       | otherwise -> do
           expected <- lines . T.unpack . T.decodeUtf8 <$> BS.readFile (path </> "test.event")
           assertEqual preface expected (map renderEvent (toEvents docs))
+          let out = renderSyntax defaultRenderOptions docs
+          case parseDocumentsText out of
+            Left err -> assertFailure $ preface ++ "\nrendered:\n" ++ T.unpack out ++ "\nerror: " ++ prettyError "out.yaml" err
+            Right docs' -> do
+              assertEqual
+                (preface ++ "\nrendered:\n" ++ T.unpack out)
+                (map withoutStyle (toEvents docs))
+                (map withoutStyle (toEvents docs'))
+              assertEqual (preface ++ "\nrendered again") out (renderSyntax defaultRenderOptions docs')
           hasJson <- doesFileExist (path </> "in.json")
           when hasJson $ do
             json <- BS.readFile (path </> "in.json")
@@ -85,6 +94,16 @@ runTest path = do
   where
     jsonValues :: A.Parser [J.Value]
     jsonValues = many (A.skipSpace *> J.json') <* A.skipSpace <* A.endOfInput
+
+    -- The renderer can change the styles and the document markers.
+    withoutStyle :: Event -> Event
+    withoutStyle = \case
+      DocumentStart _ -> DocumentStart False
+      DocumentEnd _ -> DocumentEnd False
+      SequenceStart props _ -> SequenceStart props Block
+      MappingStart props _ -> MappingStart props Block
+      ScalarEvent props _ t -> ScalarEvent props Plain t
+      e -> e
 
 -- | The JSON value of a node. The keys of the mappings in the tests with JSON
 -- are strings.
