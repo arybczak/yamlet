@@ -190,7 +190,7 @@ test_syntaxTree = do
       (errorOf (decodeDocument @Config "name: x\njobs: many\n" doc))
     r -> assertFailure (show r)
   let key = S.plainNode "a"
-      built = S.Document Nothing False False S.noComments (S.mappingNode [(key, key), (key, key)])
+      built = S.document (S.mappingNode [(key, key), (key, key)])
   assertEqual "built" (Just (1, 1, "duplicate key \"a\"")) (errorOf (resolveDocument "" built))
 
 test_emptyStream :: Assertion

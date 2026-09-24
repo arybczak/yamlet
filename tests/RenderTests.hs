@@ -112,7 +112,7 @@ test_styles = assertEqual "output" (Right input) (renderSyntax defaultRenderOpti
 test_fallbacks :: Assertion
 test_fallbacks = do
   let render :: Node -> T.Text
-      render n = renderSyntax defaultRenderOptions [Document Nothing False False noComments n]
+      render n = renderSyntax defaultRenderOptions [document n]
   assertEqual "plain with a colon" "'a: b'\n" (render (plainNode "a: b"))
   assertEqual "plain number stays plain" "12\n" (render (plainNode "12"))
   assertEqual "single-quoted line break" "\"a\\nb\"\n" (render (scalarNode SingleQuoted "a\nb"))
@@ -293,7 +293,7 @@ test_commentRoundTrip = case parseDocumentsText configuration of
 test_movedComments :: Assertion
 test_movedComments = do
   let render :: Node -> T.Text
-      render n = renderSyntax defaultRenderOptions [Document Nothing False False noComments n]
+      render n = renderSyntax defaultRenderOptions [document n]
       withInline :: T.Text -> Node -> Node
       withInline t n = n { comments = n.comments { inline = Just t } }
       withBefore :: T.Text -> Node -> Node
@@ -367,7 +367,7 @@ instance Arbitrary Tree where
   arbitrary = do
     root <- sized genNode
     c <- genComments False
-    pure . Tree $ Document Nothing False False c root
+    pure . Tree $ (document root) { docComments = c }
 
 genNode :: Int -> Gen Node
 genNode size = do

@@ -26,10 +26,10 @@ data Event
 
 -- | The events of a stream.
 toEvents :: [Document] -> [Event]
-toEvents docs = StreamStart : foldr document [StreamEnd] docs
+toEvents docs = StreamStart : foldr documentEvents [StreamEnd] docs
   where
-    document :: Document -> [Event] -> [Event]
-    document doc rest = DocumentStart doc.explicitStart
+    documentEvents :: Document -> [Event] -> [Event]
+    documentEvents doc rest = DocumentStart doc.explicitStart
       : node doc.root (DocumentEnd doc.explicitEnd : rest)
 
     node :: Node -> [Event] -> [Event]

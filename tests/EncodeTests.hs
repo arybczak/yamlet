@@ -111,7 +111,7 @@ test_tags = do
 
 test_syntax :: Assertion
 test_syntax = assertEqual "output" expected $ S.renderSyntax S.defaultRenderOptions
-  [S.Document Nothing False False S.noComments (edit (toSyntax value))]
+  [S.document (edit (toSyntax value))]
   where
     value :: Node
     value = mapping ["name" .= ("x" :: T.Text), "paths" .= ["a" :: T.Text, "b"]]
@@ -145,8 +145,7 @@ prop_syntaxRoundTrip :: Doc -> Property
 prop_syntaxRoundTrip (Doc n) = readsBack output n
   where
     output :: T.Text
-    output = S.renderSyntax S.defaultRenderOptions
-      [S.Document Nothing False False S.noComments (toSyntax n)]
+    output = S.renderSyntax S.defaultRenderOptions [S.document (toSyntax n)]
 
 readsBack :: T.Text -> Node -> Property
 readsBack output n = case decodeNodes output of

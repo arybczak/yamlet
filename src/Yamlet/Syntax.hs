@@ -47,6 +47,7 @@ module Yamlet.Syntax
     -- * Documents
   , Document(..)
   , Version(..)
+  , document
 
     -- * Nodes
   , Node(..)
@@ -95,6 +96,16 @@ parseDocuments bs = decodeInput bs >>= parseStream
 -- | Parse the documents of a stream.
 parseDocumentsText :: T.Text -> Either Error [Document]
 parseDocumentsText = parseStream
+
+-- | A document with the given root, without directives, markers and comments.
+document :: Node -> Document
+document n = Document
+  { version = Nothing
+  , explicitStart = False
+  , explicitEnd = False
+  , docComments = noComments
+  , root = n
+  }
 
 -- | A node with the given content, without properties and comments.
 contentNode :: Content -> Node
