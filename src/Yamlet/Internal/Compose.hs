@@ -1,3 +1,4 @@
+{-# LANGUAGE MagicHash #-}
 {-# OPTIONS_HADDOCK not-home #-}
 
 -- | Composition of the representation graph from the syntax tree.
@@ -8,8 +9,11 @@ module Yamlet.Internal.Compose
   ( compose
   ) where
 
+import Data.List qualified as L
 import Data.Map.Strict qualified as M
+import Data.Set qualified as Set
 import Data.Text qualified as T
+import GHC.Exts
 
 import Yamlet.Error
 import Yamlet.Internal.Syntax qualified as S
@@ -159,21 +163,15 @@ hasAlias n = case n.content of
 duplicate :: [Node] -> Maybe Node
 duplicate keys = case keys of
   -- Comparing all pairs is faster for few keys.
-  _ : _ : _ : _ : _ : _ : _ : _ : _ -> viaMap M.empty [] keys
+  _ : _ : _ : _ : _ : _ : _ : _ : _ -> viaSet Set.empty keys
   _ -> pairwise [] keys
   where
-    -- A scalar key cannot be equal to a collection key, so only the
-    -- collection keys need the pairwise comparison.
-    viaMap :: M.Map (T.Text, ScalarKey) () -> [Node] -> [Node] -> Maybe Node
-    viaMap seen collections = \case
+    viaSet :: Set.Set Key -> [Node] -> Maybe Node
+    viaSet seen = \case
       [] -> Nothing
-      k : ks -> case scalarKey k.value of
-        Just sk ->
-          let key = (k.tag, sk)
-          in if M.member key seen then Just k else viaMap (M.insert key () seen) collections ks
-        Nothing
-          | any (sameNode k) collections -> Just k
-          | otherwise -> viaMap seen (k : collections) ks
+      k : ks
+        | Key k `Set.member` seen -> Just k
+        | otherwise -> viaSet (Set.insert (Key k) seen) ks
 
     pairwise :: [Node] -> [Node] -> Maybe Node
     pairwise seen = \case
@@ -182,31 +180,66 @@ duplicate keys = case keys of
         | any (sameNode k) seen -> Just k
         | otherwise -> pairwise (k : seen) ks
 
-data ScalarKey
-  = KNull
-  | KBool !Bool
-  | KInt !Integer
-  | KFloat !FloatValue
-  | KString !T.Text
-  deriving stock (Eq, Ord)
+newtype Key = Key Node
 
-scalarKey :: Value -> Maybe ScalarKey
-scalarKey = \case
-  Null -> Just KNull
-  Bool b -> Just (KBool b)
-  Int i -> Just (KInt i)
-  Float d -> Just (KFloat d)
-  String t -> Just (KString t)
-  Sequence _ -> Nothing
-  Mapping _ -> Nothing
+instance Eq Key where
+  Key a == Key b = sameNode a b
 
--- | Equality of nodes that ignores their offsets.
+instance Ord Key where
+  compare (Key a) (Key b) = compareNodes a b
+
+-- | Equality of nodes that ignores their offsets. It is faster than
+-- 'compareNodes' for the few keys of most mappings.
 sameNode :: Node -> Node -> Bool
-sameNode a b =
-  a.tag == b.tag && case (a.value, b.value) of
-    (Sequence xs, Sequence ys) -> length xs == length ys && and (zipWith sameNode xs ys)
-    (Mapping xs, Mapping ys) -> length xs == length ys && all (\(k, v) -> any (samePair k v) ys) xs
-    (x, y) -> x == y
+sameNode (Node _ tagA valueA) (Node _ tagB valueB) =
+  tagA == tagB
+    && ( isTrue# (reallyUnsafePtrEquality# valueA valueB) || case (valueA, valueB) of
+           (Sequence xs, Sequence ys) -> length xs == length ys && and (zipWith sameNode xs ys)
+           (Mapping xs, Mapping ys) -> length xs == length ys && all (\(k, v) -> any (samePair k v) ys) xs
+           (x, y) -> x == y
+       )
   where
     samePair :: Node -> Node -> (Node, Node) -> Bool
     samePair k v (k', v') = sameNode k k' && sameNode v v'
+
+-- | An order of nodes that ignores their offsets and the order of the entries
+-- of a mapping. The aliases of an anchor share the value of its node, so the
+-- order and 'sameNode' take such values as equal without a look inside, even
+-- if an alias expands to a huge node.
+compareNodes :: Node -> Node -> Ordering
+-- A pattern binds the evaluated fields, a selector would give new thunks.
+compareNodes (Node _ tagA valueA) (Node _ tagB valueB)
+  | isTrue# (reallyUnsafePtrEquality# valueA valueB) = compare tagA tagB
+  -- The values of keys differ more often than their tags.
+  | otherwise = compareValues valueA valueB <> compare tagA tagB
+  where
+    compareValues :: Value -> Value -> Ordering
+    compareValues x y = case (x, y) of
+      (Null, Null) -> EQ
+      (Bool p, Bool q) -> compare p q
+      (Int i, Int j) -> compare i j
+      (Float f, Float g) -> compare f g
+      (String s, String t) -> compare s t
+      (Sequence xs, Sequence ys) ->
+        compare (length xs) (length ys) <> mconcat (zipWith compareNodes xs ys)
+      (Mapping xs, Mapping ys) ->
+        compare (length xs) (length ys) <> mconcat (zipWith compareEntries (sorted xs) (sorted ys))
+      _ -> compare (rank x) (rank y)
+
+    -- The keys of a mapping are unique, so their order is the same for equal
+    -- mappings.
+    sorted :: [(Node, Node)] -> [(Node, Node)]
+    sorted = L.sortBy (\(k, _) (k', _) -> compareNodes k k')
+
+    compareEntries :: (Node, Node) -> (Node, Node) -> Ordering
+    compareEntries (k, v) (k', v') = compareNodes k k' <> compareNodes v v'
+
+    rank :: Value -> Int
+    rank = \case
+      Null -> 0
+      Bool _ -> 1
+      Int _ -> 2
+      Float _ -> 3
+      String _ -> 4
+      Sequence _ -> 5
+      Mapping _ -> 6

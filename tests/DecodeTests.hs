@@ -31,6 +31,7 @@ decodeTests =
     , testCase "aliases" test_aliases
     , localOption (mkTimeout 10000000) $ testCase "nesting" test_nesting
     , localOption (mkTimeout 10000000) $ testCase "many keys" test_manyKeys
+    , localOption (mkTimeout 10000000) $ testCase "alias keys" test_aliasKeys
     , testCase "optional keys" test_optionalKeys
     , testCase "syntax tree" test_syntaxTree
     , testCase "empty stream" test_emptyStream
@@ -363,19 +364,39 @@ test_keyErrors = do
     "duplicate collection key"
     (Just (2, 1, "duplicate key"))
     (errorOf (decodeNodes (withKeys ["{c: [d]}", "{c: [d]}"])))
+  assertEqual
+    "duplicate mapping key in another order"
+    (Just (2, 1, "duplicate key"))
+    (errorOf (decodeNodes (withKeys ["{a: 1, b: 2}", "{b: 2, a: 1}"])))
+
+-- | The check for duplicate keys does not expand the aliases of a key. The
+-- alias *a9 expands to 10^10 nodes.
+test_aliasKeys :: Assertion
+test_aliasKeys = do
+  let anchors :: T.Text
+      anchors =
+        T.unlines $
+          "a0: &a0 [x, x, x, x, x, x, x, x, x, x]"
+            : [ T.pack ("a" ++ show i ++ ": &a" ++ show i ++ " [" ++ L.intercalate ", " (replicate 10 ("*a" ++ show (i - 1))) ++ "]")
+              | i <- [1 .. 9 :: Int]
+              ]
+      check :: String -> Maybe (Int, Int, String) -> T.Text -> Assertion
+      check preface expected keys = assertEqual preface expected (errorOf (decodeNodes (anchors <> keys)))
+  check "different keys" Nothing "? *a9\n: 1\n? [*a8, 1]\n: 2\n? [*a8, 2]\n: 3\n"
+  check "duplicate key" (Just (13, 3, "duplicate key")) "? [*a9, 1]\n: 1\n? [*a9, 1]\n: 2\n"
 
 -- | The time of the check for duplicate keys is not quadratic in the number
--- of keys if one key is a collection.
+-- of keys.
 test_manyKeys :: Assertion
-test_manyKeys =
-  assertEqual
-    "keys"
-    (Right 100001)
-    (length . entries <$> decodeText @Node input)
+test_manyKeys = do
+  let keys :: [T.Text]
+      keys = [T.pack ("k" ++ show i) | i <- [1 .. 100000 :: Int]]
+      count :: [T.Text] -> Either Error Int
+      count ks = length . entries <$> decodeText @Node (T.unlines (map (<> ": 1") ks))
+  assertEqual "one collection key" (Right 100001) (count ("[c]" : keys))
+  assertEqual "collection keys" (Right 100000) (count (map (\k -> "[" <> k <> "]") keys))
+  assertEqual "mapping keys" (Right 100000) (count (map (\k -> "{a: " <> k <> "}") keys))
   where
-    input :: T.Text
-    input = T.unlines $ "[c]: 1" : [T.pack ("k" ++ show i ++ ": 1") | i <- [1 .. 100000 :: Int]]
-
     entries :: Node -> [(Node, Node)]
     entries n = case n.value of
       Mapping kvs -> kvs
