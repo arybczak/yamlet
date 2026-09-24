@@ -4,11 +4,13 @@
 --
 -- Most texts in the tree share the memory of the input, so a node keeps the
 -- whole input alive. To keep a text longer than the tree, copy it with
--- 'Data.Text.copy'.
+-- 'Data.Text.copy', or copy the whole tree with 'copyDocument'.
 module Yamlet.Syntax
   ( -- * Parsing
     parseDocuments
   , parseDocumentsText
+  , copyDocument
+  , copyNode
 
     -- * Documents
   , Document(..)
@@ -43,3 +45,26 @@ parseDocuments bs = decodeInput bs >>= parseStream
 -- | Parse the documents of a stream.
 parseDocumentsText :: T.Text -> Either Error [Document]
 parseDocumentsText = parseStream
+
+-- | Copy every text of a document, so that the document does not keep the
+-- input alive.
+copyDocument :: Document -> Document
+copyDocument doc = doc { root = copyNode doc.root }
+
+-- | Copy every text of a node, so that the node does not keep the input
+-- alive.
+copyNode :: Node -> Node
+copyNode = \case
+  Scalar off props style t -> Scalar off (copyProps props) style (T.copy t)
+  Sequence off props style xs -> Sequence off (copyProps props) style (map copyNode xs)
+  Mapping off props style kvs ->
+    Mapping off (copyProps props) style [ (copyNode k, copyNode v) | (k, v) <- kvs ]
+  Alias off name -> Alias off (T.copy name)
+  where
+    copyProps :: Props -> Props
+    copyProps props = Props
+      { anchor = T.copy <$> props.anchor
+      , tag = case props.tag of
+          Tag t -> Tag (T.copy t)
+          t -> t
+      }

@@ -12,6 +12,7 @@ import Test.Tasty.QuickCheck
 
 import Yamlet
 import Yamlet.Schema
+import Yamlet.Syntax qualified as S
 
 decodeTests :: TestTree
 decodeTests = testGroup "Decode"
@@ -87,10 +88,21 @@ test_copies = do
   case decodeText @Int "a: 1\nb: [\n" of
     Left err -> assertBool "the source line is a copy" $ isCopy err.sourceLine
     Right _ -> assertFailure "expected an error"
+  case S.parseDocumentsText "key: &a value\nother: *a\n" of
+    Left err -> assertFailure (show err)
+    Right docs -> assertBool "syntax texts are copies" . all isCopy $
+      concatMap (texts . (.root) . S.copyDocument) docs
   where
     -- A copy starts at the beginning of its own array.
     isCopy :: T.Text -> Bool
     isCopy (T.Text _ off _) = off == 0
+
+    texts :: S.Node -> [T.Text]
+    texts = \case
+      S.Scalar _ props _ t -> t : maybe [] pure props.anchor
+      S.Sequence _ _ _ xs -> concatMap texts xs
+      S.Mapping _ _ _ kvs -> concatMap (\(k, v) -> texts k ++ texts v) kvs
+      S.Alias _ name -> [name]
 
 test_aliases :: Assertion
 test_aliases = assertEqual "map"
