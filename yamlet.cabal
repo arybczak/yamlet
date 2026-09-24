@@ -1,0 +1,113 @@
+cabal-version:      3.8
+build-type:         Simple
+name:               yamlet
+version:            0.1.0.0
+license:            BSD-3-Clause
+license-file:       LICENSE
+category:           Text, Data
+maintainer:         andrzej@rybczak.net
+author:             Andrzej Rybczak
+synopsis:           A pure, fast and conforming YAML 1.2 library.
+
+description:
+  A YAML 1.2.2 parser and emitter written in Haskell, with error messages that
+  point to the line and the column of the problem. It depends only on the
+  packages that come with GHC.
+
+extra-source-files:
+  CHANGELOG.md
+  README.md
+
+tested-with: GHC ^>= { 9.10, 9.12, 9.14 }
+
+common language
+    ghc-options:        -Wall
+                        -Wcompat
+                        -Werror=missing-deriving-strategies
+                        -Werror=prepositive-qualified-module
+
+    default-language:   GHC2021
+
+    default-extensions: DerivingStrategies
+                        DuplicateRecordFields
+                        LambdaCase
+                        MultiWayIf
+                        NoFieldSelectors
+                        OverloadedRecordDot
+                        OverloadedStrings
+
+library
+    import:         language
+
+    ghc-options:    -O2
+
+    build-depends:    base       >= 4.20 && < 5
+                    , bytestring >= 0.11
+                    , containers >= 0.6
+                    , deepseq    >= 1.4
+                    , text       >= 2.0
+
+    hs-source-dirs:  src
+
+    exposed-modules: Yamlet
+                     Yamlet.Decode
+                     Yamlet.Encode
+                     Yamlet.Error
+                     Yamlet.Event
+                     Yamlet.Internal.Compose
+                     Yamlet.Internal.Parser
+                     Yamlet.Internal.Parser.Monad
+                     Yamlet.Internal.Schema
+                     Yamlet.Node
+                     Yamlet.Syntax
+
+test-suite test
+    import:         language
+
+    ghc-options:    -threaded -rtsopts
+
+    build-depends:    base
+                    , aeson
+                    , attoparsec
+                    , attoparsec-aeson
+                    , bytestring
+                    , containers
+                    , directory
+                    , filepath
+                    , yamlet
+                    , scientific
+                    , tasty
+                    , tasty-hunit
+                    , tasty-quickcheck
+                    , QuickCheck
+                    , text
+                    , vector
+
+    hs-source-dirs: tests
+
+    type:           exitcode-stdio-1.0
+    main-is:        Main.hs
+
+    other-modules:  DecodeTests
+                    EncodeTests
+                    TestSuite
+
+benchmark bench
+    import:         language
+
+    ghc-options:    -rtsopts
+
+    build-depends:    base
+                    , aeson
+                    , bytestring
+                    , containers
+                    , yamlet
+                    , HsYAML
+                    , tasty-bench
+                    , text
+                    , yaml
+
+    hs-source-dirs: bench
+
+    type:           exitcode-stdio-1.0
+    main-is:        Main.hs
