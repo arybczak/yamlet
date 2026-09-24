@@ -27,7 +27,8 @@
 --
 -- * A comment before the directives or the @---@ marker of a document, or on
 --   the line of the marker, belongs to the document. A comment with no node
---   below it belongs to the end of the document.
+--   below it, or on the line of a @...@ marker, belongs to the end of the
+--   document.
 --
 -- Empty lines go with the comments that follow them, or with the node below
 -- them. Several empty lines in a row count as one.

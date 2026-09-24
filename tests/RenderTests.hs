@@ -170,19 +170,21 @@ test_forceBlock =
         ]
 
 test_documents :: Assertion
-test_documents = assertEqual "output" (Right input) (renderSyntax defaultRenderOptions <$> parseDocumentsText input)
-  where
-    input :: T.Text
-    input =
-      T.unlines
-        [ "first"
-        , "--- second"
-        , "..."
-        , "%YAML 1.2"
-        , "---"
-        , "a: b"
-        , "---"
-        ]
+test_documents = do
+  let check :: String -> T.Text -> Assertion
+      check preface input = assertEqual preface (Right input) (renderSyntax defaultRenderOptions <$> parseDocumentsText input)
+  check "markers" $
+    T.unlines
+      [ "first"
+      , "--- second"
+      , "..."
+      , "%YAML 1.2"
+      , "---"
+      , "a: b"
+      , "---"
+      ]
+  check "comment after the end marker" "a: b\n...\n# c\nd: e\n"
+  check "comment before the directives" "a\n...\n# b\n%YAML 1.2\n--- c\n"
 
 -- | The comments of a document with the path of their nodes.
 commentsOf :: Document -> [(String, String, T.Text)]
@@ -235,6 +237,8 @@ test_attachment = do
   check "at the end of the document" [("document", "after", "c")] "a\n# c\n"
   check "before the marker" [("document", "before", "c")] "# c\n---\na: 1\n"
   check "on the marker line" [("document", "inline", "c")] "--- # c\na: 1\n"
+  check "after the end marker" [("document", "after", "c")] "a\n...\n# c\n"
+  check "on the end marker line" [("document", "after", "c")] "a\n... # c\n"
   check "inside a flow sequence" [("/0", "inline", "c"), ("/1", "before", "d")] "[a, # c\n # d\n b]\n"
   check "empty lines" [] "a: 1\n\n\nb: 2\n"
   assertEqual

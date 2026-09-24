@@ -494,12 +494,15 @@ lYamlStream markers0 = do
       let explicitEnd = isMarker e p && byteAt e p == DOT
       when explicitEnd lDocumentSuffix
       q <- pos
+      when explicitEnd lDocumentPrefix
+      r <- pos
       let doc =
             attachComments
               e
               prefix
               marker
-              q
+              -- The lines after the last document belong to its end.
+              (if r >= e.end then r else q)
               Document
                 { version = version
                 , explicitStart = isJust marker
@@ -507,11 +510,7 @@ lYamlStream markers0 = do
                 , docComments = noComments
                 , root = root
                 }
-      if explicitEnd
-        then do
-          lDocumentPrefix
-          (doc :) <$> documents markers True q
-        else (doc :) <$> documents markers False q
+      (doc :) <$> documents markers explicitEnd q
 
 -- | Stop with an error at the furthest failure.
 throwUnexpected :: Int -> P a
@@ -527,12 +526,13 @@ lDocumentPrefix = many_ $ do
   p <- pos
   if isBom e p then advance 3 else lComment
 
--- | l-document-suffix
+-- | l-document-suffix, without the comment lines after it. They belong to the
+-- next document.
 lDocumentSuffix :: P ()
 lDocumentSuffix = do
   advance 3
   p <- pos
-  sLComments <|> throwAt p "unexpected content after the document end marker (...)"
+  sBComment <|> throwAt p "unexpected content after the document end marker (...)"
 
 -- | l-directive, repeated, with the version and the tag handles they define.
 directives :: P (Maybe Version, M.Map T.Text T.Text)
