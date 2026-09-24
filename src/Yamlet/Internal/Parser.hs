@@ -640,9 +640,10 @@ directives = go Nothing defaultHandles M.empty
           skipWhile isDecDigit
           r <- pos
           when (r == q) $ throwAt p "invalid %YAML directive"
-          -- A number beyond the range of Int wraps around. The worst effect
-          -- is a wrong version for an absurd directive.
-          pure . read . T.unpack $ slice e q r
+          let digits = T.dropWhile (== '0') (slice e q r)
+          -- A longer number could be beyond the range of Int.
+          when (T.length digits > 9) $ throwAt p "unsupported YAML version"
+          pure $ T.foldl' (\acc d -> acc * 10 + digitToInt d) 0 digits
 
     tagDirective :: Int -> P (T.Text, T.Text)
     tagDirective p = do
