@@ -107,8 +107,10 @@ benchmark bench
                     , aeson
                     , bytestring
                     , containers
+                    , deepseq
                     , yamlet
                     , HsYAML
+                    , scientific
                     , tasty-bench
                     , text
                     , yaml
