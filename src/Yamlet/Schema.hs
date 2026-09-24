@@ -12,6 +12,7 @@ module Yamlet.Schema
 
 import Control.Applicative
 import Data.Char
+import Data.Scientific qualified as Sci
 import Data.Text qualified as T
 
 import Yamlet.Internal.Emit
@@ -39,7 +40,7 @@ resolveTagged tag t
   | tag == nullTag = if isNull t then Just Null else Nothing
   | tag == boolTag = Bool <$> readBool t
   | tag == intTag = Int <$> readInt t
-  | tag == floatTag = Float <$> (readFloat t <|> fromInteger <$> readInt t)
+  | tag == floatTag = Float <$> (readFloat t <|> (\i -> Finite (Sci.scientific i 0)) <$> readInt t)
   | otherwise = Just (String t)
 
 -- | A plain scalar with the text is a string, e.g. @9.10.3@ is a string, but
@@ -84,24 +85,29 @@ readInt t
           Just $ T.foldl' (\acc d -> acc * radix + toInteger (digitToInt d)) 0 ds
       | otherwise = Nothing
 
+
 -- | [-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?, [-+]?\.inf or \.nan
 -- in one of three capitalizations.
-readFloat :: T.Text -> Maybe Double
+readFloat :: T.Text -> Maybe FloatValue
 readFloat t0 = case t0 of
-  ".nan" -> Just nan
-  ".NaN" -> Just nan
-  ".NAN" -> Just nan
+  ".nan" -> Just NaN
+  ".NaN" -> Just NaN
+  ".NAN" -> Just NaN
   _ -> case T.uncons t0 of
-    Just ('-', t) -> negate <$> unsigned t
+    Just ('-', t) -> negateFloat <$> unsigned t
     Just ('+', t) -> unsigned t
     _ -> unsigned t0
   where
-    nan :: Double
-    nan = 0 / 0
+    negateFloat :: FloatValue -> FloatValue
+    negateFloat = \case
+      Finite s -> Finite (negate s)
+      Infinity -> NegativeInfinity
+      NegativeInfinity -> Infinity
+      NaN -> NaN
 
-    unsigned :: T.Text -> Maybe Double
+    unsigned :: T.Text -> Maybe FloatValue
     unsigned t
-      | t == ".inf" || t == ".Inf" || t == ".INF" = Just (1 / 0)
+      | t == ".inf" || t == ".Inf" || t == ".INF" = Just Infinity
       | otherwise =
           let (int, rest) = T.span isDigit t
               (frac, rest') = case T.uncons rest of
@@ -114,15 +120,17 @@ readFloat t0 = case t0 of
                     Just $ decimal (int <> frac) (ex - toInteger (T.length frac))
                 | otherwise -> Nothing
 
-    -- The value of digits times a power of 10. The multiplication or the
-    -- division is exact and correctly rounded if both operands fit in the
-    -- mantissa of a double.
-    decimal :: T.Text -> Integer -> Double
+    -- The digits times a power of 10. An exponent out of the range of Int
+    -- gives infinity or zero.
+    decimal :: T.Text -> Integer -> FloatValue
     decimal ds e
-      | T.length (T.dropWhile (== '0') ds) <= 15 && abs e <= 22 =
-          let m = fromIntegral (T.foldl' (\acc d -> acc * 10 + digitToInt d) 0 ds)
-          in if e >= 0 then m * 10 ^ e else m / 10 ^ negate e
-      | otherwise = read $ (if T.null ds then "0" else T.unpack ds) ++ "e" ++ show e
+      | c == 0 = Finite 0
+      | e > toInteger (maxBound @Int) = Infinity
+      | e < toInteger (minBound @Int) = Finite 0
+      | otherwise = Finite (Sci.scientific c (fromInteger e))
+      where
+        c :: Integer
+        c = T.foldl' (\acc d -> acc * 10 + toInteger (digitToInt d)) 0 ds
 
     exponent_ :: T.Text -> Maybe Integer
     exponent_ t = case T.uncons t of

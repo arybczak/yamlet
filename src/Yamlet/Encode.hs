@@ -12,6 +12,7 @@ module Yamlet.Encode
 import Data.Int
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
+import Data.Scientific qualified as Sci
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Builder qualified as B
@@ -58,8 +59,9 @@ instance ToYAML Word8 where toYAML = node . Int . toInteger
 instance ToYAML Word16 where toYAML = node . Int . toInteger
 instance ToYAML Word32 where toYAML = node . Int . toInteger
 instance ToYAML Word64 where toYAML = node . Int . toInteger
-instance ToYAML Double where toYAML = node . Float
-instance ToYAML Float where toYAML = node . Float . realToFrac
+instance ToYAML Double where toYAML = node . Float . doubleToFloat
+instance ToYAML Float where toYAML = node . Float . doubleToFloat . realToFrac
+instance ToYAML Sci.Scientific where toYAML = node . Float . Finite
 instance ToYAML T.Text where toYAML = node . String
 instance ToYAML TL.Text where toYAML = node . String . TL.toStrict
 
@@ -197,10 +199,12 @@ scalarText n = case n.value of
   Null -> "null"
   Bool b -> if b then "true" else "false"
   Int i -> B.fromString (show i)
-  Float d
-    | isNaN d -> ".nan"
-    | isInfinite d -> if d > 0 then ".inf" else "-.inf"
-    | otherwise -> B.fromString (show d)
+  -- The generic format always has a dot or an exponent, so the number reads
+  -- back as a float, not as an integer.
+  Float (Finite s) -> B.fromString (Sci.formatScientific Sci.Generic Nothing s)
+  Float Infinity -> ".inf"
+  Float NegativeInfinity -> "-.inf"
+  Float NaN -> ".nan"
   String t
     | isPlainSafe t -> B.fromText t
     | otherwise -> doubleQuoted t

@@ -10,6 +10,9 @@ module Yamlet.Node
   ( -- * Nodes
     Node(..)
   , Value(..)
+  , FloatValue(..)
+  , floatToDouble
+  , doubleToFloat
   , describe
 
     -- * Construction
@@ -29,6 +32,7 @@ module Yamlet.Node
   ) where
 
 import Control.DeepSeq
+import Data.Scientific qualified as Sci
 import Data.Text qualified as T
 import GHC.Generics
 
@@ -54,13 +58,43 @@ data Value
   = Null
   | Bool !Bool
   | Int !Integer
-  | Float !Double
+  | Float !FloatValue
   | String !T.Text
   | Sequence [Node]
   | Mapping [(Node, Node)]
   -- ^ The entries of a mapping in the order of the input. The keys are unique.
   deriving stock (Eq, Show, Generic)
   deriving anyclass NFData
+
+-- | The value of a floating-point number. A finite value is exact, e.g. @0.1@
+-- is exactly one tenth.
+--
+-- Arithmetic on a 'Sci.Scientific' with a huge exponent, e.g. @1e1000000000@,
+-- can use all memory. Convert a value from an untrusted input with
+-- 'floatToDouble' or with the bounded conversions of "Data.Scientific".
+data FloatValue
+  = Finite !Sci.Scientific
+  | Infinity
+  | NegativeInfinity
+  | NaN
+  deriving stock (Eq, Ord, Show, Generic)
+  deriving anyclass NFData
+
+-- | The nearest double, infinite if the value is out of its range.
+floatToDouble :: FloatValue -> Double
+floatToDouble = \case
+  Finite s -> Sci.toRealFloat s
+  Infinity -> 1 / 0
+  NegativeInfinity -> -1 / 0
+  NaN -> 0 / 0
+
+-- | The value of a double. A finite double becomes the shortest decimal that
+-- reads back as the same double, e.g. @0.1@.
+doubleToFloat :: Double -> FloatValue
+doubleToFloat d
+  | isNaN d = NaN
+  | isInfinite d = if d > 0 then Infinity else NegativeInfinity
+  | otherwise = Finite (Sci.fromFloatDigits d)
 
 -- | The kind of a value in plain words, for error messages, e.g. "a list".
 describe :: Value -> String

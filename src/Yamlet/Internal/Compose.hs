@@ -171,7 +171,7 @@ data ScalarKey
   = KNull
   | KBool !Bool
   | KInt !Integer
-  | KFloat !Double
+  | KFloat !FloatValue
   | KString !T.Text
   deriving stock (Eq, Ord)
 

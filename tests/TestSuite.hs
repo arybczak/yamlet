@@ -10,7 +10,6 @@ import Data.Aeson.Parser qualified as J
 import Data.Attoparsec.ByteString.Char8 qualified as A
 import Data.ByteString qualified as BS
 import Data.List qualified as L
-import Data.Scientific qualified as Sci
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
 import Data.Vector qualified as V
@@ -87,7 +86,8 @@ toJson n = case n.value of
   Y.Null -> J.Null
   Y.Bool b -> J.Bool b
   Y.Int i -> J.Number (fromInteger i)
-  Y.Float d -> J.Number (Sci.fromFloatDigits d)
+  Y.Float (Y.Finite s) -> J.Number s
+  Y.Float _ -> J.Null
   Y.String t -> J.String t
   Y.Sequence xs -> J.Array . V.fromList $ map toJson xs
   Y.Mapping kvs -> J.Object $ KM.fromList [ (key k, toJson v) | (k, v) <- kvs ]

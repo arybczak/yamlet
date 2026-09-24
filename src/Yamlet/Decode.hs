@@ -16,6 +16,7 @@ module Yamlet.Decode
   , withBool
   , withInt
   , withFloat
+  , withScientific
   , withText
 
     -- * Collections
@@ -38,6 +39,7 @@ import Data.Int
 import Data.List qualified as L
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
+import Data.Scientific qualified as Sci
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
 import Data.Word
@@ -111,11 +113,19 @@ withInt f = parseNode $ \n -> case n.value of
   Int i -> f i
   _ -> typeMismatch "an integer" n
 
--- | An integer counts as a floating-point number too.
+-- | The nearest double. An integer counts as a floating-point number too.
 withFloat :: (Double -> Parser a) -> Node -> Parser a
 withFloat f = parseNode $ \n -> case n.value of
-  Float d -> f d
+  Float v -> f (floatToDouble v)
   Int i -> f (fromInteger i)
+  _ -> typeMismatch "a number" n
+
+-- | The exact value of a finite number. An integer counts too.
+withScientific :: (Sci.Scientific -> Parser a) -> Node -> Parser a
+withScientific f = parseNode $ \n -> case n.value of
+  Float (Finite s) -> f s
+  Int i -> f (Sci.scientific i 0)
+  Float _ -> fail "expected a finite number"
   _ -> typeMismatch "a number" n
 
 -- | The text is a copy, so it does not keep the input alive.
@@ -247,6 +257,9 @@ bounded = withInt $ \i ->
 
 instance FromYAML Double where
   parseYAML = withFloat pure
+
+instance FromYAML Sci.Scientific where
+  parseYAML = withScientific pure
 
 instance FromYAML Float where
   parseYAML = withFloat (pure . realToFrac)

@@ -1,7 +1,6 @@
 # yamlet
 
-A YAML 1.2.2 library written in Haskell. It depends only on the packages that
-come with GHC.
+A YAML 1.2.2 library written in Haskell, with few dependencies.
 
 ## Features
 
@@ -12,6 +11,8 @@ come with GHC.
   an excerpt of the input. Messages name the kinds of values in plain words,
   e.g. `expected a list, but got an integer`.
 - Mappings keep the order of their keys, on input and on output.
+- Floating-point numbers are exact, e.g. `0.1` is exactly one tenth. They
+  convert to `Scientific` without loss and to `Double` on request.
 - If a string reads back the same as a plain scalar, the encoder does not
   quote it. Thus `dist-newstyle` stays unquoted.
 - The input can be UTF-8, UTF-16 or UTF-32. The library detects the encoding

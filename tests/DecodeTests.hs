@@ -3,6 +3,7 @@ module DecodeTests (decodeTests) where
 import Data.Int
 import Data.List qualified as L
 import Data.Map.Strict qualified as M
+import Data.Scientific qualified as Sci
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
 import Data.Text.Internal qualified as T
@@ -18,6 +19,7 @@ decodeTests :: TestTree
 decodeTests = testGroup "Decode"
   [ testCase "core schema" test_coreSchema
   , testProperty "floats" prop_floats
+  , testCase "exact floats" test_exactFloats
   , testCase "plain scalars" test_plainSafe
   , testCase "record" test_record
   , testCase "copies" test_copies
@@ -41,9 +43,10 @@ test_coreSchema = do
     Left err -> assertFailure (show err)
     Right ns -> assertEqual "values"
       [ Null, Null, String "", Bool True, Bool False, Int 12, Int 0, Int 15, Int 31
-      , Float 1.5, Float (-1 / 0), Float 0, Float 1000, Int 12, Float 0.5, String "a", String "1"
+      , Float (Finite 1.5), Float NegativeInfinity, Float NaN, Float (Finite 1000), Int 12
+      , Float (Finite 0.5), String "a", String "1"
       ]
-      (map (\n -> case n.value of Float d | isNaN d -> Float 0; v -> v) ns)
+      (map (.value) ns)
 
 test_plainSafe :: Assertion
 test_plainSafe = do
@@ -62,10 +65,12 @@ test_plainSafe = do
   assertBool "string number" . not $ isPlainString "9.10"
   assertBool "string null" . not $ isPlainString "~"
 
--- | A decimal number resolves to the same double as 'read' gives.
+-- | A decimal number resolves to its exact value, and 'withFloat' gives the
+-- same double as 'read'.
 prop_floats :: Property
 prop_floats = forAll genDecimal $ \s ->
-  resolvePlain (T.pack s) === Float (read s)
+  resolvePlain (T.pack s) === Float (Finite (read s))
+    .&&. decodeText @Double (T.pack s) === Right (read s)
   where
     genDecimal :: Gen String
     genDecimal = do
@@ -78,6 +83,19 @@ prop_floats = forAll genDecimal $ \s ->
     digits = do
       k <- choose (1, 20)
       vectorOf k (elements ['0' .. '9'])
+
+test_exactFloats :: Assertion
+test_exactFloats = do
+  assertEqual "one tenth" (Right (Sci.scientific 1 (-1))) (decodeText @Sci.Scientific "0.1")
+  assertEqual "more digits than a double holds" (Right (Sci.scientific 12345678901234567890123 (-3)))
+    (decodeText @Sci.Scientific "12345678901234567890.123")
+  assertEqual "integer as a scientific" (Right (Sci.scientific 42 0)) (decodeText @Sci.Scientific "42")
+  assertEqual "huge exponent" (Right (Sci.scientific 1 1000000000)) (decodeText @Sci.Scientific "1e1000000000")
+  assertEqual "huge exponent as a double" (Right (1 / 0)) (decodeText @Double "1e1000000000")
+  assertEqual "exponent beyond Int" (Right [Float Infinity, Float (Finite 0)])
+    (map (.value) <$> decodeText @[Node] "[1e99999999999999999999, 1e-99999999999999999999]")
+  assertEqual "infinity as a scientific" (Just (1, 1, "expected a finite number"))
+    (errorOf (decodeText @Sci.Scientific ".inf"))
 
 data Config = Config
   { name :: T.Text

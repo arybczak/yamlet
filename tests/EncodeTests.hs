@@ -1,6 +1,7 @@
 module EncodeTests (encodeTests) where
 
 import Data.List qualified as L
+import Data.Scientific qualified as Sci
 import Data.Text qualified as T
 import Test.QuickCheck
 import Test.Tasty
@@ -13,6 +14,7 @@ encodeTests :: TestTree
 encodeTests = testGroup "Encode"
   [ testCase "block style" test_blockStyle
   , testCase "quoting" test_quoting
+  , testCase "floats" test_floats
   , testCase "literal block scalars" test_literal
   , testCase "tags" test_tags
   , testProperty "round trip" prop_roundTrip
@@ -79,6 +81,17 @@ test_quoting = do
   check "\"\\uFEFF\"" "\xFEFF"
   check "zażółć" "zażółć"
 
+-- | A float reads back as a float, not as an integer.
+test_floats :: Assertion
+test_floats = do
+  assertEqual "integral double" "12.0\n" (encodeText (12 :: Double))
+  assertEqual "double" "0.1\n" (encodeText (0.1 :: Double))
+  assertEqual "large scientific" "1.0e30\n" (encodeText (Sci.scientific 1 30))
+  assertEqual "exact scientific" "1.2345678901234567890123e19\n"
+    (encodeText (Sci.scientific 12345678901234567890123 (-3)))
+  assertEqual "infinity" "-.inf\n" (encodeText (-1 / 0 :: Double))
+  assertEqual "not a number" ".nan\n" (encodeText (0 / 0 :: Double))
+
 test_literal :: Assertion
 test_literal = do
   assertEqual "clip" "key: |\n  a\n  b\n" (encodeText (mapping ["key" .= ("a\nb\n" :: T.Text)]))
@@ -143,7 +156,7 @@ genScalar = node <$> oneof
   [ pure Null
   , Bool <$> arbitrary
   , Int <$> arbitrary
-  , Float <$> elements [0, 1.5, -2.25e-10, 1 / 0, -1 / 0, 123456.789]
+  , Float <$> elements (map Finite [0, 1.5, -2.25e-10, 123456.789, 1e30, 12] ++ [Infinity, NegativeInfinity, NaN])
   , String <$> genText
   ]
 
