@@ -25,8 +25,15 @@ module Yamlet.Syntax
   , ScalarStyle(..)
   , CollectionStyle(..)
 
+    -- ** Construction
+  , scalarNode
+  , plainNode
+  , sequenceNode
+  , mappingNode
+
     -- * Positions
   , Offset(..)
+  , noOffset
   ) where
 
 import Data.ByteString qualified as BS
@@ -45,6 +52,22 @@ parseDocuments bs = decodeInput bs >>= parseStream
 -- | Parse the documents of a stream.
 parseDocumentsText :: T.Text -> Either Error [Document]
 parseDocumentsText = parseStream
+
+-- | A scalar in the given style, without properties.
+scalarNode :: ScalarStyle -> T.Text -> Node
+scalarNode = Scalar noOffset noProps
+
+-- | A plain scalar without properties.
+plainNode :: T.Text -> Node
+plainNode = scalarNode Plain
+
+-- | A block sequence without properties.
+sequenceNode :: [Node] -> Node
+sequenceNode = Sequence noOffset noProps Block
+
+-- | A block mapping without properties.
+mappingNode :: [(Node, Node)] -> Node
+mappingNode = Mapping noOffset noProps Block
 
 -- | Copy every text of a document, so that the document does not keep the
 -- input alive.

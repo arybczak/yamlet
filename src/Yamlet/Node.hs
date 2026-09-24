@@ -14,7 +14,7 @@ module Yamlet.Node
 
     -- * Construction
   , node
-  , noOffset
+  , S.noOffset
   , S.Offset(..)
 
     -- * Tags
@@ -76,14 +76,10 @@ describe = \case
 -- | A node with the default tag for its value.
 node :: Value -> Node
 node v = Node
-  { offset = noOffset
+  { offset = S.noOffset
   , tag = defaultTag v
   , value = v
   }
-
--- | The offset of a node that does not come from an input.
-noOffset :: S.Offset
-noOffset = S.Offset (-1)
 
 nullTag, boolTag, intTag, floatTag, strTag, seqTag, mapTag :: T.Text
 nullTag = "tag:yaml.org,2002:null"

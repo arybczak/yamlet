@@ -20,6 +20,7 @@ module Yamlet.Internal.Syntax
 
     -- * Positions
   , Offset(..)
+  , noOffset
   ) where
 
 import Control.DeepSeq
@@ -105,3 +106,7 @@ data CollectionStyle
 -- | The offset of a byte in the UTF-8 encoded input.
 newtype Offset = Offset Int
   deriving newtype (Eq, Ord, Show, NFData)
+
+-- | The offset of a node that does not come from an input.
+noOffset :: Offset
+noOffset = Offset (-1)
