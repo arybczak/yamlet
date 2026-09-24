@@ -103,6 +103,8 @@ data Tag
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (NFData)
 
+-- | The style of a scalar: without quotes, in single or double quotes, or a
+-- literal (@|@) or folded (@>@) block scalar.
 data ScalarStyle
   = Plain
   | SingleQuoted
@@ -112,6 +114,7 @@ data ScalarStyle
   deriving stock (Eq, Ord, Show, Enum, Bounded, Generic)
   deriving anyclass (NFData)
 
+-- | The style of a collection: with indentation, or with brackets and commas.
 data CollectionStyle
   = Block
   | Flow
@@ -130,6 +133,7 @@ data Comments = Comments
   deriving stock (Eq, Show, Generic)
   deriving anyclass (NFData)
 
+-- | No comments and no empty lines.
 noComments :: Comments
 noComments = Comments [] Nothing []
 

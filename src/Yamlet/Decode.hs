@@ -100,16 +100,19 @@ typeMismatch expected n =
 ----------------------------------------
 -- Scalars
 
+-- | Run the parser if the node is null.
 withNull :: Parser a -> Node -> Parser a
 withNull p = parseNode $ \n -> case n.value of
   Null -> p
   _ -> typeMismatch "null" n
 
+-- | The value of a boolean.
 withBool :: (Bool -> Parser a) -> Node -> Parser a
 withBool f = parseNode $ \n -> case n.value of
   Bool b -> f b
   _ -> typeMismatch "a boolean" n
 
+-- | The value of an integer.
 withInt :: (Integer -> Parser a) -> Node -> Parser a
 withInt f = parseNode $ \n -> case n.value of
   Int i -> f i
@@ -139,11 +142,13 @@ withText f = parseNode $ \n -> case n.value of
 ----------------------------------------
 -- Collections
 
+-- | The items of a sequence.
 withSequence :: ([Node] -> Parser a) -> Node -> Parser a
 withSequence f = parseNode $ \n -> case n.value of
   Sequence xs -> f xs
   _ -> typeMismatch "a list" n
 
+-- | The entries of a mapping.
 withMapping :: (Object -> Parser a) -> Node -> Parser a
 withMapping f = parseNode $ \n -> case n.value of
   Mapping kvs -> f (mkObject n kvs)

@@ -49,7 +49,7 @@ import Yamlet.Internal.Syntax qualified as S
 -- | A node of a document.
 data Node = Node
   { offset :: !S.Offset
-  -- ^ The position of the node in the input, or 'noOffset' for a node that
+  -- ^ The position of the node in the input, or 'S.noOffset' for a node that
   -- a program created.
   , tag :: !T.Text
   -- ^ The resolved tag, e.g. @tag:yaml.org,2002:str@.
@@ -124,6 +124,7 @@ node v =
     , value = v
     }
 
+-- | The tags of the core schema, e.g. @tag:yaml.org,2002:null@ for 'nullTag'.
 nullTag, boolTag, intTag, floatTag, strTag, seqTag, mapTag :: T.Text
 nullTag = "tag:yaml.org,2002:null"
 boolTag = "tag:yaml.org,2002:bool"

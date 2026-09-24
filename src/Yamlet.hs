@@ -122,8 +122,10 @@ encode = T.encodeUtf8 . encodeText
 encodeAll :: ToYAML a => [a] -> BS.ByteString
 encodeAll = T.encodeUtf8 . encodeAllText
 
+-- | Encode a value as a document.
 encodeText :: ToYAML a => a -> T.Text
 encodeText a = renderDocuments [toYAML a]
 
+-- | Encode values as a stream of documents.
 encodeAllText :: ToYAML a => [a] -> T.Text
 encodeAllText = renderDocuments . map toYAML
