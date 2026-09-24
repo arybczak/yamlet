@@ -111,7 +111,12 @@ test_syntaxErrors = do
   let check :: String -> (Int, Int, String) -> T.Text -> Assertion
       check preface expected input = assertEqual preface (Just expected) (errorOf (decodeNodes input))
   check "bad indentation" (3, 2, "unexpected indentation") "a:\n  b: 1\n c: 2\n"
-  check "mapping in a plain scalar" (1, 11, "unexpected ':'") "key: value: other\n"
+  check "mapping in a plain scalar" (1, 11, "unexpected ':', quote the value if it contains \": \"")
+    "key: value: other\n"
+  check "missing closing quote" (1, 7, "unterminated double-quoted scalar") "name: \"abc\nnext: value\n"
+  check "badly indented quoted line" (2, 1, "invalid indentation of a line in a single-quoted scalar")
+    "name: 'abc\nnext'\n"
+  check "end of line" (2, 8, "unexpected end of line") "- key: value\n  other\n"
   check "tab indentation" (2, 1, "tabs cannot be used for indentation") "a:\n\tb: 1\n"
   check "unterminated string" (1, 6, "unterminated double-quoted scalar") "key: \"abc\n"
   check "unclosed flow sequence" (1, 11, "expected ',' or ']'") "key: [a, b\nc: d\n"

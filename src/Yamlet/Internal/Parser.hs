@@ -72,9 +72,18 @@ unexpected e i = case indentationTab (i - 1) Nothing of
   Nothing -> (i,) $ case byteAt e i of
     0 -> "unexpected end of input"
     w | indented -> "unexpected indentation"
+      | isBreak w -> "unexpected end of line"
+      | w == COLON && valueColon ->
+          "unexpected ':', quote the value if it contains \": \""
       | w < 0x80 -> "unexpected " ++ show (chr (fromIntegral w))
       | otherwise -> "unexpected " ++ show (T.head (slice e i e.end))
   where
+    -- A colon that ends a word and precedes white space, as in an unquoted
+    -- value like "Error: file not found".
+    valueColon :: Bool
+    valueColon = isNsChar (byteBefore e i)
+      && (let w = byteAt e (i + 1) in w == 0 || isWhite w || isBreak w)
+
     -- Only spaces precede the index on its line.
     indented :: Bool
     indented = i > e.base && byteBefore e i == SPACE && go (i - 1)
@@ -771,7 +780,7 @@ cDoubleQuoted n c props = withScan $ \e p ->
 
       badIndent :: Int -> Scanned T.Text
       badIndent i
-        | nextContent i >= e.end = unterminated i
+        | nextContent i >= e.end || not (hasClosingQuote e DQUOTE (nextContent i)) = unterminated i
         | otherwise = Failed (nextContent i)
             "invalid indentation of a line in a double-quoted scalar"
 
@@ -811,7 +820,7 @@ cSingleQuoted n c props = withScan $ \e p ->
 
       badIndent :: Int -> Scanned T.Text
       badIndent i
-        | nextContent i >= e.end = unterminated i
+        | nextContent i >= e.end || not (hasClosingQuote e SQUOTE (nextContent i)) = unterminated i
         | otherwise = Failed (nextContent i)
             "invalid indentation of a line in a single-quoted scalar"
 
@@ -827,6 +836,15 @@ skipBlankLines :: Env -> Int -> Int
 skipBlankLines e i =
   let j = skipWhites e (breakEnd e i)
   in if isBreak (byteAt e j) then skipBlankLines e j else breakEnd e i
+
+-- | The line from the index contains a closing quote. If it does not, a line
+-- with a wrong indentation more likely follows a missing quote.
+hasClosingQuote :: Env -> Word8 -> Int -> Bool
+hasClosingQuote e quote i = case byteAt e i of
+  w | w == quote -> True
+    | w == BACKSLASH && quote == DQUOTE -> hasClosingQuote e quote (i + 2)
+    | w == 0 || isBreak w -> False
+    | otherwise -> hasClosingQuote e quote (i + 1)
 
 finish :: [T.Text] -> T.Text
 finish = \case
