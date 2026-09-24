@@ -152,6 +152,10 @@ test_record = do
     "defaults"
     (Right (Config "x" [] 1))
     (decodeText "name: x\npaths:\n")
+  assertEqual
+    "keys of a map that convert to the same key"
+    (Just (2, 1, "duplicate key after conversion"))
+    (errorOf (decodeText @(M.Map Double Int) "1: 1\n1.0: 2\n"))
 
 -- | Decoded texts and error lines do not point into the input.
 test_copies :: Assertion

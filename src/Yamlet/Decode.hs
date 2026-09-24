@@ -315,12 +315,17 @@ instance FromYAML a => FromYAML (Maybe a) where
     Null -> pure Nothing
     _ -> Just <$> parseYAML n
 
+-- | Two keys that convert to the same key, e.g. @1@ and @1.0@ for 'Double',
+-- are an error.
 instance (Ord k, FromYAML k, FromYAML v) => FromYAML (M.Map k v) where
-  parseYAML = withMapping $ \o ->
-    M.fromList
-      <$> forM
-        o.entries
-        (\(k, v) -> (,) <$> parseNode parseYAML k <*> parseNode parseYAML v)
+  parseYAML = withMapping $ \o -> foldM insert M.empty o.entries
+    where
+      insert :: M.Map k v -> (Node, Node) -> Parser (M.Map k v)
+      insert m (k, v) = do
+        k' <- parseNode parseYAML k
+        when (k' `M.member` m) $ failAt k "duplicate key after conversion"
+        v' <- parseNode parseYAML v
+        pure $ M.insert k' v' m
 
 instance (FromYAML a, FromYAML b) => FromYAML (a, b) where
   parseYAML = withSequence $ \case
