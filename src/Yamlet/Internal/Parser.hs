@@ -1101,25 +1101,35 @@ closing c w msg = do
 --
 -- The grammar tries a JSON-like node as the key of a pair and then again as
 -- a node, which takes exponential time for nested flow sequences. So the
--- parser reads the node once, and it becomes a key if it fits one and a
--- colon follows.
+-- parser reads the node once, and a JSON-like node becomes a key if it fits
+-- one and a colon follows. The node is read once even if it fails, as it can
+-- in a key.
 nsFlowSeqEntry :: Int -> Ctx -> P Node
 nsFlowSeqEntry n c = do
   e <- env
   p <- pos
-  (pair e p <$> nsFlowPair n c) <|> jsonEntry e p <|> nsFlowNode n c
+  (pair e p <$> nsFlowPair n c) <|> nodeEntry e p
   where
     pair :: Env -> Int -> (Node, Node) -> Node
     pair e p (k, v) = mkNode e p v.endOffset noProps (Mapping Flow [(k, v)])
 
-    jsonEntry :: Env -> Int -> P Node
-    jsonEntry e p = do
-      k <- cFlowJsonNode n c
+    nodeEntry :: Env -> Int -> P Node
+    nodeEntry e p = do
+      k <- nsFlowNode n c
       q <- pos
       let value = optional_ sSeparateInLine >> cNsFlowMapAdjacentValue n c
-      if fitsKey e p q && all (not . isBreak . byteAt e) [p .. q - 1]
+      if isJsonNode k && fitsKey e p q && all (not . isBreak . byteAt e) [p .. q - 1]
         then (pair e p . (k,) <$> value) <|> pure k
         else pure k
+
+    -- The content of c-flow-json-node(n,c).
+    isJsonNode :: Node -> Bool
+    isJsonNode k = case k.content of
+      Sequence Flow _ -> True
+      Mapping Flow _ -> True
+      Scalar SingleQuoted _ -> True
+      Scalar DoubleQuoted _ -> True
+      _ -> False
 
 -- | ns-flow-map-entry(n,c)
 nsFlowMapEntry :: Int -> Ctx -> P (Node, Node)

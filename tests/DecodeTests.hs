@@ -226,6 +226,8 @@ test_nesting = do
   assertEqual "sequences" (Right 100000) (depth <$> decodeText (nested 100000 "x"))
   assertEqual "key" (Right 101) (depth <$> decodeText ("[" <> nested 100 "x" <> ": y]"))
   assertBool "key on two lines" (isLeft (decodeText @Node "[[a,\n b]: c]"))
+  -- A flow sequence at the start of a line is first tried as a key.
+  assertEqual "on two lines" (Right 40) (depth <$> decodeText (nested 40 "x\n"))
 
 test_optionalKeys :: Assertion
 test_optionalKeys = do
