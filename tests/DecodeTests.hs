@@ -334,6 +334,8 @@ test_syntaxErrors = do
   check "duplicate key" (3, 1, "duplicate key \"a\"") "a: 1\nb: 2\na: 3\n"
   check "undefined tag handle" (1, 1, "undefined tag handle !e!") "!e!foo bar\n"
   check "invalid character" (1, 4, "invalid character") "a: \x01\n"
+  check "noncharacter U+FFFE" (1, 4, "invalid character") "a: \xFFFE\n"
+  check "noncharacter U+FFFF" (1, 5, "invalid character") "a: b\xFFFF\n"
 
 test_typeErrors :: Assertion
 test_typeErrors = do

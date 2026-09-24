@@ -73,6 +73,12 @@ prescan e start = go start (if isMarker e start then [start] else [])
                , let w1 = A.unsafeIndex e.array (i + 1)
                , w1 >= 0x80 && w1 <= 0x9F && w1 /= 0x85 ->
                    Left i
+               -- U+FFFE and U+FFFF.
+               | w == 0xEF && i + 2 < e.end
+               , A.unsafeIndex e.array (i + 1) == 0xBF
+               , let w2 = A.unsafeIndex e.array (i + 2)
+               , w2 == 0xBE || w2 == 0xBF ->
+                   Left i
                | otherwise -> go (i + 1) acc
 
 -- | The location and the message of the error for the furthest position at
