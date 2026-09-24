@@ -11,12 +11,17 @@ module Yamlet.Internal.Syntax
 
     -- * Nodes
   , Node(..)
-  , nodeOffset
+  , Content(..)
   , Props(..)
   , noProps
   , Tag(..)
   , ScalarStyle(..)
   , CollectionStyle(..)
+
+    -- * Comments
+  , Comments(..)
+  , noComments
+  , Line(..)
 
     -- * Positions
   , Offset(..)
@@ -35,6 +40,9 @@ data Document = Document
   -- ^ The document starts with a @---@ marker.
   , explicitEnd :: !Bool
   -- ^ The document ends with a @...@ marker.
+  , docComments :: !Comments
+  -- ^ The lines before the directives or the @---@ marker, the comment on the
+  -- line of the marker and the lines at the end of the document.
   , root :: !Node
   }
   deriving stock (Eq, Show, Generic)
@@ -49,21 +57,27 @@ data Version = Version
   deriving anyclass NFData
 
 -- | A node of a document.
-data Node
-  = Scalar !Offset !Props !ScalarStyle !T.Text
-  | Sequence !Offset !Props !CollectionStyle [Node]
-  | Mapping !Offset !Props !CollectionStyle [(Node, Node)]
-  | Alias !Offset !T.Text
+data Node = Node
+  { offset :: !Offset
+  -- ^ The position of the first character of the content.
+  , endOffset :: !Offset
+  -- ^ The position after the last character of the content.
+  , props :: !Props
+  , comments :: !Comments
+  , content :: !Content
+  }
   deriving stock (Eq, Show, Generic)
   deriving anyclass NFData
 
--- | The position of the first character of the node content.
-nodeOffset :: Node -> Offset
-nodeOffset = \case
-  Scalar o _ _ _ -> o
-  Sequence o _ _ _ -> o
-  Mapping o _ _ _ -> o
-  Alias o _ -> o
+-- | The content of a node.
+data Content
+  = Scalar !ScalarStyle !T.Text
+  | Sequence !CollectionStyle [Node]
+  | Mapping !CollectionStyle [(Node, Node)]
+  | Alias !T.Text
+  -- ^ An alias has no properties.
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass NFData
 
 -- | The properties of a node.
 data Props = Props
@@ -101,6 +115,29 @@ data CollectionStyle
   = Block
   | Flow
   deriving stock (Eq, Ord, Show, Enum, Bounded, Generic)
+  deriving anyclass NFData
+
+-- | The comments and the empty lines that belong to a node.
+data Comments = Comments
+  { before :: [Line]
+  -- ^ The lines above the node.
+  , inline :: !(Maybe T.Text)
+  -- ^ The comment at the end of the first line of the node.
+  , after :: [Line]
+  -- ^ The lines after the last entry of a collection.
+  }
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass NFData
+
+noComments :: Comments
+noComments = Comments [] Nothing []
+
+-- | A line of comments. Several empty lines in a row count as one.
+data Line
+  = EmptyLine
+  | Comment !T.Text
+  -- ^ The text after the @#@ and one space.
+  deriving stock (Eq, Show, Generic)
   deriving anyclass NFData
 
 -- | The offset of a byte in the UTF-8 encoded input.

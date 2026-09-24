@@ -11,6 +11,8 @@ A YAML 1.2.2 library written in Haskell, with few dependencies.
   an excerpt of the input. Messages name the kinds of values in plain words,
   e.g. `expected a list, but got an integer`.
 - Mappings keep the order of their keys, on input and on output.
+- The syntax tree keeps the comments and the empty lines, so a program can
+  read a file, change it and write it back with its comments.
 - Floating-point numbers are exact, e.g. `0.1` is exactly one tenth. They
   convert to `Scientific` without loss and to `Double` on request.
 - If a string reads back the same as a plain scalar, the encoder does not
@@ -24,8 +26,8 @@ A YAML 1.2.2 library written in Haskell, with few dependencies.
   class.
 - `Yamlet.Node`: the representation graph, with resolved tags and aliases.
 - `Yamlet.Syntax`: the syntax tree, with styles, anchors and unresolved tags.
-  It has a parser and a renderer that keeps the styles, and it can add empty
-  lines and comments before the entries.
+  It keeps the comments and the empty lines, each at a node that the rules in
+  its documentation choose, and it has a parser and a renderer for it.
 - `Yamlet.Schema`: the rules of the core schema, e.g. to check how a plain
   scalar reads back.
 - `Yamlet.Event`: the parse events of the specification.

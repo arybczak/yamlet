@@ -33,13 +33,13 @@ toEvents docs = StreamStart : foldr document [StreamEnd] docs
       : node doc.root (DocumentEnd doc.explicitEnd : rest)
 
     node :: Node -> [Event] -> [Event]
-    node n rest = case n of
-      Scalar _ props style t -> ScalarEvent props style t : rest
-      Sequence _ props style xs ->
-        SequenceStart props style : foldr node (SequenceEnd : rest) xs
-      Mapping _ props style kvs ->
-        MappingStart props style : foldr pair (MappingEnd : rest) kvs
-      Alias _ name -> AliasEvent name : rest
+    node n rest = case n.content of
+      Scalar style t -> ScalarEvent n.props style t : rest
+      Sequence style xs ->
+        SequenceStart n.props style : foldr node (SequenceEnd : rest) xs
+      Mapping style kvs ->
+        MappingStart n.props style : foldr pair (MappingEnd : rest) kvs
+      Alias name -> AliasEvent name : rest
 
     pair :: (Node, Node) -> [Event] -> [Event]
     pair (k, v) rest = node k (node v rest)

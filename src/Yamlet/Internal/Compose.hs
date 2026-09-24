@@ -24,37 +24,37 @@ compose input doc
   where
     -- Without aliases the anchors do not matter.
     plain :: S.Node -> Either Error Node
-    plain = \case
-      S.Scalar off props style t -> scalar off props style t
-      S.Sequence off props _ xs -> do
+    plain sn = let off = sn.offset; props = sn.props in case sn.content of
+      S.Scalar style t -> scalar off props style t
+      S.Sequence _ xs -> do
         tag <- collectionTag off props seqTag
         ns <- mapM plain xs
         Right $ Node off tag (Sequence ns)
-      S.Mapping off props _ kvs -> do
+      S.Mapping _ kvs -> do
         tag <- collectionTag off props mapTag
         entries <- mapM (\(k, v) -> (,) <$> plain k <*> plain v) kvs
         checkUniqueKeys entries
         Right $ Node off tag (Mapping entries)
-      S.Alias off _ -> Left $ errorAt input off "unexpected alias"
+      S.Alias _ -> Left $ errorAt input off "unexpected alias"
 
     -- An anchor maps to Nothing while the parser composes its node.
     go :: M.Map T.Text (Maybe Node) -> S.Node -> Either Error (Node, M.Map T.Text (Maybe Node))
-    go anchors = \case
-      S.Alias off name -> case M.lookup name anchors of
+    go anchors sn = let off = sn.offset; props = sn.props in case sn.content of
+      S.Alias name -> case M.lookup name anchors of
         Just (Just n) -> Right (Node off n.tag n.value, anchors)
         Just Nothing -> Left $ errorAt input off $
           "the alias *" ++ T.unpack name ++ " refers to a node that contains it"
         Nothing -> Left $ errorAt input off $
           "undefined alias *" ++ T.unpack name
-      S.Scalar off props style t -> do
+      S.Scalar style t -> do
         n <- scalar off props style t
         Right (n, define props n anchors)
-      S.Sequence off props _ xs -> do
+      S.Sequence _ xs -> do
         tag <- collectionTag off props seqTag
         (ns, anchors') <- goList (open props anchors) xs
         let n = Node off tag (Sequence ns)
         Right (n, define props n anchors')
-      S.Mapping off props _ kvs -> do
+      S.Mapping _ kvs -> do
         tag <- collectionTag off props mapTag
         (entries, anchors') <- goPairs (open props anchors) kvs
         checkUniqueKeys entries
@@ -132,10 +132,10 @@ compose input doc
       Nothing -> Right ()
 
 hasAlias :: S.Node -> Bool
-hasAlias = \case
+hasAlias n = case n.content of
   S.Scalar{} -> False
-  S.Sequence _ _ _ xs -> any hasAlias xs
-  S.Mapping _ _ _ kvs -> any (\(k, v) -> hasAlias k || hasAlias v) kvs
+  S.Sequence _ xs -> any hasAlias xs
+  S.Mapping _ kvs -> any (\(k, v) -> hasAlias k || hasAlias v) kvs
   S.Alias{} -> True
 
 -- | The first key that is equal to an earlier one.

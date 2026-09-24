@@ -79,24 +79,25 @@ doubleQuoted t = "\"" <> T.foldr (\c b -> escape c <> b) mempty t <> "\""
     hex :: Int -> Int -> B.Builder
     hex k i = let s = map toUpper (showHex i "") in B.fromString (replicate (k - length s) '0' ++ s)
 
--- | A literal block scalar with the content at the given indentation. The
--- flag allows the keep indicator for trailing empty lines.
-literalBlock :: Bool -> Int -> T.Text -> Maybe B.Builder
+-- | The header and the content lines of a literal block scalar, with the
+-- content at the given indentation. The flag allows the keep indicator for
+-- trailing empty lines.
+literalBlock :: Bool -> Int -> T.Text -> Maybe (B.Builder, B.Builder)
 literalBlock allowKeep indent t = do
   (header, body, trailing) <- blockParts allowKeep t
-  Just $ "|" <> header
-    <> mconcat (map (line indent) (T.splitOn "\n" body))
-    <> B.fromText (T.replicate (trailing - 1) "\n")
+  let content = mconcat (map (line indent) (T.splitOn "\n" body))
+        <> B.fromText (T.replicate (trailing - 1) "\n")
+  Just ("|" <> header, content)
 
--- | A folded block scalar with the content at the given indentation. It has no
--- keep indicator, and each line of the text becomes one line of the output.
-foldedBlock :: Int -> T.Text -> Maybe B.Builder
+-- | The header and the content lines of a folded block scalar, with the
+-- content at the given indentation. It has no keep indicator, and each line of
+-- the text becomes one line of the output.
+foldedBlock :: Int -> T.Text -> Maybe (B.Builder, B.Builder)
 foldedBlock indent t = do
   (header, body, _) <- blockParts False t
   let (leading, rest) = span T.null (T.splitOn "\n" body)
-  Just $ ">" <> header
-    <> mconcat (replicate (length leading) "\n")
-    <> go Nothing (groups rest)
+      content = mconcat (replicate (length leading) "\n") <> go Nothing (groups rest)
+  Just (">" <> header, content)
   where
     -- The lines with content, each with the number of empty lines before it.
     groups :: [T.Text] -> [(Int, T.Text)]

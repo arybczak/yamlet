@@ -214,5 +214,5 @@ scalarText n = case n.value of
 -- | A literal block scalar for a string with line breaks.
 literal :: Int -> T.Text -> Maybe B.Builder
 literal indent t
-  | T.any (== '\n') t = literalBlock True indent t
+  | T.any (== '\n') t = uncurry (<>) <$> literalBlock True indent t
   | otherwise = Nothing

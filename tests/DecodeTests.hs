@@ -135,11 +135,11 @@ test_copies = do
     isCopy (T.Text _ off _) = off == 0
 
     texts :: S.Node -> [T.Text]
-    texts = \case
-      S.Scalar _ props _ t -> t : maybe [] pure props.anchor
-      S.Sequence _ _ _ xs -> concatMap texts xs
-      S.Mapping _ _ _ kvs -> concatMap (\(k, v) -> texts k ++ texts v) kvs
-      S.Alias _ name -> [name]
+    texts n = case n.content of
+      S.Scalar _ t -> t : maybe [] pure n.props.anchor
+      S.Sequence _ xs -> concatMap texts xs
+      S.Mapping _ kvs -> concatMap (\(k, v) -> texts k ++ texts v) kvs
+      S.Alias name -> [name]
 
 -- | JSON is valid YAML, including the escapes that JSON encoders write.
 test_json :: Assertion

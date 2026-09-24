@@ -54,6 +54,7 @@ library
                      Yamlet.Encode
                      Yamlet.Error
                      Yamlet.Event
+                     Yamlet.Internal.Comments
                      Yamlet.Internal.Compose
                      Yamlet.Internal.Emit
                      Yamlet.Internal.Input

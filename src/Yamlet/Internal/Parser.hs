@@ -17,6 +17,7 @@ import Data.Bits
 import Data.ByteString qualified as BS
 import Data.Char
 import Data.Map.Strict qualified as M
+import Data.Maybe
 import Data.Text qualified as T
 import Data.Text.Array qualified as A
 import Data.Text.Encoding qualified as T
@@ -24,6 +25,7 @@ import Data.Text.Internal qualified as T
 import Data.Word
 
 import Yamlet.Error
+import Yamlet.Internal.Comments
 import Yamlet.Internal.Parser.Monad
 import Yamlet.Internal.Syntax
 
@@ -388,47 +390,51 @@ isMarker e i =
 -- a document marker.
 lYamlStream :: [Int] -> P [Document]
 lYamlStream markers0 = do
+  s <- pos
   lDocumentPrefix
-  documents markers0 True
+  documents markers0 True s
   where
-    documents :: [Int] -> Bool -> P [Document]
-    documents markers afterEnd = do
+    -- The last argument is the index where the comments of the next
+    -- document start.
+    documents :: [Int] -> Bool -> Int -> P [Document]
+    documents markers afterEnd prefix = do
       e <- env
       p <- pos
       if | p >= e.end -> pure []
          | isMarker e p && byteAt e p == DOT -> do
              lDocumentSuffix
              lDocumentPrefix
-             documents markers True
-         | isMarker e p -> document markers Nothing defaultHandles
+             documents markers True prefix
+         | isMarker e p -> document markers Nothing defaultHandles prefix
          | afterEnd && byteAt e p == PERCENT -> do
              (version, hs) <- directives
              q <- pos
              unless (isMarker e q && byteAt e q == MINUS) $
                throwAt q "expected a document start marker (---) after the directives"
-             document markers version hs
-         | afterEnd -> bareDocument markers
+             document markers version hs prefix
+         | afterEnd -> bareDocument markers prefix
          | otherwise -> throwAt p "expected a document start marker (---)"
 
-    document :: [Int] -> Maybe Version -> M.Map T.Text T.Text -> P [Document]
-    document markers version hs = do
+    document :: [Int] -> Maybe Version -> M.Map T.Text T.Text -> Int -> P [Document]
+    document markers version hs prefix = do
+      m <- pos
       advance 3
       p <- pos
       e <- env
       let (limit, markers') = nextMarker e markers p
       root <- withEnd limit . withHandles hs $
         lBareDocument <|> (eNode <* sLComments)
-      finishDocument markers' version True limit root
+      finishDocument markers' version prefix (Just m) limit root
 
-    bareDocument :: [Int] -> P [Document]
-    bareDocument markers = do
+    bareDocument :: [Int] -> Int -> P [Document]
+    bareDocument markers prefix = do
       p <- pos
       e <- env
       let (limit, markers') = nextMarker e markers p
       root <- withEnd limit lBareDocument <|> do
         fu <- furthest
         throwUnexpected fu
-      finishDocument markers' Nothing False limit root
+      finishDocument markers' Nothing prefix Nothing limit root
 
     -- The end of the document that starts at the index, and the markers
     -- after it.
@@ -437,8 +443,9 @@ lYamlStream markers0 = do
       m : ms -> (m, m : ms)
       [] -> (e.end, [])
 
-    finishDocument :: [Int] -> Maybe Version -> Bool -> Int -> Node -> P [Document]
-    finishDocument markers version explicitStart limit root = do
+    finishDocument
+      :: [Int] -> Maybe Version -> Int -> Maybe Int -> Int -> Node -> P [Document]
+    finishDocument markers version prefix marker limit root = do
       withEnd limit $ many_ lComment
       e <- env
       p <- pos
@@ -446,18 +453,20 @@ lYamlStream markers0 = do
         fu <- furthest
         throwUnexpected (max fu p)
       let explicitEnd = isMarker e p && byteAt e p == DOT
-          doc = Document
+      when explicitEnd lDocumentSuffix
+      q <- pos
+      let doc = attachComments e prefix marker q Document
             { version = version
-            , explicitStart = explicitStart
+            , explicitStart = isJust marker
             , explicitEnd = explicitEnd
+            , docComments = noComments
             , root = root
             }
       if explicitEnd
         then do
-          lDocumentSuffix
           lDocumentPrefix
-          (doc :) <$> documents markers True
-        else (doc :) <$> documents markers False
+          (doc :) <$> documents markers True q
+        else (doc :) <$> documents markers False q
 
 -- | Stop with an error at the furthest failure.
 throwUnexpected :: Int -> P a
@@ -653,7 +662,7 @@ eScalar :: Props -> P Node
 eScalar props = do
   e <- env
   p <- pos
-  pure $ Scalar (toOffset e p) props Plain T.empty
+  pure $ mkNode e p (toOffset e p) props (Scalar Plain T.empty)
 
 -- | c-ns-properties(n,c)
 cNsProperties :: Int -> Ctx -> P Props
@@ -731,7 +740,9 @@ cNsAliasNode = do
   e <- env
   p <- pos
   char STAR
-  Alias (toOffset e p) <$> nsAnchorName
+  name <- nsAnchorName
+  q <- pos
+  pure $ mkNode e p (toOffset e q) noProps (Alias name)
 
 ----------------------------------------
 -- Flow scalars
@@ -782,7 +793,7 @@ cDoubleQuoted n c props = withScan $ \e p ->
       nextContent :: Int -> Int
       nextContent i = skipWhites e (skipBlankLines e i)
   in case go (p + 1) (p + 1) [] of
-       Done q t -> Done q (Scalar (toOffset e p) props DoubleQuoted t)
+       Done q t -> Done q (mkNode e p (toOffset e q) props (Scalar DoubleQuoted t))
        NoMatch q -> NoMatch q
        Failed q msg -> Failed q msg
 
@@ -822,7 +833,7 @@ cSingleQuoted n c props = withScan $ \e p ->
       nextContent :: Int -> Int
       nextContent i = skipWhites e (skipBlankLines e i)
   in case go (p + 1) (p + 1) [] of
-       Done q t -> Done q (Scalar (toOffset e p) props SingleQuoted t)
+       Done q t -> Done q (mkNode e p (toOffset e q) props (Scalar SingleQuoted t))
        NoMatch q -> NoMatch q
        Failed q msg -> Failed q msg
 
@@ -913,12 +924,12 @@ nsPlain n c props = withScan $ \e p ->
        then NoMatch p
        else
          let q = plainLine e c (p + 1)
-             node = Scalar (toOffset e p) props Plain
+             node end t = mkNode e p (toOffset e end) props (Scalar Plain t)
          in if isKeyCtx c
-              then Done q (node (slice e p q))
+              then Done q (node q (slice e p q))
               else case plainNextLines e n c q of
-                ([], _) -> Done q (node (slice e p q))
-                (ts, r) -> Done r (node (T.concat (slice e p q : ts)))
+                ([], _) -> Done q (node q (slice e p q))
+                (ts, r) -> Done r (node r (T.concat (slice e p q : ts)))
 
 -- | The end of the plain scalar content on the current line.
 plainLine :: Env -> Ctx -> Int -> Int
@@ -978,7 +989,8 @@ cFlowSequence n c props = do
   optional_ $ sSeparate n c
   entries <- flowEntries n c' (nsFlowSeqEntry n c')
   closing c' RBRACKET "expected ',' or ']'"
-  pure $ Sequence (toOffset e p) props Flow entries
+  q <- pos
+  pure $ mkNode e p (toOffset e q) props (Sequence Flow entries)
   where
     c' :: Ctx
     c' = inFlow c
@@ -992,7 +1004,8 @@ cFlowMapping n c props = do
   optional_ $ sSeparate n c
   entries <- flowEntries n c' (nsFlowMapEntry n c')
   closing c' RBRACE "expected ',' or '}'"
-  pure $ Mapping (toOffset e p) props Flow entries
+  q <- pos
+  pure $ mkNode e p (toOffset e q) props (Mapping Flow entries)
   where
     c' :: Ctx
     c' = inFlow c
@@ -1028,7 +1041,7 @@ nsFlowSeqEntry n c = pair <|> nsFlowNode n c
       e <- env
       p <- pos
       (k, v) <- nsFlowPair n c
-      pure $ Mapping (toOffset e p) noProps Flow [(k, v)]
+      pure $ mkNode e p v.endOffset noProps (Mapping Flow [(k, v)])
 
 -- | ns-flow-map-entry(n,c)
 nsFlowMapEntry :: Int -> Ctx -> P (Node, Node)
@@ -1211,9 +1224,15 @@ cLBlockScalar n props = do
         _ -> foldedText lines_
       value = chomp chomping (not (null lines_)) trailing text
       style = if indicator == PIPE then Literal else Folded
+      -- The empty lines after the content are not part of the scalar,
+      -- unless it keeps them.
+      contentEnd = case (chomping, reverse lines_) of
+        (Keep, _) -> r
+        (_, BlockLine _ (T.Text _ o l) : _) -> o + l
+        (_, []) -> q
   setPos r
   lTrailComments indent
-  pure $ Scalar (toOffset e p) props style value
+  pure $ mkNode e p (toOffset e contentEnd) props (Scalar style value)
 
 -- | c-b-block-header(t). Return the chomping and the indentation indicator.
 cBBlockHeader :: Int -> P (Chomping, Maybe Int)
@@ -1359,7 +1378,7 @@ lBlockSequence n props = do
   p <- pos
   x <- cLBlockSeqEntry k
   xs <- many $ sIndent k >> cLBlockSeqEntry k
-  pure $ Sequence (toOffset e p) props Block (x : xs)
+  pure $ mkNode e p (last (x : xs)).endOffset props (Sequence Block (x : xs))
 
 -- | c-l-block-seq-entry(n)
 cLBlockSeqEntry :: Int -> P Node
@@ -1400,7 +1419,7 @@ nsLCompactSequence n = do
   p <- pos
   x <- cLBlockSeqEntry n
   xs <- many $ sIndent n >> cLBlockSeqEntry n
-  pure $ Sequence (toOffset e p) noProps Block (x : xs)
+  pure $ mkNode e p (last (x : xs)).endOffset noProps (Sequence Block (x : xs))
 
 -- | l+block-mapping(n)
 lBlockMapping :: Int -> Props -> P Node
@@ -1412,7 +1431,7 @@ lBlockMapping n props = do
   p <- pos
   x <- nsLBlockMapEntry k
   xs <- many $ sIndent k >> nsLBlockMapEntry k
-  pure $ Mapping (toOffset e p) props Block (x : xs)
+  pure $ mkNode e p (snd (last (x : xs))).endOffset props (Mapping Block (x : xs))
 
 -- | ns-l-block-map-entry(n)
 nsLBlockMapEntry :: Int -> P (Node, Node)
@@ -1461,7 +1480,7 @@ nsLCompactMapping n = do
   p <- pos
   x <- nsLBlockMapEntry n
   xs <- many $ sIndent n >> nsLBlockMapEntry n
-  pure $ Mapping (toOffset e p) noProps Block (x : xs)
+  pure $ mkNode e p (snd (last (x : xs))).endOffset noProps (Mapping Block (x : xs))
 
 ----------------------------------------
 -- Block nodes
@@ -1518,3 +1537,13 @@ sLBlockCollection n c = do
     oneProperty :: P Props
     oneProperty = (Props Nothing <$> cNsTagProperty)
               <|> ((\a -> Props (Just a) NoTag) <$> cNsAnchorProperty)
+
+-- | A node without comments from the given index to the given offset.
+mkNode :: Env -> Int -> Offset -> Props -> Content -> Node
+mkNode e p end props c = Node
+  { offset = toOffset e p
+  , endOffset = end
+  , props = props
+  , comments = noComments
+  , content = c
+  }
