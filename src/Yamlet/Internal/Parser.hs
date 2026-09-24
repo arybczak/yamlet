@@ -608,6 +608,8 @@ directives = go Nothing defaultHandles M.empty
           skipWhile isDecDigit
           r <- pos
           when (r == q) $ throwAt p "invalid %YAML directive"
+          -- A number beyond the range of Int wraps around. The worst effect
+          -- is a wrong version for an absurd directive.
           pure . read . T.unpack $ slice e q r
 
     tagDirective :: Int -> P (T.Text, T.Text)
