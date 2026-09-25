@@ -529,6 +529,8 @@ test_syntaxErrors = do
     (1, 14, "unexpected 't' after the end of a quoted scalar")
     "key: \"value\" trailing\n"
   check "content after a flow value" (1, 12, "unexpected 'i' after the end of a flow collection") "x: { y: z }in: valid\n"
+  check "letter beyond ASCII" (1, 4, "unexpected 'é' after the end of a flow collection") "[a]é\n"
+  check "character that cannot be shown" (1, 4, "unexpected U+200B after the end of a flow collection") "[a]\x200B\n"
   check
     "comment line in a plain scalar"
     (3, 3, "a comment ends a plain scalar, so this line cannot continue it")

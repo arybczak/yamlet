@@ -9,6 +9,7 @@
 module Yamlet.Internal.Parser.Hints
   ( unexpected
   , mistake
+  , codePointName
   ) where
 
 import Control.Monad
@@ -17,6 +18,7 @@ import Data.Maybe
 import Data.Text qualified as T
 import Data.Text.Array qualified as A
 import Data.Word
+import Numeric
 
 import Yamlet.Internal.Parser.Chars
 import Yamlet.Internal.Parser.Monad
@@ -408,7 +410,18 @@ isListItem e i = byteAt e i == MINUS && (let b = byteAt e (i + 1) in b == 0 || i
 unexpectedChar :: Env -> Int -> String
 unexpectedChar e i
   | w < 0x80 = "unexpected " ++ show (chr (fromIntegral w))
-  | otherwise = "unexpected " ++ show (T.head (slice e i e.end))
+  | isPrint c = "unexpected '" ++ [c] ++ "'"
+  | otherwise = "unexpected " ++ codePointName c
   where
     w :: Word8
     w = byteAt e i
+
+    c :: Char
+    c = T.head (slice e i e.end)
+
+-- | The code point of a character, e.g. U+0007, for a character that an error
+-- cannot show.
+codePointName :: Char -> String
+codePointName c =
+  let hex = map toUpper (showHex (ord c) "")
+  in "U+" ++ replicate (4 - length hex) '0' ++ hex
