@@ -111,9 +111,10 @@ prescan e start = go start (if isMarker e start then [start] else []) []
 unexpected :: Env -> Int -> (Int, String)
 unexpected e i = case indentationTab (i - 1) Nothing of
   Just tab -> (tab, "tabs cannot be used for indentation")
+  Nothing | Just r <- blockMistake e i -> r
   Nothing -> (i,) $ case byteAt e i of
-    0 -> "unexpected end of input"
     w
+      | w == 0 -> "unexpected end of input"
       | indented -> maybe "unexpected indentation" id (indentationMistake e i)
       | isBreak w -> "unexpected end of line"
       | w == COLON && valueColon ->
@@ -181,44 +182,25 @@ mistake e i
 -- mapping entries or the other way round, or a line of a block scalar with
 -- too little indentation.
 indentationMistake :: Env -> Int -> Maybe String
-indentationMistake e i = go (lineStart i)
+indentationMistake e i = go (lineStart e i)
   where
     column :: Int
-    column = i - lineStart i
+    column = i - lineStart e i
 
     -- Look at the lines above, up to the first line with less indentation.
     go :: Int -> Maybe String
-    go start
-      | start <= e.base = Nothing
-      | otherwise =
-          let prev = lineStart (breakStart (start - 1))
-              k = skipSpaces e prev
-              indent = k - prev
-              b = byteAt e k
-          in if
-               | b == 0 || isBreak b || b == HASH -> go prev
-               | indent > column -> go prev
-               | indent < column ->
-                   if endsWithHeader k
-                     then Just "unexpected indentation, the line has less indentation than the block scalar above it"
-                     else Nothing
-               | isItem k && not (isItem i) -> Just "unexpected key among list items"
-               | not (isItem k) && isItem i -> Just "unexpected list item among mapping entries"
-               | otherwise -> Nothing
-
-    lineStart :: Int -> Int
-    lineStart j
-      | j > e.base && not (isBreak (byteBefore e j)) = lineStart (j - 1)
-      | otherwise = j
-
-    -- The start of the line break that ends at the index, e.g. of CR LF.
-    breakStart :: Int -> Int
-    breakStart j
-      | j > e.base && byteBefore e j == CR && byteAt e j == LF = j - 1
-      | otherwise = j
-
-    isItem :: Int -> Bool
-    isItem j = byteAt e j == MINUS && (let b = byteAt e (j + 1) in b == 0 || isWhite b || isBreak b)
+    go start = do
+      k <- lineAbove e start
+      let indent = k - lineStart e k
+      if
+        | indent > column -> go (lineStart e k)
+        | indent < column ->
+            if endsWithHeader k
+              then Just "unexpected indentation, the line has less indentation than the block scalar above it"
+              else Nothing
+        | isListItem e k && not (isListItem e i) -> Just "unexpected key among list items"
+        | not (isListItem e k) && isListItem e i -> Just "unexpected list item among mapping entries"
+        | otherwise -> Nothing
 
     -- The line from the index ends with a block scalar header, e.g. "key: |-".
     endsWithHeader :: Int -> Bool
@@ -246,6 +228,86 @@ indentationMistake e i = go (lineStart i)
     skipIndicators j =
       let b = byteBefore e j
       in if b == MINUS || b == 0x2B || isDecDigit b then skipIndicators (j - 1) else j
+
+-- | The error for a line of a block collection that lacks the space after
+-- "-" or the ":" after a key, if the entries above it at the same position
+-- are list items or mapping entries.
+blockMistake :: Env -> Int -> Maybe (Int, String)
+blockMistake e i = do
+  guard $ start < i
+  k <- entryAbove (lineStart e i)
+  if
+    | isListItem e k && byteAt e start == MINUS && i == start + 1 ->
+        Just (i, "expected a space after '-'")
+    | not (isListItem e k) && (w == 0 || isBreak w) ->
+        Just $ case filter tightColon [start .. i - 1] of
+          colon : _ -> (colon + 1, "expected a space after ':'")
+          [] -> (i, "expected ':' after the key")
+    | otherwise -> Nothing
+  where
+    w :: Word8
+    w = byteAt e i
+
+    start :: Int
+    start = skipSpaces e (lineStart e i)
+
+    column :: Int
+    column = start - lineStart e i
+
+    -- The closest entry above that starts at the column. An entry can follow
+    -- "- " on its line, as in "- key: value".
+    entryAbove :: Int -> Maybe Int
+    entryAbove from = do
+      k <- lineAbove e from
+      let indent = k - lineStart e k
+          entry = skipItems k
+      if
+        | indent == column -> Just k
+        | entry - lineStart e k == column -> Just entry
+        | indent < column -> Nothing
+        | otherwise -> entryAbove (lineStart e k)
+
+    skipItems :: Int -> Int
+    skipItems j = if isListItem e j then skipItems (skipWhites e (j + 1)) else j
+
+    -- A colon before a word, as in "key:value", but not in "http://".
+    tightColon :: Int -> Bool
+    tightColon j = byteAt e j == COLON && startsWord (byteAt e (j + 1))
+
+    startsWord :: Word8 -> Bool
+    startsWord b =
+      (b < 0x80 && isAlphaNum (chr (fromIntegral b)))
+        || b == SQUOTE
+        || b == DQUOTE
+        || b == LBRACKET
+        || b == LBRACE
+
+-- | The start of the line that contains the index.
+lineStart :: Env -> Int -> Int
+lineStart e i
+  | i > e.base && not (isBreak (byteBefore e i)) = lineStart e (i - 1)
+  | otherwise = i
+
+-- | The first content of the closest line above the line that starts at the
+-- index. Blank lines and comment lines do not count.
+lineAbove :: Env -> Int -> Maybe Int
+lineAbove e start
+  | start <= e.base = Nothing
+  | otherwise =
+      let prev = lineStart e (breakStart (start - 1))
+          k = skipSpaces e prev
+          b = byteAt e k
+      in if isBreak b || b == HASH then lineAbove e prev else Just k
+  where
+    -- The start of the line break that ends at the index, e.g. of CR LF.
+    breakStart :: Int -> Int
+    breakStart j
+      | j > e.base && byteBefore e j == CR && byteAt e j == LF = j - 1
+      | otherwise = j
+
+-- | A block sequence entry starts at the index.
+isListItem :: Env -> Int -> Bool
+isListItem e i = byteAt e i == MINUS && (let b = byteAt e (i + 1) in b == 0 || isWhite b || isBreak b)
 
 unexpectedChar :: Env -> Int -> String
 unexpectedChar e i

@@ -374,7 +374,10 @@ test_syntaxErrors = do
     "badly indented quoted line"
     (2, 1, "invalid indentation of a line in a single-quoted scalar")
     "name: 'abc\nnext'\n"
-  check "end of line" (2, 8, "unexpected end of line") "- key: value\n  other\n"
+  check "missing colon" (2, 4, "expected ':' after the key") "a: 1\nb 2\nc: 3\n"
+  check "missing colon in a list item" (2, 8, "expected ':' after the key") "- key: value\n  other\n"
+  check "missing space after a colon" (2, 3, "expected a space after ':'") "a: 1\nb:2\n"
+  check "missing space after a dash" (2, 2, "expected a space after '-'") "- a\n-b\n"
   check "tab indentation" (2, 1, "tabs cannot be used for indentation") "a:\n\tb: 1\n"
   check "unterminated string" (1, 6, "unterminated double-quoted scalar") "key: \"abc\n"
   check "flow sequence before a key" (1, 6, "unterminated flow sequence") "key: [a, b\nc: d\n"
