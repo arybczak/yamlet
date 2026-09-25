@@ -412,6 +412,9 @@ test_syntaxErrors = do
     "[a, `b`]\n"
   check "key among list items" (5, 3, "unexpected key among list items") "a:\n  - x\n\n  # c\n  b: 1\n"
   check "list item among keys" (3, 3, "unexpected list item among mapping entries") "a:\n  b: 1\n  - x\n"
+  check "list item among top keys" (2, 1, "unexpected list item among mapping entries") "a: 1\n- b\n"
+  check "key among top list items" (2, 1, "unexpected key among list items") "- a\nb: 1\n"
+  check "brace after a list item" (2, 1, "unexpected '}'") "- a\n}\n"
   check
     "line of a block scalar"
     (3, 3, "unexpected indentation, the line has less indentation than the block scalar above it")

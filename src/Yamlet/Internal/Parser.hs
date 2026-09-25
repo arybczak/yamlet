@@ -117,6 +117,7 @@ unexpected e i = case indentationTab (i - 1) Nothing of
       | w == 0 -> "unexpected end of input"
       | indented -> maybe "unexpected indentation" id (indentationMistake e i)
       | isBreak w -> "unexpected end of line"
+      | i > e.base && isBreak (byteBefore e i), Just msg <- indentationMistake e i -> msg
       | w == COLON && valueColon ->
           "unexpected ':', quote the value if it contains \": \""
       | Just msg <- mistake e i -> msg
@@ -202,7 +203,8 @@ indentationMistake e i = go (lineStart e i)
             if endsWithHeader k
               then Just "unexpected indentation, the line has less indentation than the block scalar above it"
               else Nothing
-        | isListItem e k && not (isListItem e i) -> Just "unexpected key among list items"
+        | isListItem e k && not (isListItem e i) && not (isFlowIndicator (byteAt e i)) ->
+            Just "unexpected key among list items"
         | not (isListItem e k) && isListItem e i -> Just "unexpected list item among mapping entries"
         | otherwise -> Nothing
 
