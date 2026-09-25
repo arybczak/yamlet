@@ -424,7 +424,7 @@ test_emptyStream = do
 
 test_encodings :: Assertion
 test_encodings = do
-  let text = "key: zażółć\n" :: T.Text
+  let text = "key: zażółć \x1F600\n" :: T.Text
   assertEqual "UTF-8 with BOM" (Right text) (decodeInput ("\xEF\xBB\xBF" <> T.encodeUtf8 text) >>= stripBom)
   assertEqual "UTF-16LE" (Right text) (decodeInput (T.encodeUtf16LE text))
   assertEqual "UTF-16BE" (Right text) (decodeInput (T.encodeUtf16BE text))
