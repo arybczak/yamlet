@@ -119,6 +119,9 @@ prescan e start = go start (if isMarker e start then [start] else []) []
 unexpected :: Env -> Int -> (Int, String)
 unexpected e i = case indentationTab (i - 1) Nothing of
   Just tab -> (tab, "tabs cannot be used for indentation")
+  Nothing
+    | Just start <- propertiesLine ->
+        (start, "an anchor or a tag cannot be on a line of its own here, write it after the key or the '-'")
   Nothing | Just r <- blockMistake e i -> r
   Nothing
     | Just colon <- aliasColon ->
@@ -146,6 +149,24 @@ unexpected e i = case indentationTab (i - 1) Nothing of
       | Just msg <- mistake e i -> msg
       | otherwise -> unexpectedChar e i
   where
+    -- The start of the line of the index if the line has only anchors and
+    -- tags, as in "&anchor".
+    propertiesLine :: Maybe Int
+    propertiesLine =
+      let start = skipSpaces e (lineStart e i)
+      in if onlyProperties start then Just start else Nothing
+      where
+        onlyProperties :: Int -> Bool
+        onlyProperties j =
+          let b = byteAt e j
+              next = skipWhites e (wordEnd j)
+              b' = byteAt e next
+          in (b == AMP || b == EXCL)
+               && (b' == 0 || isBreak b' || b' == HASH || onlyProperties next)
+
+        wordEnd :: Int -> Int
+        wordEnd j = if isNsChar (byteAt e j) then wordEnd (j + 1) else j
+
     -- The ':' that ends an alias name before the index, as in "*x: 1". An
     -- alias name can contain ':'.
     aliasColon :: Maybe Int

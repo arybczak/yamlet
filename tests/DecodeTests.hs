@@ -369,6 +369,14 @@ test_syntaxErrors = do
     "mapping in a plain scalar"
     (1, 11, "unexpected ':', quote the value if it contains \": \"")
     "key: value: other\n"
+  check
+    "anchor on its own line in a sequence"
+    (2, 1, "an anchor or a tag cannot be on a line of its own here, write it after the key or the '-'")
+    "- item1\n&node\n- item2\n"
+  check
+    "tag on its own line after a key"
+    (2, 1, "an anchor or a tag cannot be on a line of its own here, write it after the key or the '-'")
+    "key: &x\n!!map\n  a: b\n"
   check "flow key on two lines" (2, 2, "unexpected ':', a key must be on a single line") "[23\n]: 42\n"
   check "quoted key on two lines" (2, 3, "a key must be on a single line") "a: 1\n\"c\n d\": 1\n"
   check
