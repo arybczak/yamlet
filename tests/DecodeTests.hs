@@ -13,6 +13,7 @@ import Data.Set qualified as Set
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
 import Data.Text.Internal qualified as T
+import Data.Time
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
@@ -31,6 +32,7 @@ decodeTests =
     , testCase "plain scalars" test_plainSafe
     , testCase "record" test_record
     , testCase "containers" test_containers
+    , localOption (mkTimeout 10000000) $ testCase "time" test_time
     , testCase "copies" test_copies
     , testCase "JSON" test_json
     , testCase "aliases" test_aliases
@@ -206,6 +208,42 @@ test_containers = do
     "tuple of 10 with the wrong size"
     (Just (1, 1, "expected a list of 10 elements, but got 1"))
     (errorOf (decodeText @(Int, Int, Int, Int, Int, Int, Int, Int, Int, Int) "[1]"))
+
+test_time :: Assertion
+test_time = do
+  assertEqual "day" (Right (fromGregorian 2026 9 25)) (decodeText "2026-09-25")
+  assertEqual
+    "invalid day"
+    (Just (1, 1, "expected a date such as 2026-09-25"))
+    (errorOf (decodeText @Day "2026-02-30"))
+  assertEqual "short year" (Just (1, 1, "expected a date such as 2026-09-25")) (errorOf (decodeText @Day "26-09-25"))
+  assertEqual "time without seconds" (Right (TimeOfDay 12 30 0)) (decodeText "12:30")
+  assertEqual "time with a fraction" (Right (TimeOfDay 12 30 5.25)) (decodeText "12:30:05.25")
+  assertEqual "invalid time" (Just (1, 1, "expected a time such as 12:30:00")) (errorOf (decodeText @TimeOfDay "24:00"))
+  let noon = LocalTime (fromGregorian 2026 9 25) (TimeOfDay 12 30 0)
+  assertEqual "local time with T" (Right noon) (decodeText "2026-09-25T12:30:00")
+  assertEqual "local time with a space" (Right noon) (decodeText "2026-09-25 12:30")
+  let utcNoon = UTCTime (fromGregorian 2026 9 25) (12 * 3600 + 30 * 60)
+  assertEqual "UTC time" (Right utcNoon) (decodeText "2026-09-25T12:30:00Z")
+  assertEqual "UTC time from an offset" (Right utcNoon) (decodeText "2026-09-25T14:30:00+02:00")
+  assertEqual "offset without a colon" (Right utcNoon) (decodeText "2026-09-25T14:30:00 +0200")
+  assertEqual "offset in hours" (Right utcNoon) (decodeText "2026-09-25T10:30:00-02")
+  assertEqual
+    "time without a time zone"
+    (Just (1, 1, "expected a date, a time and a time zone such as 2026-09-25T12:30:00Z"))
+    (errorOf (decodeText @UTCTime "2026-09-25T12:30:00"))
+  assertEqual
+    "zoned time"
+    (Right (noon, 120))
+    ((\z -> (zonedTimeToLocalTime z, timeZoneMinutes (zonedTimeZone z))) <$> decodeText "2026-09-25T12:30:00+02:00")
+  assertEqual "duration" (Right (1.5 :: NominalDiffTime)) (decodeText "1.5")
+  assertEqual "whole duration" (Right (60 :: DiffTime)) (decodeText "60")
+  assertEqual "picosecond" (Right (picosecondsToDiffTime 1)) (decodeText "1e-12")
+  assertEqual "tiny duration" (Right (0 :: DiffTime)) (decodeText "1e-1000000000")
+  assertEqual
+    "huge duration"
+    (Just (1, 1, "the duration is out of range"))
+    (errorOf (decodeText @NominalDiffTime "1e1000000000"))
 
 test_record :: Assertion
 test_record = do

@@ -7,6 +7,7 @@ import Data.Scientific qualified as Sci
 import Data.Sequence qualified as Seq
 import Data.Set qualified as Set
 import Data.Text qualified as T
+import Data.Time
 import Test.QuickCheck
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -26,6 +27,7 @@ encodeTests =
     , testCase "tags" test_tags
     , testCase "syntax tree" test_syntax
     , testCase "containers" test_containers
+    , testCase "time" test_time
     , testProperty "round trip" prop_roundTrip
     , testProperty "syntax round trip" prop_syntaxRoundTrip
     ]
@@ -36,12 +38,27 @@ test_containers = do
   assertEqual "int set" "- 1\n- 2\n- 3\n" (encodeText (IS.fromList [3, 1, 2]))
   assertEqual "left" "Left: 1\n" (encodeText (Left @Int @T.Text 1))
   assertEqual "right" "Right: a\n" (encodeText (Right @Int @T.Text "a"))
-  let roundTrip :: (Eq a, Show a, ToYAML a, FromYAML a) => String -> a -> Assertion
-      roundTrip preface x = assertEqual preface (Right x) (decodeText (encodeText x))
   roundTrip "int map" (IM.fromList [(1, "a"), (-2, "b" :: T.Text)])
   roundTrip "sequence" (Seq.fromList [1, 2, 3 :: Int])
   roundTrip "either" [Left 1, Right "a" :: Either Int T.Text]
   roundTrip "tuple of 10" (1 :: Int, 'a', True, "b" :: T.Text, 2.5 :: Double, [1 :: Int], Just 'c', (), 'd', -1 :: Int)
+
+test_time :: Assertion
+test_time = do
+  let noon = LocalTime (fromGregorian 2026 9 25) (TimeOfDay 12 30 5.25)
+  assertEqual "day" "2026-09-25\n" (encodeText (fromGregorian 2026 9 25))
+  assertEqual "time" "12:30:00\n" (encodeText (TimeOfDay 12 30 0))
+  assertEqual "local time" "2026-09-25T12:30:05.25\n" (encodeText noon)
+  assertEqual "UTC time" "2026-09-25T12:30:00Z\n" (encodeText (UTCTime (fromGregorian 2026 9 25) (12 * 3600 + 30 * 60)))
+  assertEqual "zoned time" "2026-09-25T12:30:05.25-02:30\n" (encodeText (ZonedTime noon (minutesToTimeZone (-150))))
+  assertEqual "duration" "1.5\n" (encodeText (1.5 :: NominalDiffTime))
+  roundTrip "local time" noon
+  roundTrip "UTC time" (UTCTime (fromGregorian (-44) 3 15) 0.000000000001)
+  roundTrip "diff time" (picosecondsToDiffTime 123456789)
+
+-- | Encoding a value and decoding the result gives the same value.
+roundTrip :: (Eq a, Show a, ToYAML a, FromYAML a) => String -> a -> Assertion
+roundTrip preface x = assertEqual preface (Right x) (decodeText (encodeText x))
 
 test_blockStyle :: Assertion
 test_blockStyle = assertEqual "output" expected (encodeText value)

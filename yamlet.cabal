@@ -46,6 +46,7 @@ library
                     , deepseq    >= 1.4
                     , scientific >= 0.3.7
                     , text       >= 2.0
+                    , time       >= 1.9.1
 
     hs-source-dirs:  src
 
@@ -64,6 +65,7 @@ library
                      Yamlet.Internal.Render
                      Yamlet.Internal.Schema
                      Yamlet.Internal.Syntax
+                     Yamlet.Internal.Time
                      Yamlet.Node
                      Yamlet.Schema
                      Yamlet.Syntax
@@ -88,6 +90,7 @@ test-suite test
                     , tasty-quickcheck
                     , QuickCheck
                     , text
+                    , time
                     , vector
 
     hs-source-dirs: tests

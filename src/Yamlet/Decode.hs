@@ -36,6 +36,7 @@ module Yamlet.Decode
   ) where
 
 import Control.Monad
+import Data.Fixed
 import Data.Int
 import Data.IntMap.Strict qualified as IM
 import Data.IntSet qualified as IS
@@ -47,10 +48,12 @@ import Data.Sequence qualified as Seq
 import Data.Set qualified as Set
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
+import Data.Time
 import Data.Word
 import Numeric.Natural
 
 import Yamlet.Internal.Schema
+import Yamlet.Internal.Time
 import Yamlet.Node
 
 -- | A parser of nodes. Its errors point to the node that the parser works on,
@@ -344,6 +347,45 @@ instance FromYAML Double where
 
 instance FromYAML Sci.Scientific where
   parseYAML = withScientific pure
+
+-- | @YYYY-MM-DD@, e.g. @2026-09-25@.
+instance FromYAML Day where
+  parseYAML = withText $ maybe (fail "expected a date such as 2026-09-25") pure . parseDay
+
+-- | @HH:MM@, with optional seconds and a fraction of a second, e.g.
+-- @12:30:05.25@.
+instance FromYAML TimeOfDay where
+  parseYAML = withText $ maybe (fail "expected a time such as 12:30:00") pure . parseTimeOfDay
+
+-- | A date and a time, separated by @T@ or a space, e.g.
+-- @2026-09-25T12:30:00@.
+instance FromYAML LocalTime where
+  parseYAML =
+    withText $ maybe (fail "expected a date and a time such as 2026-09-25T12:30:00") pure . parseLocalTime
+
+-- | A date, a time and a time zone, e.g. @2026-09-25T12:30:00+02:00@. The
+-- time zone is @Z@, @+HH:MM@, @+HHMM@ or @+HH@.
+instance FromYAML ZonedTime where
+  parseYAML = withText $ maybe (fail zonedTimeMismatch) pure . parseZonedTime
+
+-- | Like 'ZonedTime', converted to UTC.
+instance FromYAML UTCTime where
+  parseYAML = withText $ maybe (fail zonedTimeMismatch) pure . parseUTCTime
+
+-- | A number of seconds, rounded down to a picosecond.
+instance FromYAML NominalDiffTime where
+  parseYAML = withScientific $ \s -> secondsToNominalDiffTime . MkFixed <$> duration s
+
+-- | A number of seconds, rounded down to a picosecond.
+instance FromYAML DiffTime where
+  parseYAML = withScientific $ \s -> picosecondsToDiffTime <$> duration s
+
+zonedTimeMismatch :: String
+zonedTimeMismatch = "expected a date, a time and a time zone such as 2026-09-25T12:30:00Z"
+
+-- | The picoseconds in a number of seconds.
+duration :: Sci.Scientific -> Parser Integer
+duration = maybe (fail "the duration is out of range") pure . picoseconds
 
 -- | The nearest float. A conversion by way of 'Double' could round twice.
 instance FromYAML Float where

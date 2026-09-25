@@ -11,6 +11,7 @@ module Yamlet.Encode
   ) where
 
 import Data.Containers.ListUtils
+import Data.Fixed
 import Data.Foldable
 import Data.Int
 import Data.IntMap.Strict qualified as IM
@@ -24,10 +25,12 @@ import Data.Set qualified as Set
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Builder qualified as B
+import Data.Time
 import Data.Word
 import Numeric.Natural
 
 import Yamlet.Internal.Emit
+import Yamlet.Internal.Time
 import Yamlet.Node
 import Yamlet.Schema
 import Yamlet.Syntax qualified as S
@@ -71,6 +74,20 @@ instance ToYAML Word64 where toYAML = node . Int . toInteger
 instance ToYAML Double where toYAML = node . Float . doubleToFloatValue
 instance ToYAML Float where toYAML = node . Float . floatToFloatValue
 instance ToYAML Sci.Scientific where toYAML = node . Float . Finite
+instance ToYAML Day where toYAML = node . String . formatDay
+instance ToYAML TimeOfDay where toYAML = node . String . formatTimeOfDay
+instance ToYAML LocalTime where toYAML = node . String . formatLocalTime
+instance ToYAML ZonedTime where toYAML = node . String . formatZonedTime
+instance ToYAML UTCTime where toYAML = node . String . formatUTCTime
+
+-- | A number of seconds.
+instance ToYAML NominalDiffTime where
+  toYAML d = let MkFixed ps = nominalDiffTimeToSeconds d in node (Float (Finite (Sci.scientific ps (-12))))
+
+-- | A number of seconds.
+instance ToYAML DiffTime where
+  toYAML d = node (Float (Finite (Sci.scientific (diffTimeToPicoseconds d) (-12))))
+
 instance ToYAML T.Text where toYAML = node . String
 instance ToYAML TL.Text where toYAML = node . String . TL.toStrict
 
