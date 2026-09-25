@@ -415,6 +415,11 @@ test_syntaxErrors = do
   check "list item among top keys" (2, 1, "unexpected list item among mapping entries") "a: 1\n- b\n"
   check "key among top list items" (2, 1, "unexpected key among list items") "- a\nb: 1\n"
   check "brace after a list item" (2, 1, "unexpected '}'") "- a\n}\n"
+  check "text after a block scalar header" (1, 6, "the content of a block scalar starts on the next line") "s: | text\n"
+  check
+    "zero indentation indicator"
+    (1, 5, "the indentation indicator of a block scalar must be from 1 to 9")
+    "s: |0\n  x\n"
   check "list on the line of its key" (1, 4, "unexpected '-', a list cannot start on the line of its key") "a: - b\n"
   check
     "line of a block scalar"

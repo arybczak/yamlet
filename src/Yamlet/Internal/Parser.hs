@@ -1620,7 +1620,15 @@ cBBlockHeader p = do
         | Just m <- indentOf a = (Clip, Just m, 1)
         | otherwise = (Clip, Nothing, 0)
   advance k
-  sBComment <|> throwAt p "invalid block scalar header"
+  e <- env
+  q <- pos
+  let content = skipWhites e q
+  sBComment <|> if
+    | isDecDigit (byteAt e q) ->
+        throwAt q "the indentation indicator of a block scalar must be from 1 to 9"
+    | content > q && isNsChar (byteAt e content) ->
+        throwAt content "the content of a block scalar starts on the next line"
+    | otherwise -> throwAt p "invalid block scalar header"
   pure (chomping, indent)
   where
     chompingOf :: Word8 -> Maybe Chomping
