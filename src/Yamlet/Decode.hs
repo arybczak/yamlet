@@ -250,18 +250,36 @@ p .!= def = maybe def id <$> p
 infixl 9 .:, .:?, .:!
 infixl 8 .!=
 
--- | Fail at the first key that is not in the list.
+-- | Fail at the first key that is not in the list. If a key in the list is
+-- close to the unknown key, e.g. "host" to "hots", the error suggests it.
 rejectUnknownKeys :: [T.Text] -> Object -> Parser ()
 rejectUnknownKeys known o = forM_ o.entries $ \(k, _) -> case k.value of
   String t
     | t `elem` known -> pure ()
-    | otherwise ->
-        failAt k $
-          "unknown key "
-            ++ show t
-            ++ ", expected one of: "
-            ++ L.intercalate ", " (map T.unpack known)
+    | otherwise -> failAt k $ "unknown key " ++ show t ++ case suggestion (T.unpack t) of
+        Just s -> ", did you mean " ++ show s ++ "?"
+        Nothing -> ", expected one of: " ++ L.intercalate ", " (map T.unpack known)
   _ -> typeMismatch "a string" k
+  where
+    suggestion :: String -> Maybe T.Text
+    suggestion t =
+      case L.sortOn fst [(d, s) | s <- known, let d = distance t (T.unpack s), d <= 2, d < length t] of
+        (_, s) : _ -> Just s
+        [] -> Nothing
+
+    -- The Levenshtein distance: the number of characters to insert, delete
+    -- or change. After i characters of xs, the row holds the distance from
+    -- them to each prefix of ys.
+    distance :: String -> String -> Int
+    distance xs ys = last (L.foldl' nextRow [0 .. length ys] (zip [1 ..] xs))
+      where
+        nextRow :: [Int] -> (Int, Char) -> [Int]
+        nextRow row (i, x) = scanl cell i (zip3 ys row (drop 1 row))
+          where
+            -- The distances to the left, diagonally above and above.
+            cell :: Int -> (Char, Int, Int) -> Int
+            cell left (y, diagonal, above) =
+              minimum [left + 1, above + 1, diagonal + if x == y then 0 else 1]
 
 ----------------------------------------
 -- Class

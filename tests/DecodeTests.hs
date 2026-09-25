@@ -549,7 +549,11 @@ test_keyErrors = do
     (errorOf (decodeText @Config "jobs: 1\n"))
   assertEqual
     "unknown key"
-    (Just (2, 1, "unknown key \"job\", expected one of: name, paths, jobs"))
+    (Just (2, 1, "unknown key \"other\", expected one of: name, paths, jobs"))
+    (errorOf (decodeText @Config "name: x\nother: 1\n"))
+  assertEqual
+    "unknown key close to a known one"
+    (Just (2, 1, "unknown key \"job\", did you mean \"jobs\"?"))
     (errorOf (decodeText @Config "name: x\njob: 1\n"))
   let lookupError :: T.Text -> T.Text -> Maybe String
       lookupError key input = case runParser (withMapping $ \o -> (.:) @T.Text o key) <$> decodeText input of
