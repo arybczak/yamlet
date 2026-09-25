@@ -32,7 +32,7 @@ import Data.Sequence qualified as Seq
 import Data.Set qualified as Set
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
-import Data.Text.Lazy.Builder qualified as B
+import Data.Text.Builder.Linear qualified as B
 import Data.Time
 import Data.Time.Calendar.Month
 import Data.Time.Calendar.Quarter
@@ -384,7 +384,7 @@ instance
 -- | Render documents in the block style. Documents after the first one start
 -- with a @---@ marker.
 renderDocuments :: [Node] -> T.Text
-renderDocuments docs = TL.toStrict . B.toLazyText . mconcat $ zipWith document [0 :: Int ..] docs
+renderDocuments docs = B.runBuilder . mconcat $ zipWith document [0 :: Int ..] docs
   where
     document :: Int -> Node -> B.Builder
     document i n
@@ -495,7 +495,7 @@ implicitKey k = case k.value of
   Sequence _ -> Nothing
   Mapping _ -> Nothing
   _
-    | TL.length (B.toLazyText key) > 1024 -> Nothing
+    | T.length (B.runBuilder key) > 1024 -> Nothing
     | otherwise -> Just key
   where
     key :: B.Builder

@@ -25,7 +25,7 @@ import Data.ByteString qualified as BS
 import Data.Char
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
-import Data.Text.Lazy.Builder qualified as B
+import Data.Text.Builder.Linear qualified as B
 import Data.Word
 import Numeric
 
@@ -80,13 +80,13 @@ doubleQuoted t = "\"" <> T.foldr (\c b -> escape c <> b) mempty t <> "\""
       '\r' -> "\\r"
       '\0' -> "\\0"
       c
-        | isPrintable c -> B.singleton c
+        | isPrintable c -> B.fromChar c
         | ord c <= 0xFF -> "\\x" <> hex 2 (ord c)
         | ord c <= 0xFFFF -> "\\u" <> hex 4 (ord c)
         | otherwise -> "\\U" <> hex 8 (ord c)
 
     hex :: Int -> Int -> B.Builder
-    hex k i = let s = map toUpper (showHex i "") in B.fromString (replicate (k - length s) '0' ++ s)
+    hex k i = let s = map toUpper (showHex i "") in B.fromText (T.pack (replicate (k - length s) '0' ++ s))
 
 -- | The header and the content lines of a literal block scalar, with the
 -- content at the given indentation. The flag allows the keep indicator for
@@ -210,7 +210,7 @@ tagDirective :: Char -> B.Builder
 tagDirective c = "%TAG " <> handleText c <> " " <> percentEscape c <> "\n"
 
 handleText :: Char -> B.Builder
-handleText c = "!t" <> B.fromString (showHex (ord c) "") <> "!"
+handleText c = "!t" <> B.fromText (T.pack (showHex (ord c) "")) <> "!"
 
 -- | A global tag that a verbatim tag holds as it is. The parser does not
 -- decode the escapes of a verbatim tag.
@@ -236,11 +236,11 @@ isVerbatim tag = hasScheme && uriChars (T.unpack tag)
 -- | The text of a tag suffix or a tag prefix. A character that the form does
 -- not allow gets a %XX escape, which the parser decodes.
 shorthand :: T.Text -> B.Builder
-shorthand = T.foldr (\c b -> (if isTagChar c then B.singleton c else percentEscape c) <> b) mempty
+shorthand = T.foldr (\c b -> (if isTagChar c then B.fromChar c else percentEscape c) <> b) mempty
 
 -- | The %XX escapes of the UTF-8 bytes of a character.
 percentEscape :: Char -> B.Builder
-percentEscape c = mconcat [B.fromString ('%' : hex w) | w <- BS.unpack (T.encodeUtf8 (T.singleton c))]
+percentEscape c = mconcat [B.fromText (T.pack ('%' : hex w)) | w <- BS.unpack (T.encodeUtf8 (T.singleton c))]
   where
     hex :: Word8 -> String
     hex w = let s = map toUpper (showHex w "") in if length s < 2 then '0' : s else s

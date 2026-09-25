@@ -18,8 +18,7 @@ import Data.Map.Strict qualified as M
 import Data.Maybe
 import Data.Set qualified as S
 import Data.Text qualified as T
-import Data.Text.Lazy qualified as TL
-import Data.Text.Lazy.Builder qualified as B
+import Data.Text.Builder.Linear qualified as B
 
 import Yamlet.Internal.Emit
 import Yamlet.Internal.Syntax
@@ -53,7 +52,7 @@ defaultRenderOptions =
 -- An anchor name with a character that YAML does not allow in it, e.g. a
 -- space, becomes a new name in the anchor and in its aliases.
 renderSyntax :: RenderOptions -> [Document] -> T.Text
-renderSyntax opts = emptyLines . TL.toStrict . B.toLazyText . go True
+renderSyntax opts = emptyLines . B.runBuilder . go True
   where
     -- The parser reads several empty lines in a row as one, and gives empty
     -- lines at the start or the end of the output to no node. So they go
@@ -152,7 +151,7 @@ document opts afterEnd doc =
     , if directives
         then
           foldMap
-            (\v -> "%YAML " <> B.fromString (show v.major) <> "." <> B.fromString (show v.minor) <> "\n")
+            (\v -> "%YAML " <> B.fromUnboundedDec v.major <> "." <> B.fromUnboundedDec v.minor <> "\n")
             doc.version
             <> foldMap tagDirective handles
         else mempty
@@ -430,7 +429,7 @@ implicitKey opts k
   | isBlock opts k = Nothing
   | isEmpty k = Nothing
   | hasEndLines k = Nothing
-  | TL.length (B.toLazyText key) > 1024 = Nothing
+  | T.length (B.runBuilder key) > 1024 = Nothing
   | otherwise = Just key
   where
     key :: B.Builder
