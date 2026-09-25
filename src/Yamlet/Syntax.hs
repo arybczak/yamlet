@@ -4,7 +4,9 @@
 --
 -- Most texts in the tree share the memory of the input, so a node keeps the
 -- whole input alive. To keep a text longer than the tree, copy it with
--- 'Data.Text.copy', or copy the whole tree with 'copyDocument'.
+-- 'Data.Text.copy', or copy the whole tree with 'copyDocument'. Copy only
+-- what the program keeps: a copy of a whole tree usually needs more memory
+-- than the input it frees.
 --
 -- = Comments
 --
@@ -151,13 +153,17 @@ copyDocument doc =
 copyNode :: Node -> Node
 copyNode n =
   n
-    { props =
-        Props
-          { anchor = T.copy <$> n.props.anchor
-          , tag = case n.props.tag of
-              Tag t -> Tag (T.copy t)
-              t -> t
-          }
+    { props = case n.props of
+        -- Most nodes share one empty value, which a copy would duplicate.
+        Props Nothing (Tag t) -> Props Nothing (Tag (T.copy t))
+        Props Nothing _ -> n.props
+        Props anchor tag ->
+          Props
+            { anchor = T.copy <$> anchor
+            , tag = case tag of
+                Tag t -> Tag (T.copy t)
+                t -> t
+            }
     , comments = copyComments n.comments
     , content = case n.content of
         Scalar style t -> Scalar style (T.copy t)
@@ -167,12 +173,14 @@ copyNode n =
     }
 
 copyComments :: Comments -> Comments
-copyComments c =
-  Comments
-    { before = map copyLine c.before
-    , inline = T.copy <$> c.inline
-    , after = map copyLine c.after
-    }
+copyComments c = case c of
+  Comments [] Nothing [] -> c
+  _ ->
+    Comments
+      { before = map copyLine c.before
+      , inline = T.copy <$> c.inline
+      , after = map copyLine c.after
+      }
   where
     copyLine :: Line -> Line
     copyLine = \case
