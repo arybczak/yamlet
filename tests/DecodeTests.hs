@@ -562,6 +562,10 @@ test_keyErrors = do
     (Just (2, 1, "unknown key \"other\", expected one of: name, paths, jobs"))
     (errorOf (decodeText @Config "name: x\nother: 1\n"))
   assertEqual
+    "key that is not a string"
+    (Just (2, 1, "expected a string as the key, but got an integer"))
+    (errorOf (decodeText @Config "name: x\n1: y\n"))
+  assertEqual
     "unknown key close to a known one"
     (Just (2, 1, "unknown key \"job\", did you mean \"jobs\"?"))
     (errorOf (decodeText @Config "name: x\njob: 1\n"))

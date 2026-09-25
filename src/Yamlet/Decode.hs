@@ -259,7 +259,7 @@ rejectUnknownKeys known o = forM_ o.entries $ \(k, _) -> case k.value of
     | otherwise -> failAt k $ "unknown key " ++ show t ++ case suggestion (T.unpack t) of
         Just s -> ", did you mean " ++ show s ++ "?"
         Nothing -> ", expected one of: " ++ L.intercalate ", " (map T.unpack known)
-  _ -> typeMismatch "a string" k
+  _ -> typeMismatch "a string as the key" k
   where
     suggestion :: String -> Maybe T.Text
     suggestion t =
