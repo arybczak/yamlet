@@ -21,7 +21,6 @@ import Data.IntSet qualified as IS
 import Data.List
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
-import Data.Maybe
 import Data.Monoid qualified as Mon
 import Data.Ord
 import Data.Proxy
@@ -393,13 +392,15 @@ renderDocuments docs = B.runBuilder . mconcat $ zipWith document [0 :: Int ..] d
       where
         -- The handles for the tags that are not valid URIs.
         handles :: [Char]
-        handles = nubOrd . mapMaybe tagHandle $ tags n []
+        handles = nubOrd $ tagHandles n []
 
-    tags :: Node -> [T.Text] -> [T.Text]
-    tags n acc =
-      n.tag : case n.value of
-        Sequence xs -> foldr tags acc xs
-        Mapping kvs -> foldr (\(k, v) -> tags k . tags v) acc kvs
+    -- Every node has a tag, so a list of the tags would have an entry for
+    -- each node. Few tags need a handle.
+    tagHandles :: Node -> [Char] -> [Char]
+    tagHandles n acc =
+      maybe id (:) (tagHandle n.tag) $ case n.value of
+        Sequence xs -> foldr tagHandles acc xs
+        Mapping kvs -> foldr (\(k, v) -> tagHandles k . tagHandles v) acc kvs
         _ -> acc
 
     topLevel :: Node -> B.Builder
