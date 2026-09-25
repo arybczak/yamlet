@@ -482,6 +482,14 @@ test_typeErrors = do
     (Just (1, 1, "expected a string, but got a boolean"))
     (errorOf (decodeText @IntOrText "true"))
   assertEqual
+    "pair"
+    (Just (1, 1, "expected a list of 2 elements, but got 1"))
+    (errorOf (decodeText @(Int, Int) "[1]"))
+  assertEqual
+    "triple"
+    (Just (1, 1, "expected a list of 3 elements, but got 4"))
+    (errorOf (decodeText @(Int, Int, Int) "[1, 2, 3, 4]"))
+  assertEqual
     "YAML 1.1 boolean"
     (Just (1, 1, "expected a boolean, but got the string \"yes\", which is a boolean only in YAML 1.1"))
     (errorOf (decodeText @Bool "yes"))

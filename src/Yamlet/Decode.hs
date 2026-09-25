@@ -375,7 +375,7 @@ instance (Ord k, FromYAML k, FromYAML v) => FromYAML (M.Map k v) where
 instance (FromYAML a, FromYAML b) => FromYAML (a, b) where
   parseYAML = withSequence $ \case
     [a, b] -> (,) <$> parseNode parseYAML a <*> parseNode parseYAML b
-    _ -> fail "expected a list of 2 elements"
+    xs -> fail $ "expected a list of 2 elements, but got " ++ show (length xs)
 
 instance (FromYAML a, FromYAML b, FromYAML c) => FromYAML (a, b, c) where
   parseYAML = withSequence $ \case
@@ -384,4 +384,4 @@ instance (FromYAML a, FromYAML b, FromYAML c) => FromYAML (a, b, c) where
         <$> parseNode parseYAML a
         <*> parseNode parseYAML b
         <*> parseNode parseYAML c
-    _ -> fail "expected a list of 3 elements"
+    xs -> fail $ "expected a list of 3 elements, but got " ++ show (length xs)
