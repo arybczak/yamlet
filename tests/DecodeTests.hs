@@ -369,6 +369,10 @@ test_syntaxErrors = do
     "mapping in a plain scalar"
     (1, 11, "unexpected ':', quote the value if it contains \": \"")
     "key: value: other\n"
+  check
+    "key indented under a value"
+    (2, 4, "unexpected ':', this line continues the scalar from the line above, check the indentation and the line above")
+    "a: 1\n  b: 2\n"
   check "missing closing quote" (1, 7, "unterminated double-quoted scalar") "name: \"abc\nnext: value\n"
   check
     "badly indented quoted line"

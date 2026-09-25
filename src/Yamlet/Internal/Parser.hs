@@ -128,20 +128,25 @@ unexpected e i = case indentationTab (i - 1) Nothing of
       | indented -> maybe "unexpected indentation" id (indentationMistake e i)
       | isBreak w -> "unexpected end of line"
       | i > e.base && isBreak (byteBefore e i), Just msg <- indentationMistake e i -> msg
-      | w == COLON && longKey ->
+      | w == COLON && firstColon && not (fitsKey e entryStart i) ->
           "a key can be at most 1024 characters long, write a longer key after '? '"
+      -- A colon on the first line of a key does not fail, so the scalar
+      -- before this one started on a line above.
+      | w == COLON && firstColon && valueColon ->
+          "unexpected ':', this line continues the scalar from the line above, check the indentation and the line above"
       | w == COLON && valueColon ->
           "unexpected ':', quote the value if it contains \": \""
       | itemAfterKey -> "unexpected '-', a list cannot start on the line of its key"
       | Just msg <- mistake e i -> msg
       | otherwise -> unexpectedChar e i
   where
-    -- A colon after the first node of an entry that is too long for an
-    -- implicit key.
-    longKey :: Bool
-    longKey =
-      let start = skipListItems e (skipSpaces e (lineStart e i))
-      in not (fitsKey e start i) && not (any (isKeyColon e) [start .. i - 1])
+    -- The start of the entry on the line, after any "- ".
+    entryStart :: Int
+    entryStart = skipListItems e (skipSpaces e (lineStart e i))
+
+    -- No colon that ends a key precedes the index on its line.
+    firstColon :: Bool
+    firstColon = not (any (isKeyColon e) [entryStart .. i - 1])
 
     -- A list item right after a key, as in "a: - b".
     itemAfterKey :: Bool
