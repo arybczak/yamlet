@@ -120,9 +120,17 @@ unexpected e i = case indentationTab (i - 1) Nothing of
       | i > e.base && isBreak (byteBefore e i), Just msg <- indentationMistake e i -> msg
       | w == COLON && valueColon ->
           "unexpected ':', quote the value if it contains \": \""
+      | itemAfterKey -> "unexpected '-', a list cannot start on the line of its key"
       | Just msg <- mistake e i -> msg
       | otherwise -> unexpectedChar e i
   where
+    -- A list item right after a key, as in "a: - b".
+    itemAfterKey :: Bool
+    itemAfterKey = isListItem e i && byteBefore e (skipBack i) == COLON
+      where
+        skipBack :: Int -> Int
+        skipBack j = if isWhite (byteBefore e j) then skipBack (j - 1) else j
+
     -- A colon that ends a word and precedes white space, as in an unquoted
     -- value like "Error: file not found".
     valueColon :: Bool
