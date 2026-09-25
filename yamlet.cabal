@@ -17,11 +17,19 @@ extra-doc-files:
   CHANGELOG.md
   README.md
 
+extra-source-files:
+  tests/fixtures/error-messages.txt
+  tests/fixtures/yaml-test-suite/**/*.event
+  tests/fixtures/yaml-test-suite/**/*.json
+  tests/fixtures/yaml-test-suite/**/*.token
+  tests/fixtures/yaml-test-suite/**/*.yaml
+  tests/fixtures/yaml-test-suite/**/===
+  tests/fixtures/yaml-test-suite/**/error
+
 tested-with: GHC ^>= { 9.2, 9.4, 9.6, 9.8, 9.10, 9.12, 9.14 }
 
 common language
     ghc-options:        -Wall
-                        -Wcompat
                         -Werror=missing-deriving-strategies
                         -Werror=prepositive-qualified-module
 

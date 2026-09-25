@@ -27,10 +27,11 @@ import Yamlet.Syntax
 import Events
 
 -- | The tests of the suite. The directory with the data branch of the
--- repository is in @YAML_TEST_SUITE@, or in @tests/yaml-test-suite@.
+-- repository is in @YAML_TEST_SUITE@, or in
+-- @tests/fixtures/yaml-test-suite@.
 testSuiteTests :: IO TestTree
 testSuiteTests = do
-  dir <- fromMaybe "tests/yaml-test-suite" <$> lookupEnv "YAML_TEST_SUITE"
+  dir <- fromMaybe "tests/fixtures/yaml-test-suite" <$> lookupEnv "YAML_TEST_SUITE"
   exists <- doesDirectoryExist dir
   if not exists
     then
@@ -57,9 +58,10 @@ findCases dir = do
       | otherwise -> pure []
 
 -- | The error messages for the invalid inputs match the file
--- @tests/error-messages.txt@. The messages come from heuristics that look
--- at the input around an error, so a change in one can change others. If
--- @YAMLET_ACCEPT_ERRORS@ is set, the test writes the file instead.
+-- @tests/fixtures/error-messages.txt@. The messages come from heuristics
+-- that look at the input around an error, so a change in one can change
+-- others. If @YAMLET_ACCEPT_ERRORS@ is set, the test writes the file
+-- instead.
 checkErrorMessages :: FilePath -> [FilePath] -> Assertion
 checkErrorMessages root paths = do
   actual <- fmap (unlines . concat) . forM paths $ \path -> do
@@ -89,7 +91,7 @@ checkErrorMessages root paths = do
       unless (null changes) $ assertFailure (preface ++ ":\n" ++ unlines changes)
   where
     file :: FilePath
-    file = "tests/error-messages.txt"
+    file = "tests/fixtures/error-messages.txt"
 
     -- The pairs of a case header and its message.
     entries :: String -> [(String, String)]
