@@ -447,7 +447,7 @@ test_syntaxErrors = do
     (4, 3, "duplicate key \"<<\", merge keys are not supported")
     "a: &a {x: 1}\nb:\n  <<: *a\n  <<: *a\n"
   check "undefined tag handle" (1, 1, "undefined tag handle !e!") "!e!foo bar\n"
-  check "invalid character" (1, 4, "invalid character") "a: \x01\n"
+  check "invalid character" (1, 4, "invalid character U+0001") "a: \x01\n"
   check "backslash at the end of the input" (1, 4, "unterminated double-quoted scalar") "a: \"b\\"
   check "backslash at the end of a key" (1, 2, "unterminated double-quoted scalar") "[\"a\\"
   check "unsupported version" (1, 1, "unsupported YAML version 2.0") "%YAML 2.0\n--- a\n"
@@ -464,8 +464,8 @@ test_syntaxErrors = do
     "valid verbatim tags"
     (Right ["!bar", "tag:yaml.org,2002:str"])
     (map (.tag) <$> decodeText @[Node] "[!<!bar> a, !<tag:yaml.org,2002:str> b]")
-  check "noncharacter U+FFFE" (1, 4, "invalid character") "a: \xFFFE\n"
-  check "noncharacter U+FFFF" (1, 5, "invalid character") "a: b\xFFFF\n"
+  check "noncharacter U+FFFE" (1, 4, "invalid character U+FFFE") "a: \xFFFE\n"
+  check "noncharacter U+FFFF" (1, 5, "invalid character U+FFFF") "a: b\xFFFF\n"
 
 newtype IntOrText = IntOrText (Either Integer T.Text)
   deriving stock (Eq, Show)

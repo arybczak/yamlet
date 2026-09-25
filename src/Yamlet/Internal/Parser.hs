@@ -25,6 +25,7 @@ import Data.Text.Array qualified as A
 import Data.Text.Encoding qualified as T
 import Data.Text.Internal qualified as T
 import Data.Word
+import Numeric
 
 import Yamlet.Error
 import Yamlet.Internal.Comments
@@ -34,7 +35,7 @@ import Yamlet.Internal.Syntax
 -- | Parse all documents of a stream.
 parseStream :: T.Text -> Either Error [Document]
 parseStream input@(T.Text arr off len) = case prescan e start of
-  Left i -> Left $ errorAt input (toOffset e i) "invalid character"
+  Left i -> Left $ errorAt input (toOffset e i) ("invalid character " ++ codePoint (T.head (slice e i e.end)))
   Right (markers, boms) -> case runParser e start (lYamlStream markers) of
     Left (ParseError i msg) -> Left $ errorAt input (toOffset e i) msg
     Right (Just docs, _, _) -> case filter (not . allowedBom docs) boms of
@@ -70,6 +71,13 @@ parseStream input@(T.Text arr off len) = case prescan e start of
 
     start :: Int
     start = if isBom e off then off + 3 else off
+
+    -- The characters that YAML forbids are not printable, so the error names
+    -- the code point, e.g. U+0007.
+    codePoint :: Char -> String
+    codePoint c =
+      let hex = map toUpper (showHex (ord c) "")
+      in "U+" ++ replicate (4 - length hex) '0' ++ hex
 
 -- | Check that the input has only characters that YAML allows, and find the
 -- lines that start with a document marker, and the byte order marks. A
