@@ -175,6 +175,7 @@ unexpected e i = case indentationTab (i - 1) Nothing of
         && isNsChar (byteAt e i)
         && not (isListItem e i)
         && not (any (isKeyColon e) [i .. lineEnd i - 1])
+        && isNothing (mistake e i)
         && commentAbove (lineStart e i)
       where
         commentAbove :: Int -> Bool

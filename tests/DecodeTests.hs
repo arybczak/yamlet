@@ -383,6 +383,10 @@ test_syntaxErrors = do
     (2, 1, "a comment ends a plain scalar, so this line cannot continue it")
     "word1  # comment\nword2\n"
   check
+    "directive after a comment"
+    (3, 1, "unexpected '%', a plain scalar cannot start with it, quote the value")
+    "---\nscalar1 # comment\n%YAML 1.2\n---\nscalar2\n"
+  check
     "anchor on its own line in a sequence"
     (2, 1, "an anchor or a tag cannot be on a line of its own here, write it after the key or the '-'")
     "- item1\n&node\n- item2\n"
