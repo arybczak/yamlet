@@ -113,6 +113,7 @@ compose input doc
           Just a -> M.insert a (Just (n, i)) st.anchors
           Nothing -> st.anchors
 
+    -- Unlike in 'duplicate', comparing all pairs is not faster for few keys.
     checkUniqueNumbers :: [((Node, Int), (Node, Int))] -> Either Error ()
     checkUniqueNumbers = loop IS.empty
       where

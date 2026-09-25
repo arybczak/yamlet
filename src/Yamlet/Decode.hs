@@ -165,6 +165,8 @@ data Object = Object
   , index :: M.Map T.Text (Node, Node)
   }
 
+-- A list with linear lookups is faster only up to about 10 keys, and it saves
+-- only about 1% of the time to decode a typical record.
 mkObject :: Node -> [(Node, Node)] -> Parser Object
 mkObject n kvs = do
   index <- foldM insert M.empty kvs
