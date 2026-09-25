@@ -14,7 +14,6 @@ module Yamlet.Internal.Schema
   , isYaml11Bool
   ) where
 
-import Control.Applicative
 import Data.Bifunctor
 import Data.Char
 import Data.Scientific qualified as Sci
@@ -62,7 +61,7 @@ resolveTaggedExact tag t
   | tag == nullTag = if isNull t then Just (Right Null) else Nothing
   | tag == boolTag = Right . Bool <$> readBool t
   | tag == intTag = Right . Int <$> readInt t
-  | tag == floatTag = bimap Float Float <$> (readFloat t <|> Right . integerFloat <$> readInt t)
+  | tag == floatTag = bimap Float Float <$> readFloat t
   | otherwise = Just . Right $ String t
 
 -- | A plain scalar with the text is a string, e.g. @9.10.3@ is a string, but
@@ -125,12 +124,6 @@ digitsValue radix t0 = go (T.length t0) t0
           let k = n `div` 2
               (hi, lo) = T.splitAt (n - k) t
           in go (n - k) hi * radix ^ k + go k lo
-
--- | The value of an integer as a float.
-integerFloat :: Integer -> FloatValue
-integerFloat i
-  | i < 0 = negateFloat (integerFloat (negate i))
-  | otherwise = either id id $ decimal (T.pack (show i)) 0
 
 -- | The decimal digits times a power of 10. A value beyond the limit of
 -- 'maxExponent' gives infinity or zero, which are not exact.

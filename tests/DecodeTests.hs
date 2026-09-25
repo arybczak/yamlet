@@ -163,6 +163,12 @@ test_exactFloats = do
     "negative zero"
     (Right [Float NegativeZero, Float NegativeZero, Float (Finite 0), Int 0])
     (map (.value) <$> decodeText @[Node] "[-0.0, !!float -0, 0.0, -0]")
+  assertEqual "integer with a float tag" (Right 12) (decodeText @Double "!!float 12")
+  forM_ ["0x10", "0o10"] $ \t ->
+    assertEqual
+      ("integer in another base with a float tag, " ++ show t)
+      (Just (1, 9, "invalid value for the tag !!float"))
+      (errorOf (decodeText @Double ("!!float " <> t)))
   assertEqual "negative zero as a double" (Right True) (isNegativeZero <$> decodeText @Double "-0.0")
   assertEqual "negative zero as a scientific" (Right 0) (decodeText @Sci.Scientific "-0.0")
   assertEqual
