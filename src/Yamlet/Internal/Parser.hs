@@ -15,6 +15,7 @@ module Yamlet.Internal.Parser
 import Control.Monad
 import Data.ByteString qualified as BS
 import Data.Char
+import Data.List qualified as L
 import Data.Map.Strict qualified as M
 import Data.Maybe
 import Data.Set qualified as Set
@@ -999,7 +1000,13 @@ closing c start w kind msg = do
   char w
     <|> if
       | c == FlowKey -> failure
-      | atLineEnd e p -> throwAt start ("unterminated " ++ kind)
+      | atLineEnd e p -> case nextContent e p of
+          Just (lineStart, q)
+            | Just tab <- L.find (\j -> byteAt e j == TAB) [lineStart .. q - 1] ->
+                throwAt tab "tabs cannot be used for indentation"
+            | byteAt e q == w ->
+                throwAt q ("'" ++ [chr (fromIntegral w)] ++ "' is indented too little to end the " ++ kind)
+          _ -> throwAt start ("unterminated " ++ kind)
       | dash e p ->
           throwAt p "unexpected '-', a list item cannot be inside a flow collection, quote '-' if it is a string"
       | otherwise -> throwAt p (fromMaybe msg (mistake e True p))
@@ -1014,6 +1021,24 @@ closing c start w kind msg = do
           HASH -> let b = byteAt e (i - 1) in isWhite b || isBreak b
           b | isWhite b -> atLineEnd e (i + 1)
           b -> isBreak b
+
+    -- The start of the next line with content after the line of the index,
+    -- and the index of the content, unless a document marker or the end of
+    -- the input comes first. A closing bracket or a tab there shows that the
+    -- line is indented too little. Other content can be the next key after a
+    -- missing bracket.
+    nextContent :: Env -> Int -> Maybe (Int, Int)
+    nextContent e i
+      | i >= e.end = Nothing
+      | not (isBreak (byteAt e i)) = nextContent e (i + 1)
+      | otherwise =
+          let s = breakEnd e i
+              q = skipWhites e s
+              b = byteAt e q
+          in if
+               | q >= e.end || isMarker e s -> Nothing
+               | isBreak b || b == HASH -> nextContent e q
+               | otherwise -> Just (s, q)
 
     -- A '-' that cannot start a plain scalar, e.g. "- " as in a block
     -- sequence.

@@ -587,6 +587,15 @@ test_syntaxErrors = do
   check "flow sequence at the end" (1, 6, "unterminated flow sequence") "key: [a, b\n"
   check "flow sequence before a comment" (1, 6, "unterminated flow sequence") "key: [a, b # c\nd: e\n"
   check
+    "closing bracket indented too little"
+    (4, 1, "']' is indented too little to end the flow sequence")
+    "key: [\n  a,\n  b\n]\n"
+  check
+    "closing brace after a comment line"
+    (3, 1, "'}' is indented too little to end the flow mapping")
+    "key: {\n  # c\n}\n"
+  check "tab in a flow sequence" (2, 1, "tabs cannot be used for indentation") "a: [\n\tb\n]\n"
+  check
     "block scalar in a flow sequence"
     (1, 2, "unexpected '|', a block scalar cannot be inside a flow collection")
     "[|\n  x\n]\n"

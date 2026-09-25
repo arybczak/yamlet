@@ -163,7 +163,7 @@
 # Y79Y/000: Tabs in various contexts
 3:1: unexpected 'b'
 # Y79Y/003: Tabs in various contexts
-1:3: unterminated flow sequence
+2:1: tabs cannot be used for indentation
 # Y79Y/004: Tabs in various contexts
 1:3: unexpected '-'
 # Y79Y/005: Tabs in various contexts
