@@ -114,6 +114,8 @@ unexpected e i = case indentationTab (i - 1) Nothing of
   Nothing | Just r <- blockMistake e i -> r
   Nothing -> (i,) $ case byteAt e i of
     w
+      | byteBefore e i == STAR && not (isAnchorChar w) -> "expected an alias name after '*'"
+      | byteBefore e i == AMP && not (isAnchorChar w) -> "expected an anchor name after '&'"
       | w == 0 -> "unexpected end of input"
       | indented -> maybe "unexpected indentation" id (indentationMistake e i)
       | isBreak w -> "unexpected end of line"
@@ -172,6 +174,8 @@ mistake e i
   -- parser, so here it follows the end of another node, e.g. "x"#c.
   | w == HASH && isNsChar (byteBefore e i) =
       Just "unexpected '#', a comment needs a space before it"
+  | w == STAR && not (isAnchorChar (byteAt e (i + 1))) = Just "expected an alias name after '*'"
+  | w == AMP && not (isAnchorChar (byteAt e (i + 1))) = Just "expected an anchor name after '&'"
   | afterQuote SQUOTE =
       Just $ unexpectedChar e i ++ " after a single-quoted scalar, write '' for a quote inside it"
   | afterQuote DQUOTE =
