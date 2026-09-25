@@ -702,6 +702,16 @@ test_syntaxErrors = do
   check "verbatim tag without a name" (1, 1, "invalid verbatim tag") "!<!> a\n"
   check "verbatim tag without a scheme" (1, 1, "invalid verbatim tag") "!<$:?> a\n"
   check "empty verbatim tag" (1, 1, "invalid verbatim tag") "!<> a\n"
+  let badEscape = "invalid escape in the tag, write '%' and two hexadecimal digits"
+  check "escape without digits in a tag" (1, 6, badEscape) "x: !a%zz b\n"
+  check "escape with one digit in a tag" (1, 6, badEscape) "x: !a%4 b\n"
+  check "escape without digits in a tag prefix" (1, 8, badEscape) "%TAG ! %\xE9\n--- a\n"
+  check "secondary handle without a suffix" (1, 6, "expected the rest of the tag after !!") "a: !! z\n"
+  check "invalid UTF-8 in a tag" (1, 1, "the escapes of the tag are not valid UTF-8") "!!str%FF a\n"
+  assertEqual
+    "character from the escapes of the prefix and the suffix"
+    (Right ["tag:\xE9"])
+    (map (\d -> case d.root.props.tag of S.Tag t -> t; _ -> "") <$> S.parseDocumentsText "%TAG !e! tag:%C3\n--- !e!%A9 a\n")
   assertEqual
     "valid verbatim tags"
     (Right ["!bar", "tag:yaml.org,2002:str"])

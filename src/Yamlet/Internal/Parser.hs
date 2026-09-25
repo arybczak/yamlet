@@ -503,7 +503,10 @@ directives = go Nothing defaultHandles Set.empty
       when (first == EXCL) $ advance 1
       scan uriChars
       r <- pos
-      pure (handle, percentDecode (slice e q r))
+      invalidEscape r
+      -- The escapes of the prefix and of the suffix of a tag can form one
+      -- character, so the prefix stays encoded.
+      pure (handle, slice e q r)
       where
         noPrefix :: String
         noPrefix = "expected a prefix after the tag handle, e.g. tag:example.com,2000:"
@@ -551,11 +554,20 @@ tagChars e i
     w :: Word8
     w = byteAt e i
 
--- | Decode the %XX escapes of a tag.
-percentDecode :: T.Text -> T.Text
+-- | Stop with an error if a @%@ without two hexadecimal digits after it is at
+-- the index, after the valid characters of a tag.
+invalidEscape :: Int -> P ()
+invalidEscape i = do
+  e <- env
+  when (byteAt e i == PERCENT) $
+    throwAt i "invalid escape in the tag, write '%' and two hexadecimal digits"
+
+-- | Decode the %XX escapes of a tag, or 'Nothing' if the bytes are not valid
+-- UTF-8.
+percentDecode :: T.Text -> Maybe T.Text
 percentDecode t
-  | T.any (== '%') t = T.pack . decodeUtf8Chars $ go (T.unpack t)
-  | otherwise = t
+  | T.any (== '%') t = either (const Nothing) Just . T.decodeUtf8' . BS.pack $ go (T.unpack t)
+  | otherwise = Just t
   where
     go :: String -> [Word8]
     go = \case
@@ -568,9 +580,6 @@ percentDecode t
     encodeChar c = A.toList arr 0 len
       where
         !(T.Text arr _ len) = T.singleton c
-
-    decodeUtf8Chars :: [Word8] -> String
-    decodeUtf8Chars = T.unpack . T.decodeUtf8Lenient . BS.pack
 
 -- | l-bare-document
 lBareDocument :: P Node
@@ -672,9 +681,15 @@ cNsTagProperty = do
       q <- pos
       scan tagChars
       r <- pos
+      invalidEscape r
+      -- Only the primary handle "!" can stand alone, as the non-specific tag.
+      when (r == q && handle /= "!") $
+        throwAt r ("expected the rest of the tag after " ++ T.unpack handle)
       guardP (r > q)
       case M.lookup handle e.handles of
-        Just prefix -> pure . Tag $ prefix <> percentDecode (slice e q r)
+        Just prefix -> case percentDecode (prefix <> slice e q r) of
+          Just t -> pure (Tag t)
+          Nothing -> throwAt p "the escapes of the tag are not valid UTF-8"
         Nothing -> throwAt p $ "undefined tag handle " ++ T.unpack handle
 
     nonSpecific :: P Tag
