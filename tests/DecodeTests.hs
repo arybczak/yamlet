@@ -178,12 +178,17 @@ instance FromYAML Config where
     rejectUnknownKeys ["name", "paths", "jobs"] o
     Config <$> o .: "name" <*> o .:? "paths" .!= [] <*> o .:? "jobs" .!= 1
 
--- | Edge cases of block scalars, with the results of libyaml and of the
--- JavaScript package yaml.
+-- | Edge cases of block scalars that the specification leaves unclear.
 test_blockScalars :: Assertion
 test_blockScalars = do
+  -- libyaml and the JavaScript package yaml give the same result.
   assertEqual "indentation indicator at the top level" (Right " a\n") (decodeText @T.Text "--- |1\n  a\n")
   assertEqual "indentation indicator without a marker" (Right " a\n") (decodeText @T.Text "|2\n   a\n")
+  -- The end of the input ends a last line of spaces, as in the test JEF9/02
+  -- of the YAML test suite.
+  assertEqual "keep with spaces at the end" (Right "a\n\n") (decodeText @T.Text "|+\n  a\n  ")
+  assertEqual "keep with an empty line and spaces at the end" (Right "a\n\n\n") (decodeText @T.Text "|+\n  a\n\n  ")
+  assertEqual "keep with a line break at the end" (Right "a\n\n") (decodeText @T.Text "|+\n  a\n  \n")
 
 -- | An error inside 'P.notFollowedBy' is not lost.
 test_notFollowedBy :: Assertion

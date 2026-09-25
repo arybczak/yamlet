@@ -1326,6 +1326,8 @@ blockLines e indent = go 0 []
               w = byteAt e s
           in if
                | isBreak w -> go (empties + 1) acc (breakEnd e s)
+               -- Spaces at the end of the input are an empty line, as in the
+               -- test JEF9/02 of the YAML test suite.
                | s >= e.end -> (reverse acc, empties + 1, s)
                | s - i == indent ->
                    let t = lineEnd s
