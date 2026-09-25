@@ -1,5 +1,7 @@
 module DecodeTests (decodeTests) where
 
+import Control.Monad
+import Data.Bifunctor
 import Data.ByteString qualified as BS
 import Data.Either
 import Data.Int
@@ -278,6 +280,15 @@ test_time = do
     "huge duration"
     (Just (1, 1, "the duration is out of range"))
     (errorOf (decodeText @NominalDiffTime "1e1000000000"))
+  forM_ [maxBound - 11, maxBound] $ \ex ->
+    assertEqual
+      ("duration with the exponent " ++ show ex)
+      (Left "the duration is out of range")
+      (first snd (runParser (parseYAML @NominalDiffTime) (node (Float (Finite (Sci.scientific 1 ex))))))
+  assertEqual
+    "zero duration with a large exponent"
+    (Right (0 :: DiffTime))
+    (runParser parseYAML (node (Float (Finite (Sci.scientific 0 100)))))
 
 test_record :: Assertion
 test_record = do

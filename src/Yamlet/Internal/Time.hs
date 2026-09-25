@@ -60,6 +60,9 @@ parseUTCTime = fmap zonedTimeToUTC . parseZonedTime
 -- a huge exponent does not build a huge integer.
 picoseconds :: Sci.Scientific -> Maybe Integer
 picoseconds s
+  | c == 0 = Just 0
+  -- The check comes before the computation of k, which can overflow.
+  | Sci.base10Exponent s > 48 = Nothing
   | k >= 0 = if k > 60 - digits then Nothing else Just (c * 10 ^ k)
   | -k > digits = Just (if c < 0 then -1 else 0)
   | otherwise = Just (c `div` 10 ^ negate k)
