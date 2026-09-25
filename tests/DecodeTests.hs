@@ -467,8 +467,20 @@ test_syntaxErrors = do
   check "noncharacter U+FFFE" (1, 4, "invalid character") "a: \xFFFE\n"
   check "noncharacter U+FFFF" (1, 5, "invalid character") "a: b\xFFFF\n"
 
+newtype IntOrText = IntOrText (Either Integer T.Text)
+  deriving stock (Eq, Show)
+
+instance FromYAML IntOrText where
+  parseYAML n = IntOrText <$> ((Left <$> withInt pure n) `orElse` (Right <$> withText pure n))
+
 test_typeErrors :: Assertion
 test_typeErrors = do
+  assertEqual "first alternative" (Right (IntOrText (Left 1))) (decodeText "1")
+  assertEqual "second alternative" (Right (IntOrText (Right "a"))) (decodeText "a")
+  assertEqual
+    "error of the second alternative"
+    (Just (1, 1, "expected a string, but got a boolean"))
+    (errorOf (decodeText @IntOrText "true"))
   assertEqual
     "list instead of string"
     (Just (1, 7, "expected a string, but got a list"))

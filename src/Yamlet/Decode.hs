@@ -10,6 +10,7 @@ module Yamlet.Decode
   , parseNode
   , failAt
   , typeMismatch
+  , orElse
 
     -- * Scalars
   , withNull
@@ -34,7 +35,6 @@ module Yamlet.Decode
   , rejectUnknownKeys
   ) where
 
-import Control.Applicative
 import Control.Monad
 import Data.Int
 import Data.List qualified as L
@@ -51,6 +51,15 @@ import Yamlet.Schema
 
 -- | A parser of nodes. Its errors point to the node that the parser works on,
 -- unless 'failAt' names another one.
+--
+-- The parser has no 'Control.Applicative.Alternative' instance. To try
+-- another parser after a failure, use 'orElse'. To reject a value, fail with
+-- a message that says why:
+--
+-- @
+-- port <- parseYAML n
+-- unless (port > 0 && port < 65536) $ fail "the port must be from 1 to 65535"
+-- @
 newtype Parser a = Parser (Offset -> Either (Offset, String) a)
 
 instance Functor Parser where
@@ -67,16 +76,6 @@ instance Monad Parser where
 
 instance MonadFail Parser where
   fail msg = Parser $ \off -> Left (off, msg)
-
--- | Try the second parser if the first one fails. The error of the second one
--- wins.
-instance Alternative Parser where
-  empty = fail "no parse"
-  Parser g <|> Parser h = Parser $ \off -> case g off of
-    Left _ -> h off
-    r -> r
-
-instance MonadPlus Parser
 
 -- | Run a parser on a node. Return the offset of the node that caused an
 -- error with the error message.
@@ -97,6 +96,19 @@ typeMismatch :: String -> Node -> Parser a
 typeMismatch expected n =
   failAt n $
     "expected " ++ expected ++ ", but got " ++ describe n.value
+
+-- | Run the second parser if the first one fails. The error of the second one
+-- wins, e.g.
+--
+-- @
+-- (Left \<$> withInt pure n) \`orElse\` (Right \<$> withText pure n)
+-- @
+orElse :: Parser a -> Parser a -> Parser a
+orElse (Parser g) (Parser h) = Parser $ \off -> case g off of
+  Left _ -> h off
+  r -> r
+
+infixl 3 `orElse`
 
 ----------------------------------------
 -- Scalars
