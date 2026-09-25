@@ -1,6 +1,5 @@
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE UnboxedSums #-}
 {-# LANGUAGE UnboxedTuples #-}
 {-# OPTIONS_HADDOCK not-home #-}
 
@@ -171,7 +170,7 @@ option a p = p <|> pure a
 -- an error, as in '<|>'.
 notFollowedBy :: P a -> P ()
 notFollowedBy (P g) = P $ \e p fu -> case g e p fu of
-  OK# _ _ _ -> Fail# (if isTrue# (p ># fu) then p else fu)
+  OK# {} -> Fail# (if isTrue# (p ># fu) then p else fu)
   Fail# _ -> OK# () p fu
   Err# err -> Err# err
 
@@ -206,7 +205,7 @@ failure :: P a
 failure = P $ \_ p fu -> Fail# (if isTrue# (p ># fu) then p else fu)
 
 guardP :: Bool -> P ()
-guardP b = if b then pure () else failure
+guardP b = unless b failure
 
 -- | Stop with an error at the given index.
 throwAt :: Int -> String -> P a

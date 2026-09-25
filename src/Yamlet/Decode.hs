@@ -43,6 +43,7 @@ import Data.IntSet qualified as IS
 import Data.List qualified as L
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
+import Data.Maybe
 import Data.Scientific qualified as Sci
 import Data.Sequence qualified as Seq
 import Data.Set qualified as Set
@@ -252,7 +253,7 @@ o .:! key = case M.lookup key o.index of
 
 -- | A default for an optional value.
 (.!=) :: Parser (Maybe a) -> a -> Parser a
-p .!= def = maybe def id <$> p
+p .!= def = fromMaybe def <$> p
 
 infixl 9 .:, .:?, .:!
 infixl 8 .!=
@@ -374,11 +375,11 @@ instance FromYAML UTCTime where
 
 -- | A number of seconds, rounded down to a picosecond.
 instance FromYAML NominalDiffTime where
-  parseYAML = withScientific $ \s -> secondsToNominalDiffTime . MkFixed <$> duration s
+  parseYAML = withScientific $ fmap (secondsToNominalDiffTime . MkFixed) . duration
 
 -- | A number of seconds, rounded down to a picosecond.
 instance FromYAML DiffTime where
-  parseYAML = withScientific $ \s -> picosecondsToDiffTime <$> duration s
+  parseYAML = withScientific $ fmap picosecondsToDiffTime . duration
 
 zonedTimeMismatch :: String
 zonedTimeMismatch = "expected a date, a time and a time zone such as 2026-09-25T12:30:00Z"

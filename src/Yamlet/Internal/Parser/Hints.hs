@@ -39,7 +39,7 @@ unexpected e i = case indentationTab (i - 1) Nothing of
       | byteBefore e i == STAR && not (isAnchorChar w) -> "expected an alias name after '*'"
       | byteBefore e i == AMP && not (isAnchorChar w) -> "expected an anchor name after '&'"
       | w == 0 -> "unexpected end of input"
-      | indented -> maybe "unexpected indentation" id (indentationMistake e i)
+      | indented -> fromMaybe "unexpected indentation" (indentationMistake e i)
       | isBreak w -> "unexpected end of line"
       | i > e.base && isBreak (byteBefore e i), Just msg <- indentationMistake e i -> msg
       | w == COLON && firstColon && not (fitsKey e entryStart i) ->
@@ -205,7 +205,7 @@ unexpected e i = case indentationTab (i - 1) Nothing of
             | otherwise -> Nothing
       where
         tab' :: Maybe Int
-        tab' = if byteAt e i == TAB then Just (maybe i id tab) else tab
+        tab' = if byteAt e i == TAB then Just (fromMaybe i tab) else tab
 
 -- | The error for a common mistake at the index, if the character there shows
 -- one.

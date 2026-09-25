@@ -121,7 +121,7 @@ toRealFloat = \case
   Finite s -> Sci.toRealFloat s
   NegativeZero -> -0
   Infinity -> 1 / 0
-  NegativeInfinity -> -1 / 0
+  NegativeInfinity -> -(1 / 0)
   NaN -> 0 / 0
 
 fromRealFloat :: RealFloat a => a -> FloatValue

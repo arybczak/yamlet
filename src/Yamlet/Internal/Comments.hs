@@ -163,7 +163,7 @@ attachNode e limit minColumn n items0 =
       in (map (.line) taken, rest)
 
     sequenceItems :: CollectionStyle -> [Node] -> [Item] -> ([Node], [Item])
-    sequenceItems style xs is0 = go xs is0
+    sequenceItems style = go
       where
         go :: [Node] -> [Item] -> ([Node], [Item])
         go [] is = ([], is)
@@ -181,7 +181,7 @@ attachNode e limit minColumn n items0 =
         itemColumn = if style == Flow then 0 else columnOf e s + 1
 
     mappingEntries :: CollectionStyle -> [(Node, Node)] -> [Item] -> ([(Node, Node)], [Item])
-    mappingEntries style kvs is0 = go kvs is0
+    mappingEntries style = go
       where
         go :: [(Node, Node)] -> [Item] -> ([(Node, Node)], [Item])
         go [] is = ([], is)
@@ -304,7 +304,7 @@ scanItems e start stop = go start start False False
       | otherwise = lineBefore i (j - 1) ls
 
     dropSpace :: T.Text -> T.Text
-    dropSpace t = maybe t id (T.stripPrefix " " t)
+    dropSpace t = fromMaybe t (T.stripPrefix " " t)
 
 isBreak :: Word8 -> Bool
 isBreak w = w == 0x0A || w == 0x0D

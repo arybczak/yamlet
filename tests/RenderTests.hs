@@ -1,6 +1,7 @@
 module RenderTests (renderTests) where
 
 import Data.List qualified as L
+import Data.Maybe
 import Data.Text qualified as T
 import Test.QuickCheck
 import Test.Tasty
@@ -489,7 +490,7 @@ prop_roundTrip (Tree doc) =
         inner :: Node -> Bool
         inner x =
           not (null [() | Comment _ <- x.comments.before])
-            || x.comments.inline /= Nothing
+            || isJust x.comments.inline
             || hasComments x
 
 newtype Tree = Tree Document

@@ -310,8 +310,8 @@ test_copies = do
   case S.parseDocumentsText "key: &a value\nother: *a\n" of
     Left err -> assertFailure (show err)
     Right docs ->
-      assertBool "syntax texts are copies" . all isCopy $
-        concatMap (texts . (.root) . S.copyDocument) docs
+      assertBool "syntax texts are copies" $
+        all (all isCopy . texts . (.root) . S.copyDocument) docs
   where
     -- A copy starts at the beginning of its own array.
     isCopy :: T.Text -> Bool

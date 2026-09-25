@@ -11,6 +11,7 @@ module Yamlet.Internal.Render
   ) where
 
 import Control.Applicative
+import Data.Bifunctor
 import Data.Containers.ListUtils
 import Data.List qualified as L
 import Data.Map.Strict qualified as M
@@ -128,7 +129,7 @@ validAnchors doc
         , content = case n.content of
             Alias a -> Alias (newName a)
             Sequence style xs -> Sequence style (map rename xs)
-            Mapping style kvs -> Mapping style (map (\(k, v) -> (rename k, rename v)) kvs)
+            Mapping style kvs -> Mapping style (map (bimap rename rename) kvs)
             c -> c
         }
 
@@ -215,7 +216,7 @@ document opts afterEnd doc =
           (Just dc, Just rc) -> "---" <> comment (Just dc) <> "\n" <> lines_ 0 (r.comments.before ++ [Comment rc])
           (dc, rc) -> "---" <> comment (dc <|> rc) <> "\n" <> lines_ 0 r.comments.before
       | marker && null r.comments.before && isNothing doc.docComments.inline =
-          "--- " <> inline opts InValue 2 r (r.comments.inline) <> "\n"
+          "--- " <> inline opts InValue 2 r r.comments.inline <> "\n"
       | marker =
           "---"
             <> comment doc.docComments.inline

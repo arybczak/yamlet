@@ -10,6 +10,7 @@ import Data.Aeson.Parser qualified as J
 import Data.Attoparsec.ByteString.Char8 qualified as A
 import Data.ByteString qualified as BS
 import Data.List qualified as L
+import Data.Maybe
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
 import Data.Vector qualified as V
@@ -29,13 +30,12 @@ import Events
 -- repository is in @YAML_TEST_SUITE@, or in @tests/yaml-test-suite@.
 testSuiteTests :: IO TestTree
 testSuiteTests = do
-  dir <- maybe "tests/yaml-test-suite" id <$> lookupEnv "YAML_TEST_SUITE"
+  dir <- fromMaybe "tests/yaml-test-suite" <$> lookupEnv "YAML_TEST_SUITE"
   exists <- doesDirectoryExist dir
   if not exists
     then
-      pure . testCase "yaml-test-suite"
-        $ assertFailure
-        $ "The test suite is missing, run scripts/fetch-test-suite.sh or set YAML_TEST_SUITE"
+      pure . testCase "yaml-test-suite" $
+        assertFailure "The test suite is missing, run scripts/fetch-test-suite.sh or set YAML_TEST_SUITE"
     else do
       paths <- findCases dir
       pure . testGroup "yaml-test-suite" $
@@ -202,13 +202,10 @@ renderEvent = \case
 
     renderProps :: Props -> String
     renderProps props =
-      concat
-        [ maybe "" (\a -> " &" ++ T.unpack a) props.anchor
-        , case props.tag of
-            NoTag -> ""
-            NonSpecificTag -> " <!>"
-            Tag t -> " <" ++ T.unpack t ++ ">"
-        ]
+      maybe "" (\a -> " &" ++ T.unpack a) props.anchor ++ case props.tag of
+        NoTag -> ""
+        NonSpecificTag -> " <!>"
+        Tag t -> " <" ++ T.unpack t ++ ">"
 
     styleChar :: ScalarStyle -> Char
     styleChar = \case

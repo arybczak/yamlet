@@ -24,6 +24,7 @@ module Yamlet.Internal.Time
 import Control.Monad
 import Data.Char
 import Data.Fixed
+import Data.Maybe
 import Data.Scientific qualified as Sci
 import Data.Text qualified as T
 import Data.Time
@@ -127,7 +128,7 @@ localTime t0 = do
 
 -- | @Z@, @+HH:MM@, @+HHMM@ or @+HH@, optionally after one space.
 timeZone :: T.Text -> Maybe (TimeZone, T.Text)
-timeZone t0 = case T.uncons (maybe t0 id (char ' ' t0)) of
+timeZone t0 = case T.uncons (fromMaybe t0 (char ' ' t0)) of
   Just ('Z', t) -> Just (utc, t)
   Just (c, t1) | c == '+' || c == '-' -> do
     (h, t2) <- twoDigits t1

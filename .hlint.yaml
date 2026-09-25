@@ -1,0 +1,10 @@
+# The default extensions of yamlet.cabal.
+- arguments:
+    - -XGHC2021
+    - -XDerivingStrategies
+    - -XDuplicateRecordFields
+    - -XLambdaCase
+    - -XMultiWayIf
+    - -XNoFieldSelectors
+    - -XOverloadedRecordDot
+    - -XOverloadedStrings

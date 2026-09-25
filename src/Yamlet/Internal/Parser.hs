@@ -85,7 +85,7 @@ parseStream input@(T.Text arr off len) = case prescan e start of
 -- order mark is the index of the mark. Return the index of an invalid
 -- character on error.
 prescan :: Env -> Int -> Either Int ([Int], [Int])
-prescan e start = go start (if isMarker e start then [start] else []) []
+prescan e start = go start [start | isMarker e start] []
   where
     go :: Int -> [Int] -> [Int] -> Either Int ([Int], [Int])
     go i acc boms
@@ -398,7 +398,7 @@ directives = go Nothing defaultHandles Set.empty
           name <- directiveName
           case name of
             "YAML" -> do
-              when (version /= Nothing) $
+              when (isJust version) $
                 throwAt p "duplicate %YAML directive"
               v <- yamlVersion p
               sLComments <|> throwAfter "unexpected content after the %YAML version"
@@ -702,9 +702,7 @@ cDoubleQuoted n c props = withScan $ \e p ->
           | isWhite w ->
               let j = skipWhites e i
                   w' = byteAt e j
-              in if
-                   | isBreak w' -> fold i j acc
-                   | otherwise -> go seg j acc
+              in if isBreak w' then fold i j acc else go seg j acc
           | isBreak w -> fold i i acc
           | i >= e.end -> unterminated i
           | otherwise -> go seg (i + 1) acc
@@ -1012,7 +1010,7 @@ closing c start w kind msg = do
       | atLineEnd e p -> throwAt start ("unterminated " ++ kind)
       | dash e p ->
           throwAt p "unexpected '-', a list item cannot be inside a flow collection, quote '-' if it is a string"
-      | otherwise -> throwAt p (maybe msg id (mistake e p))
+      | otherwise -> throwAt p (fromMaybe msg (mistake e p))
   where
     -- The separation after an entry goes on to the next line if the
     -- collection can continue there. So a stop at the end of a line means
@@ -1051,7 +1049,7 @@ nsFlowSeqEntry n c = do
       k <- nsFlowNode n c
       q <- pos
       let value = optional_ sSeparateInLine >> cNsFlowMapAdjacentValue n c
-      if isJsonNode k && fitsKey e p q && all (not . isBreak . byteAt e) [p .. q - 1]
+      if isJsonNode k && fitsKey e p q && not (any (isBreak . byteAt e) [p .. q - 1])
         then (pair e p . (k,) <$> value) <|> pure k
         else pure k
 
