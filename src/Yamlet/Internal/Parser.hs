@@ -118,9 +118,25 @@ unexpected e i = case indentationTab (i - 1) Nothing of
       | isBreak w -> "unexpected end of line"
       | w == COLON && valueColon ->
           "unexpected ':', quote the value if it contains \": \""
-      | w < 0x80 -> "unexpected " ++ show (chr (fromIntegral w))
-      | otherwise -> "unexpected " ++ show (T.head (slice e i e.end))
+      | afterQuote SQUOTE ->
+          found ++ " after a single-quoted scalar, write '' for a quote inside it"
+      | afterQuote DQUOTE ->
+          found ++ " after a double-quoted scalar, write \\\" for a quote inside it"
+      | otherwise -> found
   where
+    found :: String
+    found
+      | byteAt e i < 0x80 = "unexpected " ++ show (chr (fromIntegral (byteAt e i)))
+      | otherwise = "unexpected " ++ show (T.head (slice e i e.end))
+
+    -- Content right after a quote, as in 'it's'. A plain scalar can hold a
+    -- quote, so the quote closes a quoted scalar.
+    afterQuote :: Word8 -> Bool
+    afterQuote q =
+      byteBefore e i == q
+        && isNsChar (byteAt e i)
+        && not (isFlowIndicator (byteAt e i))
+
     -- A colon that ends a word and precedes white space, as in an unquoted
     -- value like "Error: file not found".
     valueColon :: Bool

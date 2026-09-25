@@ -385,6 +385,14 @@ test_syntaxErrors = do
   check "flow mapping before a marker" (1, 1, "unterminated flow mapping") "{a: 1\n---\nb\n"
   check "missing colon" (1, 6, "expected ':', ',' or '}'") "{\"a\" 1}"
   check "missing comma after a value" (1, 12, "expected ',' or '}'") "{\"a\": 1 \"b\": 2}"
+  check
+    "quote in a single-quoted scalar"
+    (1, 10, "unexpected 's' after a single-quoted scalar, write '' for a quote inside it")
+    "msg: 'it's here'\n"
+  check
+    "quote in a double-quoted scalar"
+    (1, 12, "unexpected 'h' after a double-quoted scalar, write \\\" for a quote inside it")
+    "msg: \"say \"hi\"\"\n"
   check "invalid escape" (1, 8, "invalid escape sequence") "key: \"a\\qb\"\n"
   check "undefined alias" (2, 4, "undefined alias *x") "a: 1\nb: *x\n"
   check "duplicate key" (3, 1, "duplicate key \"a\"") "a: 1\nb: 2\na: 3\n"
