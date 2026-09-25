@@ -211,6 +211,9 @@ mistake e i
       Just "unexpected '#', a comment needs a space before it"
   | w == COMMA && (let b = byteBefore e (skipBack i) in b == COMMA || b == LBRACKET || b == LBRACE) =
       Just "unexpected ',', a flow collection cannot have an empty entry"
+  -- In the block style, these characters start a block scalar and do not fail.
+  | w == PIPE || w == GREATER =
+      Just $ unexpectedChar e i ++ ", a block scalar cannot be inside a flow collection"
   | w == STAR && not (isAnchorChar (byteAt e (i + 1))) = Just "expected an alias name after '*'"
   | w == STAR && (let b = byteAt e (wordStart e (skipBackWhites e i)) in b == AMP || b == EXCL) =
       Just "unexpected '*', an alias cannot have an anchor or a tag"
