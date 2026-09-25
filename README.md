@@ -68,3 +68,11 @@ The test suite reads the data of the YAML test suite from
 ```
 scripts/fetch-test-suite.sh
 ```
+
+The file `tests/error-messages.txt` holds the expected error message for
+each invalid input of the YAML test suite. If you change an error message
+on purpose, update the file with this command and review the diff:
+
+```
+YAMLET_ACCEPT_ERRORS=1 cabal test
+```

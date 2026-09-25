@@ -36,10 +36,15 @@ testSuiteTests = do
       pure . testCase "yaml-test-suite"
         $ assertFailure
         $ "The test suite is missing, run scripts/fetch-test-suite.sh or set YAML_TEST_SUITE"
-    else testGroup "yaml-test-suite" <$> findTests dir dir
+    else do
+      paths <- findCases dir
+      pure . testGroup "yaml-test-suite" $
+        testCase "error messages" (checkErrorMessages dir paths)
+          : [testCase (makeRelative dir path) (runTest path) | path <- paths]
 
-findTests :: FilePath -> FilePath -> IO [TestTree]
-findTests root dir = do
+-- | The directories of the test cases, in order.
+findCases :: FilePath -> IO [FilePath]
+findCases dir = do
   -- The name and tags directories link to the tests by other names.
   entries <- L.sort . filter (`notElem` ["name", "tags"]) <$> listDirectory dir
   fmap concat . forM entries $ \entry -> do
@@ -47,12 +52,53 @@ findTests root dir = do
     isDir <- doesDirectoryExist path
     hasInput <- doesFileExist (path </> "in.yaml")
     if
-      | isDir && hasInput -> pure [testCase (testName path) (runTest path)]
-      | isDir -> findTests root path
+      | isDir && hasInput -> pure [path]
+      | isDir -> findCases path
       | otherwise -> pure []
+
+-- | The error messages for the invalid inputs match the file
+-- @tests/error-messages.txt@. The messages come from heuristics that look
+-- at the input around an error, so a change in one can change others. If
+-- @YAMLET_ACCEPT_ERRORS@ is set, the test writes the file instead.
+checkErrorMessages :: FilePath -> [FilePath] -> Assertion
+checkErrorMessages root paths = do
+  actual <- fmap (unlines . concat) . forM paths $ \path -> do
+    isError <- doesFileExist (path </> "error")
+    if not isError
+      then pure []
+      else do
+        name <- T.strip . T.decodeUtf8 <$> BS.readFile (path </> "===")
+        input <- T.decodeUtf8 <$> BS.readFile (path </> "in.yaml")
+        let message = case parseDocumentsText input of
+              Left err -> show err.location.line ++ ":" ++ show err.location.column ++ ": " ++ err.message
+              Right _ -> "no error"
+        pure ["# " ++ makeRelative root path ++ ": " ++ T.unpack name, message]
+  accept <- lookupEnv "YAMLET_ACCEPT_ERRORS"
+  case accept of
+    Just _ -> writeFile file actual
+    Nothing -> do
+      expected <- readFile file
+      let changes =
+            [ header ++ "\n- " ++ old ++ "\n+ " ++ new
+            | ((header, old), (_, new)) <- zip (entries expected) (entries actual)
+            , old /= new
+            ]
+          preface = "the error messages differ from " ++ file ++ ", set YAMLET_ACCEPT_ERRORS to update it"
+      when (length (entries expected) /= length (entries actual)) $
+        assertFailure (preface ++ ": the number of invalid inputs changed")
+      unless (null changes) $ assertFailure (preface ++ ":\n" ++ unlines changes)
   where
-    testName :: FilePath -> String
-    testName path = makeRelative root path
+    file :: FilePath
+    file = "tests/error-messages.txt"
+
+    -- The pairs of a case header and its message.
+    entries :: String -> [(String, String)]
+    entries s = pairs (lines s)
+      where
+        pairs :: [String] -> [(String, String)]
+        pairs = \case
+          header : message : rest -> (header, message) : pairs rest
+          _ -> []
 
 runTest :: FilePath -> Assertion
 runTest path = do

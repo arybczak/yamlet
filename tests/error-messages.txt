@@ -1,0 +1,188 @@
+# 236B: Invalid value after mapping
+3:8: expected ':' after the key
+# 2CMS: Invalid mapping in plain multiline
+3:10: unexpected ':', this line continues the scalar from the line above, check the indentation and the line above
+# 2G84/00: Literal modifers
+1:6: the indentation indicator of a block scalar must be from 1 to 9
+# 2G84/01: Literal modifers
+1:7: the indentation indicator of a block scalar must be from 1 to 9
+# 3HFZ: Invalid content after document end marker
+3:4: unexpected content after the document end marker (...)
+# 4EJS: Invalid tabs as indendation in a mapping
+3:1: tabs cannot be used for indentation
+# 4H7K: Flow sequence with invalid extra closing bracket
+2:13: unexpected ']' after the end of a flow collection
+# 4HVU: Wrong indendation in Sequence
+4:3: unexpected indentation
+# 4JVG: Scalar value with two anchors
+4:11: unexpected end of line
+# 55WF: Invalid escape in double quoted string
+2:2: invalid escape sequence, write \\ for a backslash or use single quotes
+# 5LLU: Block scalar with wrong indented line after spaces only
+4:4: a leading empty line of a block scalar has more spaces than the first non-empty line
+# 5TRB: Invalid document-start marker in doublequoted tring
+2:1: unterminated double-quoted scalar
+# 5U3A: Sequence on same Line as Mapping Key
+1:6: unexpected '-', a list cannot start on the line of its key
+# 62EZ: Invalid block mapping key on same line as previous key
+2:12: unexpected 'i' after the end of a flow collection
+# 6JTT: Flow sequence without closing bracket
+2:1: unterminated flow sequence
+# 6S55: Invalid scalar at the end of sequence
+4:2: unexpected key among list items
+# 7LBH: Multiline double quoted implicit keys
+2:3: a key must be on a single line
+# 7MNF: Missing colon
+3:5: expected ':' after the key
+# 8XDJ: Comment in plain multiline value
+3:3: a comment ends a plain scalar, so this line cannot continue it
+# 9C9N: Wrong indented flow sequence
+2:7: unterminated flow sequence
+# 9CWY: Invalid scalar at the end of mapping
+4:8: expected ':' after the key
+# 9HCY: Need document footer before directives
+2:1: unexpected '%', a plain scalar cannot start with it, quote the value
+# 9JBA: Invalid comment after end of flow sequence
+2:13: unexpected '#', a comment needs a space before it
+# 9KBC: Mapping starting at --- line
+1:9: unexpected ':', a mapping cannot start on the line of '---'
+# 9MAG: Flow sequence with invalid comma at the beginning
+2:3: unexpected ',', a flow collection cannot have an empty entry
+# 9MMA: Directive by itself with no document
+2:1: expected a document start marker (---) after the directives
+# 9MQT/01: Scalar doc with '...' in content
+1:5: unterminated double-quoted scalar
+# B63P: Directive without document
+2:1: expected a document start marker (---) after the directives
+# BD7L: Invalid mapping after sequence
+3:1: unexpected key among list items
+# BF9H: Trailing comment in multiline plain scalar
+4:8: a comment ends a plain scalar, so this line cannot continue it
+# BS4K: Comment between plain scalar lines
+2:1: a comment ends a plain scalar, so this line cannot continue it
+# C2SP: Flow Mapping Key on two lines
+2:2: unexpected ':', a key must be on a single line
+# CML9: Missing comma in flow
+3:3: expected ',' or ']'
+# CQ3W: Double quoted string without closing quote
+2:6: unterminated double-quoted scalar
+# CTN5: Flow sequence with invalid extra comma
+2:12: unexpected ',', a flow collection cannot have an empty entry
+# CVW2: Invalid comment after comma
+2:11: unexpected '#', a comment needs a space before it
+# CXX2: Mapping with anchor on document start line
+1:14: unexpected ':', a mapping cannot start on the line of '---'
+# D49Q: Multiline single quoted implicit keys
+2:3: a key must be on a single line
+# DK4H: Implicit key followed by newline
+3:3: expected ',' or ']'
+# DK95/01: Tabs that look like indentation
+2:2: invalid indentation of a line in a double-quoted scalar
+# DK95/06: Tabs that look like indentation
+3:3: tabs cannot be used for indentation
+# DMG6: Wrong indendation in Map
+3:2: unexpected indentation
+# EB22: Missing document-end marker before directive
+3:1: unexpected '%', a plain scalar cannot start with it, quote the value
+# EW3V: Wrong indendation in mapping
+2:4: unexpected ':', this line continues the scalar from the line above, check the indentation and the line above
+# G5U8: Plain dashes in flow sequence
+2:4: unexpected '-', a list item cannot be inside a flow collection, quote '-' if it is a string
+# G7JE: Multiline implicit keys
+2:2: expected ':' after the key
+# G9HC: Invalid anchor in zero indented sequence
+3:1: an anchor or a tag cannot be on a line of its own here, write it after the key or the '-'
+# GDY7: Comment that looks like a mapping key
+2:9: unexpected '#'
+# GT5M: Node anchor in sequence
+2:1: an anchor or a tag cannot be on a line of its own here, write it after the key or the '-'
+# H7J7: Node anchor not indented
+2:1: an anchor or a tag cannot be on a line of its own here, write it after the key or the '-'
+# H7TQ: Extra words on %YAML directive
+1:11: unexpected content after the %YAML version
+# HRE5: Double quoted scalar with escaped single quote
+2:17: invalid escape sequence, write \\ for a backslash or use single quotes
+# HU3P: Invalid Mapping in plain scalar
+3:5: unexpected ':', this line continues the scalar from the line above, check the indentation and the line above
+# JKF3: Multiline unidented double quoted block key
+2:1: invalid indentation of a line in a double-quoted scalar
+# JY7Z: Trailing content that looks like a mapping
+2:17: unexpected 'n' after the end of a quoted scalar
+# KS4U: Invalid item after end of flow sequence
+5:1: unexpected 'i'
+# LHL4: Invalid tag
+2:9: unexpected '{'
+# MUS6/00: Directive variants
+1:7: expected a version such as 1.2 after %YAML
+# MUS6/01: Directive variants
+3:1: unexpected '%', a plain scalar cannot start with it, quote the value
+# N4JP: Bad indentation in mapping
+3:2: unexpected indentation
+# N782: Invalid document markers in flow style
+1:1: unterminated flow sequence
+# P2EQ: Invalid sequene item on same line as previous item
+2:11: unexpected '-' after the end of a flow collection
+# Q4CL: Trailing content after quoted value
+2:17: unexpected 't' after the end of a quoted scalar
+# QB6E: Wrong indented multiline quoted scalar
+2:9: unterminated double-quoted scalar
+# QLJ7: Tag shorthand used in documents but only defined in the first
+4:5: undefined tag handle !prefix!
+# RHX7: YAML directive without document end marker
+3:1: unexpected '%', a plain scalar cannot start with it, quote the value
+# RXY3: Invalid document-end marker in single quoted string
+2:1: unterminated single-quoted scalar
+# S4GJ: Invalid text after block scalar indicator
+2:11: the content of a block scalar starts on the next line
+# S98Z: Block scalar with more spaces than first content line
+4:4: a leading empty line of a block scalar has more spaces than the first non-empty line
+# SF5V: Duplicate YAML directive
+2:1: duplicate %YAML directive
+# SR86: Anchor plus Alias
+2:10: unexpected '*', an alias cannot have an anchor or a tag
+# SU5Z: Comment without whitespace after doublequoted scalar
+1:13: unexpected '#', a comment needs a space before it
+# SU74: Anchor and alias as mapping key
+2:4: unexpected '*', an alias cannot have an anchor or a tag
+# SY6V: Anchor before sequence entry on same line
+1:9: unexpected '-', a list cannot start on the line of its anchor or tag
+# T833: Flow mapping missing a separating comma
+4:5: expected ',' or '}'
+# TD5N: Invalid scalar after sequence
+3:1: unexpected key among list items
+# U44R: Bad indentation in mapping (2)
+3:4: unexpected indentation
+# U99R: Invalid comma in tag
+1:8: unexpected ','
+# VJP3/00: Flow collections over many lines
+1:4: unterminated flow mapping
+# W9L4: Literal block scalar with more spaces in first line
+3:6: a leading empty line of a block scalar has more spaces than the first non-empty line
+# X4QW: Comment without whitespace after block scalar indicator
+1:8: invalid block scalar header
+# Y79Y/000: Tabs in various contexts
+3:1: unexpected 'b'
+# Y79Y/003: Tabs in various contexts
+1:3: unterminated flow sequence
+# Y79Y/004: Tabs in various contexts
+1:3: unexpected '-'
+# Y79Y/005: Tabs in various contexts
+1:4: unexpected '-'
+# Y79Y/006: Tabs in various contexts
+1:3: unexpected '-'
+# Y79Y/007: Tabs in various contexts
+2:3: unexpected '-', a list cannot start on the line of its key
+# Y79Y/008: Tabs in various contexts
+1:6: unexpected ':', quote the value if it contains ": "
+# Y79Y/009: Tabs in various contexts
+2:6: unexpected ':', quote the value if it contains ": "
+# YJV2: Dash in flow sequence
+1:2: unexpected '-', a list item cannot be inside a flow collection, quote '-' if it is a string
+# ZCZ6: Invalid mapping in plain single line value
+1:5: unexpected ':', quote the value if it contains ": "
+# ZL4Z: Invalid nested mapping
+2:7: unexpected ':', quote the value if it contains ": "
+# ZVH3: Wrong indented sequence item
+2:2: unexpected indentation
+# ZXT5: Implicit key followed by newline and adjacent value
+2:3: expected ',' or ']'
