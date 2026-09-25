@@ -253,7 +253,7 @@ blockMistake e i = do
   if
     | isListItem e k && byteAt e start == MINUS && i == start + 1 ->
         Just (i, "expected a space after '-'")
-    | not (isListItem e k) && (w == 0 || isBreak w) ->
+    | not (isListItem e k) && (w == 0 || isBreak w) && not (any keyColon [start .. i - 1]) ->
         Just $ case filter tightColon [start .. i - 1] of
           colon : _ -> (colon + 1, "expected a space after ':'")
           [] -> (i, "expected ':' after the key")
@@ -285,6 +285,9 @@ blockMistake e i = do
     skipItems j = if isListItem e j then skipItems (skipWhites e (j + 1)) else j
 
     -- A colon before a word, as in "key:value", but not in "http://".
+    keyColon :: Int -> Bool
+    keyColon j = byteAt e j == COLON && (let b = byteAt e (j + 1) in b == 0 || isWhite b || isBreak b)
+
     tightColon :: Int -> Bool
     tightColon j = byteAt e j == COLON && startsWord (byteAt e (j + 1))
 

@@ -377,6 +377,7 @@ test_syntaxErrors = do
   check "missing colon" (2, 4, "expected ':' after the key") "a: 1\nb 2\nc: 3\n"
   check "missing colon in a list item" (2, 8, "expected ':' after the key") "- key: value\n  other\n"
   check "missing space after a colon" (2, 3, "expected a space after ':'") "a: 1\nb:2\n"
+  check "line that has its colon" (2, 5, "unexpected end of line") "a: 1\nb: *\n"
   check "missing space after a dash" (2, 2, "expected a space after '-'") "- a\n-b\n"
   check "tab indentation" (2, 1, "tabs cannot be used for indentation") "a:\n\tb: 1\n"
   check "unterminated string" (1, 6, "unterminated double-quoted scalar") "key: \"abc\n"
