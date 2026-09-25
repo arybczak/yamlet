@@ -7,6 +7,9 @@
 module Yamlet.Internal.Time
   ( -- * Parsing
     parseDay
+  , parseMonth
+  , parseQuarter
+  , parseQuarterOfYear
   , parseTimeOfDay
   , parseLocalTime
   , parseZonedTime
@@ -15,6 +18,9 @@ module Yamlet.Internal.Time
 
     -- * Formatting
   , formatDay
+  , formatMonth
+  , formatQuarter
+  , formatQuarterOfYear
   , formatTimeOfDay
   , formatLocalTime
   , formatZonedTime
@@ -28,6 +34,8 @@ import Data.Maybe
 import Data.Scientific qualified as Sci
 import Data.Text qualified as T
 import Data.Time
+import Data.Time.Calendar.Month
+import Data.Time.Calendar.Quarter
 
 ----------------------------------------
 -- Parsing
@@ -35,6 +43,25 @@ import Data.Time
 -- | @[+-]YYYY-MM-DD@, with at least four digits in the year.
 parseDay :: T.Text -> Maybe Day
 parseDay = whole day
+
+-- | @[+-]YYYY-MM@, with at least four digits in the year.
+parseMonth :: T.Text -> Maybe Month
+parseMonth = whole $ \t -> do
+  ((y, m), rest) <- yearMonth t
+  mm <- fromYearMonthValid y m
+  pure (mm, rest)
+
+-- | @[+-]YYYY-qN@, with at least four digits in the year, e.g. @2026-q3@.
+parseQuarter :: T.Text -> Maybe Quarter
+parseQuarter = whole $ \t0 -> do
+  (y, t1) <- year t0
+  t2 <- char '-' t1
+  (q, t3) <- quarterOfYear t2
+  pure (YearQuarter y q, t3)
+
+-- | @q1@ to @q4@.
+parseQuarterOfYear :: T.Text -> Maybe QuarterOfYear
+parseQuarterOfYear = whole quarterOfYear
 
 -- | @HH:MM[:SS[.S...]]@.
 parseTimeOfDay :: T.Text -> Maybe TimeOfDay
@@ -84,6 +111,23 @@ whole p t = case p t of
 
 day :: T.Text -> Maybe (Day, T.Text)
 day t0 = do
+  ((y, m), t1) <- yearMonth t0
+  t2 <- char '-' t1
+  (d, t3) <- twoDigits t2
+  dd <- fromGregorianValid y m d
+  pure (dd, t3)
+
+-- | @[+-]YYYY-MM@, the year and the month of a date.
+yearMonth :: T.Text -> Maybe ((Integer, Int), T.Text)
+yearMonth t0 = do
+  (y, t1) <- year t0
+  t2 <- char '-' t1
+  (m, t3) <- twoDigits t2
+  pure ((y, m), t3)
+
+-- | @[+-]YYYY@, with at least four digits.
+year :: T.Text -> Maybe (Integer, T.Text)
+year t0 = do
   let (sign, t1) = case T.uncons t0 of
         Just ('-', t) -> (negate, t)
         Just ('+', t) -> (id, t)
@@ -91,12 +135,13 @@ day t0 = do
       (y, t2) = T.span isDigit t1
   -- A longer year is no real date, and its value would be costly to read.
   guard $ T.length y >= 4 && T.length y <= 18
-  t3 <- char '-' t2
-  (m, t4) <- twoDigits t3
-  t5 <- char '-' t4
-  (d, t6) <- twoDigits t5
-  dd <- fromGregorianValid (sign (T.foldl' (\acc c -> acc * 10 + toInteger (digitToInt c)) 0 y)) m d
-  pure (dd, t6)
+  pure (sign (T.foldl' (\acc c -> acc * 10 + toInteger (digitToInt c)) 0 y), t2)
+
+-- | @q1@ to @q4@, in either case.
+quarterOfYear :: T.Text -> Maybe (QuarterOfYear, T.Text)
+quarterOfYear t = case T.unpack (T.take 2 t) of
+  [q, d] | toLower q == 'q', Just qy <- lookup d [('1', Q1), ('2', Q2), ('3', Q3), ('4', Q4)] -> Just (qy, T.drop 2 t)
+  _ -> Nothing
 
 timeOfDay :: T.Text -> Maybe (TimeOfDay, T.Text)
 timeOfDay t0 = do
@@ -161,10 +206,29 @@ char c t = case T.uncons t of
 formatDay :: Day -> T.Text
 formatDay dd =
   let (y, m, d) = toGregorian dd
-      year
-        | y < 0 = "-" <> pad 4 (negate y)
-        | otherwise = pad 4 y
-  in T.concat [year, "-", pad 2 (toInteger m), "-", pad 2 (toInteger d)]
+  in T.concat [formatYear y, "-", pad 2 (toInteger m), "-", pad 2 (toInteger d)]
+
+-- | @YYYY-MM@, with a sign for a negative year.
+formatMonth :: Month -> T.Text
+formatMonth (YearMonth y m) = formatYear y <> "-" <> pad 2 (toInteger m)
+
+-- | @YYYY-qN@, with a sign for a negative year, e.g. @2026-q3@.
+formatQuarter :: Quarter -> T.Text
+formatQuarter (YearQuarter y q) = formatYear y <> "-" <> formatQuarterOfYear q
+
+-- | @q1@ to @q4@.
+formatQuarterOfYear :: QuarterOfYear -> T.Text
+formatQuarterOfYear = \case
+  Q1 -> "q1"
+  Q2 -> "q2"
+  Q3 -> "q3"
+  Q4 -> "q4"
+
+-- | A year with at least four digits, and a sign if it is negative.
+formatYear :: Integer -> T.Text
+formatYear y
+  | y < 0 = "-" <> pad 4 (negate y)
+  | otherwise = pad 4 y
 
 -- | @HH:MM:SS@, with the fraction of a second if it is not zero.
 formatTimeOfDay :: TimeOfDay -> T.Text

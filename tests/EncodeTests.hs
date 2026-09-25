@@ -16,6 +16,8 @@ import Data.Sequence qualified as Seq
 import Data.Set qualified as Set
 import Data.Text qualified as T
 import Data.Time
+import Data.Time.Calendar.Month
+import Data.Time.Calendar.Quarter
 import Data.Tree qualified as Tree
 import Data.Version
 import Test.QuickCheck hiding (Fixed)
@@ -94,6 +96,19 @@ test_time = do
   roundTrip "local time" noon
   roundTrip "UTC time" (UTCTime (fromGregorian (-44) 3 15) 0.000000000001)
   roundTrip "diff time" (picosecondsToDiffTime 123456789)
+  assertEqual "month" "2026-09\n" (encodeText (YearMonth 2026 9))
+  assertEqual "month of a negative year" "-0044-03\n" (encodeText (YearMonth (-44) 3))
+  assertEqual "quarter" "2026-q3\n" (encodeText (YearQuarter 2026 Q3))
+  assertEqual "quarter of a year" "q3\n" (encodeText Q3)
+  assertEqual "day of the week" "monday\n" (encodeText Monday)
+  assertEqual "calendar days" "months: 1\ndays: 2\n" (encodeText (CalendarDiffDays 1 2))
+  assertEqual "calendar time" "months: 1\ntime: 1.5\n" (encodeText (CalendarDiffTime 1 1.5))
+  roundTrip "months" [YearMonth 2026 1, YearMonth 12345 12, YearMonth (-1) 6]
+  roundTrip "quarters" [YearQuarter 2026 Q1, YearQuarter (-5) Q4]
+  roundTrip "quarters of a year" [Q1, Q2, Q3, Q4]
+  roundTrip "days of the week" [Monday .. Sunday]
+  roundTrip "calendar days" (CalendarDiffDays (-3) 40)
+  roundTrip "calendar time" (CalendarDiffTime 2 (-0.000000000001))
   assertEqual
     "zoned time with a large offset"
     (Right (noon, 900))

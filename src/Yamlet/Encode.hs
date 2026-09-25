@@ -34,6 +34,8 @@ import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Builder qualified as B
 import Data.Time
+import Data.Time.Calendar.Month
+import Data.Time.Calendar.Quarter
 import Data.Tree qualified as Tree
 import Data.Version
 import Data.Void
@@ -99,6 +101,23 @@ instance ToYaml NominalDiffTime where
 -- | A number of seconds.
 instance ToYaml DiffTime where
   toYaml d = node (Float (Finite (Sci.scientific (diffTimeToPicoseconds d) (-12))))
+
+instance ToYaml Month where toYaml = node . String . formatMonth
+instance ToYaml Quarter where toYaml = node . String . formatQuarter
+instance ToYaml QuarterOfYear where toYaml = node . String . formatQuarterOfYear
+
+-- | The English name in lowercase, e.g. @monday@.
+instance ToYaml DayOfWeek where
+  toYaml = node . String . T.toLower . T.pack . show
+
+-- | A mapping with the keys @months@ and @days@, e.g. @{months: 1, days: 2}@.
+instance ToYaml CalendarDiffDays where
+  toYaml d = mapping ["months" .= cdMonths d, "days" .= cdDays d]
+
+-- | A mapping with the keys @months@ and @time@, a number of seconds, e.g.
+-- @{months: 1, time: 1.5}@.
+instance ToYaml CalendarDiffTime where
+  toYaml d = mapping ["months" .= ctMonths d, "time" .= ctTime d]
 
 instance ToYaml T.Text where toYaml = node . String
 instance ToYaml TL.Text where toYaml = node . String . TL.toStrict

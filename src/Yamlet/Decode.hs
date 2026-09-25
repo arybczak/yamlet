@@ -56,6 +56,8 @@ import Data.Set qualified as Set
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
 import Data.Time
+import Data.Time.Calendar.Month
+import Data.Time.Calendar.Quarter
 import Data.Tree qualified as Tree
 import Data.Version
 import Data.Void
@@ -403,6 +405,37 @@ instance FromYaml NominalDiffTime where
 -- | A number of seconds, rounded down to a picosecond.
 instance FromYaml DiffTime where
   parseYaml = withScientific $ fmap picosecondsToDiffTime . duration
+
+-- | @YYYY-MM@, e.g. @2026-09@.
+instance FromYaml Month where
+  parseYaml = withText $ maybe (fail "expected a month such as 2026-09") pure . parseMonth
+
+-- | @YYYY-qN@, e.g. @2026-q3@.
+instance FromYaml Quarter where
+  parseYaml = withText $ maybe (fail "expected a quarter such as 2026-q3") pure . parseQuarter
+
+-- | @q1@ to @q4@.
+instance FromYaml QuarterOfYear where
+  parseYaml = withText $ maybe (fail "expected a quarter of a year such as q3") pure . parseQuarterOfYear
+
+-- | The English name in any case, e.g. @monday@.
+instance FromYaml DayOfWeek where
+  parseYaml = withText $ \t ->
+    maybe (fail "expected a day of the week such as monday") pure $
+      lookup (T.toLower t) [(T.toLower (T.pack (show d)), d) | d <- [Monday .. Sunday]]
+
+-- | A mapping with the keys @months@ and @days@, e.g. @{months: 1, days: 2}@.
+instance FromYaml CalendarDiffDays where
+  parseYaml = withMapping $ \o -> do
+    rejectUnknownKeys ["months", "days"] o
+    CalendarDiffDays <$> o .: "months" <*> o .: "days"
+
+-- | A mapping with the keys @months@ and @time@, a number of seconds, e.g.
+-- @{months: 1, time: 1.5}@.
+instance FromYaml CalendarDiffTime where
+  parseYaml = withMapping $ \o -> do
+    rejectUnknownKeys ["months", "time"] o
+    CalendarDiffTime <$> o .: "months" <*> o .: "time"
 
 zonedTimeMismatch :: String
 zonedTimeMismatch = "expected a date, a time and a time zone such as 2026-09-25T12:30:00Z"

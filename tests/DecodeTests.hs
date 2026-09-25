@@ -18,6 +18,8 @@ import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
 import Data.Text.Internal qualified as T
 import Data.Time
+import Data.Time.Calendar.Month
+import Data.Time.Calendar.Quarter
 import Data.Version
 import Data.Void
 import Test.Tasty
@@ -268,6 +270,18 @@ test_time = do
     "invalid day"
     (Just (1, 1, "expected a date such as 2026-09-25"))
     (errorOf (decodeText @Day "2026-02-30"))
+  assertEqual "invalid month" (Just (1, 1, "expected a month such as 2026-09")) (errorOf (decodeText @Month "2026-13"))
+  assertEqual "uppercase quarter" (Right (YearQuarter 2026 Q3)) (decodeText "2026-Q3")
+  assertEqual "invalid quarter" (Just (1, 1, "expected a quarter such as 2026-q3")) (errorOf (decodeText @Quarter "2026-q5"))
+  assertEqual "day of the week in another case" (Right Friday) (decodeText "FriDay")
+  assertEqual
+    "invalid day of the week"
+    (Just (1, 1, "expected a day of the week such as monday"))
+    (errorOf (decodeText @DayOfWeek "mon"))
+  assertEqual
+    "unknown key of calendar days"
+    (Just (1, 22, "unknown key \"weeks\", expected one of: months, days"))
+    (errorOf (decodeText @CalendarDiffDays "{months: 1, days: 2, weeks: 3}"))
   assertEqual "short year" (Just (1, 1, "expected a date such as 2026-09-25")) (errorOf (decodeText @Day "26-09-25"))
   assertEqual "time without seconds" (Right (TimeOfDay 12 30 0)) (decodeText "12:30")
   assertEqual "time with a fraction" (Right (TimeOfDay 12 30 5.25)) (decodeText "12:30:05.25")
