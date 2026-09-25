@@ -59,7 +59,9 @@ data Node = Node
   -- ^ The position of the node in the input, or 'S.noOffset' for a node that
   -- a program created.
   , tag :: !T.Text
-  -- ^ The resolved tag, e.g. @tag:yaml.org,2002:str@.
+  -- ^ The resolved tag, e.g. @tag:yaml.org,2002:str@. The encoder writes a
+  -- tag that is not the default for the value. A value that does not fit its
+  -- tag of the core schema, e.g. a string with 'intTag', does not read back.
   , value :: !Value
   }
   deriving stock (Eq, Show, Generic)
@@ -76,7 +78,9 @@ data Value
   | Float !FloatValue
   | String !T.Text
   | Sequence [Node]
-  | -- | The entries of a mapping in the order of the input. The keys are unique.
+  | -- | The entries of a mapping in the order of the input. The keys are
+    -- unique. The encoder does not check this for a mapping that a program
+    -- builds, and a mapping with two equal keys does not read back.
     Mapping [(Node, Node)]
   deriving stock (Eq, Show, Generic)
   deriving anyclass (NFData)

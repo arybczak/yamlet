@@ -53,7 +53,8 @@ key .= v = (node (String key), toYAML v)
 
 infixr 8 .=
 
--- | A mapping with the entries in the given order.
+-- | A mapping with the entries in the given order. The keys must be
+-- different, as for 'Mapping'.
 mapping :: [(Node, Node)] -> Node
 mapping = node . Mapping
 
@@ -106,6 +107,8 @@ instance ToYAML a => ToYAML (NE.NonEmpty a) where
 instance ToYAML a => ToYAML (Maybe a) where
   toYAML = maybe (node Null) toYAML
 
+-- | Two keys that give the same node, e.g. 'Nothing' and @'Just' ()@, or two
+-- NaN values, give a mapping that does not read back.
 instance (ToYAML k, ToYAML v) => ToYAML (M.Map k v) where
   toYAML m = mapping [(toYAML k, toYAML v) | (k, v) <- M.toList m]
 
