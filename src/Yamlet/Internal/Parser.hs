@@ -120,6 +120,9 @@ unexpected :: Env -> Int -> (Int, String)
 unexpected e i = case indentationTab (i - 1) Nothing of
   Just tab -> (tab, "tabs cannot be used for indentation")
   Nothing | Just r <- blockMistake e i -> r
+  Nothing
+    | Just colon <- aliasColon ->
+        (colon, "the name of the alias includes the ':', write a space before ':' if the alias is a key")
   Nothing -> (i,) $ case byteAt e i of
     w
       | byteBefore e i == STAR && not (isAnchorChar w) -> "expected an alias name after '*'"
@@ -140,6 +143,16 @@ unexpected e i = case indentationTab (i - 1) Nothing of
       | Just msg <- mistake e i -> msg
       | otherwise -> unexpectedChar e i
   where
+    -- The ':' that ends an alias name before the index, as in "*x: 1". An
+    -- alias name can contain ':'.
+    aliasColon :: Maybe Int
+    aliasColon =
+      let j = skipBackWhites e i
+          start = wordStart e j
+      in if j > start && byteBefore e j == COLON && byteAt e start == STAR
+           then Just (j - 1)
+           else Nothing
+
     -- The start of the entry on the line, after any "- ".
     entryStart :: Int
     entryStart = skipListItems e (skipSpaces e (lineStart e i))
@@ -199,7 +212,7 @@ mistake e i
   | w == COMMA && (let b = byteBefore e (skipBack i) in b == COMMA || b == LBRACKET || b == LBRACE) =
       Just "unexpected ',', a flow collection cannot have an empty entry"
   | w == STAR && not (isAnchorChar (byteAt e (i + 1))) = Just "expected an alias name after '*'"
-  | w == STAR && (let b = byteAt e (wordStart (skipBackWhites i)) in b == AMP || b == EXCL) =
+  | w == STAR && (let b = byteAt e (wordStart e (skipBackWhites e i)) in b == AMP || b == EXCL) =
       Just "unexpected '*', an alias cannot have an anchor or a tag"
   | w == AMP && not (isAnchorChar (byteAt e (i + 1))) = Just "expected an anchor name after '&'"
   | afterQuote SQUOTE =
@@ -220,13 +233,6 @@ mistake e i
     skipBack j
       | isWhite (byteBefore e j) || isBreak (byteBefore e j) = skipBack (j - 1)
       | otherwise = j
-
-    skipBackWhites :: Int -> Int
-    skipBackWhites j = if isWhite (byteBefore e j) then skipBackWhites (j - 1) else j
-
-    -- The start of the word that ends at the index, e.g. of an anchor.
-    wordStart :: Int -> Int
-    wordStart j = if isAnchorChar (byteBefore e j) then wordStart (j - 1) else j
 
     -- Content right after a quote, as in 'it's'. A plain scalar can hold a
     -- quote, so the quote closes a quoted scalar. A colon there ends a key.
@@ -336,6 +342,16 @@ blockMistake e i = do
         || b == DQUOTE
         || b == LBRACKET
         || b == LBRACE
+
+-- | The index after the last content before the white space that ends at the
+-- index.
+skipBackWhites :: Env -> Int -> Int
+skipBackWhites e i = if isWhite (byteBefore e i) then skipBackWhites e (i - 1) else i
+
+-- | The start of the word that ends at the index, e.g. of an anchor or an
+-- alias with its indicator.
+wordStart :: Env -> Int -> Int
+wordStart e i = if isAnchorChar (byteBefore e i) then wordStart e (i - 1) else i
 
 -- | The start of the line that contains the index.
 lineStart :: Env -> Int -> Int
