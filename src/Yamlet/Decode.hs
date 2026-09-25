@@ -189,6 +189,8 @@ data Object = Object
   { node :: !Node
   , entries :: [(Node, Node)]
   , index :: M.Map T.Text (Node, Node)
+  , otherKeys :: [Node]
+  -- ^ The keys that are not strings, for the error of a lookup.
   }
 
 -- A list with linear lookups is faster only up to about 10 keys, and it saves
@@ -196,7 +198,13 @@ data Object = Object
 mkObject :: Node -> [(Node, Node)] -> Parser Object
 mkObject n kvs = do
   index <- foldM insert M.empty kvs
-  pure Object {node = n, entries = kvs, index = index}
+  pure
+    Object
+      { node = n
+      , entries = kvs
+      , index = index
+      , otherKeys = [k | (k, _) <- kvs, case k.value of String _ -> False; _ -> True]
+      }
   where
     insert :: M.Map T.Text (Node, Node) -> (Node, Node) -> Parser (M.Map T.Text (Node, Node))
     insert m kv@(k, _) = case k.value of
@@ -223,33 +231,37 @@ lookupKey key o = snd <$> M.lookup key o.index
 
 -- | The value of a key. It is an error if the key is missing.
 (.:) :: FromYAML a => Object -> T.Text -> Parser a
-o .: key = case M.lookup key o.index of
-  Just (_, v) -> parseNode parseYAML v
-  Nothing -> case L.find (\(k, _) -> k.value == plain) o.entries of
-    Just (k, _) -> failAt k $ "the key " ++ T.unpack key ++ " is " ++ describe k.value ++ ", not a string"
+o .: key =
+  findKey o key >>= \case
+    Just v -> parseNode parseYAML v
     Nothing -> failAt o.node $ "missing key " ++ show key
-  where
-    -- A scalar key with the same text, e.g. 404, is not a string, so the index
-    -- does not have it.
-    plain :: Value
-    plain = resolvePlain key
 
 -- | The value of a key, or 'Nothing' if the key is missing or its value is
 -- null.
 (.:?) :: FromYAML a => Object -> T.Text -> Parser (Maybe a)
-o .:? key = case M.lookup key o.index of
-  Just (_, v) -> case v.value of
-    Null -> pure Nothing
-    _ -> Just <$> parseNode parseYAML v
-  Nothing -> pure Nothing
+o .:? key =
+  findKey o key >>= \case
+    Just v | Null <- v.value -> pure Nothing
+    mv -> traverse (parseNode parseYAML) mv
 
 -- | The value of a key, or 'Nothing' if the key is missing. Unlike '.:?', a
 -- null value goes to the parser of the value, e.g. @'Maybe' a@ gives
 -- @'Just' 'Nothing'@ for a null value.
 (.:!) :: FromYAML a => Object -> T.Text -> Parser (Maybe a)
-o .:! key = case M.lookup key o.index of
-  Just (_, v) -> Just <$> parseNode parseYAML v
-  Nothing -> pure Nothing
+o .:! key = findKey o key >>= traverse (parseNode parseYAML)
+
+-- | The value of a string key, or 'Nothing' if the key is missing. A key with
+-- the same text that is not a string, e.g. 404, is an error, so that its
+-- value does not go away.
+findKey :: Object -> T.Text -> Parser (Maybe Node)
+findKey o key = case M.lookup key o.index of
+  Just (_, v) -> pure (Just v)
+  Nothing -> case L.find (\k -> k.value == plain) o.otherKeys of
+    Just k -> failAt k $ "the key " ++ T.unpack key ++ " is " ++ describe k.value ++ ", not a string"
+    Nothing -> pure Nothing
+  where
+    plain :: Value
+    plain = resolvePlain key
 
 -- | A default for an optional value.
 (.!=) :: Parser (Maybe a) -> a -> Parser a

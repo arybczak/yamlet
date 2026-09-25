@@ -405,6 +405,10 @@ test_optionalKeys = do
   check "missing" (Nothing, Nothing) "b: 1\n"
   check "null" (Nothing, Just Nothing) "a: null\n"
   check "value" (Just (Just 1), Just (Just 1)) "a: 1\n"
+  let keyError :: (Object -> T.Text -> Parser (Maybe Int)) -> Either (Offset, String) (Maybe Int)
+      keyError op = either (error . show) (runParser (withMapping (`op` "404"))) (decodeText "200: 1\n404: 2\n")
+  assertEqual "optional integer key" (Left (Offset 7, "the key 404 is an integer, not a string")) (keyError (.:?))
+  assertEqual "optional integer key, null as a value" (Left (Offset 7, "the key 404 is an integer, not a string")) (keyError (.:!))
 
 test_syntaxTree :: Assertion
 test_syntaxTree = do
