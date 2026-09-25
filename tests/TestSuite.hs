@@ -83,27 +83,43 @@ runTest path = do
                 (map withoutStyle (toEvents docs'))
               assertEqual (preface ++ "\nrendered again") out (renderSyntax defaultRenderOptions docs')
           hasJson <- doesFileExist (path </> "in.json")
-          when hasJson $ do
-            json <- BS.readFile (path </> "in.json")
-            expectedValues <- case A.parseOnly jsonValues json of
-              Right vs -> pure vs
-              Left err -> assertFailure $ "invalid in.json: " ++ err
-            case Y.decodeNodes input of
-              Left err -> assertFailure $ preface ++ "\nunexpected error: " ++ prettyError "in.yaml" err
-              Right nodes -> assertEqual (preface ++ "\nvalues") expectedValues (map toJson nodes)
+          case Y.decodeNodes input of
+            Left err
+              | hasJson -> assertFailure $ preface ++ "\nunexpected error: " ++ prettyError "in.yaml" err
+              -- The decoder rejects duplicate keys, which the syntax allows.
+              | otherwise -> pure ()
+            Right nodes -> do
+              when hasJson $ do
+                json <- BS.readFile (path </> "in.json")
+                expectedValues <- case A.parseOnly jsonValues json of
+                  Right vs -> pure vs
+                  Left err -> assertFailure $ "invalid in.json: " ++ err
+                assertEqual (preface ++ "\nvalues") expectedValues (map toJson nodes)
+              let encoded = Y.encodeAllText nodes
+              case Y.decodeNodes encoded of
+                Left err -> assertFailure $ preface ++ "\nencoded:\n" ++ T.unpack encoded ++ "\nerror: " ++ prettyError "out.yaml" err
+                Right nodes' ->
+                  assertEqual
+                    (preface ++ "\nencoded:\n" ++ T.unpack encoded)
+                    (map withoutOffsets nodes)
+                    (map withoutOffsets nodes')
   where
     jsonValues :: A.Parser [J.Value]
     jsonValues = many (A.skipSpace *> J.json') <* A.skipSpace <* A.endOfInput
 
-    -- The renderer can change the styles and the document markers.
+    -- The renderer can change the styles.
     withoutStyle :: Event -> Event
     withoutStyle = \case
-      DocumentStart _ -> DocumentStart False
-      DocumentEnd _ -> DocumentEnd False
       SequenceStart props _ -> SequenceStart props Block
       MappingStart props _ -> MappingStart props Block
       ScalarEvent props _ t -> ScalarEvent props Plain t
       e -> e
+
+    withoutOffsets :: Y.Node -> Y.Node
+    withoutOffsets n = Y.Node Y.noOffset n.tag $ case n.value of
+      Y.Sequence xs -> Y.Sequence (map withoutOffsets xs)
+      Y.Mapping kvs -> Y.Mapping [(withoutOffsets k, withoutOffsets v) | (k, v) <- kvs]
+      v -> v
 
 -- | The JSON value of a node. The keys of the mappings in the tests with JSON
 -- are strings.
