@@ -46,8 +46,8 @@ import Data.Text.Lazy qualified as TL
 import Data.Word
 import Numeric.Natural
 
-import Yamlet.Node
 import Yamlet.Internal.Schema
+import Yamlet.Node
 
 -- | A parser of nodes. Its errors point to the node that the parser works on,
 -- unless 'failAt' names another one.
@@ -256,9 +256,11 @@ rejectUnknownKeys :: [T.Text] -> Object -> Parser ()
 rejectUnknownKeys known o = forM_ o.entries $ \(k, _) -> case k.value of
   String t
     | t `elem` known -> pure ()
-    | otherwise -> failAt k $ "unknown key " ++ show t ++ case suggestion (T.unpack t) of
-        Just s -> ", did you mean " ++ show s ++ "?"
-        Nothing -> ", expected one of: " ++ L.intercalate ", " (map T.unpack known)
+    | otherwise ->
+        failAt k $
+          "unknown key " ++ show t ++ case suggestion (T.unpack t) of
+            Just s -> ", did you mean " ++ show s ++ "?"
+            Nothing -> ", expected one of: " ++ L.intercalate ", " (map T.unpack known)
   _ -> typeMismatch "a string as the key" k
   where
     suggestion :: String -> Maybe T.Text
