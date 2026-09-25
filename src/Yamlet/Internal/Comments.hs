@@ -20,6 +20,7 @@ import Data.Word
 
 import Yamlet.Internal.Parser.Monad hiding ((<|>))
 import Yamlet.Internal.Syntax
+import Yamlet.Internal.Utils
 
 -- | A comment or an empty line. The indices are offsets of the input.
 data Item = Item
@@ -304,7 +305,7 @@ scanItems e start stop = go start start False False
       | otherwise = lineBefore i (j - 1) ls
 
     dropSpace :: T.Text -> T.Text
-    dropSpace t = fromMaybe t (T.stripPrefix " " t)
+    dropSpace t = fromMaybe t (textStripPrefix " " t)
 
 isBreak :: Word8 -> Bool
 isBreak w = w == 0x0A || w == 0x0D

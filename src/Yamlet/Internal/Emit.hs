@@ -29,6 +29,8 @@ import Data.Text.Builder.Linear qualified as B
 import Data.Word
 import Numeric
 
+import Yamlet.Internal.Utils
+
 -- | The text reads back as the same text if it is a plain scalar on one line,
 -- in a flow collection if the flag is set. The check ignores the schema, so
 -- e.g. @12@ passes.
@@ -42,8 +44,8 @@ plainSyntax inFlow t = case T.uncons t of
       && T.last t /= ':'
       && not (": " `T.isInfixOf` t)
       && not (" #" `T.isInfixOf` t)
-      && not ("---" `T.isPrefixOf` t)
-      && not ("..." `T.isPrefixOf` t)
+      && not (textIsPrefixOf "---" t)
+      && not (textIsPrefixOf "..." t)
   where
     firstOk :: Char -> T.Text -> Bool
     firstOk c rest
@@ -181,10 +183,10 @@ line indent l
 tagText :: T.Text -> B.Builder
 tagText tag
   | T.null tag = "!"
-  | Just suffix <- T.stripPrefix "tag:yaml.org,2002:" tag
+  | Just suffix <- textStripPrefix "tag:yaml.org,2002:" tag
   , not (T.null suffix) =
       "!!" <> shorthand suffix
-  | Just suffix <- T.stripPrefix "!" tag
+  | Just suffix <- textStripPrefix "!" tag
   , not (T.null suffix) =
       "!" <> shorthand suffix
   | Just (c, suffix) <- T.uncons tag
@@ -198,7 +200,7 @@ tagHandle tag = case T.uncons tag of
   Just (c, suffix)
     | c /= '!'
     , not (T.null suffix)
-    , not ("tag:yaml.org,2002:" `T.isPrefixOf` tag)
+    , not (textIsPrefixOf "tag:yaml.org,2002:" tag)
     , not (isVerbatim tag) ->
         Just c
   _ -> Nothing

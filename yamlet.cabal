@@ -76,6 +76,7 @@ library
                      Yamlet.Internal.Schema
                      Yamlet.Internal.Syntax
                      Yamlet.Internal.Time
+                     Yamlet.Internal.Utils
                      Yamlet.Node
                      Yamlet.Schema
                      Yamlet.Syntax

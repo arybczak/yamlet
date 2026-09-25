@@ -37,6 +37,8 @@ import Data.Time
 import Data.Time.Calendar.Month
 import Data.Time.Calendar.Quarter
 
+import Yamlet.Internal.Utils
+
 ----------------------------------------
 -- Parsing
 
@@ -160,7 +162,7 @@ timeOfDay t0 = do
       let (frac, rest') = case char '.' rest of
             Just r -> T.span isDigit r
             Nothing -> (T.empty, rest)
-      guard $ not (T.null frac && T.isPrefixOf "." rest)
+      guard $ not (T.null frac && textIsPrefixOf "." rest)
       -- Digits after the twelfth do not change a picosecond value.
       let ps = T.foldl' (\acc c -> acc * 10 + toInteger (digitToInt c)) 0 (T.justifyLeft 12 '0' (T.take 12 frac))
       pure (MkFixed (toInteger s * 10 ^ (12 :: Int) + ps), rest')

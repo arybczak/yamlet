@@ -20,6 +20,7 @@ import Data.Scientific qualified as Sci
 import Data.Text qualified as T
 
 import Yamlet.Internal.Emit
+import Yamlet.Internal.Utils
 import Yamlet.Node
 
 -- | The value of a plain scalar without a tag, e.g. @null@, @true@, @12@,
@@ -100,10 +101,10 @@ isYaml11Bool t =
 -- | [-+]?[0-9]+, 0o[0-7]+ or 0x[0-9a-fA-F]+.
 readInt :: T.Text -> Maybe Integer
 readInt t
-  | Just ds <- T.stripPrefix "0o" t = digits 8 isOctDigit ds
-  | Just ds <- T.stripPrefix "0x" t = digits 16 isHexDigit ds
-  | Just ds <- T.stripPrefix "-" t = negate <$> digits 10 isDigit ds
-  | Just ds <- T.stripPrefix "+" t = digits 10 isDigit ds
+  | Just ds <- textStripPrefix "0o" t = digits 8 isOctDigit ds
+  | Just ds <- textStripPrefix "0x" t = digits 16 isHexDigit ds
+  | Just ds <- textStripPrefix "-" t = negate <$> digits 10 isDigit ds
+  | Just ds <- textStripPrefix "+" t = digits 10 isDigit ds
   | otherwise = digits 10 isDigit t
   where
     digits :: Integer -> (Char -> Bool) -> T.Text -> Maybe Integer
@@ -191,7 +192,7 @@ readFloat t0 = case t0 of
               (frac, rest') = case T.uncons rest of
                 Just ('.', r) -> T.span isDigit r
                 _ -> ("", rest)
-              hasDot = T.isPrefixOf "." rest
+              hasDot = textIsPrefixOf "." rest
           in if
                | T.null int && T.null frac -> Nothing
                | not (T.null int) || hasDot -> do
