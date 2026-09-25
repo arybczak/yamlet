@@ -14,6 +14,7 @@ module Yamlet.Internal.Parser.Hints
 
 import Control.Monad
 import Data.Char
+import Data.List qualified as L
 import Data.Maybe
 import Data.Text qualified as T
 import Data.Text.Array qualified as A
@@ -28,6 +29,10 @@ import Yamlet.Internal.Parser.Monad
 unexpected :: Env -> Int -> (Int, String)
 unexpected e i = case indentationTab (i - 1) Nothing of
   Just tab -> (tab, "tabs cannot be used for indentation")
+  Nothing
+    | byteAt e i == COLON && firstColon
+    , Just tab <- tabBeforeContent ->
+        (tab, "tabs cannot be used for indentation")
   Nothing
     | Just start <- propertiesLine ->
         (start, "an anchor or a tag cannot be on a line of its own here, write it after the key or the '-'")
@@ -193,6 +198,13 @@ unexpected e i = case indentationTab (i - 1) Nothing of
           | otherwise = case byteBefore e j of
               SPACE -> go (j - 1)
               w -> isBreak w
+
+    -- The first tab before the content of the line of the index, as in
+    -- "\tkey: value". A plain scalar can follow a tab, but a key cannot.
+    tabBeforeContent :: Maybe Int
+    tabBeforeContent =
+      let start = lineStart e i
+      in L.find (\j -> byteAt e j == TAB) [start .. skipWhites e start - 1]
 
     -- The first tab in the indentation before the index, if only white space
     -- precedes the index on its line.

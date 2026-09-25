@@ -580,6 +580,8 @@ test_syntaxErrors = do
   check "alias without a name in a flow sequence" (1, 2, "expected an alias name after '*'") "[*, a]\n"
   check "missing space after a dash" (2, 2, "expected a space after '-'") "- a\n-b\n"
   check "tab indentation" (2, 1, "tabs cannot be used for indentation") "a:\n\tb: 1\n"
+  check "tab before a key" (1, 1, "tabs cannot be used for indentation") "\tkey: value\n"
+  check "tab after spaces before a key" (2, 3, "tabs cannot be used for indentation") "a:\n  \tb: c\n"
   check "unterminated string" (1, 6, "unterminated double-quoted scalar") "key: \"abc\n"
   check "flow sequence before a key" (1, 6, "unterminated flow sequence") "key: [a, b\nc: d\n"
   check "flow sequence at the end" (1, 6, "unterminated flow sequence") "key: [a, b\n"
