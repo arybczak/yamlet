@@ -47,7 +47,7 @@ import Data.Word
 import Numeric.Natural
 
 import Yamlet.Node
-import Yamlet.Schema
+import Yamlet.Internal.Schema
 
 -- | A parser of nodes. Its errors point to the node that the parser works on,
 -- unless 'failAt' names another one.
@@ -123,6 +123,12 @@ withNull p = parseNode $ \n -> case n.value of
 withBool :: (Bool -> Parser a) -> Node -> Parser a
 withBool f = parseNode $ \n -> case n.value of
   Bool b -> f b
+  String t
+    | isYaml11Bool t ->
+        failAt n $
+          "expected a boolean, but got the string "
+            ++ show t
+            ++ ", which is a boolean only in YAML 1.1"
   _ -> typeMismatch "a boolean" n
 
 -- | The value of an integer.

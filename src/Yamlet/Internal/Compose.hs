@@ -143,7 +143,11 @@ compose input doc
             Nothing ->
               Left
                 $ errorAt input off
-                $ "invalid value for the tag !!" ++ T.unpack (T.drop 18 tag)
+                $ "invalid value for the tag !!"
+                  ++ T.unpack (T.drop 18 tag)
+                  ++ if tag == boolTag && isYaml11Bool t
+                    then ", " ++ show t ++ " is a boolean only in YAML 1.1"
+                    else ""
       where
         node' :: Value -> Node
         node' v = Node off (defaultTag v) v

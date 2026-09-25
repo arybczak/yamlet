@@ -11,6 +11,7 @@ module Yamlet.Internal.Schema
   , resolveTaggedExact
   , isPlainString
   , isPlainSafe
+  , isYaml11Bool
   ) where
 
 import Control.Applicative
@@ -89,6 +90,12 @@ readBool = \case
   "False" -> Just False
   "FALSE" -> Just False
   _ -> Nothing
+
+-- | A word that YAML 1.1 reads as a boolean, but YAML 1.2 as a string, e.g.
+-- yes or off.
+isYaml11Bool :: T.Text -> Bool
+isYaml11Bool t =
+  t `elem` ["y", "Y", "yes", "Yes", "YES", "n", "N", "no", "No", "NO", "on", "On", "ON", "off", "Off", "OFF"]
 
 -- | [-+]?[0-9]+, 0o[0-7]+ or 0x[0-9a-fA-F]+.
 readInt :: T.Text -> Maybe Integer

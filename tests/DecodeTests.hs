@@ -482,6 +482,14 @@ test_typeErrors = do
     (Just (1, 1, "expected a string, but got a boolean"))
     (errorOf (decodeText @IntOrText "true"))
   assertEqual
+    "YAML 1.1 boolean"
+    (Just (1, 1, "expected a boolean, but got the string \"yes\", which is a boolean only in YAML 1.1"))
+    (errorOf (decodeText @Bool "yes"))
+  assertEqual
+    "YAML 1.1 boolean with a tag"
+    (Just (1, 11, "invalid value for the tag !!bool, \"off\" is a boolean only in YAML 1.1"))
+    (errorOf (decodeNodes "a: !!bool off\n"))
+  assertEqual
     "list instead of string"
     (Just (1, 7, "expected a string, but got a list"))
     (errorOf (decodeText @Config "name: [a]\n"))
