@@ -205,11 +205,15 @@ test_fallbacks = do
     (render (sequenceNode [anchored "a_b" (plainNode "x"), anchored "a b" (plainNode "y"), contentNode (Alias "a b")]))
 
 test_forceBlock :: Assertion
-test_forceBlock =
+test_forceBlock = do
   assertEqual
     "output"
     (Right expected)
     (renderSyntax defaultRenderOptions {forceBlock = True} <$> parseDocumentsText input)
+  assertEqual
+    "collection in a key"
+    (Right "? - a\n  - b\n: 1\n")
+    (renderSyntax defaultRenderOptions {forceBlock = True} <$> parseDocumentsText "[a, b]: 1\n")
   where
     input :: T.Text
     input = "list: [a, [b, c], {d: e}]\nkey: [[f]]\n"

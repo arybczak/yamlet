@@ -26,8 +26,8 @@ import Yamlet.Internal.Syntax
 -- | The options of 'renderSyntax'.
 newtype RenderOptions = RenderOptions
   { forceBlock :: Bool
-  -- ^ Write every non-empty collection in the block style, unless it is in
-  -- a flow collection or in a key.
+  -- ^ Write every non-empty collection in the block style. A collection in a
+  -- key then becomes an explicit key, e.g. @? - a@.
   }
 
 -- | The collection styles of the tree.
