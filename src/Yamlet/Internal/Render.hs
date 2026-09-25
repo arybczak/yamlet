@@ -147,13 +147,13 @@ validAnchors doc
 document :: RenderOptions -> Bool -> Document -> B.Builder
 document opts afterEnd doc =
   mconcat
-    [ lines_ 0 doc.docComments.before
+    [ if needsEnd then "...\n" else mempty
+    , lines_ 0 doc.docComments.before
     , if directives
         then
-          (if afterEnd then mempty else "...\n")
-            <> foldMap
-              (\v -> "%YAML " <> B.fromString (show v.major) <> "." <> B.fromString (show v.minor) <> "\n")
-              doc.version
+          foldMap
+            (\v -> "%YAML " <> B.fromString (show v.major) <> "." <> B.fromString (show v.minor) <> "\n")
+            doc.version
             <> foldMap tagDirective handles
         else mempty
     , body
@@ -177,6 +177,16 @@ document opts afterEnd doc =
 
     directives :: Bool
     directives = isJust doc.version || not (null handles)
+
+    -- Without an end marker, the previous document takes the comments above
+    -- this one.
+    needsEnd :: Bool
+    needsEnd = not afterEnd && (directives || any isComment doc.docComments.before)
+
+    isComment :: Line -> Bool
+    isComment = \case
+      Comment _ -> True
+      EmptyLine -> False
 
     -- A document needs a start marker after another document, after
     -- directives, for a comment on the marker line, and if it is empty. A

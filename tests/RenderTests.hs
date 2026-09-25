@@ -247,6 +247,16 @@ test_documents = do
       ]
   check "comment after the end marker" "a: b\n...\n# c\nd: e\n"
   check "comment before the directives" "a\n...\n# b\n%YAML 1.2\n--- c\n"
+  let commented :: Document -> Document
+      commented d = d {docComments = noComments {before = [Comment "c"]}}
+  assertEqual
+    "comment above a document without an end marker above it"
+    "a\n...\n# c\n--- b\n"
+    (renderSyntax defaultRenderOptions [document (plainNode "a"), commented (document (plainNode "b"))])
+  assertEqual
+    "comment above a document with directives"
+    "a\n...\n# c\n%YAML 1.2\n--- b\n"
+    (renderSyntax defaultRenderOptions [document (plainNode "a"), commented (document (plainNode "b")) {version = Just (Version 1 2)}])
 
 -- | The comments of a document with the path of their nodes.
 commentsOf :: Document -> [(String, String, T.Text)]
