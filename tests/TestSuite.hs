@@ -147,8 +147,8 @@ runTest path = do
                 Right nodes' ->
                   assertEqual
                     (preface ++ "\nencoded:\n" ++ T.unpack encoded)
-                    (map withoutOffsets nodes)
-                    (map withoutOffsets nodes')
+                    (map Y.withoutOffsets nodes)
+                    (map Y.withoutOffsets nodes')
   where
     jsonValues :: A.Parser [J.Value]
     jsonValues = many (A.skipSpace *> J.json') <* A.skipSpace <* A.endOfInput
@@ -160,12 +160,6 @@ runTest path = do
       MappingStart props _ -> MappingStart props Block
       ScalarEvent props _ t -> ScalarEvent props Plain t
       e -> e
-
-    withoutOffsets :: Y.Node -> Y.Node
-    withoutOffsets n = Y.Node Y.noOffset n.tag $ case n.value of
-      Y.Sequence xs -> Y.Sequence (map withoutOffsets xs)
-      Y.Mapping kvs -> Y.Mapping [(withoutOffsets k, withoutOffsets v) | (k, v) <- kvs]
-      v -> v
 
 -- | The JSON value of a node. The keys of the mappings in the tests with JSON
 -- are strings.

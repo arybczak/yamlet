@@ -29,6 +29,7 @@ module Yamlet.Node
   , node
   , S.noOffset
   , S.Offset (..)
+  , withoutOffsets
 
     -- * Tags
   , nullTag
@@ -49,6 +50,10 @@ import GHC.Generics
 import Yamlet.Internal.Syntax qualified as S
 
 -- | A node of a document.
+--
+-- The 'Eq' instance compares the offsets too, so a decoded node is not equal
+-- to the same node that a program builds. To compare only the tags and the
+-- values, compare the results of 'withoutOffsets'.
 data Node = Node
   { offset :: !S.Offset
   -- ^ The position of the node in the input, or 'S.noOffset' for a node that
@@ -145,6 +150,15 @@ node v =
     , tag = defaultTag v
     , value = v
     }
+
+-- | The node with 'S.noOffset' as the offset of every node in it. Like every
+-- function that visits all nodes, it visits a node once for each alias path
+-- to it.
+withoutOffsets :: Node -> Node
+withoutOffsets n = Node S.noOffset n.tag $ case n.value of
+  Sequence xs -> Sequence (map withoutOffsets xs)
+  Mapping kvs -> Mapping [(withoutOffsets k, withoutOffsets v) | (k, v) <- kvs]
+  v -> v
 
 -- | The tags of the core schema, e.g. @tag:yaml.org,2002:null@ for 'nullTag'.
 nullTag, boolTag, intTag, floatTag, strTag, seqTag, mapTag :: T.Text

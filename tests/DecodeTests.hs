@@ -31,6 +31,7 @@ decodeTests =
     , testCase "exact floats" test_exactFloats
     , testCase "plain scalars" test_plainSafe
     , testCase "record" test_record
+    , testCase "without offsets" test_withoutOffsets
     , testCase "containers" test_containers
     , localOption (mkTimeout 10000000) $ testCase "time" test_time
     , testCase "copies" test_copies
@@ -173,6 +174,15 @@ instance FromYAML Config where
   parseYAML = withMapping $ \o -> do
     rejectUnknownKeys ["name", "paths", "jobs"] o
     Config <$> o .: "name" <*> o .:? "paths" .!= [] <*> o .:? "jobs" .!= 1
+
+test_withoutOffsets :: Assertion
+test_withoutOffsets = do
+  let built = mapping ["a" .= [1 :: Int, 2]]
+  case decodeText @Node "a: [1, 2]" of
+    Right decoded -> do
+      assertBool "decoded nodes have offsets" (decoded /= built)
+      assertEqual "equal without offsets" (withoutOffsets built) (withoutOffsets decoded)
+    Left err -> assertFailure (show err)
 
 test_containers :: Assertion
 test_containers = do

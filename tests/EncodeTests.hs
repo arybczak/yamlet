@@ -220,15 +220,8 @@ prop_syntaxRoundTrip (Doc n) = readsBack output n
 
 readsBack :: T.Text -> Node -> Property
 readsBack output n = case decodeNodes output of
-  Right [n'] -> counterexample (T.unpack output) $ strip n' === strip n
+  Right [n'] -> counterexample (T.unpack output) $ withoutOffsets n' === withoutOffsets n
   r -> counterexample (T.unpack output ++ "\n" ++ show r) False
-  where
-    -- Drop the offsets.
-    strip :: Node -> Node
-    strip x = Node noOffset x.tag $ case x.value of
-      Sequence xs -> Sequence (map strip xs)
-      Mapping kvs -> Mapping [(strip k, strip v) | (k, v) <- kvs]
-      v -> v
 
 newtype Doc = Doc Node
   deriving stock (Show)
