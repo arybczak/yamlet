@@ -451,6 +451,13 @@ test_syntaxErrors = do
   check "backslash at the end of the input" (1, 4, "unterminated double-quoted scalar") "a: \"b\\"
   check "backslash at the end of a key" (1, 2, "unterminated double-quoted scalar") "[\"a\\"
   check "unsupported version" (1, 1, "unsupported YAML version 2.0") "%YAML 2.0\n--- a\n"
+  check "version without a minor number" (1, 7, "expected a version such as 1.2 after %YAML") "%YAML 1\n--- a\n"
+  check "content after the version" (1, 11, "unexpected content after the %YAML version") "%YAML 1.2 x\n--- a\n"
+  check
+    "tag directive without a prefix"
+    (1, 9, "expected a prefix after the tag handle, e.g. tag:example.com,2000:")
+    "%TAG !e!\n--- a\n"
+  check "invalid tag handle" (1, 6, "invalid tag handle") "%TAG e tag:x,2000:\n--- a\n"
   check "version beyond Int" (1, 1, "unsupported YAML version") "%YAML 18446744073709551617.2\n--- a\n"
   check "minor version beyond Int" (1, 1, "unsupported YAML version") ("%YAML 1." <> T.replicate 100000 "9" <> "\n--- a\n")
   assertEqual

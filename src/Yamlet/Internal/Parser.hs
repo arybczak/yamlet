@@ -796,19 +796,26 @@ directives = go Nothing defaultHandles Set.empty
               when (version /= Nothing) $
                 throwAt p "duplicate %YAML directive"
               v <- yamlVersion p
-              sLComments <|> throwAt p "invalid %YAML directive"
+              sLComments <|> throwAfter "unexpected content after the %YAML version"
               go (Just v) hs defined
             "TAG" -> do
-              (handle, prefix) <- tagDirective p
+              (handle, prefix) <- tagDirective
               when (handle `Set.member` defined)
                 $ throwAt p
                 $ "duplicate %TAG directive for " ++ T.unpack handle
-              sLComments <|> throwAt p "invalid %TAG directive"
+              sLComments <|> throwAfter "unexpected content after the tag prefix"
               go version (M.insert handle prefix hs) (Set.insert handle defined)
             _ -> do
               many_ $ sSeparateInLine >> directiveParameter
               sLComments <|> throwAt p "invalid directive"
               go version hs defined
+
+    -- Fail at the content after the white space at the position.
+    throwAfter :: String -> P a
+    throwAfter msg = do
+      e <- env
+      q <- pos
+      throwAt (skipWhites e q) msg
 
     directiveName :: P T.Text
     directiveName = do
@@ -829,48 +836,58 @@ directives = go Nothing defaultHandles Set.empty
     yamlVersion :: Int -> P Version
     yamlVersion p = do
       w <- peek
-      unless (isWhite w) $ throwAt p "invalid %YAML directive"
+      unless (isWhite w) $ throwAfter badVersion
       sSeparateInLine
-      major <- number
-      char DOT <|> throwAt p "invalid %YAML directive"
-      minor <- number
+      v <- pos
+      major <- number v
+      char DOT <|> throwAt v badVersion
+      minor <- number v
       w' <- peek
-      when (isNsChar w') $ throwAt p "invalid %YAML directive"
+      when (isNsChar w') $ throwAt v badVersion
       when (major /= 1)
         $ throwAt p
         $ "unsupported YAML version " ++ show major ++ "." ++ show minor
       pure $ Version major minor
       where
-        number :: P Int
-        number = do
+        badVersion :: String
+        badVersion = "expected a version such as 1.2 after %YAML"
+
+        number :: Int -> P Int
+        number v = do
           e <- env
           q <- pos
           skipWhile isDecDigit
           r <- pos
-          when (r == q) $ throwAt p "invalid %YAML directive"
+          when (r == q) $ throwAt v badVersion
           let digits = T.dropWhile (== '0') (slice e q r)
           -- A longer number could be beyond the range of Int.
           when (T.length digits > 9) $ throwAt p "unsupported YAML version"
           pure $ T.foldl' (\acc d -> acc * 10 + digitToInt d) 0 digits
 
-    tagDirective :: Int -> P (T.Text, T.Text)
-    tagDirective p = do
+    tagDirective :: P (T.Text, T.Text)
+    tagDirective = do
       e <- env
       w <- peek
-      unless (isWhite w) $ throwAt p "invalid %TAG directive"
+      unless (isWhite w) $
+        throwAfter "expected a tag handle and a prefix after %TAG, e.g. %TAG !e! tag:example.com,2000:"
       sSeparateInLine
-      handle <- cTagHandle <|> throwAt p "invalid tag handle"
+      h <- pos
+      handle <- cTagHandle <|> throwAt h "invalid tag handle"
       w' <- peek
-      unless (isWhite w') $ throwAt p "invalid %TAG directive"
+      unless (isWhite w') $ throwAfter noPrefix
       sSeparateInLine
       q <- pos
       first <- peek
+      when (first == 0 || isBreak first || first == HASH) $ throwAt q noPrefix
       unless (first == EXCL || isTagChar first || first == PERCENT) $
         throwAt q "invalid tag prefix"
       when (first == EXCL) $ advance 1
       scan uriChars
       r <- pos
       pure (handle, percentDecode (slice e q r))
+      where
+        noPrefix :: String
+        noPrefix = "expected a prefix after the tag handle, e.g. tag:example.com,2000:"
 
 -- | c-tag-handle
 cTagHandle :: P T.Text
