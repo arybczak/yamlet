@@ -270,6 +270,12 @@ test_time = do
   assertEqual "UTC time from an offset" (Right utcNoon) (decodeText "2026-09-25T14:30:00+02:00")
   assertEqual "offset without a colon" (Right utcNoon) (decodeText "2026-09-25T14:30:00 +0200")
   assertEqual "offset in hours" (Right utcNoon) (decodeText "2026-09-25T10:30:00-02")
+  assertEqual "lowercase separator and zone" (Right utcNoon) (decodeText "2026-09-25t12:30:00z")
+  assertEqual "large offset" (Right utcNoon) (decodeText "2026-09-26T12:29:00+23:59")
+  assertEqual
+    "offset beyond a day"
+    (Just (1, 1, "expected a date, a time and a time zone such as 2026-09-25T12:30:00Z"))
+    (errorOf (decodeText @UTCTime "2026-09-25T12:30:00+24:00"))
   assertEqual
     "time without a time zone"
     (Just (1, 1, "expected a date, a time and a time zone such as 2026-09-25T12:30:00Z"))

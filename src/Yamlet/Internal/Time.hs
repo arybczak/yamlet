@@ -40,7 +40,7 @@ parseDay = whole day
 parseTimeOfDay :: T.Text -> Maybe TimeOfDay
 parseTimeOfDay = whole timeOfDay
 
--- | A date and a time, separated by @T@ or a space.
+-- | A date and a time, separated by @T@, @t@ or a space.
 parseLocalTime :: T.Text -> Maybe LocalTime
 parseLocalTime = whole localTime
 
@@ -124,15 +124,15 @@ localTime :: T.Text -> Maybe (LocalTime, T.Text)
 localTime t0 = do
   (d, t1) <- day t0
   t2 <- case T.uncons t1 of
-    Just (c, t) | c == 'T' || c == ' ' -> Just t
+    Just (c, t) | c == 'T' || c == 't' || c == ' ' -> Just t
     _ -> Nothing
   (tod, t3) <- timeOfDay t2
   pure (LocalTime d tod, t3)
 
--- | @Z@, @+HH:MM@, @+HHMM@ or @+HH@, optionally after one space.
+-- | @Z@, @z@, @+HH:MM@, @+HHMM@ or @+HH@, optionally after one space.
 timeZone :: T.Text -> Maybe (TimeZone, T.Text)
 timeZone t0 = case T.uncons (fromMaybe t0 (char ' ' t0)) of
-  Just ('Z', t) -> Just (utc, t)
+  Just (c, t) | c == 'Z' || c == 'z' -> Just (utc, t)
   Just (c, t1) | c == '+' || c == '-' -> do
     (h, t2) <- twoDigits t1
     (m, t3) <- case T.uncons t2 of
@@ -140,7 +140,7 @@ timeZone t0 = case T.uncons (fromMaybe t0 (char ' ' t0)) of
       Just (d, _) | isDigit d -> twoDigits t2
       _ -> Just (0, t2)
     let offset = (if c == '-' then negate else id) (h * 60 + m)
-    guard $ m <= 59 && offset >= -720 && offset <= 840
+    guard $ h <= 23 && m <= 59
     pure (minutesToTimeZone offset, t3)
   _ -> Nothing
 

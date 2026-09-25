@@ -370,14 +370,14 @@ instance FromYAML Day where
 instance FromYAML TimeOfDay where
   parseYAML = withText $ maybe (fail "expected a time such as 12:30:00") pure . parseTimeOfDay
 
--- | A date and a time, separated by @T@ or a space, e.g.
+-- | A date and a time, separated by @T@, @t@ or a space, e.g.
 -- @2026-09-25T12:30:00@.
 instance FromYAML LocalTime where
   parseYAML =
     withText $ maybe (fail "expected a date and a time such as 2026-09-25T12:30:00") pure . parseLocalTime
 
 -- | A date, a time and a time zone, e.g. @2026-09-25T12:30:00+02:00@. The
--- time zone is @Z@, @+HH:MM@, @+HHMM@ or @+HH@.
+-- time zone is @Z@, @z@, @+HH:MM@, @+HHMM@ or @+HH@.
 instance FromYAML ZonedTime where
   parseYAML = withText $ maybe (fail zonedTimeMismatch) pure . parseZonedTime
 

@@ -55,6 +55,12 @@ test_time = do
   roundTrip "local time" noon
   roundTrip "UTC time" (UTCTime (fromGregorian (-44) 3 15) 0.000000000001)
   roundTrip "diff time" (picosecondsToDiffTime 123456789)
+  assertEqual
+    "zoned time with a large offset"
+    (Right (noon, 900))
+    ( (\z -> (zonedTimeToLocalTime z, timeZoneMinutes (zonedTimeZone z)))
+        <$> decodeText (encodeText (ZonedTime noon (minutesToTimeZone 900)))
+    )
 
 -- | Encoding a value and decoding the result gives the same value.
 roundTrip :: (Eq a, Show a, ToYAML a, FromYAML a) => String -> a -> Assertion
