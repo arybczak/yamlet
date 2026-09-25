@@ -383,6 +383,8 @@ test_syntaxErrors = do
   check "missing space after a colon" (2, 3, "expected a space after ':'") "a: 1\nb:2\n"
   check "line that has its colon" (2, 5, "expected an alias name after '*'") "a: 1\nb: *\n"
   check "anchor without a name" (1, 5, "expected an anchor name after '&'") "a: & 1\n"
+  check "alias with an anchor" (2, 7, "unexpected '*', an alias cannot have an anchor or a tag") "a: &x 1\nb: &y *x\n"
+  check "alias with a tag in a flow sequence" (1, 11, "unexpected '*', an alias cannot have an anchor or a tag") "[&x a, !t *x]\n"
   check "alias without a name in a flow sequence" (1, 2, "expected an alias name after '*'") "[*, a]\n"
   check "missing space after a dash" (2, 2, "expected a space after '-'") "- a\n-b\n"
   check "tab indentation" (2, 1, "tabs cannot be used for indentation") "a:\n\tb: 1\n"

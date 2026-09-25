@@ -199,6 +199,8 @@ mistake e i
   | w == COMMA && (let b = byteBefore e (skipBack i) in b == COMMA || b == LBRACKET || b == LBRACE) =
       Just "unexpected ',', a flow collection cannot have an empty entry"
   | w == STAR && not (isAnchorChar (byteAt e (i + 1))) = Just "expected an alias name after '*'"
+  | w == STAR && (let b = byteAt e (wordStart (skipBackWhites i)) in b == AMP || b == EXCL) =
+      Just "unexpected '*', an alias cannot have an anchor or a tag"
   | w == AMP && not (isAnchorChar (byteAt e (i + 1))) = Just "expected an anchor name after '&'"
   | afterQuote SQUOTE =
       Just $ unexpectedChar e i ++ " after a single-quoted scalar, write '' for a quote inside it"
@@ -218,6 +220,13 @@ mistake e i
     skipBack j
       | isWhite (byteBefore e j) || isBreak (byteBefore e j) = skipBack (j - 1)
       | otherwise = j
+
+    skipBackWhites :: Int -> Int
+    skipBackWhites j = if isWhite (byteBefore e j) then skipBackWhites (j - 1) else j
+
+    -- The start of the word that ends at the index, e.g. of an anchor.
+    wordStart :: Int -> Int
+    wordStart j = if isAnchorChar (byteBefore e j) then wordStart (j - 1) else j
 
     -- Content right after a quote, as in 'it's'. A plain scalar can hold a
     -- quote, so the quote closes a quoted scalar. A colon there ends a key.
