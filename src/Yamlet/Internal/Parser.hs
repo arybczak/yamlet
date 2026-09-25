@@ -1112,7 +1112,7 @@ cFlowSequence n c props = do
   char LBRACKET
   optional_ $ sSeparate n c
   entries <- flowEntries n c' (nsFlowSeqEntry n c')
-  closing c' RBRACKET "expected ',' or ']'"
+  closing c' p RBRACKET "flow sequence" "expected ',' or ']'"
   q <- pos
   pure $ mkNode e p (toOffset e q) props (Sequence Flow entries)
   where
@@ -1127,12 +1127,23 @@ cFlowMapping n c props = do
   char LBRACE
   optional_ $ sSeparate n c
   entries <- flowEntries n c' (nsFlowMapEntry n c')
-  closing c' RBRACE "expected ',' or '}'"
+  closing c' p RBRACE "flow mapping" (expected entries)
   q <- pos
   pure $ mkNode e p (toOffset e q) props (Mapping Flow entries)
   where
     c' :: Ctx
     c' = inFlow c
+
+    -- After a key with no value, the most likely mistake is a missing colon,
+    -- e.g. in {"a" 1}.
+    expected :: [(Node, Node)] -> String
+    expected entries = case reverse entries of
+      (k, v) : _
+        | v.content == Scalar Plain T.empty
+        , v.props == noProps
+        , v.offset == k.endOffset ->
+            "expected ':', ',' or '}'"
+      _ -> "expected ',' or '}'"
 
 -- | ns-s-flow-seq-entries(n,c) and ns-s-flow-map-entries(n,c).
 flowEntries :: forall a. Int -> Ctx -> P a -> P [a]
@@ -1148,13 +1159,29 @@ flowEntries n c entry = go []
           (char COMMA >> optional_ (sSeparate n c) >> go (x : acc))
             <|> pure (reverse (x : acc))
 
--- | The closing bracket of a flow collection. Its absence is an error unless
--- the collection is an implicit key, which the parser can try again as a
--- value.
-closing :: Ctx -> Word8 -> String -> P ()
-closing c w msg = do
+-- | The closing bracket of a flow collection that starts at the index. Its
+-- absence is an error unless the collection is an implicit key, which the
+-- parser can try again as a value. If the collection stops at the end of a
+-- line, the error points to its start, which can be far away.
+closing :: Ctx -> Int -> Word8 -> String -> String -> P ()
+closing c start w kind msg = do
+  e <- env
   p <- pos
-  char w <|> if c == FlowKey then failure else throwAt p msg
+  char w <|> if
+    | c == FlowKey -> failure
+    | atLineEnd e p -> throwAt start ("unterminated " ++ kind)
+    | otherwise -> throwAt p msg
+  where
+    -- The separation after an entry goes on to the next line if the
+    -- collection can continue there. So a stop at the end of a line means
+    -- that the document ends or that the next line is indented too little.
+    atLineEnd :: Env -> Int -> Bool
+    atLineEnd e i
+      | i >= e.end = True
+      | otherwise = case byteAt e i of
+          HASH -> let b = byteAt e (i - 1) in isWhite b || isBreak b
+          b | isWhite b -> atLineEnd e (i + 1)
+          b -> isBreak b
 
 -- | ns-flow-seq-entry(n,c)
 --
