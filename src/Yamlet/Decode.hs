@@ -47,6 +47,7 @@ import Data.Word
 import Numeric.Natural
 
 import Yamlet.Node
+import Yamlet.Schema
 
 -- | A parser of nodes. Its errors point to the node that the parser works on,
 -- unless 'failAt' names another one.
@@ -196,7 +197,14 @@ lookupKey key o = snd <$> M.lookup key o.index
 (.:) :: FromYAML a => Object -> T.Text -> Parser a
 o .: key = case M.lookup key o.index of
   Just (_, v) -> parseNode parseYAML v
-  Nothing -> failAt o.node $ "missing key " ++ show key
+  Nothing -> case L.find (\(k, _) -> k.value == plain) o.entries of
+    Just (k, _) -> failAt k $ "the key " ++ T.unpack key ++ " is " ++ describe k.value ++ ", not a string"
+    Nothing -> failAt o.node $ "missing key " ++ show key
+  where
+    -- A scalar key with the same text, e.g. 404, is not a string, so the index
+    -- does not have it.
+    plain :: Value
+    plain = resolvePlain key
 
 -- | The value of a key, or 'Nothing' if the key is missing or its value is
 -- null.

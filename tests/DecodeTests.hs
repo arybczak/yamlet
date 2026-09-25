@@ -442,6 +442,22 @@ test_keyErrors = do
     "unknown key"
     (Just (2, 1, "unknown key \"job\", expected one of: name, paths, jobs"))
     (errorOf (decodeText @Config "name: x\njob: 1\n"))
+  let lookupError :: T.Text -> T.Text -> Maybe String
+      lookupError key input = case runParser (withMapping $ \o -> (.:) @T.Text o key) <$> decodeText input of
+        Right (Left (_, msg)) -> Just msg
+        _ -> Nothing
+  assertEqual
+    "integer key"
+    (Just "the key 404 is an integer, not a string")
+    (lookupError "404" "200: ok\n404: not found\n")
+  assertEqual
+    "boolean key"
+    (Just "the key true is a boolean, not a string")
+    (lookupError "true" "true: 1\n")
+  assertEqual
+    "string key that is missing"
+    (Just "missing key \"a\"")
+    (lookupError "a" "b: 1\n")
   let withKeys :: [T.Text] -> T.Text
       withKeys ks = T.unlines $ map (<> ": 1") ks ++ [T.pack ("k" ++ show i ++ ": 1") | i <- [1 .. 10 :: Int]]
   assertEqual
