@@ -393,6 +393,18 @@ test_syntaxErrors = do
     "quote in a double-quoted scalar"
     (1, 12, "unexpected 'h' after a double-quoted scalar, write \\\" for a quote inside it")
     "msg: \"say \"hi\"\"\n"
+  check
+    "quote in a quoted scalar in a flow sequence"
+    (1, 5, "unexpected 'b' after a double-quoted scalar, write \\\" for a quote inside it")
+    "[\"a\"b]\n"
+  check
+    "reserved indicator"
+    (1, 7, "unexpected '@', a plain scalar cannot start with it, quote the value")
+    "user: @admin\n"
+  check
+    "reserved indicator in a flow sequence"
+    (1, 5, "unexpected '`', a plain scalar cannot start with it, quote the value")
+    "[a, `b`]\n"
   check "invalid escape" (1, 8, "invalid escape sequence") "key: \"a\\qb\"\n"
   check "undefined alias" (2, 4, "undefined alias *x") "a: 1\nb: *x\n"
   check "duplicate key" (3, 1, "duplicate key \"a\"") "a: 1\nb: 2\na: 3\n"

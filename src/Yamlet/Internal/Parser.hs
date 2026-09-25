@@ -118,25 +118,9 @@ unexpected e i = case indentationTab (i - 1) Nothing of
       | isBreak w -> "unexpected end of line"
       | w == COLON && valueColon ->
           "unexpected ':', quote the value if it contains \": \""
-      | afterQuote SQUOTE ->
-          found ++ " after a single-quoted scalar, write '' for a quote inside it"
-      | afterQuote DQUOTE ->
-          found ++ " after a double-quoted scalar, write \\\" for a quote inside it"
-      | otherwise -> found
+      | Just msg <- mistake e i -> msg
+      | otherwise -> unexpectedChar e i
   where
-    found :: String
-    found
-      | byteAt e i < 0x80 = "unexpected " ++ show (chr (fromIntegral (byteAt e i)))
-      | otherwise = "unexpected " ++ show (T.head (slice e i e.end))
-
-    -- Content right after a quote, as in 'it's'. A plain scalar can hold a
-    -- quote, so the quote closes a quoted scalar.
-    afterQuote :: Word8 -> Bool
-    afterQuote q =
-      byteBefore e i == q
-        && isNsChar (byteAt e i)
-        && not (isFlowIndicator (byteAt e i))
-
     -- A colon that ends a word and precedes white space, as in an unquoted
     -- value like "Error: file not found".
     valueColon :: Bool
@@ -170,6 +154,36 @@ unexpected e i = case indentationTab (i - 1) Nothing of
         tab' :: Maybe Int
         tab' = if byteAt e i == TAB then Just (maybe i id tab) else tab
 
+-- | The error for a common mistake at the index, if the character there shows
+-- one.
+mistake :: Env -> Int -> Maybe String
+mistake e i
+  | afterQuote SQUOTE =
+      Just $ unexpectedChar e i ++ " after a single-quoted scalar, write '' for a quote inside it"
+  | afterQuote DQUOTE =
+      Just $ unexpectedChar e i ++ " after a double-quoted scalar, write \\\" for a quote inside it"
+  -- Other indicators start a node of another kind, e.g. '&' an anchor.
+  | w == AT || w == GRAVE || w == PERCENT =
+      Just $ unexpectedChar e i ++ ", a plain scalar cannot start with it, quote the value"
+  | otherwise = Nothing
+  where
+    w :: Word8
+    w = byteAt e i
+
+    -- Content right after a quote, as in 'it's'. A plain scalar can hold a
+    -- quote, so the quote closes a quoted scalar. A colon there ends a key.
+    afterQuote :: Word8 -> Bool
+    afterQuote q =
+      byteBefore e i == q && isNsChar w && not (isFlowIndicator w) && w /= COLON
+
+unexpectedChar :: Env -> Int -> String
+unexpectedChar e i
+  | w < 0x80 = "unexpected " ++ show (chr (fromIntegral w))
+  | otherwise = "unexpected " ++ show (T.head (slice e i e.end))
+  where
+    w :: Word8
+    w = byteAt e i
+
 ----------------------------------------
 -- Characters
 
@@ -191,9 +205,11 @@ pattern
   , LESS
   , GREATER
   , QUESTION
+  , AT
   , LBRACKET
   , BACKSLASH
   , RBRACKET
+  , GRAVE
   , LBRACE
   , PIPE
   , RBRACE
@@ -217,9 +233,11 @@ pattern COLON = 0x3A
 pattern LESS = 0x3C
 pattern GREATER = 0x3E
 pattern QUESTION = 0x3F
+pattern AT = 0x40
 pattern LBRACKET = 0x5B
 pattern BACKSLASH = 0x5C
 pattern RBRACKET = 0x5D
+pattern GRAVE = 0x60
 pattern LBRACE = 0x7B
 pattern PIPE = 0x7C
 pattern RBRACE = 0x7D
@@ -1186,7 +1204,7 @@ closing c start w kind msg = do
   char w <|> if
     | c == FlowKey -> failure
     | atLineEnd e p -> throwAt start ("unterminated " ++ kind)
-    | otherwise -> throwAt p msg
+    | otherwise -> throwAt p (maybe msg id (mistake e p))
   where
     -- The separation after an entry goes on to the next line if the
     -- collection can continue there. So a stop at the end of a line means
