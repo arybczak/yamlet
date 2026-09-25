@@ -82,7 +82,7 @@ decodeText input =
   decodeNodes input >>= \case
     [] -> convert input (Node (Offset 0) nullTag Null)
     [n] -> convert input n
-    _ : n : _ -> Left $ errorAt input n.offset "expected a single document"
+    _ : n : _ -> Left $ errorAt input n.offset "expected a single document, but got a second one"
 
 -- | Decode every document of a stream.
 decodeAllText :: FromYAML a => T.Text -> Either Error [a]

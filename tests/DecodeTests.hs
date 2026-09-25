@@ -490,6 +490,10 @@ test_typeErrors = do
     (Just (1, 1, "expected a list of 3 elements, but got 4"))
     (errorOf (decodeText @(Int, Int, Int) "[1, 2, 3, 4]"))
   assertEqual
+    "second document"
+    (Just (3, 1, "expected a single document, but got a second one"))
+    (errorOf (decodeText @T.Text "a\n---\nb\n"))
+  assertEqual
     "YAML 1.1 boolean"
     (Just (1, 1, "expected a boolean, but got the string \"yes\", which is a boolean only in YAML 1.1"))
     (errorOf (decodeText @Bool "yes"))
