@@ -459,7 +459,11 @@ test_keyErrors = do
     (Just "missing key \"a\"")
     (lookupError "a" "b: 1\n")
   let withKeys :: [T.Text] -> T.Text
-      withKeys ks = T.unlines $ map (<> ": 1") ks ++ [T.pack ("k" ++ show i ++ ": 1") | i <- [1 .. 10 :: Int]]
+      withKeys ks = T.unlines $ map (<> ": 1") ks
+  assertEqual
+    "duplicate among many scalar keys"
+    (Just (21, 1, "duplicate key \"k1\""))
+    (errorOf (decodeNodes (T.unlines [T.pack ("k" ++ show i ++ ": 1") | i <- [1 .. 20 :: Int] ++ [1]])))
   assertEqual
     "duplicate scalar key after a collection key"
     (Just (3, 1, "duplicate key \"a\""))

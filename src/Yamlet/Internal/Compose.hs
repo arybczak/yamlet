@@ -211,10 +211,10 @@ needsNumbering n = case n.content of
 
 -- | The first key that is equal to an earlier one.
 duplicate :: [Node] -> Maybe Node
-duplicate keys = case keys of
-  -- Comparing all pairs is faster for few keys.
-  _ : _ : _ : _ : _ : _ : _ : _ : _ -> viaSet Set.empty keys
-  _ -> pairwise [] keys
+duplicate keys = case drop 16 keys of
+  -- Comparing all pairs is faster for 16 keys or fewer.
+  _ : _ -> viaSet Set.empty keys
+  [] -> pairwise [] keys
   where
     viaSet :: Set.Set Key -> [Node] -> Maybe Node
     viaSet seen = \case
