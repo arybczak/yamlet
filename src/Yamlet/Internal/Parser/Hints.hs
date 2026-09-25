@@ -57,7 +57,7 @@ unexpected e i = case indentationTab (i - 1) Nothing of
           "unexpected ':', quote the value if it contains \": \""
       | itemAfterKey -> "unexpected '-', a list cannot start on the line of its key"
       | itemAfterProperty -> "unexpected '-', a list cannot start on the line of its anchor or tag"
-      | Just msg <- mistake e i -> msg
+      | Just msg <- mistake e False i -> msg
       | Just node <- endBefore -> unexpectedChar e i ++ " after the end of " ++ node
       | otherwise -> unexpectedChar e i
   where
@@ -84,7 +84,7 @@ unexpected e i = case indentationTab (i - 1) Nothing of
         && isNsChar (byteAt e i)
         && not (isListItem e i)
         && not (any (isKeyColon e) [i .. lineEnd i - 1])
-        && isNothing (mistake e i)
+        && isNothing (mistake e False i)
         && commentAbove (lineStart e i)
       where
         commentAbove :: Int -> Bool
@@ -210,17 +210,17 @@ unexpected e i = case indentationTab (i - 1) Nothing of
         tab' = if byteAt e i == TAB then Just (fromMaybe i tab) else tab
 
 -- | The error for a common mistake at the index, if the character there shows
--- one.
-mistake :: Env -> Int -> Maybe String
-mistake e i
+-- one. The flag tells if the index is inside a flow collection.
+mistake :: Env -> Bool -> Int -> Maybe String
+mistake e flow i
   -- Inside a plain scalar, a '#' after other content does not stop the
   -- parser, so here it follows the end of another node, e.g. "x"#c.
   | w == HASH && isNsChar (byteBefore e i) =
       Just "unexpected '#', a comment needs a space before it"
   | w == COMMA && (let b = byteBefore e (skipBack i) in b == COMMA || b == LBRACKET || b == LBRACE) =
       Just "unexpected ',', a flow collection cannot have an empty entry"
-  -- In the block style, these characters start a block scalar and do not fail.
-  | w == PIPE || w == GREATER =
+  -- In the block style, these characters start a block scalar.
+  | flow && (w == PIPE || w == GREATER) =
       Just $ unexpectedChar e i ++ ", a block scalar cannot be inside a flow collection"
   | w == STAR && not (isAnchorChar (byteAt e (i + 1))) = Just "expected an alias name after '*'"
   | w == STAR && (let b = byteAt e (wordStart e (skipBackWhites e i)) in b == AMP || b == EXCL) =

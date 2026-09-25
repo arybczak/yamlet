@@ -589,6 +589,12 @@ test_syntaxErrors = do
     (1, 2, "unexpected '|', a block scalar cannot be inside a flow collection")
     "[|\n  x\n]\n"
   check
+    "block scalar indicator after a quoted scalar"
+    (1, 8, "unexpected '|' after the end of a quoted scalar")
+    "a: 'x' |\n"
+  check "block scalar indicator after a flow collection" (1, 8, "unexpected '|' after the end of a flow collection") "a: [x] |\n"
+  check "block scalar indicator at the start of a line" (2, 1, "unexpected '|'") "a: b\n| x\n"
+  check
     "dash in a flow sequence"
     (1, 2, "unexpected '-', a list item cannot be inside a flow collection, quote '-' if it is a string")
     "[-]\n"

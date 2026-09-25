@@ -1002,7 +1002,7 @@ closing c start w kind msg = do
       | atLineEnd e p -> throwAt start ("unterminated " ++ kind)
       | dash e p ->
           throwAt p "unexpected '-', a list item cannot be inside a flow collection, quote '-' if it is a string"
-      | otherwise -> throwAt p (fromMaybe msg (mistake e p))
+      | otherwise -> throwAt p (fromMaybe msg (mistake e True p))
   where
     -- The separation after an entry goes on to the next line if the
     -- collection can continue there. So a stop at the end of a line means
