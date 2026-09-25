@@ -133,9 +133,11 @@ unexpected e i = case indentationTab (i - 1) Nothing of
       | i > e.base && isBreak (byteBefore e i), Just msg <- indentationMistake e i -> msg
       | w == COLON && firstColon && not (fitsKey e entryStart i) ->
           "a key can be at most 1024 characters long, write a longer key after '? '"
+      | w == COLON && firstColon && valueColon && onStartMarkerLine ->
+          "unexpected ':', a mapping cannot start on the line of '---'"
       -- A colon on the first line of a key does not fail, so the scalar
       -- before this one started on a line above.
-      | w == COLON && firstColon && valueColon ->
+      | w == COLON && firstColon && valueColon && isJust (lineAbove e (lineStart e i)) ->
           "unexpected ':', this line continues the scalar from the line above, check the indentation and the line above"
       | w == COLON && valueColon ->
           "unexpected ':', quote the value if it contains \": \""
@@ -152,6 +154,9 @@ unexpected e i = case indentationTab (i - 1) Nothing of
       in if j > start && byteBefore e j == COLON && byteAt e start == STAR
            then Just (j - 1)
            else Nothing
+
+    onStartMarkerLine :: Bool
+    onStartMarkerLine = isMarker e (lineStart e i) && byteAt e (lineStart e i) == MINUS
 
     -- The start of the entry on the line, after any "- ".
     entryStart :: Int

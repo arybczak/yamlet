@@ -370,6 +370,10 @@ test_syntaxErrors = do
     (1, 11, "unexpected ':', quote the value if it contains \": \"")
     "key: value: other\n"
   check
+    "mapping on the line of the document marker"
+    (1, 9, "unexpected ':', a mapping cannot start on the line of '---'")
+    "--- key1: value1\n    key2: value2\n"
+  check
     "key indented under a value"
     (2, 4, "unexpected ':', this line continues the scalar from the line above, check the indentation and the line above")
     "a: 1\n  b: 2\n"
