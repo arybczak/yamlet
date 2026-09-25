@@ -429,6 +429,10 @@ test_syntaxErrors = do
     "path: \"C:\\Users\\me\"\n"
   check "undefined alias" (2, 4, "undefined alias *x") "a: 1\nb: *x\n"
   check "duplicate key" (3, 1, "duplicate key \"a\"") "a: 1\nb: 2\na: 3\n"
+  check
+    "two merge keys"
+    (4, 3, "duplicate key \"<<\", merge keys are not supported")
+    "a: &a {x: 1}\nb:\n  <<: *a\n  <<: *a\n"
   check "undefined tag handle" (1, 1, "undefined tag handle !e!") "!e!foo bar\n"
   check "invalid character" (1, 4, "invalid character") "a: \x01\n"
   check "backslash at the end of the input" (1, 4, "unterminated double-quoted scalar") "a: \"b\\"

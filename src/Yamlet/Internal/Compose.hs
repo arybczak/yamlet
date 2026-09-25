@@ -175,6 +175,8 @@ compose input doc
 
     duplicateKey :: Node -> Error
     duplicateKey k = errorAt input k.offset $ case k.value of
+      -- YAML 1.1 used "<<" to merge mappings, and some tools still do.
+      String "<<" -> "duplicate key \"<<\", merge keys are not supported"
       String t -> "duplicate key " ++ show t
       _ -> "duplicate key"
 
