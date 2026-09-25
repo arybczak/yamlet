@@ -123,6 +123,7 @@ unexpected e i = case indentationTab (i - 1) Nothing of
     | Just start <- propertiesLine ->
         (start, "an anchor or a tag cannot be on a line of its own here, write it after the key or the '-'")
   Nothing | Just r <- blockMistake e i -> r
+  Nothing | afterComment -> (i, "a comment ends a plain scalar, so this line cannot continue it")
   Nothing
     | Just colon <- aliasColon ->
         (colon, "the name of the alias includes the ':', write a space before ':' if the alias is a key")
@@ -149,6 +150,33 @@ unexpected e i = case indentationTab (i - 1) Nothing of
       | Just msg <- mistake e i -> msg
       | otherwise -> unexpectedChar e i
   where
+    -- The index starts a line that looks like the continuation of a plain
+    -- scalar, and the closest line above that is not blank has a comment.
+    afterComment :: Bool
+    afterComment =
+      i == skipSpaces e (lineStart e i)
+        && isNsChar (byteAt e i)
+        && not (isListItem e i)
+        && not (any (isKeyColon e) [i .. lineEnd i - 1])
+        && commentAbove (lineStart e i)
+      where
+        commentAbove :: Int -> Bool
+        commentAbove start
+          | start <= e.base = False
+          | otherwise =
+              let prev = lineStart e (start - 1)
+                  k = skipWhites e prev
+              in if isBreak (byteAt e k) then commentAbove prev else hasComment k
+
+        hasComment :: Int -> Bool
+        hasComment j = byteAt e j == HASH || any comment [j + 1 .. lineEnd j - 1]
+
+        comment :: Int -> Bool
+        comment j = byteAt e j == HASH && isWhite (byteBefore e j)
+
+        lineEnd :: Int -> Int
+        lineEnd j = if byteAt e j == 0 || isBreak (byteAt e j) then j else lineEnd (j + 1)
+
     -- The start of the line of the index if the line has only anchors and
     -- tags, as in "&anchor".
     propertiesLine :: Maybe Int

@@ -370,6 +370,14 @@ test_syntaxErrors = do
     (1, 11, "unexpected ':', quote the value if it contains \": \"")
     "key: value: other\n"
   check
+    "comment line in a plain scalar"
+    (3, 3, "a comment ends a plain scalar, so this line cannot continue it")
+    "key: word1\n#  xxx\n  word2\n"
+  check
+    "comment at the end of a line of a plain scalar"
+    (2, 1, "a comment ends a plain scalar, so this line cannot continue it")
+    "word1  # comment\nword2\n"
+  check
     "anchor on its own line in a sequence"
     (2, 1, "an anchor or a tag cannot be on a line of its own here, write it after the key or the '-'")
     "- item1\n&node\n- item2\n"
