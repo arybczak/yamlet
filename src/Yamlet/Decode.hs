@@ -37,6 +37,8 @@ module Yamlet.Decode
 
 import Control.Monad
 import Data.Fixed
+import Data.Functor.Const
+import Data.Functor.Identity
 import Data.Int
 import Data.IntMap.Strict qualified as IM
 import Data.IntSet qualified as IS
@@ -44,14 +46,22 @@ import Data.List qualified as L
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
 import Data.Maybe
+import Data.Monoid qualified as Mon
+import Data.Ord
+import Data.Proxy
 import Data.Scientific qualified as Sci
+import Data.Semigroup qualified as Sem
 import Data.Sequence qualified as Seq
 import Data.Set qualified as Set
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
 import Data.Time
+import Data.Version
+import Data.Void
 import Data.Word
+import GHC.Real
 import Numeric.Natural
+import Text.ParserCombinators.ReadP
 
 import Yamlet.Internal.Schema
 import Yamlet.Internal.Time
@@ -493,6 +503,105 @@ instance FromYaml IS.IntSet where
 
 instance FromYaml a => FromYaml (Seq.Seq a) where
   parseYaml = fmap Seq.fromList . parseYaml
+
+-- | @LT@, @EQ@ or @GT@.
+instance FromYaml Ordering where
+  parseYaml = withText $ \case
+    "LT" -> pure LT
+    "EQ" -> pure EQ
+    "GT" -> pure GT
+    _ -> fail "expected LT, EQ or GT"
+
+-- | A string such as @1.2.3@. YAML reads a version with one dot, e.g. @1.10@,
+-- as a number, so a number is an error.
+instance FromYaml Version where
+  parseYaml = parseNode $ \n -> case n.value of
+    String t -> case [v | (v, "") <- readP_to_S parseVersion (T.unpack t)] of
+      v : _ -> pure v
+      [] -> fail "expected a version such as 1.2.3"
+    v
+      | Int _ <- v -> number
+      | Float _ <- v -> number
+      | otherwise -> typeMismatch "a version" n
+      where
+        number :: Parser Version
+        number = fail $ "expected a version, but got " ++ describe v ++ ", quote the version, e.g. \"1.10\""
+
+-- | Null.
+instance FromYaml (Proxy a) where
+  parseYaml = withNull (pure Proxy)
+
+instance FromYaml Void where
+  parseYaml _ = fail "the type Void has no values"
+
+-- | A mapping with the keys @numerator@ and @denominator@, e.g.
+-- @{numerator: 1, denominator: 3}@.
+instance (Integral a, FromYaml a) => FromYaml (Ratio a) where
+  parseYaml = withMapping $ \o -> do
+    rejectUnknownKeys ["numerator", "denominator"] o
+    n <- (.:) @a o "numerator"
+    d <- (.:) @a o "denominator"
+    when (d == 0) $ fail "the denominator is 0"
+    -- The reduction happens in Integer, where the gcd is fast. For another
+    -- type, the gcd takes quadratic time in the number of digits, and in a
+    -- bounded type, a negation can overflow, e.g. of minBound.
+    let r = toInteger n % toInteger d
+        fits :: Integer -> Bool
+        fits x = toInteger (fromInteger @a x) == x
+    if fits (numerator r) && fits (denominator r)
+      then pure (fromInteger (numerator r) :% fromInteger (denominator r))
+      else fail "the fraction is out of the range of the type"
+
+-- | A number that is a multiple of the resolution, e.g. @1.25@ for 'Centi'.
+-- A number with more digits after the point is an error, not a rounded value.
+instance HasResolution a => FromYaml (Fixed a) where
+  parseYaml = withScientific $ \s ->
+    let scaled = s * fromInteger (resolution (Proxy @a))
+    in if Sci.isInteger scaled
+         then pure (MkFixed (truncate scaled))
+         else fail $ "expected a multiple of " ++ show (MkFixed @_ @a 1)
+
+-- | The value inside.
+deriving newtype instance FromYaml a => FromYaml (Identity a)
+
+-- | The value inside.
+deriving newtype instance FromYaml a => FromYaml (Const a b)
+
+-- | The value inside.
+deriving newtype instance FromYaml a => FromYaml (Down a)
+
+-- | The value inside.
+deriving newtype instance FromYaml a => FromYaml (Sem.Min a)
+
+-- | The value inside.
+deriving newtype instance FromYaml a => FromYaml (Sem.Max a)
+
+-- | The value inside.
+deriving newtype instance FromYaml a => FromYaml (Sem.First a)
+
+-- | The value inside.
+deriving newtype instance FromYaml a => FromYaml (Sem.Last a)
+
+-- | The value inside, or null for 'Nothing'.
+deriving newtype instance FromYaml a => FromYaml (Mon.First a)
+
+-- | The value inside, or null for 'Nothing'.
+deriving newtype instance FromYaml a => FromYaml (Mon.Last a)
+
+-- | The value inside.
+deriving newtype instance FromYaml a => FromYaml (Sem.Dual a)
+
+-- | The value inside.
+deriving newtype instance FromYaml a => FromYaml (Sem.Sum a)
+
+-- | The value inside.
+deriving newtype instance FromYaml a => FromYaml (Sem.Product a)
+
+-- | The value inside.
+deriving newtype instance FromYaml Sem.All
+
+-- | The value inside.
+deriving newtype instance FromYaml Sem.Any
 
 -- | A mapping with one key, @Left@ or @Right@, e.g. @{Left: 1}@.
 instance (FromYaml a, FromYaml b) => FromYaml (Either a b) where

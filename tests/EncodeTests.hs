@@ -1,17 +1,26 @@
 module EncodeTests (encodeTests) where
 
+import Data.Fixed
+import Data.Functor.Const
+import Data.Functor.Identity
 import Data.IntMap.Strict qualified as IM
 import Data.IntSet qualified as IS
 import Data.List qualified as L
+import Data.Monoid qualified as Mon
+import Data.Ord
+import Data.Proxy
+import Data.Ratio
 import Data.Scientific qualified as Sci
+import Data.Semigroup qualified as Sem
 import Data.Sequence qualified as Seq
 import Data.Set qualified as Set
 import Data.Text qualified as T
 import Data.Time
-import Test.QuickCheck
+import Data.Version
+import Test.QuickCheck hiding (Fixed)
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Tasty.QuickCheck
+import Test.Tasty.QuickCheck hiding (Fixed)
 
 import Yamlet
 import Yamlet.Syntax qualified as S
@@ -27,6 +36,7 @@ encodeTests =
     , testCase "tags" test_tags
     , testCase "syntax tree" test_syntax
     , testCase "containers" test_containers
+    , testCase "base" test_base
     , testCase "time" test_time
     , testProperty "round trip" prop_roundTrip
     , testProperty "syntax round trip" prop_syntaxRoundTrip
@@ -42,6 +52,31 @@ test_containers = do
   roundTrip "sequence" (Seq.fromList [1, 2, 3 :: Int])
   roundTrip "either" [Left 1, Right "a" :: Either Int T.Text]
   roundTrip "tuple of 10" (1 :: Int, 'a', True, "b" :: T.Text, 2.5 :: Double, [1 :: Int], Just 'c', (), 'd', -1 :: Int)
+
+test_base :: Assertion
+test_base = do
+  assertEqual "ordering" "- LT\n- EQ\n- GT\n" (encodeText [LT, EQ, GT])
+  assertEqual "version" "1.10.2\n" (encodeText (makeVersion [1, 10, 2]))
+  assertEqual "proxy" "null\n" (encodeText (Proxy @Int))
+  assertEqual "ratio" "numerator: 1\ndenominator: 3\n" (encodeText (1 % 3 :: Rational))
+  assertEqual "fixed" "1.25\n" (encodeText (1.25 :: Centi))
+  assertEqual "fixed with a trailing zero" "1.5\n" (encodeText (1.5 :: Milli))
+  assertEqual "whole fixed" "3.0\n" (encodeText (3 :: Uni))
+  assertEqual "newtype" "- 1\n- 2\n" (encodeText (Identity [1, 2 :: Int]))
+  assertEqual "string in a newtype" "ab\n" (encodeText (Sem.Min ("ab" :: String)))
+  roundTrip "ordering" [LT, EQ, GT]
+  roundTrip "version" (makeVersion [1, 10])
+  roundTrip "negative ratio" (negate 7 % 4 :: Rational)
+  roundTrip "fixed" (-123.456 :: Milli)
+  roundTrip "nano" (0.000000001 :: Nano)
+  roundTrip "resolution of a power of 2" (MkFixed 3 :: Fixed Quarters)
+  roundTrip "newtypes" (Down 'a', Sem.Max (1 :: Int), Mon.First (Just True), Sem.Sum (2.5 :: Double), Sem.All False, Const @Int @Bool 3)
+
+-- | A resolution of 1/4, which has an exact decimal form.
+data Quarters
+
+instance HasResolution Quarters where
+  resolution _ = 4
 
 test_time :: Assertion
 test_time = do

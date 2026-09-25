@@ -13,6 +13,8 @@ module Yamlet.Encode
 import Data.Containers.ListUtils
 import Data.Fixed
 import Data.Foldable
+import Data.Functor.Const
+import Data.Functor.Identity
 import Data.Int
 import Data.IntMap.Strict qualified as IM
 import Data.IntSet qualified as IS
@@ -20,13 +22,20 @@ import Data.List
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
 import Data.Maybe
+import Data.Monoid qualified as Mon
+import Data.Ord
+import Data.Proxy
+import Data.Ratio
 import Data.Scientific qualified as Sci
+import Data.Semigroup qualified as Sem
 import Data.Sequence qualified as Seq
 import Data.Set qualified as Set
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Builder qualified as B
 import Data.Time
+import Data.Version
+import Data.Void
 import Data.Word
 import Numeric.Natural
 
@@ -125,6 +134,82 @@ instance ToYaml IS.IntSet where
 
 instance ToYaml a => ToYaml (Seq.Seq a) where
   toYaml = toYaml . toList
+
+-- | @LT@, @EQ@ or @GT@.
+instance ToYaml Ordering where
+  toYaml = node . String . T.pack . show
+
+-- | A string such as @1.2.3@.
+instance ToYaml Version where
+  toYaml = node . String . T.pack . showVersion
+
+-- | Null.
+instance ToYaml (Proxy a) where
+  toYaml _ = node Null
+
+instance ToYaml Void where
+  toYaml = absurd
+
+-- | A mapping with the keys @numerator@ and @denominator@, e.g.
+-- @{numerator: 1, denominator: 3}@.
+instance (Integral a, ToYaml a) => ToYaml (Ratio a) where
+  toYaml r = mapping ["numerator" .= numerator r, "denominator" .= denominator r]
+
+-- | A number. If the resolution is not a product of 2s and 5s, e.g. 3, a value
+-- can have no exact decimal form. It then becomes the nearest number with as
+-- many digits after the point as the resolution has, which does not read back.
+instance HasResolution a => ToYaml (Fixed a) where
+  toYaml (MkFixed n) = node . Float . Finite $ case find (\k -> 10 ^ k `mod` res == 0) [0 .. 4 * digits] of
+    Just k -> Sci.scientific (n * (10 ^ k `div` res)) (negate k)
+    Nothing -> Sci.scientific (round (n * 10 ^ digits % res)) (negate digits)
+    where
+      res :: Integer
+      res = resolution (Proxy @a)
+
+      digits :: Int
+      digits = length (show res)
+
+-- | The value inside.
+deriving newtype instance ToYaml a => ToYaml (Identity a)
+
+-- | The value inside.
+deriving newtype instance ToYaml a => ToYaml (Const a b)
+
+-- | The value inside.
+deriving newtype instance ToYaml a => ToYaml (Down a)
+
+-- | The value inside.
+deriving newtype instance ToYaml a => ToYaml (Sem.Min a)
+
+-- | The value inside.
+deriving newtype instance ToYaml a => ToYaml (Sem.Max a)
+
+-- | The value inside.
+deriving newtype instance ToYaml a => ToYaml (Sem.First a)
+
+-- | The value inside.
+deriving newtype instance ToYaml a => ToYaml (Sem.Last a)
+
+-- | The value inside, or null for 'Nothing'.
+deriving newtype instance ToYaml a => ToYaml (Mon.First a)
+
+-- | The value inside, or null for 'Nothing'.
+deriving newtype instance ToYaml a => ToYaml (Mon.Last a)
+
+-- | The value inside.
+deriving newtype instance ToYaml a => ToYaml (Sem.Dual a)
+
+-- | The value inside.
+deriving newtype instance ToYaml a => ToYaml (Sem.Sum a)
+
+-- | The value inside.
+deriving newtype instance ToYaml a => ToYaml (Sem.Product a)
+
+-- | The value inside.
+deriving newtype instance ToYaml Sem.All
+
+-- | The value inside.
+deriving newtype instance ToYaml Sem.Any
 
 -- | A mapping with one key, @Left@ or @Right@, e.g. @{Left: 1}@.
 instance (ToYaml a, ToYaml b) => ToYaml (Either a b) where

@@ -4,11 +4,13 @@ import Control.Monad
 import Data.Bifunctor
 import Data.ByteString qualified as BS
 import Data.Either
+import Data.Fixed
 import Data.Int
 import Data.IntMap.Strict qualified as IM
 import Data.IntSet qualified as IS
 import Data.List qualified as L
 import Data.Map.Strict qualified as M
+import Data.Ratio
 import Data.Scientific qualified as Sci
 import Data.Sequence qualified as Seq
 import Data.Set qualified as Set
@@ -16,6 +18,8 @@ import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
 import Data.Text.Internal qualified as T
 import Data.Time
+import Data.Version
+import Data.Void
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
@@ -773,6 +777,34 @@ test_typeErrors = do
     "custom failure"
     (Just (1, 5, "not a vowel"))
     (errorOf (decodeText @[Vowel] "[a, x]"))
+  assertEqual "ordering" (Just (1, 1, "expected LT, EQ or GT")) (errorOf (decodeText @Ordering "lt"))
+  assertEqual
+    "version as a number"
+    (Just (1, 1, "expected a version, but got a floating-point number, quote the version, e.g. \"1.10\""))
+    (errorOf (decodeText @Version "1.10"))
+  assertEqual "invalid version" (Just (1, 1, "expected a version such as 1.2.3")) (errorOf (decodeText @Version "1..2"))
+  assertEqual "void" (Just (1, 1, "the type Void has no values")) (errorOf (decodeText @Void "a"))
+  assertEqual
+    "zero denominator"
+    (Just (1, 1, "the denominator is 0"))
+    (errorOf (decodeText @Rational "{numerator: 1, denominator: 0}"))
+  assertEqual "negative denominator" (Right (negate 1 % 2 :: Rational)) (decodeText "{numerator: 2, denominator: -4}")
+  assertEqual
+    "negation of minBound"
+    (Just (1, 1, "the fraction is out of the range of the type"))
+    (errorOf (decodeText @(Ratio Int) "{numerator: -9223372036854775808, denominator: -1}"))
+  assertEqual
+    "minBound as the denominator"
+    (Just (1, 1, "the fraction is out of the range of the type"))
+    (errorOf (decodeText @(Ratio Int) "{numerator: 1, denominator: -9223372036854775808}"))
+  assertEqual
+    "minBound reduced"
+    (Right (negate 4611686018427387904 % 1 :: Ratio Int))
+    (decodeText "{numerator: -9223372036854775808, denominator: 2}")
+  assertEqual "fixed from an integer" (Right (3 :: Centi)) (decodeText "3")
+  assertEqual "fixed with fewer digits" (Right (1.5 :: Centi)) (decodeText "1.5")
+  assertEqual "fixed with an exponent" (Right (120 :: Centi)) (decodeText "1.2e2")
+  assertEqual "fixed with too many digits" (Just (1, 1, "expected a multiple of 0.01")) (errorOf (decodeText @Centi "1.239"))
 
 newtype Vowel = Vowel Char
 
@@ -884,6 +916,12 @@ test_longNumbers = do
     "trailing zeros"
     (Just (1, 600018, "duplicate key"))
     (errorOf (decodeNodes ("{0.1" <> zeros <> ": a, 0.5" <> zeros <> ": b, 0.1" <> zeros <> "0: c}")))
+  -- The gcd of a reduction takes quadratic time for most types.
+  let big = 3 ^ (2000000 :: Int) :: Integer
+  assertEqual
+    "fraction"
+    (Right big)
+    (numerator <$> decodeText @Rational ("{numerator: " <> T.pack (show big) <> ", denominator: " <> T.pack (show (7 ^ (1200000 :: Int) :: Integer)) <> "}"))
   assertEqual
     "long integer as a float"
     (Just (1, 1, "the exponent of the number is out of the range from -1000 to 1000"))
