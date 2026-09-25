@@ -1039,7 +1039,7 @@ cDoubleQuoted n c props = withScan $ \e p ->
           | i + 1 >= e.end -> unterminated i
           | otherwise -> case escape e (i + 1) of
               Just (t, j) -> go j j (t : slice e seg i : acc)
-              Nothing -> Failed i "invalid escape sequence"
+              Nothing -> Failed i (badEscape i)
         w
           | isWhite w ->
               let j = skipWhites e i
@@ -1062,6 +1062,16 @@ cDoubleQuoted n c props = withScan $ \e p ->
       unterminated i
         | isKeyCtx c = NoMatch i
         | otherwise = Failed p "unterminated double-quoted scalar"
+
+      -- A hex escape with digits fails only for a bad code point. Any other
+      -- invalid escape likely comes from a Windows path or a regular
+      -- expression, e.g. "C:\Users" or "\d+".
+      badEscape :: Int -> String
+      badEscape i
+        | chr (fromIntegral (byteAt e (i + 1))) `elem` ("xuU" :: String)
+        , isHexDigit (chr (fromIntegral (byteAt e (i + 2)))) =
+            "invalid escape sequence"
+        | otherwise = "invalid escape sequence, write \\\\ for a backslash or use single quotes"
 
       badIndent :: Int -> Scanned T.Text
       badIndent i

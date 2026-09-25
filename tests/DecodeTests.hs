@@ -416,7 +416,14 @@ test_syntaxErrors = do
     "line of a block scalar"
     (3, 3, "unexpected indentation, the line has less indentation than the block scalar above it")
     "s: >- # folded\n    line1\n  line2\n"
-  check "invalid escape" (1, 8, "invalid escape sequence") "key: \"a\\qb\"\n"
+  check
+    "invalid escape"
+    (1, 8, "invalid escape sequence, write \\\\ for a backslash or use single quotes")
+    "key: \"a\\qb\"\n"
+  check
+    "Windows path"
+    (1, 10, "invalid escape sequence, write \\\\ for a backslash or use single quotes")
+    "path: \"C:\\Users\\me\"\n"
   check "undefined alias" (2, 4, "undefined alias *x") "a: 1\nb: *x\n"
   check "duplicate key" (3, 1, "duplicate key \"a\"") "a: 1\nb: 2\na: 3\n"
   check "undefined tag handle" (1, 1, "undefined tag handle !e!") "!e!foo bar\n"
