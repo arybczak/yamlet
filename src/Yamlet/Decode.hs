@@ -37,10 +37,14 @@ module Yamlet.Decode
 
 import Control.Monad
 import Data.Int
+import Data.IntMap.Strict qualified as IM
+import Data.IntSet qualified as IS
 import Data.List qualified as L
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
 import Data.Scientific qualified as Sci
+import Data.Sequence qualified as Seq
+import Data.Set qualified as Set
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
 import Data.Word
@@ -392,16 +396,185 @@ instance (Ord k, FromYAML k, FromYAML v) => FromYAML (M.Map k v) where
             Just _ -> failAt k "duplicate key after conversion"
             Nothing -> Just <$> parseNode parseYAML v
 
-instance (FromYAML a, FromYAML b) => FromYAML (a, b) where
-  parseYAML = withSequence $ \case
-    [a, b] -> (,) <$> parseNode parseYAML a <*> parseNode parseYAML b
-    xs -> fail $ "expected a list of 2 elements, but got " ++ show (length xs)
+-- | Two keys that convert to the same key are an error.
+instance FromYAML v => FromYAML (IM.IntMap v) where
+  parseYAML = parseNode $ \n -> case n.value of
+    Mapping kvs -> foldM insert IM.empty kvs
+    _ -> typeMismatch "a mapping" n
+    where
+      insert :: IM.IntMap v -> (Node, Node) -> Parser (IM.IntMap v)
+      insert m (k, v) = do
+        k' <- parseNode parseYAML k
+        IM.alterF value k' m
+        where
+          value :: Maybe v -> Parser (Maybe v)
+          value = \case
+            Just _ -> failAt k "duplicate key after conversion"
+            Nothing -> Just <$> parseNode parseYAML v
 
-instance (FromYAML a, FromYAML b, FromYAML c) => FromYAML (a, b, c) where
+-- | A list. Two elements that convert to the same value, e.g. @1@ and @1.0@
+-- for 'Double', are an error.
+instance (Ord a, FromYAML a) => FromYAML (Set.Set a) where
+  parseYAML = withSequence (foldM insert Set.empty)
+    where
+      insert :: Set.Set a -> Node -> Parser (Set.Set a)
+      insert s n = do
+        x <- parseNode parseYAML n
+        Set.alterF (\present -> if present then failAt n "duplicate element after conversion" else pure True) x s
+
+-- | A list. Two equal elements are an error.
+instance FromYAML IS.IntSet where
+  parseYAML = withSequence (foldM insert IS.empty)
+    where
+      insert :: IS.IntSet -> Node -> Parser IS.IntSet
+      insert s n = do
+        x <- parseNode parseYAML n
+        IS.alterF (\present -> if present then failAt n "duplicate element" else pure True) x s
+
+instance FromYAML a => FromYAML (Seq.Seq a) where
+  parseYAML = fmap Seq.fromList . parseYAML
+
+-- | A mapping with one key, @Left@ or @Right@, e.g. @{Left: 1}@.
+instance (FromYAML a, FromYAML b) => FromYAML (Either a b) where
+  parseYAML = withMapping $ \o -> case objectEntries o of
+    [(k, v)] -> case k.value of
+      String "Left" -> Left <$> parseNode parseYAML v
+      String "Right" -> Right <$> parseNode parseYAML v
+      _ -> failAt k "expected the key Left or Right"
+    _ -> fail "expected a mapping with one key, Left or Right"
+
+instance (FromYAML a1, FromYAML a2) => FromYAML (a1, a2) where
   parseYAML = withSequence $ \case
-    [a, b, c] ->
-      (,,)
-        <$> parseNode parseYAML a
-        <*> parseNode parseYAML b
-        <*> parseNode parseYAML c
-    xs -> fail $ "expected a list of 3 elements, but got " ++ show (length xs)
+    [a1, a2] -> (,) <$> element a1 <*> element a2
+    xs -> tupleSize 2 xs
+
+instance (FromYAML a1, FromYAML a2, FromYAML a3) => FromYAML (a1, a2, a3) where
+  parseYAML = withSequence $ \case
+    [a1, a2, a3] -> (,,) <$> element a1 <*> element a2 <*> element a3
+    xs -> tupleSize 3 xs
+
+instance (FromYAML a1, FromYAML a2, FromYAML a3, FromYAML a4) => FromYAML (a1, a2, a3, a4) where
+  parseYAML = withSequence $ \case
+    [a1, a2, a3, a4] -> (,,,) <$> element a1 <*> element a2 <*> element a3 <*> element a4
+    xs -> tupleSize 4 xs
+
+instance
+  (FromYAML a1, FromYAML a2, FromYAML a3, FromYAML a4, FromYAML a5)
+  => FromYAML (a1, a2, a3, a4, a5)
+  where
+  parseYAML = withSequence $ \case
+    [a1, a2, a3, a4, a5] ->
+      (,,,,) <$> element a1 <*> element a2 <*> element a3 <*> element a4 <*> element a5
+    xs -> tupleSize 5 xs
+
+instance
+  (FromYAML a1, FromYAML a2, FromYAML a3, FromYAML a4, FromYAML a5, FromYAML a6)
+  => FromYAML (a1, a2, a3, a4, a5, a6)
+  where
+  parseYAML = withSequence $ \case
+    [a1, a2, a3, a4, a5, a6] ->
+      (,,,,,)
+        <$> element a1
+        <*> element a2
+        <*> element a3
+        <*> element a4
+        <*> element a5
+        <*> element a6
+    xs -> tupleSize 6 xs
+
+instance
+  (FromYAML a1, FromYAML a2, FromYAML a3, FromYAML a4, FromYAML a5, FromYAML a6, FromYAML a7)
+  => FromYAML (a1, a2, a3, a4, a5, a6, a7)
+  where
+  parseYAML = withSequence $ \case
+    [a1, a2, a3, a4, a5, a6, a7] ->
+      (,,,,,,)
+        <$> element a1
+        <*> element a2
+        <*> element a3
+        <*> element a4
+        <*> element a5
+        <*> element a6
+        <*> element a7
+    xs -> tupleSize 7 xs
+
+instance
+  (FromYAML a1, FromYAML a2, FromYAML a3, FromYAML a4, FromYAML a5, FromYAML a6, FromYAML a7, FromYAML a8)
+  => FromYAML (a1, a2, a3, a4, a5, a6, a7, a8)
+  where
+  parseYAML = withSequence $ \case
+    [a1, a2, a3, a4, a5, a6, a7, a8] ->
+      (,,,,,,,)
+        <$> element a1
+        <*> element a2
+        <*> element a3
+        <*> element a4
+        <*> element a5
+        <*> element a6
+        <*> element a7
+        <*> element a8
+    xs -> tupleSize 8 xs
+
+instance
+  ( FromYAML a1
+  , FromYAML a2
+  , FromYAML a3
+  , FromYAML a4
+  , FromYAML a5
+  , FromYAML a6
+  , FromYAML a7
+  , FromYAML a8
+  , FromYAML a9
+  )
+  => FromYAML (a1, a2, a3, a4, a5, a6, a7, a8, a9)
+  where
+  parseYAML = withSequence $ \case
+    [a1, a2, a3, a4, a5, a6, a7, a8, a9] ->
+      (,,,,,,,,)
+        <$> element a1
+        <*> element a2
+        <*> element a3
+        <*> element a4
+        <*> element a5
+        <*> element a6
+        <*> element a7
+        <*> element a8
+        <*> element a9
+    xs -> tupleSize 9 xs
+
+instance
+  ( FromYAML a1
+  , FromYAML a2
+  , FromYAML a3
+  , FromYAML a4
+  , FromYAML a5
+  , FromYAML a6
+  , FromYAML a7
+  , FromYAML a8
+  , FromYAML a9
+  , FromYAML a10
+  )
+  => FromYAML (a1, a2, a3, a4, a5, a6, a7, a8, a9, a10)
+  where
+  parseYAML = withSequence $ \case
+    [a1, a2, a3, a4, a5, a6, a7, a8, a9, a10] ->
+      (,,,,,,,,,)
+        <$> element a1
+        <*> element a2
+        <*> element a3
+        <*> element a4
+        <*> element a5
+        <*> element a6
+        <*> element a7
+        <*> element a8
+        <*> element a9
+        <*> element a10
+    xs -> tupleSize 10 xs
+
+-- | An element of a tuple.
+element :: FromYAML a => Node -> Parser a
+element = parseNode parseYAML
+
+-- | The error for a list with the wrong number of elements for a tuple.
+tupleSize :: Int -> [Node] -> Parser a
+tupleSize n xs = fail $ "expected a list of " ++ show n ++ " elements, but got " ++ show (length xs)

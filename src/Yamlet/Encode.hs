@@ -11,11 +11,16 @@ module Yamlet.Encode
   ) where
 
 import Data.Containers.ListUtils
+import Data.Foldable
 import Data.Int
+import Data.IntMap.Strict qualified as IM
+import Data.IntSet qualified as IS
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
 import Data.Maybe
 import Data.Scientific qualified as Sci
+import Data.Sequence qualified as Seq
+import Data.Set qualified as Set
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Builder qualified as B
@@ -86,11 +91,158 @@ instance ToYAML a => ToYAML (Maybe a) where
 instance (ToYAML k, ToYAML v) => ToYAML (M.Map k v) where
   toYAML m = mapping [(toYAML k, toYAML v) | (k, v) <- M.toList m]
 
-instance (ToYAML a, ToYAML b) => ToYAML (a, b) where
-  toYAML (a, b) = node $ Sequence [toYAML a, toYAML b]
+instance ToYAML v => ToYAML (IM.IntMap v) where
+  toYAML m = mapping [(toYAML k, toYAML v) | (k, v) <- IM.toList m]
 
-instance (ToYAML a, ToYAML b, ToYAML c) => ToYAML (a, b, c) where
-  toYAML (a, b, c) = node $ Sequence [toYAML a, toYAML b, toYAML c]
+-- | A list in ascending order.
+instance ToYAML a => ToYAML (Set.Set a) where
+  toYAML = toYAML . Set.toAscList
+
+-- | A list in ascending order.
+instance ToYAML IS.IntSet where
+  toYAML = toYAML . IS.toAscList
+
+instance ToYAML a => ToYAML (Seq.Seq a) where
+  toYAML = toYAML . toList
+
+-- | A mapping with one key, @Left@ or @Right@, e.g. @{Left: 1}@.
+instance (ToYAML a, ToYAML b) => ToYAML (Either a b) where
+  toYAML = \case
+    Left a -> mapping ["Left" .= a]
+    Right b -> mapping ["Right" .= b]
+
+instance (ToYAML a1, ToYAML a2) => ToYAML (a1, a2) where
+  toYAML (a1, a2) =
+    node $
+      Sequence
+        [ toYAML a1
+        , toYAML a2
+        ]
+
+instance (ToYAML a1, ToYAML a2, ToYAML a3) => ToYAML (a1, a2, a3) where
+  toYAML (a1, a2, a3) =
+    node $
+      Sequence
+        [ toYAML a1
+        , toYAML a2
+        , toYAML a3
+        ]
+
+instance (ToYAML a1, ToYAML a2, ToYAML a3, ToYAML a4) => ToYAML (a1, a2, a3, a4) where
+  toYAML (a1, a2, a3, a4) =
+    node $
+      Sequence
+        [ toYAML a1
+        , toYAML a2
+        , toYAML a3
+        , toYAML a4
+        ]
+
+instance (ToYAML a1, ToYAML a2, ToYAML a3, ToYAML a4, ToYAML a5) => ToYAML (a1, a2, a3, a4, a5) where
+  toYAML (a1, a2, a3, a4, a5) =
+    node $
+      Sequence
+        [ toYAML a1
+        , toYAML a2
+        , toYAML a3
+        , toYAML a4
+        , toYAML a5
+        ]
+
+instance
+  (ToYAML a1, ToYAML a2, ToYAML a3, ToYAML a4, ToYAML a5, ToYAML a6)
+  => ToYAML (a1, a2, a3, a4, a5, a6)
+  where
+  toYAML (a1, a2, a3, a4, a5, a6) =
+    node $
+      Sequence
+        [ toYAML a1
+        , toYAML a2
+        , toYAML a3
+        , toYAML a4
+        , toYAML a5
+        , toYAML a6
+        ]
+
+instance
+  (ToYAML a1, ToYAML a2, ToYAML a3, ToYAML a4, ToYAML a5, ToYAML a6, ToYAML a7)
+  => ToYAML (a1, a2, a3, a4, a5, a6, a7)
+  where
+  toYAML (a1, a2, a3, a4, a5, a6, a7) =
+    node $
+      Sequence
+        [ toYAML a1
+        , toYAML a2
+        , toYAML a3
+        , toYAML a4
+        , toYAML a5
+        , toYAML a6
+        , toYAML a7
+        ]
+
+instance
+  (ToYAML a1, ToYAML a2, ToYAML a3, ToYAML a4, ToYAML a5, ToYAML a6, ToYAML a7, ToYAML a8)
+  => ToYAML (a1, a2, a3, a4, a5, a6, a7, a8)
+  where
+  toYAML (a1, a2, a3, a4, a5, a6, a7, a8) =
+    node $
+      Sequence
+        [ toYAML a1
+        , toYAML a2
+        , toYAML a3
+        , toYAML a4
+        , toYAML a5
+        , toYAML a6
+        , toYAML a7
+        , toYAML a8
+        ]
+
+instance
+  (ToYAML a1, ToYAML a2, ToYAML a3, ToYAML a4, ToYAML a5, ToYAML a6, ToYAML a7, ToYAML a8, ToYAML a9)
+  => ToYAML (a1, a2, a3, a4, a5, a6, a7, a8, a9)
+  where
+  toYAML (a1, a2, a3, a4, a5, a6, a7, a8, a9) =
+    node $
+      Sequence
+        [ toYAML a1
+        , toYAML a2
+        , toYAML a3
+        , toYAML a4
+        , toYAML a5
+        , toYAML a6
+        , toYAML a7
+        , toYAML a8
+        , toYAML a9
+        ]
+
+instance
+  ( ToYAML a1
+  , ToYAML a2
+  , ToYAML a3
+  , ToYAML a4
+  , ToYAML a5
+  , ToYAML a6
+  , ToYAML a7
+  , ToYAML a8
+  , ToYAML a9
+  , ToYAML a10
+  )
+  => ToYAML (a1, a2, a3, a4, a5, a6, a7, a8, a9, a10)
+  where
+  toYAML (a1, a2, a3, a4, a5, a6, a7, a8, a9, a10) =
+    node $
+      Sequence
+        [ toYAML a1
+        , toYAML a2
+        , toYAML a3
+        , toYAML a4
+        , toYAML a5
+        , toYAML a6
+        , toYAML a7
+        , toYAML a8
+        , toYAML a9
+        , toYAML a10
+        ]
 
 ----------------------------------------
 -- Rendering

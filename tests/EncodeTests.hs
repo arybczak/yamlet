@@ -1,7 +1,11 @@
 module EncodeTests (encodeTests) where
 
+import Data.IntMap.Strict qualified as IM
+import Data.IntSet qualified as IS
 import Data.List qualified as L
 import Data.Scientific qualified as Sci
+import Data.Sequence qualified as Seq
+import Data.Set qualified as Set
 import Data.Text qualified as T
 import Test.QuickCheck
 import Test.Tasty
@@ -21,9 +25,23 @@ encodeTests =
     , testCase "literal block scalars" test_literal
     , testCase "tags" test_tags
     , testCase "syntax tree" test_syntax
+    , testCase "containers" test_containers
     , testProperty "round trip" prop_roundTrip
     , testProperty "syntax round trip" prop_syntaxRoundTrip
     ]
+
+test_containers :: Assertion
+test_containers = do
+  assertEqual "set" "- 1\n- 2\n- 3\n" (encodeText (Set.fromList [3, 1, 2 :: Int]))
+  assertEqual "int set" "- 1\n- 2\n- 3\n" (encodeText (IS.fromList [3, 1, 2]))
+  assertEqual "left" "Left: 1\n" (encodeText (Left @Int @T.Text 1))
+  assertEqual "right" "Right: a\n" (encodeText (Right @Int @T.Text "a"))
+  let roundTrip :: (Eq a, Show a, ToYAML a, FromYAML a) => String -> a -> Assertion
+      roundTrip preface x = assertEqual preface (Right x) (decodeText (encodeText x))
+  roundTrip "int map" (IM.fromList [(1, "a"), (-2, "b" :: T.Text)])
+  roundTrip "sequence" (Seq.fromList [1, 2, 3 :: Int])
+  roundTrip "either" [Left 1, Right "a" :: Either Int T.Text]
+  roundTrip "tuple of 10" (1 :: Int, 'a', True, "b" :: T.Text, 2.5 :: Double, [1 :: Int], Just 'c', (), 'd', -1 :: Int)
 
 test_blockStyle :: Assertion
 test_blockStyle = assertEqual "output" expected (encodeText value)

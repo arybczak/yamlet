@@ -3,9 +3,13 @@ module DecodeTests (decodeTests) where
 import Data.ByteString qualified as BS
 import Data.Either
 import Data.Int
+import Data.IntMap.Strict qualified as IM
+import Data.IntSet qualified as IS
 import Data.List qualified as L
 import Data.Map.Strict qualified as M
 import Data.Scientific qualified as Sci
+import Data.Sequence qualified as Seq
+import Data.Set qualified as Set
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
 import Data.Text.Internal qualified as T
@@ -26,6 +30,7 @@ decodeTests =
     , testCase "exact floats" test_exactFloats
     , testCase "plain scalars" test_plainSafe
     , testCase "record" test_record
+    , testCase "containers" test_containers
     , testCase "copies" test_copies
     , testCase "JSON" test_json
     , testCase "aliases" test_aliases
@@ -166,6 +171,41 @@ instance FromYAML Config where
   parseYAML = withMapping $ \o -> do
     rejectUnknownKeys ["name", "paths", "jobs"] o
     Config <$> o .: "name" <*> o .:? "paths" .!= [] <*> o .:? "jobs" .!= 1
+
+test_containers :: Assertion
+test_containers = do
+  assertEqual "set" (Right (Set.fromList [1, 2, 3])) (decodeText @(Set.Set Int) "[3, 1, 2]")
+  assertEqual
+    "set with a duplicate after conversion"
+    (Just (1, 5, "duplicate element after conversion"))
+    (errorOf (decodeText @(Set.Set Double) "[1, 1.0]"))
+  assertEqual "int map" (Right (IM.fromList [(1, "a"), (2, "b")])) (decodeText @(IM.IntMap T.Text) "{2: b, 1: a}")
+  assertEqual
+    "int map with a duplicate key"
+    (Just (1, 8, "duplicate key"))
+    (errorOf (decodeText @(IM.IntMap T.Text) "{1: a, 0x1: b}"))
+  assertEqual "int set" (Right (IS.fromList [1, 2, 3])) (decodeText @IS.IntSet "[3, 1, 2]")
+  assertEqual "int set with a duplicate" (Just (1, 5, "duplicate element")) (errorOf (decodeText @IS.IntSet "[1, 0x1]"))
+  assertEqual "sequence" (Right (Seq.fromList [1, 2])) (decodeText @(Seq.Seq Int) "[1, 2]")
+  assertEqual "left" (Right (Left 1)) (decodeText @(Either Int T.Text) "{Left: 1}")
+  assertEqual "right" (Right (Right "a")) (decodeText @(Either Int T.Text) "{Right: a}")
+  assertEqual
+    "either with another key"
+    (Just (1, 2, "expected the key Left or Right"))
+    (errorOf (decodeText @(Either Int Int) "{Up: 1}"))
+  assertEqual
+    "either with two keys"
+    (Just (1, 1, "expected a mapping with one key, Left or Right"))
+    (errorOf (decodeText @(Either Int Int) "{Left: 1, Right: 2}"))
+  assertEqual "tuple of 4" (Right (1, 'a', True, "b")) (decodeText @(Int, Char, Bool, T.Text) "[1, a, true, b]")
+  assertEqual
+    "tuple of 10"
+    (Right (1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
+    (decodeText @(Int, Int, Int, Int, Int, Int, Int, Int, Int, Int) "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]")
+  assertEqual
+    "tuple of 10 with the wrong size"
+    (Just (1, 1, "expected a list of 10 elements, but got 1"))
+    (errorOf (decodeText @(Int, Int, Int, Int, Int, Int, Int, Int, Int, Int) "[1]"))
 
 test_record :: Assertion
 test_record = do
