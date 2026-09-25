@@ -19,6 +19,7 @@ import Data.ByteString qualified as BS
 import Data.Char
 import Data.Map.Strict qualified as M
 import Data.Maybe
+import Data.Set qualified as Set
 import Data.Text qualified as T
 import Data.Text.Array qualified as A
 import Data.Text.Encoding qualified as T
@@ -568,12 +569,12 @@ lDocumentSuffix = do
 
 -- | l-directive, repeated, with the version and the tag handles they define.
 directives :: P (Maybe Version, M.Map T.Text T.Text)
-directives = go Nothing defaultHandles M.empty
+directives = go Nothing defaultHandles Set.empty
   where
     go
       :: Maybe Version
       -> M.Map T.Text T.Text
-      -> M.Map T.Text ()
+      -> Set.Set T.Text
       -> P (Maybe Version, M.Map T.Text T.Text)
     go version hs defined = do
       w <- peek
@@ -592,11 +593,11 @@ directives = go Nothing defaultHandles M.empty
               go (Just v) hs defined
             "TAG" -> do
               (handle, prefix) <- tagDirective p
-              when (handle `M.member` defined)
+              when (handle `Set.member` defined)
                 $ throwAt p
                 $ "duplicate %TAG directive for " ++ T.unpack handle
               sLComments <|> throwAt p "invalid %TAG directive"
-              go version (M.insert handle prefix hs) (M.insert handle () defined)
+              go version (M.insert handle prefix hs) (Set.insert handle defined)
             _ -> do
               many_ $ sSeparateInLine >> directiveParameter
               sLComments <|> throwAt p "invalid directive"
