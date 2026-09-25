@@ -400,6 +400,8 @@ test_syntaxErrors = do
     "quote in a quoted scalar in a flow sequence"
     (1, 5, "unexpected 'b' after a double-quoted scalar, write \\\" for a quote inside it")
     "[\"a\"b]\n"
+  check "comment after a quote" (1, 7, "unexpected '#', a comment needs a space before it") "a: \"x\"#c\n"
+  check "comment after a flow sequence" (1, 7, "unexpected '#', a comment needs a space before it") "a: [1]#c\n"
   check
     "reserved indicator"
     (1, 7, "unexpected '@', a plain scalar cannot start with it, quote the value")

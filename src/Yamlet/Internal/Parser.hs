@@ -159,6 +159,10 @@ unexpected e i = case indentationTab (i - 1) Nothing of
 -- one.
 mistake :: Env -> Int -> Maybe String
 mistake e i
+  -- Inside a plain scalar, a '#' after other content does not stop the
+  -- parser, so here it follows the end of another node, e.g. "x"#c.
+  | w == HASH && isNsChar (byteBefore e i) =
+      Just "unexpected '#', a comment needs a space before it"
   | afterQuote SQUOTE =
       Just $ unexpectedChar e i ++ " after a single-quoted scalar, write '' for a quote inside it"
   | afterQuote DQUOTE =
