@@ -34,6 +34,7 @@ import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Builder qualified as B
 import Data.Time
+import Data.Tree qualified as Tree
 import Data.Version
 import Data.Void
 import Data.Word
@@ -134,6 +135,10 @@ instance ToYaml IS.IntSet where
 
 instance ToYaml a => ToYaml (Seq.Seq a) where
   toYaml = toYaml . toList
+
+-- | A list of the label and the subtrees, e.g. @[a, [[b, []]]]@.
+instance ToYaml a => ToYaml (Tree.Tree a) where
+  toYaml t = toYaml (Tree.rootLabel t, Tree.subForest t)
 
 -- | @LT@, @EQ@ or @GT@.
 instance ToYaml Ordering where

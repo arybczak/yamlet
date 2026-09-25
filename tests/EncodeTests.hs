@@ -16,6 +16,7 @@ import Data.Sequence qualified as Seq
 import Data.Set qualified as Set
 import Data.Text qualified as T
 import Data.Time
+import Data.Tree qualified as Tree
 import Data.Version
 import Test.QuickCheck hiding (Fixed)
 import Test.Tasty
@@ -51,6 +52,9 @@ test_containers = do
   roundTrip "int map" (IM.fromList [(1, "a"), (-2, "b" :: T.Text)])
   roundTrip "sequence" (Seq.fromList [1, 2, 3 :: Int])
   roundTrip "either" [Left 1, Right "a" :: Either Int T.Text]
+  let tree = Tree.Node 'a' [Tree.Node 'b' [], Tree.Node 'c' [Tree.Node 'd' []]]
+  assertEqual "tree" "- a\n- - - b\n    - []\n  - - c\n    - - - d\n        - []\n" (encodeText tree)
+  roundTrip "tree" tree
   roundTrip "tuple of 10" (1 :: Int, 'a', True, "b" :: T.Text, 2.5 :: Double, [1 :: Int], Just 'c', (), 'd', -1 :: Int)
 
 test_base :: Assertion

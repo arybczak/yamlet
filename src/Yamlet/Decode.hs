@@ -56,6 +56,7 @@ import Data.Set qualified as Set
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
 import Data.Time
+import Data.Tree qualified as Tree
 import Data.Version
 import Data.Void
 import Data.Word
@@ -503,6 +504,10 @@ instance FromYaml IS.IntSet where
 
 instance FromYaml a => FromYaml (Seq.Seq a) where
   parseYaml = fmap Seq.fromList . parseYaml
+
+-- | A list of the label and the subtrees, e.g. @[a, [[b, []]]]@.
+instance FromYaml a => FromYaml (Tree.Tree a) where
+  parseYaml = fmap (uncurry Tree.Node) . parseYaml
 
 -- | @LT@, @EQ@ or @GT@.
 instance FromYaml Ordering where
