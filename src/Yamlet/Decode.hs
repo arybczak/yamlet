@@ -59,6 +59,7 @@ import Data.Time
 import Data.Time.Calendar.Month
 import Data.Time.Calendar.Quarter
 import Data.Tree qualified as Tree
+import Data.UUID.Types qualified as UUID
 import Data.Version
 import Data.Void
 import Data.Word
@@ -405,6 +406,10 @@ instance FromYaml NominalDiffTime where
 -- | A number of seconds, rounded down to a picosecond.
 instance FromYaml DiffTime where
   parseYaml = withScientific $ fmap picosecondsToDiffTime . duration
+
+-- | The text form with hyphens, e.g. @123e4567-e89b-12d3-a456-426614174000@.
+instance FromYaml UUID.UUID where
+  parseYaml = withText $ maybe (fail "expected a UUID such as 123e4567-e89b-12d3-a456-426614174000") pure . UUID.fromText
 
 -- | @YYYY-MM@, e.g. @2026-09@.
 instance FromYaml Month where

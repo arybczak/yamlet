@@ -55,6 +55,7 @@ library
                     , scientific >= 0.3.7
                     , text       >= 2.0.2
                     , time       >= 1.11
+                    , uuid-types >= 1.0.6
 
     hs-source-dirs:  src
 
@@ -99,6 +100,7 @@ test-suite test
                     , QuickCheck
                     , text
                     , time
+                    , uuid-types
                     , vector
 
     hs-source-dirs: tests

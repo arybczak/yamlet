@@ -19,6 +19,7 @@ import Data.Time
 import Data.Time.Calendar.Month
 import Data.Time.Calendar.Quarter
 import Data.Tree qualified as Tree
+import Data.UUID.Types qualified as UUID
 import Data.Version
 import Test.QuickCheck hiding (Fixed)
 import Test.Tasty
@@ -57,6 +58,9 @@ test_containers = do
   let tree = Tree.Node 'a' [Tree.Node 'b' [], Tree.Node 'c' [Tree.Node 'd' []]]
   assertEqual "tree" "- a\n- - - b\n    - []\n  - - c\n    - - - d\n        - []\n" (encodeText tree)
   roundTrip "tree" tree
+  let uuid = UUID.fromWords 0x123e4567 0xe89b12d3 0xa4564266 0x14174000
+  assertEqual "UUID" "123e4567-e89b-12d3-a456-426614174000\n" (encodeText uuid)
+  roundTrip "UUIDs" [uuid, UUID.nil]
   roundTrip "tuple of 10" (1 :: Int, 'a', True, "b" :: T.Text, 2.5 :: Double, [1 :: Int], Just 'c', (), 'd', -1 :: Int)
 
 test_base :: Assertion

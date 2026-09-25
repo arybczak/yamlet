@@ -37,6 +37,7 @@ import Data.Time
 import Data.Time.Calendar.Month
 import Data.Time.Calendar.Quarter
 import Data.Tree qualified as Tree
+import Data.UUID.Types qualified as UUID
 import Data.Version
 import Data.Void
 import Data.Word
@@ -101,6 +102,9 @@ instance ToYaml NominalDiffTime where
 -- | A number of seconds.
 instance ToYaml DiffTime where
   toYaml d = node (Float (Finite (Sci.scientific (diffTimeToPicoseconds d) (-12))))
+
+-- | The text form with hyphens, e.g. @123e4567-e89b-12d3-a456-426614174000@.
+instance ToYaml UUID.UUID where toYaml = node . String . UUID.toText
 
 instance ToYaml Month where toYaml = node . String . formatMonth
 instance ToYaml Quarter where toYaml = node . String . formatQuarter

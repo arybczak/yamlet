@@ -20,6 +20,7 @@ import Data.Text.Internal qualified as T
 import Data.Time
 import Data.Time.Calendar.Month
 import Data.Time.Calendar.Quarter
+import Data.UUID.Types qualified as UUID
 import Data.Version
 import Data.Void
 import Test.Tasty
@@ -792,6 +793,14 @@ test_typeErrors = do
     (Just (1, 5, "not a vowel"))
     (errorOf (decodeText @[Vowel] "[a, x]"))
   assertEqual "ordering" (Just (1, 1, "expected LT, EQ or GT")) (errorOf (decodeText @Ordering "lt"))
+  assertEqual
+    "uppercase UUID"
+    (Right (UUID.fromWords 0x123e4567 0xe89b12d3 0xa4564266 0x14174000))
+    (decodeText "123E4567-E89B-12D3-A456-426614174000")
+  assertEqual
+    "invalid UUID"
+    (Just (1, 1, "expected a UUID such as 123e4567-e89b-12d3-a456-426614174000"))
+    (errorOf (decodeText @UUID.UUID "123e4567e89b12d3a456426614174000"))
   assertEqual
     "version as a number"
     (Just (1, 1, "expected a version, but got a floating-point number, quote the version, e.g. \"1.10\""))
