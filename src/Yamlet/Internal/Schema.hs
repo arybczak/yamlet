@@ -27,9 +27,10 @@ import Yamlet.Node
 -- @0x1F@ and @1.5e3@ are not strings. Quoted and block scalars are always
 -- strings.
 --
--- A number with an exponent beyond the range of 'Int', e.g.
--- @1e99999999999999999999@, becomes infinity or zero, as a double does. The
--- decoders reject such a number, because its value is not exact.
+-- A number with an exponent beyond the range from -1000 to 1000 in
+-- scientific notation, e.g. @1e1001@ or @0.1e-1000@, becomes infinity or
+-- zero, as a double does. The decoders reject such a number, because its
+-- value is not exact.
 resolvePlain :: T.Text -> Value
 resolvePlain = either id id . resolvePlainExact
 
@@ -37,8 +38,8 @@ resolvePlain = either id id . resolvePlainExact
 -- @tag:yaml.org,2002:int@. Return 'Nothing' if the text is not valid for a tag of
 -- the core schema. A scalar with another tag is a string.
 --
--- A number with an exponent beyond the range of 'Int' becomes infinity or
--- zero, as in 'resolvePlain'.
+-- A number with an exponent beyond the range from -1000 to 1000 becomes
+-- infinity or zero, as in 'resolvePlain'.
 resolveTagged :: T.Text -> T.Text -> Maybe Value
 resolveTagged tag t = either id id <$> resolveTaggedExact tag t
 
@@ -131,8 +132,8 @@ integerFloat i
   | i < 0 = negateFloat (integerFloat (negate i))
   | otherwise = either id id $ decimal (T.pack (show i)) 0
 
--- | The decimal digits times a power of 10. An exponent out of the range of
--- Int gives infinity or zero, which are not exact.
+-- | The decimal digits times a power of 10. A value beyond the limit of
+-- 'maxExponent' gives infinity or zero, which are not exact.
 --
 -- The coefficient has no trailing zeros. The comparison of two
 -- 'Sci.Scientific' values removes them one digit at a time, which takes
@@ -140,8 +141,8 @@ integerFloat i
 decimal :: T.Text -> Integer -> Either FloatValue FloatValue
 decimal ds0 e0
   | c == 0 = Right (Finite 0)
-  | e > toInteger (maxBound @Int) = Left Infinity
-  | e < toInteger (minBound @Int) = Left (Finite 0)
+  | leading > maxExponent = Left Infinity
+  | leading < negate maxExponent = Left (Finite 0)
   | otherwise = Right $ Finite (Sci.scientific c (fromInteger e))
   where
     ds :: T.Text
@@ -150,8 +151,22 @@ decimal ds0 e0
     e :: Integer
     e = e0 + toInteger (T.length ds0 - T.length ds)
 
+    -- The exponent of the first digit that is not zero.
+    leading :: Integer
+    leading = e + toInteger (T.length (T.dropWhile (== '0') ds)) - 1
+
     c :: Integer
     c = digitsValue 10 ds
+
+-- | The limit of the exponent of the first digit of a float. A
+-- 'Sci.Scientific' keeps the exponent apart from the coefficient, but its
+-- conversion to an 'Integer', e.g. with 'truncate', computes every digit.
+-- With this limit, the integer has at most 1001 digits, about 420 bytes.
+-- Without a limit, a short input such as @1e999999999@ gives an integer of
+-- about 400 MiB. The limit covers the whole range of 'Double', from about
+-- 5e-324 to 1.8e308.
+maxExponent :: Integer
+maxExponent = 1000
 
 negateFloat :: FloatValue -> FloatValue
 negateFloat = \case

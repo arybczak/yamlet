@@ -153,7 +153,7 @@ compose input doc
         node' v = Node off (defaultTag v) v
 
         inexact :: String
-        inexact = "the exponent of the number is out of range"
+        inexact = "the exponent of the number is out of the range from -1000 to 1000"
 
     collectionTag :: S.Offset -> S.Props -> T.Text -> Either Error T.Text
     collectionTag off props def = case props.tag of

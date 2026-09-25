@@ -132,27 +132,33 @@ test_exactFloats = do
     (Right (Sci.scientific 12345678901234567890123 (-3)))
     (decodeText @Sci.Scientific "12345678901234567890.123")
   assertEqual "integer as a scientific" (Right (Sci.scientific 42 0)) (decodeText @Sci.Scientific "42")
-  assertEqual "huge exponent" (Right (Sci.scientific 1 1000000000)) (decodeText @Sci.Scientific "1e1000000000")
-  assertEqual "huge exponent as a double" (Right (1 / 0)) (decodeText @Double "1e1000000000")
+  assertEqual "largest exponent" (Right (Sci.scientific 99 999)) (decodeText @Sci.Scientific "9.9e1000")
+  assertEqual "smallest exponent" (Right (Sci.scientific 15 (-1001))) (decodeText @Sci.Scientific "1.5e-1000")
+  assertEqual "large exponent as a double" (Right (1 / 0)) (decodeText @Double "1e1000")
   -- 1 + 2^-24 + 2^-60 is nearest to the float 1 + 2^-23, but the nearest
   -- double is 1 + 2^-24, a tie between two floats that rounds to 1.
   assertEqual
     "float without double rounding"
     (Right (1 + 2 ^^ (-23 :: Int)))
     (decodeText @Float "1.000000059604644776257986737988403547205962240695953369140625")
+  forM_ ["[1e1001]", "[10e1000]", "[0.1e-1000]", "[1e99999999999999999999]", "[11e9223372036854775807]"] $ \input ->
+    assertEqual
+      ("exponent beyond the limit in " ++ show input)
+      (Just (1, 2, "the exponent of the number is out of the range from -1000 to 1000"))
+      (errorOf (decodeText @Sci.Scientific input))
   assertEqual
-    "exponent beyond Int"
-    (Just (1, 2, "the exponent of the number is out of range"))
-    (errorOf (decodeText @Sci.Scientific "[1e99999999999999999999]"))
-  assertEqual
-    "negative exponent beyond Int"
-    (Just (1, 9, "the exponent of the number is out of range"))
+    "exponent beyond the limit with a tag"
+    (Just (1, 9, "the exponent of the number is out of the range from -1000 to 1000"))
     (errorOf (decodeText @Double "!!float 1e-99999999999999999999"))
   assertEqual
-    "exponent beyond Int in the schema"
+    "integer beyond the limit as a float"
+    (Just (1, 9, "the exponent of the number is out of the range from -1000 to 1000"))
+    (errorOf (decodeText @Double ("!!float 1" <> T.replicate 1001 "0")))
+  assertEqual
+    "exponent beyond the limit in the schema"
     [Float Infinity, Float (Finite 0), Float (Finite 0)]
-    (map resolvePlain ["1e99999999999999999999", "1e-99999999999999999999", "0e99999999999999999999"])
-  assertEqual "zero with an exponent beyond Int" (Right 0) (decodeText @Double "0e99999999999999999999")
+    (map resolvePlain ["1e1001", "1e-1001", "0e99999999999999999999"])
+  assertEqual "zero with an exponent beyond the limit" (Right 0) (decodeText @Double "0e99999999999999999999")
   assertEqual
     "negative zero"
     (Right [Float NegativeZero, Float NegativeZero, Float (Finite 0), Int 0])
@@ -275,11 +281,11 @@ test_time = do
   assertEqual "duration" (Right (1.5 :: NominalDiffTime)) (decodeText "1.5")
   assertEqual "whole duration" (Right (60 :: DiffTime)) (decodeText "60")
   assertEqual "picosecond" (Right (picosecondsToDiffTime 1)) (decodeText "1e-12")
-  assertEqual "tiny duration" (Right (0 :: DiffTime)) (decodeText "1e-1000000000")
+  assertEqual "tiny duration" (Right (0 :: DiffTime)) (decodeText "1e-1000")
   assertEqual
     "huge duration"
     (Just (1, 1, "the duration is out of range"))
-    (errorOf (decodeText @NominalDiffTime "1e1000000000"))
+    (errorOf (decodeText @NominalDiffTime "1e1000"))
   forM_ [maxBound - 11, maxBound] $ \ex ->
     assertEqual
       ("duration with the exponent " ++ show ex)
@@ -815,17 +821,21 @@ test_longNumbers = do
   assertEqual "octal" (Right (8 ^ (100 :: Int) - 1)) (decodeText @Integer ("0o" <> T.replicate 100 "7"))
   assertEqual
     "float"
-    (Right (Float (Finite (Sci.scientific (10 ^ (1000000 :: Int) - 1) (-1)))))
-    ((.value) <$> decodeText @Node (nines 999999 <> ".9"))
+    (Right (Float (Finite (Sci.scientific (10 ^ (1000000 :: Int) - 1) (-999999)))))
+    ((.value) <$> decodeText @Node ("9." <> nines 999999))
   assertEqual
     "exponent"
-    (Just (1, 1, "the exponent of the number is out of range"))
+    (Just (1, 1, "the exponent of the number is out of the range from -1000 to 1000"))
     (errorOf (decodeText @Node ("1e" <> nines 1000000)))
   let zeros = T.replicate 300000 "0"
   assertEqual
     "trailing zeros"
     (Just (1, 600018, "duplicate key"))
-    (errorOf (decodeNodes ("{1" <> zeros <> ".0: a, 1" <> zeros <> ".5: b, 1" <> zeros <> ".00: c}")))
+    (errorOf (decodeNodes ("{0.1" <> zeros <> ": a, 0.5" <> zeros <> ": b, 0.1" <> zeros <> "0: c}")))
+  assertEqual
+    "long integer as a float"
+    (Just (1, 1, "the exponent of the number is out of the range from -1000 to 1000"))
+    (errorOf (decodeText @Node (nines 999999 <> ".9")))
 
 -- | The time of the check for duplicate keys is not quadratic in the number
 -- of keys.
