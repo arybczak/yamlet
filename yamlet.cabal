@@ -58,6 +58,8 @@ library
                      Yamlet.Internal.Emit
                      Yamlet.Internal.Input
                      Yamlet.Internal.Parser
+                     Yamlet.Internal.Parser.Chars
+                     Yamlet.Internal.Parser.Hints
                      Yamlet.Internal.Parser.Monad
                      Yamlet.Internal.Render
                      Yamlet.Internal.Schema
