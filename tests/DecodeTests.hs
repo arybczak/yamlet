@@ -423,6 +423,10 @@ test_syntaxErrors = do
     "zero indentation indicator"
     (1, 5, "the indentation indicator of a block scalar must be from 1 to 9")
     "s: |0\n  x\n"
+  check
+    "long key"
+    (1, 1103, "a key can be at most 1024 characters long, write a longer key after '? '")
+    ("\"" <> T.replicate 1100 "k" <> "\": 1\n")
   check "list on the line of its key" (1, 4, "unexpected '-', a list cannot start on the line of its key") "a: - b\n"
   check
     "line of a block scalar"

@@ -120,12 +120,21 @@ unexpected e i = case indentationTab (i - 1) Nothing of
       | indented -> maybe "unexpected indentation" id (indentationMistake e i)
       | isBreak w -> "unexpected end of line"
       | i > e.base && isBreak (byteBefore e i), Just msg <- indentationMistake e i -> msg
+      | w == COLON && longKey ->
+          "a key can be at most 1024 characters long, write a longer key after '? '"
       | w == COLON && valueColon ->
           "unexpected ':', quote the value if it contains \": \""
       | itemAfterKey -> "unexpected '-', a list cannot start on the line of its key"
       | Just msg <- mistake e i -> msg
       | otherwise -> unexpectedChar e i
   where
+    -- A colon after the first node of an entry that is too long for an
+    -- implicit key.
+    longKey :: Bool
+    longKey =
+      let start = skipListItems e (skipSpaces e (lineStart e i))
+      in not (fitsKey e start i) && not (any (isKeyColon e) [start .. i - 1])
+
     -- A list item right after a key, as in "a: - b".
     itemAfterKey :: Bool
     itemAfterKey = isListItem e i && byteBefore e (skipBack i) == COLON
@@ -257,7 +266,7 @@ blockMistake e i = do
   if
     | isListItem e k && byteAt e start == MINUS && i == start + 1 ->
         Just (i, "expected a space after '-'")
-    | not (isListItem e k) && (w == 0 || isBreak w) && not (any keyColon [start .. i - 1]) ->
+    | not (isListItem e k) && (w == 0 || isBreak w) && not (any (isKeyColon e) [start .. i - 1]) ->
         Just $ case filter tightColon [start .. i - 1] of
           colon : _ -> (colon + 1, "expected a space after ':'")
           [] -> (i, "expected ':' after the key")
@@ -278,20 +287,14 @@ blockMistake e i = do
     entryAbove from = do
       k <- lineAbove e from
       let indent = k - lineStart e k
-          entry = skipItems k
+          entry = skipListItems e k
       if
         | indent == column -> Just k
         | entry - lineStart e k == column -> Just entry
         | indent < column -> Nothing
         | otherwise -> entryAbove (lineStart e k)
 
-    skipItems :: Int -> Int
-    skipItems j = if isListItem e j then skipItems (skipWhites e (j + 1)) else j
-
     -- A colon before a word, as in "key:value", but not in "http://".
-    keyColon :: Int -> Bool
-    keyColon j = byteAt e j == COLON && (let b = byteAt e (j + 1) in b == 0 || isWhite b || isBreak b)
-
     tightColon :: Int -> Bool
     tightColon j = byteAt e j == COLON && startsWord (byteAt e (j + 1))
 
@@ -325,6 +328,14 @@ lineAbove e start
     breakStart j
       | j > e.base && byteBefore e j == CR && byteAt e j == LF = j - 1
       | otherwise = j
+
+-- | The index after the "- " indicators at the index, as in "- - key: value".
+skipListItems :: Env -> Int -> Int
+skipListItems e i = if isListItem e i then skipListItems e (skipWhites e (i + 1)) else i
+
+-- | A colon that ends an implicit key is at the index.
+isKeyColon :: Env -> Int -> Bool
+isKeyColon e i = byteAt e i == COLON && (let b = byteAt e (i + 1) in b == 0 || isWhite b || isBreak b)
 
 -- | A block sequence entry starts at the index.
 isListItem :: Env -> Int -> Bool
