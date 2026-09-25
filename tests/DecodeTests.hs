@@ -369,6 +369,8 @@ test_syntaxErrors = do
     "mapping in a plain scalar"
     (1, 11, "unexpected ':', quote the value if it contains \": \"")
     "key: value: other\n"
+  check "flow key on two lines" (2, 2, "unexpected ':', a key must be on a single line") "[23\n]: 42\n"
+  check "quoted key on two lines" (2, 3, "a key must be on a single line") "a: 1\n\"c\n d\": 1\n"
   check
     "mapping on the line of the document marker"
     (1, 9, "unexpected ':', a mapping cannot start on the line of '---'")

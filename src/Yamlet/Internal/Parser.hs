@@ -133,6 +133,7 @@ unexpected e i = case indentationTab (i - 1) Nothing of
       | i > e.base && isBreak (byteBefore e i), Just msg <- indentationMistake e i -> msg
       | w == COLON && firstColon && not (fitsKey e entryStart i) ->
           "a key can be at most 1024 characters long, write a longer key after '? '"
+      | w == COLON && multiLineKey -> "unexpected ':', a key must be on a single line"
       | w == COLON && firstColon && valueColon && onStartMarkerLine ->
           "unexpected ':', a mapping cannot start on the line of '---'"
       -- A colon on the first line of a key does not fail, so the scalar
@@ -154,6 +155,28 @@ unexpected e i = case indentationTab (i - 1) Nothing of
       in if j > start && byteBefore e j == COLON && byteAt e start == STAR
            then Just (j - 1)
            else Nothing
+
+    -- A key before the index that started on a line above. A key that ends
+    -- here on one line does not fail.
+    multiLineKey :: Bool
+    multiLineKey =
+      multiLineCollection || firstColon && (byteBefore e i == DQUOTE || byteBefore e i == SQUOTE)
+
+    -- A flow collection ends before the index and starts on a line above.
+    multiLineCollection :: Bool
+    multiLineCollection =
+      let b = byteBefore e i
+      in (b == RBRACKET || b == RBRACE) && go (i - 2) (1 :: Int) False
+      where
+        go :: Int -> Int -> Bool -> Bool
+        go j depth crossed
+          | j < e.base = False
+          | c == RBRACKET || c == RBRACE = go (j - 1) (depth + 1) crossed
+          | c == LBRACKET || c == LBRACE = if depth == 1 then crossed else go (j - 1) (depth - 1) crossed
+          | otherwise = go (j - 1) depth (crossed || isBreak c)
+          where
+            c :: Word8
+            c = byteAt e j
 
     onStartMarkerLine :: Bool
     onStartMarkerLine = isMarker e (lineStart e i) && byteAt e (lineStart e i) == MINUS
@@ -313,10 +336,18 @@ blockMistake e i = do
         Just (i, "expected a space after '-'")
     | not (isListItem e k) && (w == 0 || isBreak w) && not (any (isKeyColon e) [start .. i - 1]) ->
         Just $ case filter tightColon [start .. i - 1] of
+          _ | openQuote -> (i, "a key must be on a single line")
           colon : _ -> (colon + 1, "expected a space after ':'")
           [] -> (i, "expected ':' after the key")
     | otherwise -> Nothing
   where
+    -- The line starts a quoted scalar that does not end on it, as in "a
+    -- quoted key on two lines".
+    openQuote :: Bool
+    openQuote =
+      let q = byteAt e start
+      in (q == DQUOTE || q == SQUOTE) && q `notElem` [byteAt e j | j <- [start + 1 .. i - 1]]
+
     w :: Word8
     w = byteAt e i
 
