@@ -1231,6 +1231,8 @@ cLBlockScalar n props = do
   (chomping, explicitIndent) <- cBBlockHeader p
   q <- pos
   indent <- case explicitIndent of
+    -- At the top level, n is -1. A literal reading of the specification then
+    -- gives |1 no indentation, but libyaml and other parsers count from 0.
     Just m -> pure $ max 0 n + m
     Nothing -> case detectIndent e n q of
       Right m -> pure m

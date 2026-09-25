@@ -34,6 +34,7 @@ decodeTests =
     , testCase "record" test_record
     , testCase "without offsets" test_withoutOffsets
     , testCase "notFollowedBy" test_notFollowedBy
+    , testCase "block scalars" test_blockScalars
     , testCase "containers" test_containers
     , localOption (mkTimeout 10000000) $ testCase "time" test_time
     , testCase "copies" test_copies
@@ -176,6 +177,13 @@ instance FromYAML Config where
   parseYAML = withMapping $ \o -> do
     rejectUnknownKeys ["name", "paths", "jobs"] o
     Config <$> o .: "name" <*> o .:? "paths" .!= [] <*> o .:? "jobs" .!= 1
+
+-- | Edge cases of block scalars, with the results of libyaml and of the
+-- JavaScript package yaml.
+test_blockScalars :: Assertion
+test_blockScalars = do
+  assertEqual "indentation indicator at the top level" (Right " a\n") (decodeText @T.Text "--- |1\n  a\n")
+  assertEqual "indentation indicator without a marker" (Right " a\n") (decodeText @T.Text "|2\n   a\n")
 
 -- | An error inside 'P.notFollowedBy' is not lost.
 test_notFollowedBy :: Assertion
