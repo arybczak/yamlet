@@ -37,12 +37,33 @@ parseStream :: T.Text -> Either Error [Document]
 parseStream input@(T.Text arr off len) = case prescan e start of
   Left i -> Left $ errorAt input (toOffset e i) ("invalid character " ++ codePointName (T.head (slice e i e.end)))
   Right (markers, boms) -> case runParser e start (lYamlStream markers) of
-    Left (ParseError i msg) -> Left $ errorAt input (toOffset e i) msg
+    Left (ParseError i msg) -> Left $ parseError i msg
     Right (Just docs, _, _) -> case filter (not . allowedBom docs) boms of
       i : _ -> Left $ errorAt input (toOffset e i) "unexpected byte order mark"
       [] -> Right docs
-    Right (Nothing, _, fu) -> let (i, msg) = unexpected e fu in Left $ errorAt input (toOffset e i) msg
+    Right (Nothing, _, fu) -> Left $ uncurry parseError (unexpected e fu)
   where
+    -- A byte order mark at the start of the line of an error is the likely
+    -- cause, unless a document marker or a directive follows it.
+    parseError :: Int -> String -> Error
+    parseError i msg = case bomAt (lineOf i) of
+      Just b
+        | let j = skipBoms e b
+        , not (isMarker e j || byteAt e j == PERCENT) ->
+            errorAt input (toOffset e b) "unexpected byte order mark"
+      _ -> errorAt input (toOffset e i) msg
+
+    -- The byte order mark at the start of a line, other than the one at the
+    -- start of the input.
+    bomAt :: Int -> Maybe Int
+    bomAt s
+      | s == off && isBom e s = if isBom e (s + 3) then Just (s + 3) else Nothing
+      | isBom e s = Just s
+      | otherwise = Nothing
+
+    lineOf :: Int -> Int
+    lineOf i = if i > off && not (isBreak (byteBefore e i)) then lineOf (i - 1) else i
+
     -- A byte order mark can start a line between documents, or be a
     -- character of a quoted scalar.
     allowedBom :: [Document] -> Int -> Bool
@@ -78,7 +99,7 @@ parseStream input@(T.Text arr off len) = case prescan e start of
 -- order mark is the index of the mark. Return the index of an invalid
 -- character on error.
 prescan :: Env -> Int -> Either Int ([Int], [Int])
-prescan e start = go start [start | isMarker e start] []
+prescan e start = go start [start | isMarker e (skipBoms e start)] []
   where
     go :: Int -> [Int] -> [Int] -> Either Int ([Int], [Int])
     go i acc boms
@@ -89,7 +110,7 @@ prescan e start = go start [start | isMarker e start] []
                | w >= 0x20 && w < 0x7F -> go (i + 1) acc boms
                | w == LF || (w == CR && byteAt e (i + 1) /= LF) ->
                    let s = i + 1
-                       marker = isMarker e s || (isBom e s && isMarker e (s + 3))
+                       marker = isMarker e (skipBoms e s)
                    in go s (if marker then s : acc else acc) boms
                | w == CR || w == TAB -> go (i + 1) acc boms
                | w < 0x20 || w == 0x7F -> Left i

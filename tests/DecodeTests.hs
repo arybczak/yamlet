@@ -500,6 +500,13 @@ test_encodings = do
   bom "BOM at the start of a key" (2, 1) "a: 1\n\xFEFF b: 2\n"
   bom "BOM in a plain scalar" (1, 5) "a: x\xFEFFy\n"
   bom "BOM in a block scalar" (2, 3) "a: |\n  \xFEFFx\n"
+  bom "BOM before a key" (2, 1) "a: b\n\xFEFF\&c: d\n"
+  bom "BOM before a list item" (2, 1) "- a\n\xFEFF- b\n"
+  bom "BOM before an indented value" (2, 1) "a:\n\xFEFF  b\n"
+  bom "BOM before a comment in a mapping" (2, 1) "a: b\n\xFEFF#c\n"
+  documents "two BOMs before a marker" ["a", "b"] "a\n\xFEFF\xFEFF--- b\n"
+  documents "two BOMs before a marker after an end marker" ["a", "b"] "--- a\n...\n\xFEFF\xFEFF--- b\n"
+  documents "two BOMs before a marker after a block scalar" ["x\n", "b"] "--- |\n x\n\xFEFF\xFEFF--- b\n"
   where
     stripBom :: T.Text -> Either Error T.Text
     stripBom = Right . T.dropWhile (== '\xFEFF')

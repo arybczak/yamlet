@@ -46,6 +46,7 @@ module Yamlet.Internal.Parser.Chars
   , isTagChar
   , isAnchorChar
   , isBom
+  , skipBoms
 
     -- * Scanning
   , skipSpaces
@@ -181,6 +182,9 @@ isAnchorChar w = isNsChar w && not (isFlowIndicator w)
 
 isBom :: Env -> Int -> Bool
 isBom e i = byteAt e i == 0xEF && byteAt e (i + 1) == 0xBB && byteAt e (i + 2) == 0xBF
+
+skipBoms :: Env -> Int -> Int
+skipBoms e i = if isBom e i then skipBoms e (i + 3) else i
 
 ----------------------------------------
 -- Scanning
