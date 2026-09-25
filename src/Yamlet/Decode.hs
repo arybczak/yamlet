@@ -422,6 +422,11 @@ instance FromYAML a => FromYAML (Maybe a) where
 
 -- | Two keys that convert to the same key, e.g. @1@ and @1.0@ for 'Double',
 -- are an error.
+--
+-- Each key decodes with the instance of its type, so a map with 'T.Text' keys
+-- rejects a key such as @404@ or @true@, because YAML reads it as an integer
+-- or a boolean. Quote such a key in the input, e.g. @\"404\": not found@, or
+-- use a key type that matches it, e.g. 'Int'.
 instance (Ord k, FromYAML k, FromYAML v) => FromYAML (M.Map k v) where
   -- The index of 'withMapping' would be of no use here.
   parseYAML = parseNode $ \n -> case n.value of
