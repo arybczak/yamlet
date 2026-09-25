@@ -33,15 +33,32 @@ A YAML 1.2.2 library written in Haskell, with few dependencies.
 
 ## Performance
 
-The benchmark in `bench/` parses three generated inputs. The times below come
-from GHC 9.14 on one machine. The `yaml` package uses the libyaml C library and
-converts the result to an aeson `Value`.
+The benchmark in `bench/` uses three generated inputs:
 
-| Input                   | yamlet (nodes)  | HsYAML (nodes) | yaml   |
-|-------------------------|-----------------|----------------|--------|
-| config, 1105 KiB        | 32 ms           | 2970 ms        | 116 ms |
-| json, 432 KiB           | 18 ms           | 2370 ms        | 56 ms  |
-| text, 834 KiB           | 5.6 ms          | 611 ms         | 13 ms  |
+- `config`: a list of records in block style, as in a configuration file.
+- `json`: a list of records in JSON syntax.
+- `text`: a mapping of long multi-line strings.
+
+For each input, every library decodes the YAML into the same Haskell type and
+encodes a value of that type back to YAML. The times below come from GHC
+9.10.3 on one machine. The `yaml` package uses the libyaml C library and
+converts the data by way of an aeson `Value`.
+
+Decoding:
+
+| Input              | yamlet | HsYAML  | yaml   |
+|--------------------|--------|---------|--------|
+| `config`, 1105 KiB | 38 ms  | 2988 ms | 113 ms |
+| `json`, 432 KiB    | 23 ms  | 2353 ms | 57 ms  |
+| `text`, 834 KiB    | 9.5 ms | 610 ms  | 13 ms  |
+
+Encoding:
+
+| Input              | yamlet | HsYAML | yaml   |
+|--------------------|--------|--------|--------|
+| `config`, 1105 KiB | 35 ms  | 36 ms  | 55 ms  |
+| `json`, 432 KiB    | 19 ms  | 18 ms  | 32 ms  |
+| `text`, 834 KiB    | 4.8 ms | 9.1 ms | 9.4 ms |
 
 ## Tests
 
