@@ -390,6 +390,7 @@ test_syntaxErrors = do
   check "flow sequence before a key" (1, 6, "unterminated flow sequence") "key: [a, b\nc: d\n"
   check "flow sequence at the end" (1, 6, "unterminated flow sequence") "key: [a, b\n"
   check "flow sequence before a comment" (1, 6, "unterminated flow sequence") "key: [a, b # c\nd: e\n"
+  check "empty flow entry" (1, 4, "unexpected ',', a flow collection cannot have an empty entry") "[1,,2]\n"
   check "content after a flow sequence" (1, 14, "expected ',' or ']'") "key: [a, \"b\" c]\n"
   check "flow mapping at the end" (1, 1, "unterminated flow mapping") "{\"a\": 1,\n \"b\": 2\n"
   check "flow mapping before a marker" (1, 1, "unterminated flow mapping") "{a: 1\n---\nb\n"

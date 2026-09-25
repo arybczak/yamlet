@@ -196,6 +196,8 @@ mistake e i
   -- parser, so here it follows the end of another node, e.g. "x"#c.
   | w == HASH && isNsChar (byteBefore e i) =
       Just "unexpected '#', a comment needs a space before it"
+  | w == COMMA && (let b = byteBefore e (skipBack i) in b == COMMA || b == LBRACKET || b == LBRACE) =
+      Just "unexpected ',', a flow collection cannot have an empty entry"
   | w == STAR && not (isAnchorChar (byteAt e (i + 1))) = Just "expected an alias name after '*'"
   | w == AMP && not (isAnchorChar (byteAt e (i + 1))) = Just "expected an anchor name after '&'"
   | afterQuote SQUOTE =
@@ -209,6 +211,13 @@ mistake e i
   where
     w :: Word8
     w = byteAt e i
+
+    -- The index after the last content before the white space and the line
+    -- breaks that end at the index.
+    skipBack :: Int -> Int
+    skipBack j
+      | isWhite (byteBefore e j) || isBreak (byteBefore e j) = skipBack (j - 1)
+      | otherwise = j
 
     -- Content right after a quote, as in 'it's'. A plain scalar can hold a
     -- quote, so the quote closes a quoted scalar. A colon there ends a key.
