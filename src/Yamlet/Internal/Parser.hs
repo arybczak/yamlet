@@ -114,7 +114,7 @@ unexpected e i = case indentationTab (i - 1) Nothing of
   Nothing -> (i,) $ case byteAt e i of
     0 -> "unexpected end of input"
     w
-      | indented -> "unexpected indentation"
+      | indented -> maybe "unexpected indentation" id (indentationMistake e i)
       | isBreak w -> "unexpected end of line"
       | w == COLON && valueColon ->
           "unexpected ':', quote the value if it contains \": \""
@@ -175,6 +175,77 @@ mistake e i
     afterQuote :: Word8 -> Bool
     afterQuote q =
       byteBefore e i == q && isNsChar w && not (isFlowIndicator w) && w /= COLON
+
+-- | The error for content at the index that starts a line with a wrong
+-- indentation, if the lines above show the likely mistake: a list item among
+-- mapping entries or the other way round, or a line of a block scalar with
+-- too little indentation.
+indentationMistake :: Env -> Int -> Maybe String
+indentationMistake e i = go (lineStart i)
+  where
+    column :: Int
+    column = i - lineStart i
+
+    -- Look at the lines above, up to the first line with less indentation.
+    go :: Int -> Maybe String
+    go start
+      | start <= e.base = Nothing
+      | otherwise =
+          let prev = lineStart (breakStart (start - 1))
+              k = skipSpaces e prev
+              indent = k - prev
+              b = byteAt e k
+          in if
+               | b == 0 || isBreak b || b == HASH -> go prev
+               | indent > column -> go prev
+               | indent < column ->
+                   if endsWithHeader k
+                     then Just "unexpected indentation, the line has less indentation than the block scalar above it"
+                     else Nothing
+               | isItem k && not (isItem i) -> Just "unexpected key among list items"
+               | not (isItem k) && isItem i -> Just "unexpected list item among mapping entries"
+               | otherwise -> Nothing
+
+    lineStart :: Int -> Int
+    lineStart j
+      | j > e.base && not (isBreak (byteBefore e j)) = lineStart (j - 1)
+      | otherwise = j
+
+    -- The start of the line break that ends at the index, e.g. of CR LF.
+    breakStart :: Int -> Int
+    breakStart j
+      | j > e.base && byteBefore e j == CR && byteAt e j == LF = j - 1
+      | otherwise = j
+
+    isItem :: Int -> Bool
+    isItem j = byteAt e j == MINUS && (let b = byteAt e (j + 1) in b == 0 || isWhite b || isBreak b)
+
+    -- The line from the index ends with a block scalar header, e.g. "key: |-".
+    endsWithHeader :: Int -> Bool
+    endsWithHeader j =
+      let end = trimEnd j (contentEnd j)
+          h = skipIndicators end
+      in h > j
+           && (let b = byteAt e (h - 1) in b == PIPE || b == GREATER)
+           && (h - 1 == j || isWhite (byteAt e (h - 2)))
+
+    -- The end of the line before a comment.
+    contentEnd :: Int -> Int
+    contentEnd j
+      | b == 0 || isBreak b = j
+      | b == HASH && isWhite (byteBefore e j) = j
+      | otherwise = contentEnd (j + 1)
+      where
+        b :: Word8
+        b = byteAt e j
+
+    trimEnd :: Int -> Int -> Int
+    trimEnd start j = if j > start && isWhite (byteBefore e j) then trimEnd start (j - 1) else j
+
+    skipIndicators :: Int -> Int
+    skipIndicators j =
+      let b = byteBefore e j
+      in if b == MINUS || b == 0x2B || isDecDigit b then skipIndicators (j - 1) else j
 
 unexpectedChar :: Env -> Int -> String
 unexpectedChar e i

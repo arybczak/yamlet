@@ -405,6 +405,12 @@ test_syntaxErrors = do
     "reserved indicator in a flow sequence"
     (1, 5, "unexpected '`', a plain scalar cannot start with it, quote the value")
     "[a, `b`]\n"
+  check "key among list items" (5, 3, "unexpected key among list items") "a:\n  - x\n\n  # c\n  b: 1\n"
+  check "list item among keys" (3, 3, "unexpected list item among mapping entries") "a:\n  b: 1\n  - x\n"
+  check
+    "line of a block scalar"
+    (3, 3, "unexpected indentation, the line has less indentation than the block scalar above it")
+    "s: >- # folded\n    line1\n  line2\n"
   check "invalid escape" (1, 8, "invalid escape sequence") "key: \"a\\qb\"\n"
   check "undefined alias" (2, 4, "undefined alias *x") "a: 1\nb: *x\n"
   check "duplicate key" (3, 1, "duplicate key \"a\"") "a: 1\nb: 2\na: 3\n"
