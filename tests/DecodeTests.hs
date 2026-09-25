@@ -440,6 +440,8 @@ test_encodings = do
   invalid "odd length of UTF-16BE" "invalid UTF-16" (T.encodeUtf16BE "a\nbc" <> "\0")
   invalid "surrogate in UTF-32BE" "invalid UTF-32" (T.encodeUtf32BE "a\nbc" <> "\0\0\xDC\0")
   invalid "code point beyond Unicode in UTF-32LE" "invalid UTF-32" (T.encodeUtf32LE "a\nbc" <> "\0\0\x11\0")
+  invalid "incomplete character in UTF-8" "invalid UTF-8" ("a\nbc" <> "\xE2\x82")
+  invalid "surrogate in UTF-8" "invalid UTF-8" ("a\nbc" <> "\xED\xA0\x80" <> "d")
   let column :: String -> Int -> BS.ByteString -> Assertion
       column preface expected bytes =
         assertEqual preface (Just expected) ((\(_, c, _) -> c) <$> errorOf (decode @Node bytes))
