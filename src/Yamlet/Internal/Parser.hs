@@ -1547,6 +1547,8 @@ closing c start w kind msg = do
   char w <|> if
     | c == FlowKey -> failure
     | atLineEnd e p -> throwAt start ("unterminated " ++ kind)
+    | dash e p ->
+        throwAt p "unexpected '-', a list item cannot be inside a flow collection, quote '-' if it is a string"
     | otherwise -> throwAt p (maybe msg id (mistake e p))
   where
     -- The separation after an entry goes on to the next line if the
@@ -1559,6 +1561,11 @@ closing c start w kind msg = do
           HASH -> let b = byteAt e (i - 1) in isWhite b || isBreak b
           b | isWhite b -> atLineEnd e (i + 1)
           b -> isBreak b
+
+    -- A '-' that cannot start a plain scalar, e.g. "- " as in a block
+    -- sequence.
+    dash :: Env -> Int -> Bool
+    dash e i = byteAt e i == MINUS && not (isAnchorChar (byteAt e (i + 1)))
 
 -- | ns-flow-seq-entry(n,c)
 --
