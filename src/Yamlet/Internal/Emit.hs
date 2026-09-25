@@ -11,6 +11,7 @@ module Yamlet.Internal.Emit
   , doubleQuoted
   , literalBlock
   , foldedBlock
+  , needsIndentIndicator
 
     -- * Other
   , tagText
@@ -149,15 +150,22 @@ blockParts allowKeep t
     trailing = T.length t - T.length body
 
     indicator :: B.Builder
-    indicator = case T.uncons (T.dropWhile (== '\n') body) of
-      Just (' ', _) -> "2"
-      _ -> mempty
+    indicator = if needsIndentIndicator t then "2" else mempty
 
     chomping :: B.Builder
     chomping = case trailing of
       0 -> "-"
       1 -> mempty
       _ -> "+"
+
+-- | A block scalar with the text needs an indentation indicator, because its
+-- first line with content starts with a space. Parsers do not agree on the
+-- meaning of the indicator at the top level, so a caller there writes such a
+-- text with quotes.
+needsIndentIndicator :: T.Text -> Bool
+needsIndentIndicator t = case T.uncons (T.dropWhile (== '\n') t) of
+  Just (' ', _) -> True
+  _ -> False
 
 -- | A line of a block scalar. An empty line gets no indentation.
 line :: Int -> T.Text -> B.Builder

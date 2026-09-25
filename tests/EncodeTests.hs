@@ -157,6 +157,7 @@ test_literal = do
   assertEqual "strip" "key: |-\n  a\n  b\n" (encodeText (mapping ["key" .= ("a\nb" :: T.Text)]))
   assertEqual "keep" "key: |+\n  a\n\n" (encodeText (mapping ["key" .= ("a\n\n" :: T.Text)]))
   assertEqual "indentation indicator" "- |2-\n    a\n  b\n" (encodeText ["  a\nb" :: T.Text])
+  assertEqual "no indentation indicator at the top level" "\" a\\nb\"\n" (encodeText @T.Text " a\nb")
   let keep = mapping ["key" .= ("a\n\n" :: T.Text), "next" .= ("b" :: T.Text)]
   assertEqual
     "keep in a syntax tree"

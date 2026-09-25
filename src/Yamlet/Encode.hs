@@ -290,6 +290,7 @@ renderDocuments docs = TL.toStrict . B.toLazyText . mconcat $ zipWith document [
     topLevel n = case n.value of
       Sequence (_ : _) -> tagLine n <> blockSequence 0 True n
       Mapping (_ : _) -> tagLine n <> blockMapping 0 True n
+      String t | needsIndentIndicator t -> withTag n (scalarText n) <> "\n"
       _ -> scalarValue 2 n <> "\n"
 
     -- A tag of a block collection takes a line of its own.

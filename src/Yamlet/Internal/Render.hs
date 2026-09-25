@@ -162,7 +162,12 @@ document opts afterEnd doc =
     ]
   where
     r :: Node
-    r = doc.root
+    r = case doc.root.content of
+      Scalar style t
+        | style == Literal || style == Folded
+        , needsIndentIndicator t ->
+            doc.root {content = Scalar DoubleQuoted t}
+      _ -> doc.root
 
     -- The handles for the tags that are not valid URIs.
     handles :: [Char]

@@ -134,6 +134,9 @@ test_fallbacks = do
   assertEqual "plain with a colon" "'a: b'\n" (render (plainNode "a: b"))
   assertEqual "plain number stays plain" "12\n" (render (plainNode "12"))
   assertEqual "single-quoted line break" "\"a\\nb\"\n" (render (scalarNode SingleQuoted "a\nb"))
+  assertEqual "literal with an indicator at the top level" "\" a\\nb\"\n" (render (scalarNode Literal " a\nb"))
+  assertEqual "folded with an indicator at the top level" "\" a\\nb\"\n" (render (scalarNode Folded " a\nb"))
+  assertEqual "literal with an indicator in a list" "- |2-\n   a\n  b\n" (render (sequenceNode [scalarNode Literal " a\nb"]))
   assertEqual
     "keep indicator"
     "- |+\n  a\n\n- b\n"
