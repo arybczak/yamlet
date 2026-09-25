@@ -383,7 +383,15 @@ test_syntaxTree = do
     r -> assertFailure (show r)
   let key = S.plainNode "a"
       built = S.document (S.mappingNode [(key, key), (key, key)])
-  assertEqual "built" (Just (1, 1, "duplicate key \"a\"")) (errorOf (resolveDocument "" built))
+  assertEqual "built" (Just (0, 0, "duplicate key \"a\"")) (errorOf (resolveDocument "" built))
+  assertEqual
+    "built, rendered"
+    (Left "built.yaml: duplicate key \"a\"")
+    (either (Left . prettyError "built.yaml") (const (Right ())) (resolveDocument "" built))
+  assertEqual
+    "decoder error in a built node"
+    (Just (0, 0, "expected an integer, but got a string"))
+    (errorOf (decodeDocument @Int "" (S.document (S.plainNode "x"))))
 
 test_emptyStream :: Assertion
 test_emptyStream = do

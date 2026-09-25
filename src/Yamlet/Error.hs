@@ -32,7 +32,8 @@ data Error = Error
   deriving anyclass (NFData)
 
 -- | A position in the input. Lines and columns count from 1, and a column
--- counts characters, not bytes.
+-- counts characters, not bytes. Line 0 and column 0 mean that the error has
+-- no position, e.g. because it comes from a node that a program built.
 data Location = Location
   { offset :: !Offset
   , line :: !Int
@@ -51,28 +52,33 @@ data Location = Location
 -- 3 |   - 42
 --   |     ^
 -- @
+--
+-- An error with no position gives only the file and the message, e.g.
+-- @config.yaml: duplicate key \"a\"@.
 prettyError :: FilePath -> Error -> String
-prettyError file err =
-  concat
-    [ file
-    , ":"
-    , show err.location.line
-    , ":"
-    , show err.location.column
-    , ": "
-    , err.message
-    , "\n"
-    , pad
-    , " |\n"
-    , lineNo
-    , " | "
-    , shown
-    , "\n"
-    , pad
-    , " | "
-    , caret
-    , "^"
-    ]
+prettyError file err
+  | err.location.line == 0 = file ++ ": " ++ err.message
+  | otherwise =
+      concat
+        [ file
+        , ":"
+        , show err.location.line
+        , ":"
+        , show err.location.column
+        , ": "
+        , err.message
+        , "\n"
+        , pad
+        , " |\n"
+        , lineNo
+        , " | "
+        , shown
+        , "\n"
+        , pad
+        , " | "
+        , caret
+        , "^"
+        ]
   where
     lineNo :: String
     lineNo = show err.location.line
@@ -112,16 +118,22 @@ errorAt input off msg =
   Error
     { location = loc
     , message = msg
-    , sourceLine = T.copy (lineAt input off)
+    , sourceLine = if off == noOffset then T.empty else T.copy (lineAt input off)
     }
   where
     loc :: Location
     loc = locate input off
 
 -- | Compute the line and the column of an offset. A byte order mark at the
--- start of a line is not a column, because it is not content.
+-- start of a line is not a column, because it is not content. For
+-- 'noOffset', the line and the column are 0.
 locate :: T.Text -> Offset -> Location
-locate (T.Text arr base len) (Offset off0) = go base 1 base
+locate input off
+  | off == noOffset = Location {offset = off, line = 0, column = 0}
+  | otherwise = locateIn input off
+
+locateIn :: T.Text -> Offset -> Location
+locateIn (T.Text arr base len) (Offset off0) = go base 1 base
   where
     off :: Int
     off = base + max 0 (min len off0)
