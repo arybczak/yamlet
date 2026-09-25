@@ -370,6 +370,11 @@ test_syntaxErrors = do
     (1, 11, "unexpected ':', quote the value if it contains \": \"")
     "key: value: other\n"
   check
+    "content after a quoted value"
+    (1, 14, "unexpected 't' after the end of a quoted scalar")
+    "key: \"value\" trailing\n"
+  check "content after a flow value" (1, 12, "unexpected 'i' after the end of a flow collection") "x: { y: z }in: valid\n"
+  check
     "comment line in a plain scalar"
     (3, 3, "a comment ends a plain scalar, so this line cannot continue it")
     "key: word1\n#  xxx\n  word2\n"

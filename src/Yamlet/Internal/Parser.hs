@@ -148,8 +148,24 @@ unexpected e i = case indentationTab (i - 1) Nothing of
           "unexpected ':', quote the value if it contains \": \""
       | itemAfterKey -> "unexpected '-', a list cannot start on the line of its key"
       | Just msg <- mistake e i -> msg
+      | Just node <- endBefore -> unexpectedChar e i ++ " after the end of " ++ node
       | otherwise -> unexpectedChar e i
   where
+    -- The node that ends before the index on its line, as in
+    -- "key: "value" more".
+    endBefore :: Maybe String
+    endBefore
+      | not (isNsChar (byteAt e i)) = Nothing
+      | b == RBRACKET || b == RBRACE = Just "a flow collection"
+      | (b == DQUOTE || b == SQUOTE) && j < i = Just "a quoted scalar"
+      | otherwise = Nothing
+      where
+        j :: Int
+        j = skipBackWhites e i
+
+        b :: Word8
+        b = byteBefore e j
+
     -- The index starts a line that looks like the continuation of a plain
     -- scalar, and the closest line above that is not blank has a comment.
     afterComment :: Bool
