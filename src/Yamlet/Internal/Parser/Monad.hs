@@ -167,12 +167,13 @@ optional_ p = void p <|> pure ()
 option :: a -> P a -> P a
 option a p = p <|> pure a
 
--- | Succeed without input if the parser fails.
+-- | Succeed without input if the parser fails. An error of the parser stays
+-- an error, as in '<|>'.
 notFollowedBy :: P a -> P ()
 notFollowedBy (P g) = P $ \e p fu -> case g e p fu of
   OK# _ _ _ -> Fail# (if isTrue# (p ># fu) then p else fu)
   Fail# _ -> OK# () p fu
-  Err# _ -> OK# () p fu
+  Err# err -> Err# err
 
 ----------------------------------------
 -- Primitives

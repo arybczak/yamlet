@@ -19,6 +19,7 @@ import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 
 import Yamlet
+import Yamlet.Internal.Parser.Monad qualified as P
 import Yamlet.Schema
 import Yamlet.Syntax qualified as S
 
@@ -32,6 +33,7 @@ decodeTests =
     , testCase "plain scalars" test_plainSafe
     , testCase "record" test_record
     , testCase "without offsets" test_withoutOffsets
+    , testCase "notFollowedBy" test_notFollowedBy
     , testCase "containers" test_containers
     , localOption (mkTimeout 10000000) $ testCase "time" test_time
     , testCase "copies" test_copies
@@ -174,6 +176,15 @@ instance FromYAML Config where
   parseYAML = withMapping $ \o -> do
     rejectUnknownKeys ["name", "paths", "jobs"] o
     Config <$> o .: "name" <*> o .:? "paths" .!= [] <*> o .:? "jobs" .!= 1
+
+-- | An error inside 'P.notFollowedBy' is not lost.
+test_notFollowedBy :: Assertion
+test_notFollowedBy = do
+  let T.Text arr off len = "a"
+      e = P.Env {P.array = arr, P.base = off, P.end = off + len, P.handles = M.empty}
+  case P.runParser e off (P.notFollowedBy (P.throwAt off "boom")) of
+    Left (P.ParseError _ msg) -> assertEqual "message" "boom" msg
+    Right _ -> assertFailure "expected an error"
 
 test_withoutOffsets :: Assertion
 test_withoutOffsets = do
