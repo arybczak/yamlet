@@ -39,9 +39,9 @@ converts the result to an aeson `Value`.
 
 | Input                   | yamlet (nodes)  | HsYAML (nodes) | yaml   |
 |-------------------------|-----------------|----------------|--------|
-| records, 1105 KiB       | 32 ms           | 2970 ms        | 116 ms |
-| flow collections, 432 KiB | 18 ms         | 2370 ms        | 56 ms  |
-| block scalars, 834 KiB  | 5.6 ms          | 611 ms         | 13 ms  |
+| config, 1105 KiB        | 32 ms           | 2970 ms        | 116 ms |
+| json, 432 KiB           | 18 ms           | 2370 ms        | 56 ms  |
+| text, 834 KiB           | 5.6 ms          | 611 ms         | 13 ms  |
 
 ## Tests
 
