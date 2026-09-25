@@ -473,6 +473,10 @@ test_syntaxErrors = do
     "long key"
     (1, 1103, "a key can be at most 1024 characters long, write a longer key after '? '")
     ("\"" <> T.replicate 1100 "k" <> "\": 1\n")
+  check
+    "list on the line of its anchor"
+    (1, 9, "unexpected '-', a list cannot start on the line of its anchor or tag")
+    "&anchor - sequence entry\n"
   check "list on the line of its key" (1, 4, "unexpected '-', a list cannot start on the line of its key") "a: - b\n"
   check
     "line of a block scalar"

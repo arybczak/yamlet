@@ -147,6 +147,7 @@ unexpected e i = case indentationTab (i - 1) Nothing of
       | w == COLON && valueColon ->
           "unexpected ':', quote the value if it contains \": \""
       | itemAfterKey -> "unexpected '-', a list cannot start on the line of its key"
+      | itemAfterProperty -> "unexpected '-', a list cannot start on the line of its anchor or tag"
       | Just msg <- mistake e i -> msg
       | Just node <- endBefore -> unexpectedChar e i ++ " after the end of " ++ node
       | otherwise -> unexpectedChar e i
@@ -256,10 +257,14 @@ unexpected e i = case indentationTab (i - 1) Nothing of
 
     -- A list item right after a key, as in "a: - b".
     itemAfterKey :: Bool
-    itemAfterKey = isListItem e i && byteBefore e (skipBack i) == COLON
-      where
-        skipBack :: Int -> Int
-        skipBack j = if isWhite (byteBefore e j) then skipBack (j - 1) else j
+    itemAfterKey = isListItem e i && byteBefore e (skipBackWhites e i) == COLON
+
+    -- A list item right after an anchor or a tag, as in "&a - b".
+    itemAfterProperty :: Bool
+    itemAfterProperty =
+      let j = skipBackWhites e i
+          b = byteAt e (wordStart e j)
+      in isListItem e i && j < i && (b == AMP || b == EXCL)
 
     -- A colon that ends a word and precedes white space, as in an unquoted
     -- value like "Error: file not found".
