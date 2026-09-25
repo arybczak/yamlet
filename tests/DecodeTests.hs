@@ -187,8 +187,8 @@ data Config = Config
   }
   deriving stock (Eq, Show)
 
-instance FromYAML Config where
-  parseYAML = withMapping $ \o -> do
+instance FromYaml Config where
+  parseYaml = withMapping $ \o -> do
     rejectUnknownKeys ["name", "paths", "jobs"] o
     Config <$> o .: "name" <*> o .:? "paths" .!= [] <*> o .:? "jobs" .!= 1
 
@@ -302,11 +302,11 @@ test_time = do
     assertEqual
       ("duration with the exponent " ++ show ex)
       (Left "the duration is out of range")
-      (first snd (runParser (parseYAML @NominalDiffTime) (node (Float (Finite (Sci.scientific 1 ex))))))
+      (first snd (runParser (parseYaml @NominalDiffTime) (node (Float (Finite (Sci.scientific 1 ex))))))
   assertEqual
     "zero duration with a large exponent"
     (Right (0 :: DiffTime))
-    (runParser parseYAML (node (Float (Finite (Sci.scientific 0 100)))))
+    (runParser parseYaml (node (Float (Finite (Sci.scientific 0 100)))))
 
 test_record :: Assertion
 test_record = do
@@ -722,8 +722,8 @@ test_syntaxErrors = do
 newtype IntOrText = IntOrText (Either Integer T.Text)
   deriving stock (Eq, Show)
 
-instance FromYAML IntOrText where
-  parseYAML n = IntOrText <$> ((Left <$> withInt pure n) `orElse` (Right <$> withText pure n))
+instance FromYaml IntOrText where
+  parseYaml n = IntOrText <$> ((Left <$> withInt pure n) `orElse` (Right <$> withText pure n))
 
 test_typeErrors :: Assertion
 test_typeErrors = do
@@ -776,8 +776,8 @@ test_typeErrors = do
 
 newtype Vowel = Vowel Char
 
-instance FromYAML Vowel where
-  parseYAML = withText $ \t -> case T.unpack t of
+instance FromYaml Vowel where
+  parseYaml = withText $ \t -> case T.unpack t of
     [c] | c `elem` ("aeiou" :: String) -> pure (Vowel c)
     _ -> fail "not a vowel"
 

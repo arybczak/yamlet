@@ -35,10 +35,10 @@ main =
 input
   :: forall a
    . ( NFData a
-     , FromYAML a
+     , FromYaml a
      , H.FromYAML a
      , J.FromJSON a
-     , ToYAML a
+     , ToYaml a
      , H.ToYAML a
      , J.ToJSON a
      )
@@ -183,8 +183,8 @@ data Item = ItemNumber Double | ItemBool Bool | ItemNull
   deriving stock (Generic)
   deriving anyclass (NFData)
 
-instance FromYAML Config where
-  parseYAML = withMapping $ \o ->
+instance FromYaml Config where
+  parseYaml = withMapping $ \o ->
     Config
       <$> o .: "name"
       <*> o .: "id"
@@ -216,8 +216,8 @@ instance J.FromJSON Config where
       <*> o J..: "enabled"
       <*> o J..: "nested"
 
-instance FromYAML Nested where
-  parseYAML = withMapping $ \o ->
+instance FromYaml Nested where
+  parseYaml = withMapping $ \o ->
     Nested
       <$> o .: "x"
       <*> o .: "y"
@@ -237,8 +237,8 @@ instance J.FromJSON Nested where
       <*> o J..: "y"
       <*> o J..: "list"
 
-instance FromYAML Json where
-  parseYAML = withMapping $ \o ->
+instance FromYaml Json where
+  parseYaml = withMapping $ \o ->
     Json
       <$> o .: "id"
       <*> o .: "name"
@@ -261,8 +261,8 @@ instance J.FromJSON Json where
       <*> o J..: "values"
       <*> o J..: "child"
 
-instance FromYAML Item where
-  parseYAML n = case n.value of
+instance FromYaml Item where
+  parseYaml n = case n.value of
     Int i -> pure $ ItemNumber (fromInteger i)
     Float f -> pure $ ItemNumber (floatValueToDouble f)
     Bool b -> pure $ ItemBool b
@@ -284,8 +284,8 @@ instance J.FromJSON Item where
     J.Null -> pure ItemNull
     _ -> fail "expected a number, a boolean or null"
 
-instance ToYAML Config where
-  toYAML r =
+instance ToYaml Config where
+  toYaml r =
     mapping
       [ "name" .= r.name
       , "id" .= r.itemId
@@ -320,8 +320,8 @@ instance J.ToJSON Config where
       , "nested" J..= r.nested
       ]
 
-instance ToYAML Nested where
-  toYAML n =
+instance ToYaml Nested where
+  toYaml n =
     mapping
       [ "x" .= n.x
       , "y" .= n.y
@@ -344,8 +344,8 @@ instance J.ToJSON Nested where
       , "list" J..= n.list
       ]
 
-instance ToYAML Json where
-  toYAML r =
+instance ToYaml Json where
+  toYaml r =
     mapping
       [ "id" .= r.itemId
       , "name" .= r.name
@@ -371,11 +371,11 @@ instance J.ToJSON Json where
       , "child" J..= r.child
       ]
 
-instance ToYAML Item where
-  toYAML = \case
-    ItemNumber d -> toYAML d
-    ItemBool b -> toYAML b
-    ItemNull -> toYAML ()
+instance ToYaml Item where
+  toYaml = \case
+    ItemNumber d -> toYaml d
+    ItemBool b -> toYaml b
+    ItemNull -> toYaml ()
 
 instance H.ToYAML Item where
   toYAML = \case

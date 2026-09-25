@@ -8,8 +8,8 @@
 --   , paths :: [FilePath]
 --   }
 --
--- instance FromYAML Config where
---   parseYAML = withMapping $ \\o -> do
+-- instance FromYaml Config where
+--   parseYaml = withMapping $ \\o -> do
 --     rejectUnknownKeys ["name", "paths"] o
 --     Config \<$> o .: "name" \<*> o .:? "paths" .!= []
 --
@@ -47,7 +47,7 @@ module Yamlet
   , module Yamlet.Decode
 
     -- * Conversion to nodes
-  , ToYAML (..)
+  , ToYaml (..)
   , (.=)
   , mapping
 
@@ -69,15 +69,15 @@ import Yamlet.Internal.Syntax qualified as S
 import Yamlet.Node
 
 -- | Decode a stream with one document. An empty stream is null.
-decode :: FromYAML a => BS.ByteString -> Either Error a
+decode :: FromYaml a => BS.ByteString -> Either Error a
 decode bs = decodeInput bs >>= decodeText
 
 -- | Decode every document of a stream.
-decodeAll :: FromYAML a => BS.ByteString -> Either Error [a]
+decodeAll :: FromYaml a => BS.ByteString -> Either Error [a]
 decodeAll bs = decodeInput bs >>= decodeAllText
 
 -- | Decode a stream with one document. An empty stream is null.
-decodeText :: FromYAML a => T.Text -> Either Error a
+decodeText :: FromYaml a => T.Text -> Either Error a
 decodeText input =
   decodeNodes input >>= \case
     [] -> convert input (Node (Offset 0) nullTag Null)
@@ -85,7 +85,7 @@ decodeText input =
     _ : n : _ -> Left $ errorAt input n.offset "expected a single document, but got a second one"
 
 -- | Decode every document of a stream.
-decodeAllText :: FromYAML a => T.Text -> Either Error [a]
+decodeAllText :: FromYaml a => T.Text -> Either Error [a]
 decodeAllText input = decodeNodes input >>= mapM (convert input)
 
 -- | Parse a stream into the root nodes of its documents.
@@ -97,7 +97,7 @@ decodeNodes input = parseStream input >>= mapM (compose input)
 --
 -- The text is the input of the document, for the line in an error. For a
 -- document that the program built, the text can be empty.
-decodeDocument :: FromYAML a => T.Text -> S.Document -> Either Error a
+decodeDocument :: FromYaml a => T.Text -> S.Document -> Either Error a
 decodeDocument input doc = resolveDocument input doc >>= convert input
 
 -- | Resolve the tags and the aliases of a document of a syntax tree. The
@@ -110,23 +110,23 @@ decodeDocument input doc = resolveDocument input doc >>= convert input
 resolveDocument :: T.Text -> S.Document -> Either Error Node
 resolveDocument = compose
 
-convert :: FromYAML a => T.Text -> Node -> Either Error a
-convert input n = case runParser parseYAML n of
+convert :: FromYaml a => T.Text -> Node -> Either Error a
+convert input n = case runParser parseYaml n of
   Right a -> Right a
   Left (off, msg) -> Left $ errorAt input off msg
 
 -- | Encode a value as a document.
-encode :: ToYAML a => a -> BS.ByteString
+encode :: ToYaml a => a -> BS.ByteString
 encode = T.encodeUtf8 . encodeText
 
 -- | Encode values as a stream of documents.
-encodeAll :: ToYAML a => [a] -> BS.ByteString
+encodeAll :: ToYaml a => [a] -> BS.ByteString
 encodeAll = T.encodeUtf8 . encodeAllText
 
 -- | Encode a value as a document.
-encodeText :: ToYAML a => a -> T.Text
-encodeText a = renderDocuments [toYAML a]
+encodeText :: ToYaml a => a -> T.Text
+encodeText a = renderDocuments [toYaml a]
 
 -- | Encode values as a stream of documents.
-encodeAllText :: ToYAML a => [a] -> T.Text
-encodeAllText = renderDocuments . map toYAML
+encodeAllText :: ToYaml a => [a] -> T.Text
+encodeAllText = renderDocuments . map toYaml

@@ -2,7 +2,7 @@
 -- node that caused them.
 module Yamlet.Decode
   ( -- * Class
-    FromYAML (..)
+    FromYaml (..)
 
     -- * Parser
   , Parser
@@ -65,7 +65,7 @@ import Yamlet.Node
 -- a message that says why:
 --
 -- @
--- port <- parseYAML n
+-- port <- parseYaml n
 -- unless (port > 0 && port < 65536) $ fail "the port must be from 1 to 65535"
 -- @
 newtype Parser a = Parser (Offset -> Either (Offset, String) a)
@@ -230,25 +230,25 @@ lookupKey :: T.Text -> Object -> Maybe Node
 lookupKey key o = snd <$> M.lookup key o.index
 
 -- | The value of a key. It is an error if the key is missing.
-(.:) :: FromYAML a => Object -> T.Text -> Parser a
+(.:) :: FromYaml a => Object -> T.Text -> Parser a
 o .: key =
   findKey o key >>= \case
-    Just v -> parseNode parseYAML v
+    Just v -> parseNode parseYaml v
     Nothing -> failAt o.node $ "missing key " ++ show key
 
 -- | The value of a key, or 'Nothing' if the key is missing or its value is
 -- null.
-(.:?) :: FromYAML a => Object -> T.Text -> Parser (Maybe a)
+(.:?) :: FromYaml a => Object -> T.Text -> Parser (Maybe a)
 o .:? key =
   findKey o key >>= \case
     Just v | Null <- v.value -> pure Nothing
-    mv -> traverse (parseNode parseYAML) mv
+    mv -> traverse (parseNode parseYaml) mv
 
 -- | The value of a key, or 'Nothing' if the key is missing. Unlike '.:?', a
 -- null value goes to the parser of the value, e.g. @'Maybe' a@ gives
 -- @'Just' 'Nothing'@ for a null value.
-(.:!) :: FromYAML a => Object -> T.Text -> Parser (Maybe a)
-o .:! key = findKey o key >>= traverse (parseNode parseYAML)
+(.:!) :: FromYaml a => Object -> T.Text -> Parser (Maybe a)
+o .:! key = findKey o key >>= traverse (parseNode parseYaml)
 
 -- | The value of a string key, or 'Nothing' if the key is missing. A key with
 -- the same text that is not a string, e.g. 404, is an error, so that its
@@ -307,41 +307,41 @@ rejectUnknownKeys known o = forM_ o.entries $ \(k, _) -> case k.value of
 -- Class
 
 -- | Types that can be parsed from a node.
-class FromYAML a where
-  parseYAML :: Node -> Parser a
+class FromYaml a where
+  parseYaml :: Node -> Parser a
 
   -- | Parse a list. The instance for 'Char' parses a string instead.
-  parseYAMLList :: Node -> Parser [a]
-  parseYAMLList = withSequence (mapM (parseNode parseYAML))
+  parseYamlList :: Node -> Parser [a]
+  parseYamlList = withSequence (mapM (parseNode parseYaml))
 
-instance FromYAML Node where
-  parseYAML = pure
+instance FromYaml Node where
+  parseYaml = pure
 
-instance FromYAML () where
-  parseYAML = withNull (pure ())
+instance FromYaml () where
+  parseYaml = withNull (pure ())
 
-instance FromYAML Bool where
-  parseYAML = withBool pure
+instance FromYaml Bool where
+  parseYaml = withBool pure
 
-instance FromYAML Integer where
-  parseYAML = withInt pure
+instance FromYaml Integer where
+  parseYaml = withInt pure
 
-instance FromYAML Natural where
-  parseYAML = withInt $ \i ->
+instance FromYaml Natural where
+  parseYaml = withInt $ \i ->
     if i < 0
       then fail "expected a non-negative integer"
       else pure (fromInteger i)
 
-instance FromYAML Int where parseYAML = bounded
-instance FromYAML Int8 where parseYAML = bounded
-instance FromYAML Int16 where parseYAML = bounded
-instance FromYAML Int32 where parseYAML = bounded
-instance FromYAML Int64 where parseYAML = bounded
-instance FromYAML Word where parseYAML = bounded
-instance FromYAML Word8 where parseYAML = bounded
-instance FromYAML Word16 where parseYAML = bounded
-instance FromYAML Word32 where parseYAML = bounded
-instance FromYAML Word64 where parseYAML = bounded
+instance FromYaml Int where parseYaml = bounded
+instance FromYaml Int8 where parseYaml = bounded
+instance FromYaml Int16 where parseYaml = bounded
+instance FromYaml Int32 where parseYaml = bounded
+instance FromYaml Int64 where parseYaml = bounded
+instance FromYaml Word where parseYaml = bounded
+instance FromYaml Word8 where parseYaml = bounded
+instance FromYaml Word16 where parseYaml = bounded
+instance FromYaml Word32 where parseYaml = bounded
+instance FromYaml Word64 where parseYaml = bounded
 
 -- | An integer in the range of a bounded type.
 bounded :: forall a. (Bounded a, Integral a) => Node -> Parser a
@@ -355,43 +355,43 @@ bounded = withInt $ \i ->
           ++ show (toInteger (maxBound @a))
     else pure (fromInteger i)
 
-instance FromYAML Double where
-  parseYAML = withFloat pure
+instance FromYaml Double where
+  parseYaml = withFloat pure
 
-instance FromYAML Sci.Scientific where
-  parseYAML = withScientific pure
+instance FromYaml Sci.Scientific where
+  parseYaml = withScientific pure
 
 -- | @YYYY-MM-DD@, e.g. @2026-09-25@.
-instance FromYAML Day where
-  parseYAML = withText $ maybe (fail "expected a date such as 2026-09-25") pure . parseDay
+instance FromYaml Day where
+  parseYaml = withText $ maybe (fail "expected a date such as 2026-09-25") pure . parseDay
 
 -- | @HH:MM@, with optional seconds and a fraction of a second, e.g.
 -- @12:30:05.25@.
-instance FromYAML TimeOfDay where
-  parseYAML = withText $ maybe (fail "expected a time such as 12:30:00") pure . parseTimeOfDay
+instance FromYaml TimeOfDay where
+  parseYaml = withText $ maybe (fail "expected a time such as 12:30:00") pure . parseTimeOfDay
 
 -- | A date and a time, separated by @T@, @t@ or a space, e.g.
 -- @2026-09-25T12:30:00@.
-instance FromYAML LocalTime where
-  parseYAML =
+instance FromYaml LocalTime where
+  parseYaml =
     withText $ maybe (fail "expected a date and a time such as 2026-09-25T12:30:00") pure . parseLocalTime
 
 -- | A date, a time and a time zone, e.g. @2026-09-25T12:30:00+02:00@. The
 -- time zone is @Z@, @z@, @+HH:MM@, @+HHMM@ or @+HH@.
-instance FromYAML ZonedTime where
-  parseYAML = withText $ maybe (fail zonedTimeMismatch) pure . parseZonedTime
+instance FromYaml ZonedTime where
+  parseYaml = withText $ maybe (fail zonedTimeMismatch) pure . parseZonedTime
 
 -- | Like 'ZonedTime', converted to UTC.
-instance FromYAML UTCTime where
-  parseYAML = withText $ maybe (fail zonedTimeMismatch) pure . parseUTCTime
+instance FromYaml UTCTime where
+  parseYaml = withText $ maybe (fail zonedTimeMismatch) pure . parseUTCTime
 
 -- | A number of seconds, rounded down to a picosecond.
-instance FromYAML NominalDiffTime where
-  parseYAML = withScientific $ fmap (secondsToNominalDiffTime . MkFixed) . duration
+instance FromYaml NominalDiffTime where
+  parseYaml = withScientific $ fmap (secondsToNominalDiffTime . MkFixed) . duration
 
 -- | A number of seconds, rounded down to a picosecond.
-instance FromYAML DiffTime where
-  parseYAML = withScientific $ fmap picosecondsToDiffTime . duration
+instance FromYaml DiffTime where
+  parseYaml = withScientific $ fmap picosecondsToDiffTime . duration
 
 zonedTimeMismatch :: String
 zonedTimeMismatch = "expected a date, a time and a time zone such as 2026-09-25T12:30:00Z"
@@ -401,37 +401,37 @@ duration :: Sci.Scientific -> Parser Integer
 duration = maybe (fail "the duration is out of range") pure . picoseconds
 
 -- | The nearest float. A conversion by way of 'Double' could round twice.
-instance FromYAML Float where
-  parseYAML = parseNode $ \n -> case n.value of
+instance FromYaml Float where
+  parseYaml = parseNode $ \n -> case n.value of
     Float v -> pure (floatValueToFloat v)
     Int i -> pure (fromInteger i)
     _ -> typeMismatch "a number" n
 
-instance FromYAML T.Text where
-  parseYAML = withText pure
+instance FromYaml T.Text where
+  parseYaml = withText pure
 
-instance FromYAML TL.Text where
-  parseYAML = withText (pure . TL.fromStrict)
+instance FromYaml TL.Text where
+  parseYaml = withText (pure . TL.fromStrict)
 
-instance FromYAML Char where
-  parseYAML = withText $ \t -> case T.unpack t of
+instance FromYaml Char where
+  parseYaml = withText $ \t -> case T.unpack t of
     [c] -> pure c
     _ -> fail "expected a single character"
-  parseYAMLList = withText (pure . T.unpack)
+  parseYamlList = withText (pure . T.unpack)
 
-instance FromYAML a => FromYAML [a] where
-  parseYAML = parseYAMLList
+instance FromYaml a => FromYaml [a] where
+  parseYaml = parseYamlList
 
-instance FromYAML a => FromYAML (NE.NonEmpty a) where
-  parseYAML = withSequence $ \case
+instance FromYaml a => FromYaml (NE.NonEmpty a) where
+  parseYaml = withSequence $ \case
     [] -> fail "expected a non-empty list"
-    x : xs -> (NE.:|) <$> parseNode parseYAML x <*> mapM (parseNode parseYAML) xs
+    x : xs -> (NE.:|) <$> parseNode parseYaml x <*> mapM (parseNode parseYaml) xs
 
 -- | Null is 'Nothing'.
-instance FromYAML a => FromYAML (Maybe a) where
-  parseYAML n = case n.value of
+instance FromYaml a => FromYaml (Maybe a) where
+  parseYaml n = case n.value of
     Null -> pure Nothing
-    _ -> Just <$> parseYAML n
+    _ -> Just <$> parseYaml n
 
 -- | Two keys that convert to the same key, e.g. @1@ and @1.0@ for 'Double',
 -- are an error.
@@ -440,98 +440,98 @@ instance FromYAML a => FromYAML (Maybe a) where
 -- rejects a key such as @404@ or @true@, because YAML reads it as an integer
 -- or a boolean. Quote such a key in the input, e.g. @\"404\": not found@, or
 -- use a key type that matches it, e.g. 'Int'.
-instance (Ord k, FromYAML k, FromYAML v) => FromYAML (M.Map k v) where
+instance (Ord k, FromYaml k, FromYaml v) => FromYaml (M.Map k v) where
   -- The index of 'withMapping' would be of no use here.
-  parseYAML = parseNode $ \n -> case n.value of
+  parseYaml = parseNode $ \n -> case n.value of
     Mapping kvs -> foldM insert M.empty kvs
     _ -> typeMismatch "a mapping" n
     where
       insert :: M.Map k v -> (Node, Node) -> Parser (M.Map k v)
       insert m (k, v) = do
-        k' <- parseNode parseYAML k
+        k' <- parseNode parseYaml k
         M.alterF value k' m
         where
           value :: Maybe v -> Parser (Maybe v)
           value = \case
             Just _ -> failAt k "duplicate key after conversion"
-            Nothing -> Just <$> parseNode parseYAML v
+            Nothing -> Just <$> parseNode parseYaml v
 
 -- | Two keys that convert to the same key are an error.
-instance FromYAML v => FromYAML (IM.IntMap v) where
-  parseYAML = parseNode $ \n -> case n.value of
+instance FromYaml v => FromYaml (IM.IntMap v) where
+  parseYaml = parseNode $ \n -> case n.value of
     Mapping kvs -> foldM insert IM.empty kvs
     _ -> typeMismatch "a mapping" n
     where
       insert :: IM.IntMap v -> (Node, Node) -> Parser (IM.IntMap v)
       insert m (k, v) = do
-        k' <- parseNode parseYAML k
+        k' <- parseNode parseYaml k
         IM.alterF value k' m
         where
           value :: Maybe v -> Parser (Maybe v)
           value = \case
             Just _ -> failAt k "duplicate key after conversion"
-            Nothing -> Just <$> parseNode parseYAML v
+            Nothing -> Just <$> parseNode parseYaml v
 
 -- | A list. Two elements that convert to the same value, e.g. @1@ and @1.0@
 -- for 'Double', are an error.
-instance (Ord a, FromYAML a) => FromYAML (Set.Set a) where
-  parseYAML = withSequence (foldM insert Set.empty)
+instance (Ord a, FromYaml a) => FromYaml (Set.Set a) where
+  parseYaml = withSequence (foldM insert Set.empty)
     where
       insert :: Set.Set a -> Node -> Parser (Set.Set a)
       insert s n = do
-        x <- parseNode parseYAML n
+        x <- parseNode parseYaml n
         Set.alterF (\present -> if present then failAt n "duplicate element after conversion" else pure True) x s
 
 -- | A list. Two equal elements are an error.
-instance FromYAML IS.IntSet where
-  parseYAML = withSequence (foldM insert IS.empty)
+instance FromYaml IS.IntSet where
+  parseYaml = withSequence (foldM insert IS.empty)
     where
       insert :: IS.IntSet -> Node -> Parser IS.IntSet
       insert s n = do
-        x <- parseNode parseYAML n
+        x <- parseNode parseYaml n
         IS.alterF (\present -> if present then failAt n "duplicate element" else pure True) x s
 
-instance FromYAML a => FromYAML (Seq.Seq a) where
-  parseYAML = fmap Seq.fromList . parseYAML
+instance FromYaml a => FromYaml (Seq.Seq a) where
+  parseYaml = fmap Seq.fromList . parseYaml
 
 -- | A mapping with one key, @Left@ or @Right@, e.g. @{Left: 1}@.
-instance (FromYAML a, FromYAML b) => FromYAML (Either a b) where
-  parseYAML = withMapping $ \o -> case objectEntries o of
+instance (FromYaml a, FromYaml b) => FromYaml (Either a b) where
+  parseYaml = withMapping $ \o -> case objectEntries o of
     [(k, v)] -> case k.value of
-      String "Left" -> Left <$> parseNode parseYAML v
-      String "Right" -> Right <$> parseNode parseYAML v
+      String "Left" -> Left <$> parseNode parseYaml v
+      String "Right" -> Right <$> parseNode parseYaml v
       _ -> failAt k "expected the key Left or Right"
     _ -> fail "expected a mapping with one key, Left or Right"
 
-instance (FromYAML a1, FromYAML a2) => FromYAML (a1, a2) where
-  parseYAML = withSequence $ \case
+instance (FromYaml a1, FromYaml a2) => FromYaml (a1, a2) where
+  parseYaml = withSequence $ \case
     [a1, a2] -> (,) <$> element a1 <*> element a2
     xs -> tupleSize 2 xs
 
-instance (FromYAML a1, FromYAML a2, FromYAML a3) => FromYAML (a1, a2, a3) where
-  parseYAML = withSequence $ \case
+instance (FromYaml a1, FromYaml a2, FromYaml a3) => FromYaml (a1, a2, a3) where
+  parseYaml = withSequence $ \case
     [a1, a2, a3] -> (,,) <$> element a1 <*> element a2 <*> element a3
     xs -> tupleSize 3 xs
 
-instance (FromYAML a1, FromYAML a2, FromYAML a3, FromYAML a4) => FromYAML (a1, a2, a3, a4) where
-  parseYAML = withSequence $ \case
+instance (FromYaml a1, FromYaml a2, FromYaml a3, FromYaml a4) => FromYaml (a1, a2, a3, a4) where
+  parseYaml = withSequence $ \case
     [a1, a2, a3, a4] -> (,,,) <$> element a1 <*> element a2 <*> element a3 <*> element a4
     xs -> tupleSize 4 xs
 
 instance
-  (FromYAML a1, FromYAML a2, FromYAML a3, FromYAML a4, FromYAML a5)
-  => FromYAML (a1, a2, a3, a4, a5)
+  (FromYaml a1, FromYaml a2, FromYaml a3, FromYaml a4, FromYaml a5)
+  => FromYaml (a1, a2, a3, a4, a5)
   where
-  parseYAML = withSequence $ \case
+  parseYaml = withSequence $ \case
     [a1, a2, a3, a4, a5] ->
       (,,,,) <$> element a1 <*> element a2 <*> element a3 <*> element a4 <*> element a5
     xs -> tupleSize 5 xs
 
 instance
-  (FromYAML a1, FromYAML a2, FromYAML a3, FromYAML a4, FromYAML a5, FromYAML a6)
-  => FromYAML (a1, a2, a3, a4, a5, a6)
+  (FromYaml a1, FromYaml a2, FromYaml a3, FromYaml a4, FromYaml a5, FromYaml a6)
+  => FromYaml (a1, a2, a3, a4, a5, a6)
   where
-  parseYAML = withSequence $ \case
+  parseYaml = withSequence $ \case
     [a1, a2, a3, a4, a5, a6] ->
       (,,,,,)
         <$> element a1
@@ -543,10 +543,10 @@ instance
     xs -> tupleSize 6 xs
 
 instance
-  (FromYAML a1, FromYAML a2, FromYAML a3, FromYAML a4, FromYAML a5, FromYAML a6, FromYAML a7)
-  => FromYAML (a1, a2, a3, a4, a5, a6, a7)
+  (FromYaml a1, FromYaml a2, FromYaml a3, FromYaml a4, FromYaml a5, FromYaml a6, FromYaml a7)
+  => FromYaml (a1, a2, a3, a4, a5, a6, a7)
   where
-  parseYAML = withSequence $ \case
+  parseYaml = withSequence $ \case
     [a1, a2, a3, a4, a5, a6, a7] ->
       (,,,,,,)
         <$> element a1
@@ -559,10 +559,10 @@ instance
     xs -> tupleSize 7 xs
 
 instance
-  (FromYAML a1, FromYAML a2, FromYAML a3, FromYAML a4, FromYAML a5, FromYAML a6, FromYAML a7, FromYAML a8)
-  => FromYAML (a1, a2, a3, a4, a5, a6, a7, a8)
+  (FromYaml a1, FromYaml a2, FromYaml a3, FromYaml a4, FromYaml a5, FromYaml a6, FromYaml a7, FromYaml a8)
+  => FromYaml (a1, a2, a3, a4, a5, a6, a7, a8)
   where
-  parseYAML = withSequence $ \case
+  parseYaml = withSequence $ \case
     [a1, a2, a3, a4, a5, a6, a7, a8] ->
       (,,,,,,,)
         <$> element a1
@@ -576,19 +576,19 @@ instance
     xs -> tupleSize 8 xs
 
 instance
-  ( FromYAML a1
-  , FromYAML a2
-  , FromYAML a3
-  , FromYAML a4
-  , FromYAML a5
-  , FromYAML a6
-  , FromYAML a7
-  , FromYAML a8
-  , FromYAML a9
+  ( FromYaml a1
+  , FromYaml a2
+  , FromYaml a3
+  , FromYaml a4
+  , FromYaml a5
+  , FromYaml a6
+  , FromYaml a7
+  , FromYaml a8
+  , FromYaml a9
   )
-  => FromYAML (a1, a2, a3, a4, a5, a6, a7, a8, a9)
+  => FromYaml (a1, a2, a3, a4, a5, a6, a7, a8, a9)
   where
-  parseYAML = withSequence $ \case
+  parseYaml = withSequence $ \case
     [a1, a2, a3, a4, a5, a6, a7, a8, a9] ->
       (,,,,,,,,)
         <$> element a1
@@ -603,20 +603,20 @@ instance
     xs -> tupleSize 9 xs
 
 instance
-  ( FromYAML a1
-  , FromYAML a2
-  , FromYAML a3
-  , FromYAML a4
-  , FromYAML a5
-  , FromYAML a6
-  , FromYAML a7
-  , FromYAML a8
-  , FromYAML a9
-  , FromYAML a10
+  ( FromYaml a1
+  , FromYaml a2
+  , FromYaml a3
+  , FromYaml a4
+  , FromYaml a5
+  , FromYaml a6
+  , FromYaml a7
+  , FromYaml a8
+  , FromYaml a9
+  , FromYaml a10
   )
-  => FromYAML (a1, a2, a3, a4, a5, a6, a7, a8, a9, a10)
+  => FromYaml (a1, a2, a3, a4, a5, a6, a7, a8, a9, a10)
   where
-  parseYAML = withSequence $ \case
+  parseYaml = withSequence $ \case
     [a1, a2, a3, a4, a5, a6, a7, a8, a9, a10] ->
       (,,,,,,,,,)
         <$> element a1
@@ -632,8 +632,8 @@ instance
     xs -> tupleSize 10 xs
 
 -- | An element of a tuple.
-element :: FromYAML a => Node -> Parser a
-element = parseNode parseYAML
+element :: FromYaml a => Node -> Parser a
+element = parseNode parseYaml
 
 -- | The error for a list with the wrong number of elements for a tuple.
 tupleSize :: Int -> [Node] -> Parser a

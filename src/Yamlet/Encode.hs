@@ -1,7 +1,7 @@
 -- | Conversion of Haskell values to nodes and rendering of nodes as YAML.
 module Yamlet.Encode
   ( -- * Class
-    ToYAML (..)
+    ToYaml (..)
   , (.=)
   , mapping
 
@@ -40,16 +40,16 @@ import Yamlet.Syntax qualified as S
 -- Class
 
 -- | Types that can be converted to a node.
-class ToYAML a where
-  toYAML :: a -> Node
+class ToYaml a where
+  toYaml :: a -> Node
 
   -- | Convert a list. The instance for 'Char' creates a string instead.
-  toYAMLList :: [a] -> Node
-  toYAMLList = node . Sequence . map toYAML
+  toYamlList :: [a] -> Node
+  toYamlList = node . Sequence . map toYaml
 
 -- | An entry of a mapping with a string key.
-(.=) :: ToYAML a => T.Text -> a -> (Node, Node)
-key .= v = (node (String key), toYAML v)
+(.=) :: ToYaml a => T.Text -> a -> (Node, Node)
+key .= v = (node (String key), toYaml v)
 
 infixr 8 .=
 
@@ -58,211 +58,211 @@ infixr 8 .=
 mapping :: [(Node, Node)] -> Node
 mapping = node . Mapping
 
-instance ToYAML Node where toYAML = id
-instance ToYAML () where toYAML _ = node Null
-instance ToYAML Bool where toYAML = node . Bool
-instance ToYAML Integer where toYAML = node . Int
-instance ToYAML Natural where toYAML = node . Int . toInteger
-instance ToYAML Int where toYAML = node . Int . toInteger
-instance ToYAML Int8 where toYAML = node . Int . toInteger
-instance ToYAML Int16 where toYAML = node . Int . toInteger
-instance ToYAML Int32 where toYAML = node . Int . toInteger
-instance ToYAML Int64 where toYAML = node . Int . toInteger
-instance ToYAML Word where toYAML = node . Int . toInteger
-instance ToYAML Word8 where toYAML = node . Int . toInteger
-instance ToYAML Word16 where toYAML = node . Int . toInteger
-instance ToYAML Word32 where toYAML = node . Int . toInteger
-instance ToYAML Word64 where toYAML = node . Int . toInteger
-instance ToYAML Double where toYAML = node . Float . doubleToFloatValue
-instance ToYAML Float where toYAML = node . Float . floatToFloatValue
-instance ToYAML Sci.Scientific where toYAML = node . Float . Finite
-instance ToYAML Day where toYAML = node . String . formatDay
-instance ToYAML TimeOfDay where toYAML = node . String . formatTimeOfDay
-instance ToYAML LocalTime where toYAML = node . String . formatLocalTime
-instance ToYAML ZonedTime where toYAML = node . String . formatZonedTime
-instance ToYAML UTCTime where toYAML = node . String . formatUTCTime
+instance ToYaml Node where toYaml = id
+instance ToYaml () where toYaml _ = node Null
+instance ToYaml Bool where toYaml = node . Bool
+instance ToYaml Integer where toYaml = node . Int
+instance ToYaml Natural where toYaml = node . Int . toInteger
+instance ToYaml Int where toYaml = node . Int . toInteger
+instance ToYaml Int8 where toYaml = node . Int . toInteger
+instance ToYaml Int16 where toYaml = node . Int . toInteger
+instance ToYaml Int32 where toYaml = node . Int . toInteger
+instance ToYaml Int64 where toYaml = node . Int . toInteger
+instance ToYaml Word where toYaml = node . Int . toInteger
+instance ToYaml Word8 where toYaml = node . Int . toInteger
+instance ToYaml Word16 where toYaml = node . Int . toInteger
+instance ToYaml Word32 where toYaml = node . Int . toInteger
+instance ToYaml Word64 where toYaml = node . Int . toInteger
+instance ToYaml Double where toYaml = node . Float . doubleToFloatValue
+instance ToYaml Float where toYaml = node . Float . floatToFloatValue
+instance ToYaml Sci.Scientific where toYaml = node . Float . Finite
+instance ToYaml Day where toYaml = node . String . formatDay
+instance ToYaml TimeOfDay where toYaml = node . String . formatTimeOfDay
+instance ToYaml LocalTime where toYaml = node . String . formatLocalTime
+instance ToYaml ZonedTime where toYaml = node . String . formatZonedTime
+instance ToYaml UTCTime where toYaml = node . String . formatUTCTime
 
 -- | A number of seconds.
-instance ToYAML NominalDiffTime where
-  toYAML d = let MkFixed ps = nominalDiffTimeToSeconds d in node (Float (Finite (Sci.scientific ps (-12))))
+instance ToYaml NominalDiffTime where
+  toYaml d = let MkFixed ps = nominalDiffTimeToSeconds d in node (Float (Finite (Sci.scientific ps (-12))))
 
 -- | A number of seconds.
-instance ToYAML DiffTime where
-  toYAML d = node (Float (Finite (Sci.scientific (diffTimeToPicoseconds d) (-12))))
+instance ToYaml DiffTime where
+  toYaml d = node (Float (Finite (Sci.scientific (diffTimeToPicoseconds d) (-12))))
 
-instance ToYAML T.Text where toYAML = node . String
-instance ToYAML TL.Text where toYAML = node . String . TL.toStrict
+instance ToYaml T.Text where toYaml = node . String
+instance ToYaml TL.Text where toYaml = node . String . TL.toStrict
 
-instance ToYAML Char where
-  toYAML = node . String . T.singleton
-  toYAMLList = node . String . T.pack
+instance ToYaml Char where
+  toYaml = node . String . T.singleton
+  toYamlList = node . String . T.pack
 
-instance ToYAML a => ToYAML [a] where
-  toYAML = toYAMLList
+instance ToYaml a => ToYaml [a] where
+  toYaml = toYamlList
 
-instance ToYAML a => ToYAML (NE.NonEmpty a) where
-  toYAML = toYAML . NE.toList
+instance ToYaml a => ToYaml (NE.NonEmpty a) where
+  toYaml = toYaml . NE.toList
 
 -- | 'Nothing' is null.
-instance ToYAML a => ToYAML (Maybe a) where
-  toYAML = maybe (node Null) toYAML
+instance ToYaml a => ToYaml (Maybe a) where
+  toYaml = maybe (node Null) toYaml
 
 -- | Two keys that give the same node, e.g. 'Nothing' and @'Just' ()@, or two
 -- NaN values, give a mapping that does not read back.
-instance (ToYAML k, ToYAML v) => ToYAML (M.Map k v) where
-  toYAML m = mapping [(toYAML k, toYAML v) | (k, v) <- M.toList m]
+instance (ToYaml k, ToYaml v) => ToYaml (M.Map k v) where
+  toYaml m = mapping [(toYaml k, toYaml v) | (k, v) <- M.toList m]
 
-instance ToYAML v => ToYAML (IM.IntMap v) where
-  toYAML m = mapping [(toYAML k, toYAML v) | (k, v) <- IM.toList m]
-
--- | A list in ascending order.
-instance ToYAML a => ToYAML (Set.Set a) where
-  toYAML = toYAML . Set.toAscList
+instance ToYaml v => ToYaml (IM.IntMap v) where
+  toYaml m = mapping [(toYaml k, toYaml v) | (k, v) <- IM.toList m]
 
 -- | A list in ascending order.
-instance ToYAML IS.IntSet where
-  toYAML = toYAML . IS.toAscList
+instance ToYaml a => ToYaml (Set.Set a) where
+  toYaml = toYaml . Set.toAscList
 
-instance ToYAML a => ToYAML (Seq.Seq a) where
-  toYAML = toYAML . toList
+-- | A list in ascending order.
+instance ToYaml IS.IntSet where
+  toYaml = toYaml . IS.toAscList
+
+instance ToYaml a => ToYaml (Seq.Seq a) where
+  toYaml = toYaml . toList
 
 -- | A mapping with one key, @Left@ or @Right@, e.g. @{Left: 1}@.
-instance (ToYAML a, ToYAML b) => ToYAML (Either a b) where
-  toYAML = \case
+instance (ToYaml a, ToYaml b) => ToYaml (Either a b) where
+  toYaml = \case
     Left a -> mapping ["Left" .= a]
     Right b -> mapping ["Right" .= b]
 
-instance (ToYAML a1, ToYAML a2) => ToYAML (a1, a2) where
-  toYAML (a1, a2) =
+instance (ToYaml a1, ToYaml a2) => ToYaml (a1, a2) where
+  toYaml (a1, a2) =
     node $
       Sequence
-        [ toYAML a1
-        , toYAML a2
+        [ toYaml a1
+        , toYaml a2
         ]
 
-instance (ToYAML a1, ToYAML a2, ToYAML a3) => ToYAML (a1, a2, a3) where
-  toYAML (a1, a2, a3) =
+instance (ToYaml a1, ToYaml a2, ToYaml a3) => ToYaml (a1, a2, a3) where
+  toYaml (a1, a2, a3) =
     node $
       Sequence
-        [ toYAML a1
-        , toYAML a2
-        , toYAML a3
+        [ toYaml a1
+        , toYaml a2
+        , toYaml a3
         ]
 
-instance (ToYAML a1, ToYAML a2, ToYAML a3, ToYAML a4) => ToYAML (a1, a2, a3, a4) where
-  toYAML (a1, a2, a3, a4) =
+instance (ToYaml a1, ToYaml a2, ToYaml a3, ToYaml a4) => ToYaml (a1, a2, a3, a4) where
+  toYaml (a1, a2, a3, a4) =
     node $
       Sequence
-        [ toYAML a1
-        , toYAML a2
-        , toYAML a3
-        , toYAML a4
+        [ toYaml a1
+        , toYaml a2
+        , toYaml a3
+        , toYaml a4
         ]
 
-instance (ToYAML a1, ToYAML a2, ToYAML a3, ToYAML a4, ToYAML a5) => ToYAML (a1, a2, a3, a4, a5) where
-  toYAML (a1, a2, a3, a4, a5) =
+instance (ToYaml a1, ToYaml a2, ToYaml a3, ToYaml a4, ToYaml a5) => ToYaml (a1, a2, a3, a4, a5) where
+  toYaml (a1, a2, a3, a4, a5) =
     node $
       Sequence
-        [ toYAML a1
-        , toYAML a2
-        , toYAML a3
-        , toYAML a4
-        , toYAML a5
+        [ toYaml a1
+        , toYaml a2
+        , toYaml a3
+        , toYaml a4
+        , toYaml a5
         ]
 
 instance
-  (ToYAML a1, ToYAML a2, ToYAML a3, ToYAML a4, ToYAML a5, ToYAML a6)
-  => ToYAML (a1, a2, a3, a4, a5, a6)
+  (ToYaml a1, ToYaml a2, ToYaml a3, ToYaml a4, ToYaml a5, ToYaml a6)
+  => ToYaml (a1, a2, a3, a4, a5, a6)
   where
-  toYAML (a1, a2, a3, a4, a5, a6) =
+  toYaml (a1, a2, a3, a4, a5, a6) =
     node $
       Sequence
-        [ toYAML a1
-        , toYAML a2
-        , toYAML a3
-        , toYAML a4
-        , toYAML a5
-        , toYAML a6
+        [ toYaml a1
+        , toYaml a2
+        , toYaml a3
+        , toYaml a4
+        , toYaml a5
+        , toYaml a6
         ]
 
 instance
-  (ToYAML a1, ToYAML a2, ToYAML a3, ToYAML a4, ToYAML a5, ToYAML a6, ToYAML a7)
-  => ToYAML (a1, a2, a3, a4, a5, a6, a7)
+  (ToYaml a1, ToYaml a2, ToYaml a3, ToYaml a4, ToYaml a5, ToYaml a6, ToYaml a7)
+  => ToYaml (a1, a2, a3, a4, a5, a6, a7)
   where
-  toYAML (a1, a2, a3, a4, a5, a6, a7) =
+  toYaml (a1, a2, a3, a4, a5, a6, a7) =
     node $
       Sequence
-        [ toYAML a1
-        , toYAML a2
-        , toYAML a3
-        , toYAML a4
-        , toYAML a5
-        , toYAML a6
-        , toYAML a7
+        [ toYaml a1
+        , toYaml a2
+        , toYaml a3
+        , toYaml a4
+        , toYaml a5
+        , toYaml a6
+        , toYaml a7
         ]
 
 instance
-  (ToYAML a1, ToYAML a2, ToYAML a3, ToYAML a4, ToYAML a5, ToYAML a6, ToYAML a7, ToYAML a8)
-  => ToYAML (a1, a2, a3, a4, a5, a6, a7, a8)
+  (ToYaml a1, ToYaml a2, ToYaml a3, ToYaml a4, ToYaml a5, ToYaml a6, ToYaml a7, ToYaml a8)
+  => ToYaml (a1, a2, a3, a4, a5, a6, a7, a8)
   where
-  toYAML (a1, a2, a3, a4, a5, a6, a7, a8) =
+  toYaml (a1, a2, a3, a4, a5, a6, a7, a8) =
     node $
       Sequence
-        [ toYAML a1
-        , toYAML a2
-        , toYAML a3
-        , toYAML a4
-        , toYAML a5
-        , toYAML a6
-        , toYAML a7
-        , toYAML a8
+        [ toYaml a1
+        , toYaml a2
+        , toYaml a3
+        , toYaml a4
+        , toYaml a5
+        , toYaml a6
+        , toYaml a7
+        , toYaml a8
         ]
 
 instance
-  (ToYAML a1, ToYAML a2, ToYAML a3, ToYAML a4, ToYAML a5, ToYAML a6, ToYAML a7, ToYAML a8, ToYAML a9)
-  => ToYAML (a1, a2, a3, a4, a5, a6, a7, a8, a9)
+  (ToYaml a1, ToYaml a2, ToYaml a3, ToYaml a4, ToYaml a5, ToYaml a6, ToYaml a7, ToYaml a8, ToYaml a9)
+  => ToYaml (a1, a2, a3, a4, a5, a6, a7, a8, a9)
   where
-  toYAML (a1, a2, a3, a4, a5, a6, a7, a8, a9) =
+  toYaml (a1, a2, a3, a4, a5, a6, a7, a8, a9) =
     node $
       Sequence
-        [ toYAML a1
-        , toYAML a2
-        , toYAML a3
-        , toYAML a4
-        , toYAML a5
-        , toYAML a6
-        , toYAML a7
-        , toYAML a8
-        , toYAML a9
+        [ toYaml a1
+        , toYaml a2
+        , toYaml a3
+        , toYaml a4
+        , toYaml a5
+        , toYaml a6
+        , toYaml a7
+        , toYaml a8
+        , toYaml a9
         ]
 
 instance
-  ( ToYAML a1
-  , ToYAML a2
-  , ToYAML a3
-  , ToYAML a4
-  , ToYAML a5
-  , ToYAML a6
-  , ToYAML a7
-  , ToYAML a8
-  , ToYAML a9
-  , ToYAML a10
+  ( ToYaml a1
+  , ToYaml a2
+  , ToYaml a3
+  , ToYaml a4
+  , ToYaml a5
+  , ToYaml a6
+  , ToYaml a7
+  , ToYaml a8
+  , ToYaml a9
+  , ToYaml a10
   )
-  => ToYAML (a1, a2, a3, a4, a5, a6, a7, a8, a9, a10)
+  => ToYaml (a1, a2, a3, a4, a5, a6, a7, a8, a9, a10)
   where
-  toYAML (a1, a2, a3, a4, a5, a6, a7, a8, a9, a10) =
+  toYaml (a1, a2, a3, a4, a5, a6, a7, a8, a9, a10) =
     node $
       Sequence
-        [ toYAML a1
-        , toYAML a2
-        , toYAML a3
-        , toYAML a4
-        , toYAML a5
-        , toYAML a6
-        , toYAML a7
-        , toYAML a8
-        , toYAML a9
-        , toYAML a10
+        [ toYaml a1
+        , toYaml a2
+        , toYaml a3
+        , toYaml a4
+        , toYaml a5
+        , toYaml a6
+        , toYaml a7
+        , toYaml a8
+        , toYaml a9
+        , toYaml a10
         ]
 
 ----------------------------------------

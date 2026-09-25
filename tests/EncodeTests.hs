@@ -63,7 +63,7 @@ test_time = do
     )
 
 -- | Encoding a value and decoding the result gives the same value.
-roundTrip :: (Eq a, Show a, ToYAML a, FromYAML a) => String -> a -> Assertion
+roundTrip :: (Eq a, Show a, ToYaml a, FromYaml a) => String -> a -> Assertion
 roundTrip preface x = assertEqual preface (Right x) (decodeText (encodeText x))
 
 test_blockStyle :: Assertion

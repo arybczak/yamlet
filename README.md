@@ -22,7 +22,7 @@ A YAML 1.2.2 library written in Haskell.
 
 ## Modules
 
-- `Yamlet`: decoding with the `FromYAML` class and encoding with the `ToYAML`
+- `Yamlet`: decoding with the `FromYaml` class and encoding with the `ToYaml`
   class.
 - `Yamlet.Node`: the representation graph, with resolved tags and aliases.
 - `Yamlet.Syntax`: the syntax tree, with styles, anchors and unresolved tags.
