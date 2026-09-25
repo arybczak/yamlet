@@ -16,6 +16,7 @@ import Data.Foldable
 import Data.Int
 import Data.IntMap.Strict qualified as IM
 import Data.IntSet qualified as IS
+import Data.List
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
 import Data.Maybe
@@ -417,7 +418,7 @@ plainText = \case
   Int i -> T.pack (show i)
   -- The generic format always has a dot or an exponent, so the number reads
   -- back as a float, not as an integer.
-  Float (Finite s) -> T.pack (Sci.formatScientific Sci.Generic Nothing s)
+  Float (Finite s) -> T.pack (finite s)
   Float Infinity -> ".inf"
   Float NegativeZero -> "-0.0"
   Float NegativeInfinity -> "-.inf"
@@ -425,6 +426,22 @@ plainText = \case
   String t -> t
   Sequence _ -> "[]"
   Mapping _ -> "{}"
+  where
+    -- For an exponent close to the upper limit of Int, the exponent that
+    -- formatScientific writes overflows. Such a number is beyond the limit of
+    -- the decoder, so the check can use that lower limit.
+    finite :: Sci.Scientific -> String
+    finite s
+      | Sci.base10Exponent s > 10000 =
+          let ds = show (abs c)
+              ex = toInteger (Sci.base10Exponent s) + toInteger (length ds) - 1
+          in case dropWhileEnd (== '0') ds of
+               d : rest -> concat [if c < 0 then "-" else "", [d], ".", if null rest then "0" else rest, "e", show ex]
+               [] -> "0.0"
+      | otherwise = Sci.formatScientific Sci.Generic Nothing s
+      where
+        c :: Integer
+        c = Sci.coefficient s
 
 -- | A literal block scalar for a string with line breaks.
 literal :: Int -> T.Text -> Maybe B.Builder

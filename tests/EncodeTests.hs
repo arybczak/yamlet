@@ -133,6 +133,10 @@ test_floats = do
     "exact scientific"
     "1.2345678901234567890123e19\n"
     (encodeText (Sci.scientific 12345678901234567890123 (-3)))
+  assertEqual "exponent beyond the limit" "1.0e10001\n" (encodeText (Sci.scientific 1 10001))
+  assertEqual "exponent beyond Int" "1.0e9223372036854775808\n" (encodeText (Sci.scientific 10 maxBound))
+  assertEqual "negative exponent beyond Int" "-1.23e9223372036854775810\n" (encodeText (Sci.scientific (-1230) maxBound))
+  assertEqual "zero with a large exponent" "0.0\n" (encodeText (Sci.scientific 0 maxBound))
   assertEqual "infinity" "-.inf\n" (encodeText (-(1 / 0) :: Double))
   assertEqual "not a number" ".nan\n" (encodeText (0 / 0 :: Double))
   assertEqual "float" "0.1\n" (encodeText @Float 0.1)
