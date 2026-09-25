@@ -627,10 +627,24 @@ test_manyKeys = do
       _ -> []
 
 test_prettyError :: Assertion
-test_prettyError = case decodeText @Config "name: x\npaths: 42\n" of
-  Left err -> assertEqual "rendered" expected (prettyError "config.yaml" err)
-  Right _ -> assertFailure "expected an error"
+test_prettyError = do
+  case decodeText @Config "name: x\npaths: 42\n" of
+    Left err -> assertEqual "rendered" expected (prettyError "config.yaml" err)
+    Right _ -> assertFailure "expected an error"
+  case decodeNodes ("a: " <> T.replicate 100 "x" <> ": " <> T.replicate 100 "y" <> "\n") of
+    Left err -> assertEqual "long line" expectedLong (prettyError "long.yaml" err)
+    Right _ -> assertFailure "expected an error"
   where
+    expectedLong :: String
+    expectedLong =
+      L.intercalate
+        "\n"
+        [ "long.yaml:1:104: unexpected ':', quote the value if it contains \": \""
+        , "  |"
+        , "1 | ..." ++ replicate 40 'x' ++ ": " ++ replicate 38 'y' ++ "..."
+        , "  | " ++ replicate 43 ' ' ++ "^"
+        ]
+
     expected :: String
     expected =
       L.intercalate

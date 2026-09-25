@@ -42,7 +42,8 @@ data Location = Location
   deriving anyclass (NFData)
 
 -- | Render an error in the format that editors recognize. The result does not
--- end with a line break.
+-- end with a line break. Of a line longer than 80 characters, the excerpt
+-- shows only the 80 characters around the column.
 --
 -- @
 -- config.yaml:3:5: expected a list, but got an integer
@@ -65,7 +66,7 @@ prettyError file err =
     , " |\n"
     , lineNo
     , " | "
-    , T.unpack err.sourceLine
+    , shown
     , "\n"
     , pad
     , " | "
@@ -79,12 +80,31 @@ prettyError file err =
     pad :: String
     pad = map (const ' ') lineNo
 
+    width :: Int
+    width = 80
+
+    full :: String
+    full = T.unpack err.sourceLine
+
+    start :: Int
+    start = max 0 (min (err.location.column - 1 - width `div` 2) (length full - width))
+
+    shown :: String
+    shown
+      | length full <= width = full
+      | otherwise =
+          (if start > 0 then "..." else "")
+            ++ take width (drop start full)
+            ++ (if start + width < length full then "..." else "")
+
+    before :: Int
+    before
+      | length full <= width = err.location.column - 1
+      | otherwise = (if start > 0 then 3 else 0) + err.location.column - 1 - start
+
     -- A tab before the column keeps the caret aligned in a terminal.
     caret :: String
-    caret =
-      map (\c -> if c == '\t' then '\t' else ' ')
-        . take (err.location.column - 1)
-        $ T.unpack err.sourceLine
+    caret = map (\c -> if c == '\t' then '\t' else ' ') (take before shown)
 
 -- | Create an error at the given offset of the input.
 errorAt :: T.Text -> Offset -> String -> Error
