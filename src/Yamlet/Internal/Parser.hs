@@ -861,12 +861,12 @@ escape e i = case chr (fromIntegral (byteAt e i)) of
     -- JSON escapes a character outside the Basic Multilingual Plane as a
     -- pair of surrogates.
     Just hi
-      | hi >= 0xD800 && hi <= 0xDBFF
+      | isHighSurrogate hi
       , byteAt e (i + 5) == BACKSLASH
       , byteAt e (i + 6) == LOWER_U
       , Just lo <- hexAt (i + 7) 4
-      , lo >= 0xDC00 && lo <= 0xDFFF ->
-          fromCodePoint (0x10000 + (hi - 0xD800) * 0x400 + (lo - 0xDC00)) (i + 11)
+      , isLowSurrogate lo ->
+          fromCodePoint (fromSurrogates hi lo) (i + 11)
     _ -> codePoint 4
   'U' -> codePoint 8
   _ -> Nothing
@@ -881,7 +881,7 @@ escape e i = case chr (fromIntegral (byteAt e i)) of
 
     fromCodePoint :: Int -> Int -> Maybe (T.Text, Int)
     fromCodePoint cp next
-      | cp <= 0x10FFFF && (cp < 0xD800 || cp > 0xDFFF) = Just (T.singleton (chr cp), next)
+      | isScalarValue cp = Just (T.singleton (chr cp), next)
       | otherwise = Nothing
 
     -- The value of k hex digits at the index.

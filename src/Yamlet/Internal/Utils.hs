@@ -13,6 +13,10 @@ module Yamlet.Internal.Utils
   , coreTagPrefix
   , picoDecimals
   , decimalPlaces
+  , isHighSurrogate
+  , isLowSurrogate
+  , fromSurrogates
+  , isScalarValue
   ) where
 
 import Control.Monad
@@ -102,3 +106,20 @@ decimalPlaces n = if rest == 1 then Just (max twos fives) else Nothing
         go i x = case x `quotRem` p of
           (q, 0) | x /= 0 -> go (i + 1) q
           _ -> (i, x)
+
+-- | The first code unit of a surrogate pair of UTF-16.
+isHighSurrogate :: Int -> Bool
+isHighSurrogate u = u >= 0xD800 && u <= 0xDBFF
+
+-- | The second code unit of a surrogate pair of UTF-16.
+isLowSurrogate :: Int -> Bool
+isLowSurrogate u = u >= 0xDC00 && u <= 0xDFFF
+
+-- | The code point of a surrogate pair, by the formula of UTF-16.
+fromSurrogates :: Int -> Int -> Int
+fromSurrogates hi lo = 0x10000 + (hi - 0xD800) * 0x400 + (lo - 0xDC00)
+
+-- | A code point that a character can have: in the range of Unicode, and not a
+-- surrogate.
+isScalarValue :: Int -> Bool
+isScalarValue c = c >= 0 && c <= ord maxBound && not (isHighSurrogate c || isLowSurrogate c)

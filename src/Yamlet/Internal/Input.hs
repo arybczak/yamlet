@@ -18,6 +18,7 @@ import Data.Text.Unsafe qualified as T
 
 import Yamlet.Error
 import Yamlet.Internal.Syntax
+import Yamlet.Internal.Utils
 
 -- | Decode the bytes of a stream to text. The encoding is UTF-8, UTF-16 or
 -- UTF-32, detected as the YAML specification describes.
@@ -47,7 +48,7 @@ decodeInput bs = case map (BS.indexMaybe bs) [0 .. 3] of
         go :: Int -> Int
         go i
           | i + 4 > BS.length input = i
-          | c <= 0x10FFFF && not (isSurrogate c) = go (i + 4)
+          | isScalarValue c = go (i + 4)
           | otherwise = i
           where
             c :: Int
@@ -63,19 +64,13 @@ decodeInput bs = case map (BS.indexMaybe bs) [0 .. 3] of
         go :: Int -> Int
         go i
           | i + 2 > BS.length input = i
-          | u >= 0xD800 && u <= 0xDBFF =
-              if i + 4 <= BS.length input && isLow (unit input (i + 2)) then go (i + 4) else i
-          | isLow u = i
+          | isHighSurrogate u =
+              if i + 4 <= BS.length input && isLowSurrogate (unit input (i + 2)) then go (i + 4) else i
+          | isLowSurrogate u = i
           | otherwise = go (i + 2)
           where
             u :: Int
             u = unit input i
-
-        isLow :: Int -> Bool
-        isLow u = u >= 0xDC00 && u <= 0xDFFF
-
-    isSurrogate :: Int -> Bool
-    isSurrogate c = c >= 0xD800 && c <= 0xDFFF
 
     -- The code unit at the index. The callers make sure that its bytes are in
     -- the input.
