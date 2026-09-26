@@ -41,24 +41,25 @@ The benchmark in `bench/` uses three generated inputs:
 
 For each input, every library decodes the YAML into the same Haskell type and
 encodes a value of that type back to YAML. The times below come from GHC
-9.10.3 on one machine, on 2026-09-25. The `yaml` package uses the libyaml C
+9.10.3 on a Ryzen 9950X3D. Each benchmark ran in its own process, pinned to
+one core of the CCD with the 3D V-cache. The `yaml` package uses the libyaml C
 library and converts the data by way of an aeson `Value`.
 
 Decoding:
 
 | Input              | yamlet | HsYAML  | yaml   |
 |--------------------|--------|---------|--------|
-| `config`, 1105 KiB | 48 ms  | 2948 ms | 117 ms |
-| `json`, 432 KiB    | 24 ms  | 2387 ms | 67 ms  |
-| `text`, 834 KiB    | 9.7 ms | 617 ms  | 13 ms  |
+| `config`, 1105 KiB | 37 ms  | 3021 ms | 115 ms |
+| `json`, 432 KiB    | 20 ms  | 2444 ms | 60 ms  |
+| `text`, 834 KiB    | 7.2 ms | 640 ms  | 13 ms  |
 
 Encoding:
 
 | Input              | yamlet | HsYAML | yaml   |
 |--------------------|--------|--------|--------|
-| `config`, 1105 KiB | 38 ms  | 38 ms  | 58 ms  |
-| `json`, 432 KiB    | 21 ms  | 19 ms  | 33 ms  |
-| `text`, 834 KiB    | 6.2 ms | 10 ms  | 9.5 ms |
+| `config`, 1105 KiB | 18 ms  | 39 ms  | 56 ms  |
+| `json`, 432 KiB    | 11 ms  | 19 ms  | 34 ms  |
+| `text`, 834 KiB    | 2.9 ms | 10 ms  | 9.6 ms |
 
 ## Tests
 
