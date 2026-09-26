@@ -14,6 +14,7 @@ module Yamlet.Internal.Emit
   , needsIndentIndicator
 
     -- * Other
+  , indentStep
   , tagText
   , tagHandle
   , tagDirective
@@ -30,6 +31,11 @@ import Data.Word
 import Numeric
 
 import Yamlet.Internal.Utils
+
+-- | The number of spaces that the content of a block collection or a block
+-- scalar is indented by, relative to its parent. The output style is fixed.
+indentStep :: Int
+indentStep = 2
 
 -- | The text reads back as the same text if it is a plain scalar on one line,
 -- in a flow collection if the flag is set. The check ignores the schema, so
@@ -152,7 +158,7 @@ blockParts allowKeep t
     trailing = T.length t - T.length body
 
     indicator :: B.Builder
-    indicator = if needsIndentIndicator t then "2" else mempty
+    indicator = if needsIndentIndicator t then B.fromDec indentStep else mempty
 
     chomping :: B.Builder
     chomping = case trailing of

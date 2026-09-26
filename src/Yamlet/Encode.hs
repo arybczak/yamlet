@@ -415,7 +415,7 @@ renderDocuments docs = B.runBuilder . mconcat $ zipWith document [0 :: Int ..] d
       Sequence (_ : _) -> tagLine n <> blockSequence 0 True n
       Mapping (_ : _) -> tagLine n <> blockMapping 0 True n
       String t | needsIndentIndicator t -> withTag n (scalarText n) <> "\n"
-      _ -> scalarValue 2 n <> "\n"
+      _ -> scalarValue indentStep n <> "\n"
 
     -- A tag of a block collection takes a line of its own.
     tagLine :: Node -> B.Builder
@@ -456,9 +456,9 @@ blockSequence indent atLineStart n = case n.value of
 
     item :: Node -> B.Builder
     item x = case x.value of
-      Sequence (_ : _) -> collection x $ blockSequence (indent + 2) False x
-      Mapping (_ : _) -> collection x $ blockMapping (indent + 2) False x
-      _ -> " " <> scalarValue (indent + 2) x <> "\n"
+      Sequence (_ : _) -> collection x $ blockSequence (indent + indentStep) False x
+      Mapping (_ : _) -> collection x $ blockMapping (indent + indentStep) False x
+      _ -> " " <> scalarValue (indent + indentStep) x <> "\n"
 
     collection :: Node -> B.Builder -> B.Builder
     collection x body = case tagPrefix x of
@@ -466,7 +466,7 @@ blockSequence indent atLineStart n = case n.value of
       Nothing -> " " <> body
       where
         reindent :: B.Builder -> B.Builder
-        reindent b = spaces (indent + 2) <> b
+        reindent b = spaces (indent + indentStep) <> b
 
 -- | A block mapping. The first entry does not start with indentation if the
 -- mapping continues a line.
@@ -484,15 +484,15 @@ blockMapping indent atLineStart n = case n.value of
     value :: Node -> B.Builder
     value v = case v.value of
       Sequence (_ : _) -> tagged v <> "\n" <> blockSequence indent True v
-      Mapping (_ : _) -> tagged v <> "\n" <> blockMapping (indent + 2) True v
-      _ -> " " <> scalarValue (indent + 2) v <> "\n"
+      Mapping (_ : _) -> tagged v <> "\n" <> blockMapping (indent + indentStep) True v
+      _ -> " " <> scalarValue (indent + indentStep) v <> "\n"
 
     -- The key or the value of an explicit entry.
     explicit :: Node -> B.Builder
     explicit x = case x.value of
-      Sequence (_ : _) -> tagged x <> "\n" <> blockSequence (indent + 2) True x
-      Mapping (_ : _) -> tagged x <> "\n" <> blockMapping (indent + 2) True x
-      _ -> " " <> scalarValue (indent + 2) x <> "\n"
+      Sequence (_ : _) -> tagged x <> "\n" <> blockSequence (indent + indentStep) True x
+      Mapping (_ : _) -> tagged x <> "\n" <> blockMapping (indent + indentStep) True x
+      _ -> " " <> scalarValue (indent + indentStep) x <> "\n"
 
     tagged :: Node -> B.Builder
     tagged x = maybe mempty (" " <>) (tagPrefix x)

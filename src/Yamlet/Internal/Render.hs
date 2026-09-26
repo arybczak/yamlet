@@ -110,8 +110,12 @@ validAnchors doc
       | isAnchorName a || M.member a m = (used, m)
       | otherwise =
           let base = if T.null a then "anchor" else T.map (\c -> if isAnchorChar c then c else '_') a
-              new = fresh used base (2 :: Int)
+              new = fresh used base firstSuffix
           in (S.insert new used, M.insert a new m)
+
+    -- The name without a suffix is the first one, so the suffixes start at 2.
+    firstSuffix :: Int
+    firstSuffix = 2
 
     fresh :: S.Set T.Text -> T.Text -> Int -> T.Text
     fresh used base i
@@ -231,15 +235,15 @@ document opts afterEnd doc =
           (Just dc, Just rc) -> "---" <> comment (Just dc) <> "\n" <> lines_ 0 (r.comments.before ++ [Comment rc])
           (dc, rc) -> "---" <> comment (dc <|> rc) <> "\n" <> lines_ 0 r.comments.before
       | marker && null r.comments.before && isNothing doc.docComments.inline =
-          "--- " <> inline opts InValue 2 r r.comments.inline <> "\n"
+          "--- " <> inline opts InValue indentStep r r.comments.inline <> "\n"
       | marker =
           "---"
             <> comment doc.docComments.inline
             <> "\n"
             <> lines_ 0 r.comments.before
-            <> inline opts InValue 2 r r.comments.inline
+            <> inline opts InValue indentStep r r.comments.inline
             <> "\n"
-      | otherwise = lines_ 0 r.comments.before <> inline opts InValue 2 r r.comments.inline <> "\n"
+      | otherwise = lines_ 0 r.comments.before <> inline opts InValue indentStep r r.comments.inline <> "\n"
 
 -- | The entries of a block collection at the given indentation, and the lines
 -- after them at the given column. The first entry does not start with
@@ -311,13 +315,13 @@ value opts indent v lineComment extra
   | isBlock opts v = case v.content of
       Sequence _ xs
         | null [() | Comment _ <- v.comments.after] || not (endsWithBlockScalar xs) ->
-            header <> lines_ indent below <> block opts indent (indent + 2) True False v
+            header <> lines_ indent below <> block opts indent (indent + indentStep) True False v
         -- A block scalar as the last item would take in the lines after an
         -- indentless sequence.
-        | otherwise -> header <> lines_ (indent + 2) below <> block opts (indent + 2) (indent + 2) True False v
-      _ -> header <> lines_ (indent + 2) below <> block opts (indent + 2) (indent + 2) True False v
+        | otherwise -> header <> lines_ (indent + indentStep) below <> block opts (indent + indentStep) (indent + indentStep) True False v
+      _ -> header <> lines_ (indent + indentStep) below <> block opts (indent + indentStep) (indent + indentStep) True False v
   | isEmpty v = comment lineComment <> "\n"
-  | otherwise = " " <> inline opts InValue (indent + 2) v lineComment <> "\n"
+  | otherwise = " " <> inline opts InValue (indent + indentStep) v lineComment <> "\n"
   where
     header :: B.Builder
     header = maybe mempty (" " <>) (props v) <> comment lineComment <> "\n"
@@ -337,14 +341,14 @@ after :: RenderOptions -> Int -> Node -> B.Builder
 after opts indent n
   | isBlock opts n =
       if isNothing (props n) && isNothing n.comments.inline
-        then " " <> block opts (indent + 2) (indent + 2) False True n
+        then " " <> block opts (indent + indentStep) (indent + indentStep) False True n
         else
           maybe mempty (" " <>) (props n)
             <> comment n.comments.inline
             <> "\n"
-            <> block opts (indent + 2) (indent + 2) True True n
+            <> block opts (indent + indentStep) (indent + indentStep) True True n
   | isEmpty n = comment n.comments.inline <> "\n"
-  | otherwise = " " <> inline opts InValue (indent + 2) n n.comments.inline <> "\n"
+  | otherwise = " " <> inline opts InValue (indent + indentStep) n n.comments.inline <> "\n"
 
 -- | Where an inline node is.
 data Position = InValue | InKey | InFlow
