@@ -16,9 +16,9 @@ import Control.DeepSeq
 import Data.Text qualified as T
 import Data.Text.Array qualified as A
 import Data.Text.Internal qualified as T
-import Data.Word
 import GHC.Generics
 
+import Yamlet.Internal.Parser.Chars
 import Yamlet.Internal.Syntax
 
 -- | An error of the parser or the decoder.
@@ -99,14 +99,17 @@ prettyError file err
     shown
       | length full <= width = full
       | otherwise =
-          (if start > 0 then "..." else "")
+          (if start > 0 then ellipsis else "")
             ++ take width (drop start full)
-            ++ (if start + width < length full then "..." else "")
+            ++ (if start + width < length full then ellipsis else "")
+
+    ellipsis :: String
+    ellipsis = "..."
 
     before :: Int
     before
       | length full <= width = err.location.column - 1
-      | otherwise = (if start > 0 then 3 else 0) + err.location.column - 1 - start
+      | otherwise = (if start > 0 then length ellipsis else 0) + err.location.column - 1 - start
 
     -- A tab before the column keeps the caret aligned in a terminal.
     caret :: String
@@ -147,9 +150,9 @@ locateIn (T.Text arr base len) (Offset off0) = go base 1 base
             , column = 1 + countChars (min off (skipBom arr (base + len) lineStart)) off
             }
       | otherwise = case A.unsafeIndex arr i of
-          10 -> go (i + 1) (ln + 1) (i + 1)
-          13
-            | i + 1 < base + len && A.unsafeIndex arr (i + 1) == 10 ->
+          LF -> go (i + 1) (ln + 1) (i + 1)
+          CR
+            | i + 1 < base + len && A.unsafeIndex arr (i + 1) == LF ->
                 go (i + 1) ln lineStart
             | otherwise -> go (i + 1) (ln + 1) (i + 1)
           _ -> go (i + 1) ln lineStart
@@ -189,6 +192,3 @@ lineAt (T.Text arr base len) (Offset off0) = T.Text arr start (stop - start)
     findStop i
       | i < end && not (isBreak (A.unsafeIndex arr i)) = findStop (i + 1)
       | otherwise = i
-
-    isBreak :: Word8 -> Bool
-    isBreak w = w == 10 || w == 13
