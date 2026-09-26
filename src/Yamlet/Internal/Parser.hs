@@ -31,6 +31,7 @@ import Yamlet.Internal.Parser.Chars
 import Yamlet.Internal.Parser.Hints
 import Yamlet.Internal.Parser.Monad
 import Yamlet.Internal.Syntax
+import Yamlet.Internal.Utils
 
 -- | Parse all documents of a stream.
 parseStream :: T.Text -> Either Error [Document]
@@ -478,10 +479,7 @@ directives = go Nothing defaultHandles Set.empty
           skipWhile isDecDigit
           r <- pos
           when (r == q) $ throwAt v badVersion
-          let digits = T.dropWhile (== '0') (slice e q r)
-          -- A longer number could be beyond the range of Int.
-          when (T.length digits > 9) $ throwAt p "unsupported YAML version"
-          pure $ T.foldl' (\acc d -> acc * 10 + digitToInt d) 0 digits
+          maybe (throwAt p "unsupported YAML version") pure $ readBoundedInt (slice e q r)
 
     tagDirective :: P (T.Text, T.Text)
     tagDirective = do
