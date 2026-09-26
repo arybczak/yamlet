@@ -58,7 +58,7 @@ parseStream input@(T.Text arr off len) = case prescan e start of
     -- start of the input.
     bomAt :: Int -> Maybe Int
     bomAt s
-      | s == off && isBom e s = if isBom e (s + 3) then Just (s + 3) else Nothing
+      | s == off && isBom e s = if isBom e (s + bomLength) then Just (s + bomLength) else Nothing
       | isBom e s = Just s
       | otherwise = Nothing
 
@@ -92,7 +92,7 @@ parseStream input@(T.Text arr off len) = case prescan e start of
         }
 
     start :: Int
-    start = if isBom e off then off + 3 else off
+    start = if isBom e off then off + bomLength else off
 
 -- | Check that the input has only characters that YAML allows, and find the
 -- lines that start with a document marker, and the byte order marks. A
@@ -126,7 +126,7 @@ prescan e start = go start [start | isMarker e (skipBoms e start)] []
                , let w2 = A.unsafeIndex e.array (i + 2)
                , w2 == 0xBE || w2 == 0xBF ->
                    Left i
-               | w == 0xEF && isBom e i -> go (i + 3) acc (i : boms)
+               | w == 0xEF && isBom e i -> go (i + bomLength) acc (i : boms)
                | otherwise -> go (i + 1) acc boms
 
 ----------------------------------------
@@ -384,7 +384,7 @@ lDocumentPrefix :: P ()
 lDocumentPrefix = many_ $ do
   e <- env
   p <- pos
-  if isBom e p then advance 3 else lComment
+  if isBom e p then advance bomLength else lComment
 
 -- | l-document-suffix, without the comment lines after it. They belong to the
 -- next document.

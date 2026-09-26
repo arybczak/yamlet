@@ -165,13 +165,7 @@ locateIn (T.Text arr base len) (Offset off0) = go base 1 base
 
 -- | The index after a byte order mark at the index, or the index.
 skipBom :: A.Array -> Int -> Int -> Int
-skipBom arr end i
-  | i + 3 <= end
-      && A.unsafeIndex arr i == 0xEF
-      && A.unsafeIndex arr (i + 1) == 0xBB
-      && A.unsafeIndex arr (i + 2) == 0xBF =
-      i + 3
-  | otherwise = i
+skipBom arr end i = if isBomIn arr end i then i + bomLength else i
 
 -- | The line of the input that contains the offset, without the line break
 -- and without a byte order mark at its start.

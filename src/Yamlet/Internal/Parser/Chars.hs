@@ -45,6 +45,8 @@ module Yamlet.Internal.Parser.Chars
   , isUriChar
   , isTagChar
   , isAnchorChar
+  , bomLength
+  , isBomIn
   , isBom
   , skipBoms
 
@@ -181,11 +183,23 @@ isTagChar w = isUriChar w && w /= EXCL && not (isFlowIndicator w)
 isAnchorChar :: Word8 -> Bool
 isAnchorChar w = isNsChar w && not (isFlowIndicator w)
 
+-- | The number of bytes of a byte order mark, U+FEFF in UTF-8.
+bomLength :: Int
+bomLength = 3
+
+-- | A byte order mark at the index of the array, before the end index.
+isBomIn :: A.Array -> Int -> Int -> Bool
+isBomIn arr end i =
+  i + bomLength <= end
+    && A.unsafeIndex arr i == 0xEF
+    && A.unsafeIndex arr (i + 1) == 0xBB
+    && A.unsafeIndex arr (i + 2) == 0xBF
+
 isBom :: Env -> Int -> Bool
-isBom e i = byteAt e i == 0xEF && byteAt e (i + 1) == 0xBB && byteAt e (i + 2) == 0xBF
+isBom e = isBomIn e.array e.end
 
 skipBoms :: Env -> Int -> Int
-skipBoms e i = if isBom e i then skipBoms e (i + 3) else i
+skipBoms e i = if isBom e i then skipBoms e (i + bomLength) else i
 
 ----------------------------------------
 -- Scanning
@@ -206,11 +220,7 @@ isStartOfLine :: Env -> Int -> Bool
 isStartOfLine e i
   | i <= e.base = True
   | isBreak (byteBefore e i) = True
-  | i - 3 >= e.base
-      && A.unsafeIndex e.array (i - 3) == 0xEF
-      && A.unsafeIndex e.array (i - 2) == 0xBB
-      && A.unsafeIndex e.array (i - 1) == 0xBF =
-      isStartOfLine e (i - 3)
+  | i - bomLength >= e.base && isBom e (i - bomLength) = isStartOfLine e (i - bomLength)
   | otherwise = False
 
 -- | A @---@ or @...@ marker at the start of a line.
