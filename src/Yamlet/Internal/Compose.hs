@@ -160,7 +160,7 @@ compose input doc
       S.NoTag
         | style == S.Plain -> case resolvePlainExact t of
             Right v -> Right $ node' v
-            Left _ -> Left $ errorAt input off inexact
+            Left _ -> Left $ errorAt input off exponentOutOfRange
         | otherwise -> Right $ Node off strTag (String t)
       S.NonSpecificTag -> Right $ Node off strTag (String t)
       S.Tag tag
@@ -170,7 +170,7 @@ compose input doc
               $ "the tag !!" ++ T.unpack (T.drop (T.length coreTagPrefix) tag) ++ " cannot be used on a scalar"
         | otherwise -> case resolveTaggedExact tag t of
             Just (Right v) -> Right $ Node off tag v
-            Just (Left _) -> Left $ errorAt input off inexact
+            Just (Left _) -> Left $ errorAt input off exponentOutOfRange
             Nothing ->
               Left
                 $ errorAt input off
@@ -182,9 +182,6 @@ compose input doc
       where
         node' :: Value -> Node
         node' v = Node off (defaultTag v) v
-
-        inexact :: String
-        inexact = "the exponent of the number is out of the range from -1000 to 1000"
 
     collectionTag :: S.Offset -> S.Props -> T.Text -> Either Error T.Text
     collectionTag off props def = case props.tag of

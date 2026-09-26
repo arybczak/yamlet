@@ -195,7 +195,7 @@ withBoundedScientific f = withScientific $ \s ->
        -- The exponent of a zero also makes 'truncate' compute its power of 10.
        | c == 0 -> f 0
        | abs (toInteger (Sci.base10Exponent s) + toInteger (integerLog10 (abs c))) > maxExponent ->
-           fail "the exponent of the number is out of the range from -1000 to 1000"
+           fail exponentOutOfRange
        | otherwise -> f s
 
 -- | The text is a copy, so it does not keep the input alive.

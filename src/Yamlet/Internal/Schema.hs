@@ -13,6 +13,7 @@ module Yamlet.Internal.Schema
   , isPlainSafe
   , isYaml11Bool
   , maxExponent
+  , exponentOutOfRange
   ) where
 
 import Data.Bifunctor
@@ -172,6 +173,14 @@ decimal ds0 e0 written
 -- 5e-324 to 1.8e308.
 maxExponent :: Integer
 maxExponent = 1000
+
+-- | The error for a number beyond 'maxExponent'.
+exponentOutOfRange :: String
+exponentOutOfRange =
+  "the exponent of the number is out of the range from "
+    ++ show (negate maxExponent)
+    ++ " to "
+    ++ show maxExponent
 
 negateFloat :: FloatValue -> FloatValue
 negateFloat = \case
