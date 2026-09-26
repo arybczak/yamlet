@@ -375,7 +375,13 @@ rejectUnknownKeys known o = forM_ o.entries $ \(k, _) -> case k.value of
 class FromYaml a where
   parseYaml :: Node -> Parser a
   default parseYaml
-    :: (Generic a, GenericYaml a, Rep a ~ D1 d f, GConstructors f, GFromConstructor f)
+    :: ( Generic a
+       , GenericYaml a
+       , Rep a ~ D1 d f
+       , GConstructors f
+       , GFlatten (FlattenFields a) f
+       , GFromConstructor f
+       )
     => Node -> Parser a
   parseYaml = genericParseYaml
 
@@ -892,10 +898,11 @@ genericParseYaml
      , GenericYaml a
      , Rep a ~ D1 d f
      , GConstructors f
+     , GFlatten (FlattenFields a) f
      , GFromConstructor f
      )
   => Node -> Parser a
-genericParseYaml n = gParseYaml (yamlOptions @a) (from <$> yamlDefault @a) to n
+genericParseYaml n = gParseYaml (yamlOptions @a) (gFlatten @(FlattenFields a) @f) (from <$> yamlDefault @a) to n
 {-# INLINE genericParseYaml #-}
 
 -- The decoders of the constructors take a continuation, which starts as
@@ -919,8 +926,8 @@ gParseYaml
    . ( GConstructors f
      , GFromConstructor f
      )
-  => YamlOptions -> Maybe (D1 d f p) -> (D1 d f p -> a) -> Node -> Parser a
-gParseYaml opts def k n
+  => YamlOptions -> Bool -> Maybe (D1 d f p) -> (D1 d f p -> a) -> Node -> Parser a
+gParseYaml opts flat def k n
   | isEnum @f opts =
       withText (\t -> maybe (unknown "value" t) id (gFromTag opts (k . M1) t)) n
   | isTagged @f opts = withMapping tagged n
@@ -931,7 +938,7 @@ gParseYaml opts def k n
       Nothing -> missingKey o opts.tagKey
       Just tn -> do
         t <- parseNode (parseYaml @T.Text) tn
-        maybe (parseNode (\_ -> unknown "tag" t) tn) id (gFromTagged opts (unM1 <$> def) (k . M1) t o)
+        maybe (parseNode (\_ -> unknown "tag" t) tn) id (gFromTagged opts flat (unM1 <$> def) (k . M1) t o)
 
     unknown :: String -> T.Text -> Parser a
     unknown what t =
@@ -948,22 +955,23 @@ class GFromConstructor f where
   -- | The constructor without fields with the tag.
   gFromTag :: YamlOptions -> (f p -> a) -> T.Text -> Maybe (Parser a)
 
-  -- | The constructor with the tag, from the mapping that holds the tag.
-  gFromTagged :: YamlOptions -> Maybe (f p) -> (f p -> a) -> T.Text -> Object -> Maybe (Parser a)
+  -- | The constructor with the tag, from the mapping that holds the tag, with
+  -- the flag of 'FlattenFields'.
+  gFromTagged :: YamlOptions -> Bool -> Maybe (f p) -> (f p -> a) -> T.Text -> Object -> Maybe (Parser a)
 
   -- | The only constructor, without a tag.
   gFromUntagged :: YamlOptions -> Maybe (f p) -> (f p -> a) -> Node -> Parser a
 
 instance TypeError NoConstructors => GFromConstructor V1 where
   gFromTag _ _ _ = Nothing
-  gFromTagged _ _ _ _ _ = Nothing
+  gFromTagged _ _ _ _ _ _ = Nothing
   gFromUntagged _ _ _ _ = fail "expected a type with constructors"
 
 instance (GFromConstructor f, GFromConstructor g) => GFromConstructor (f :+: g) where
   gFromTag opts k t = gFromTag opts (k . L1) t `mplus` gFromTag opts (k . R1) t
-  gFromTagged opts def k t o =
-    gFromTagged opts (def >>= \case L1 x -> Just x; R1 _ -> Nothing) (k . L1) t o
-      `mplus` gFromTagged opts (def >>= \case R1 x -> Just x; L1 _ -> Nothing) (k . R1) t o
+  gFromTagged opts flat def k t o =
+    gFromTagged opts flat (def >>= \case L1 x -> Just x; R1 _ -> Nothing) (k . L1) t o
+      `mplus` gFromTagged opts flat (def >>= \case R1 x -> Just x; L1 _ -> Nothing) (k . R1) t o
 
   -- A type with several constructors always has a tag.
   gFromUntagged _ _ _ _ = fail "expected a tag"
@@ -984,14 +992,13 @@ instance
       tag :: T.Text
       tag = constructorTag opts (symbolVal (Proxy @name))
 
-  gFromTagged opts def k t o
-    | t == constructorTag opts (symbolVal (Proxy @name)) = Just (k . M1 <$> fromObject opts [opts.tagKey] (unM1 <$> def) o)
+  gFromTagged opts flat def k t o
+    | t == constructorTag opts (symbolVal (Proxy @name)) = Just (k . M1 <$> fromObject opts flat [opts.tagKey] (unM1 <$> def) o)
     | otherwise = Nothing
 
   gFromUntagged opts def k n
-    | gNamed @f || gArity @f == 0 = withMapping (fmap (k . M1) . fromObject opts [] (unM1 <$> def)) n
+    | gNamed @f || gArity @f == 0 = withMapping (fmap (k . M1) . fromObject opts False [] (unM1 <$> def)) n
     | gArity @f == 1 = k . M1 . fst <$> gFromValues [n]
-    | opts.flattenFields, Mapping _ <- n.value = k . M1 <$> gFromFlat n
     | otherwise = withSequence (fmap (k . M1) . fromList (gArity @f)) n
 
   {-# INLINE gFromTag #-}
@@ -1005,32 +1012,32 @@ fromObject
    . ( GFields f
      , GFromFields f
      )
-  => YamlOptions -> [T.Text] -> Maybe (f p) -> Object -> Parser (f p)
-fromObject opts keys def o
+  => YamlOptions -> Bool -> [T.Text] -> Maybe (f p) -> Object -> Parser (f p)
+fromObject opts flat keys def o
   | gNamed @f = do
       reject (gNames @f opts)
       gFromObject opts def o
   | gArity @f == 0 = do
       reject []
       fst <$> gFromValues []
-  | opts.flattenFields && not (all (isKey opts.contentsKey . fst) others) = flat
+  | flat && not (all (isKey opts.contentsKey . fst) others) = merged
   | otherwise = do
       reject [opts.contentsKey]
       case lookupKey opts.contentsKey o of
         Just contents -> fromContents contents
-        -- A missing contents key is null, if the fields accept null. Flat
-        -- fields can also have only optional keys.
+        -- A missing contents key is null, if the fields accept null. A flat
+        -- field can also have only optional keys.
         Nothing
           | Just fields <- def -> pure fields
-          | opts.flattenFields -> either (const flat) pure (runParser fromContents (node Null))
+          | flat -> either (const merged) pure (runParser fromContents (node Null))
           | otherwise -> either (const (missingKey o opts.contentsKey)) pure (runParser fromContents (node Null))
   where
     reject :: [T.Text] -> Parser ()
     reject fields = when opts.rejectUnknownFields $ rejectUnknownKeys (keys ++ fields) o
 
-    -- Each field decodes from the mapping without the given keys.
-    flat :: Parser (f p)
-    flat = gFromFlat (Node (objectNode o).offset (objectNode o).tag (Mapping others))
+    -- The field decodes from the mapping without the given keys.
+    merged :: Parser (f p)
+    merged = fromContents (Node (objectNode o).offset (objectNode o).tag (Mapping others))
 
     others :: [(Node, Node)]
     others = [kv | kv@(k, _) <- objectEntries o, not (any (`isKey` k) keys)]
@@ -1042,7 +1049,7 @@ fromObject opts keys def o
     fromContents contents = case gArity @f of
       1 -> fst <$> gFromValues [contents]
       k -> withSequence (fromList k) contents
-    {-# INLINE flat #-}
+    {-# INLINE merged #-}
     {-# INLINE fromContents #-}
 {-# INLINE fromObject #-}
 
@@ -1060,13 +1067,9 @@ class GFromFields f where
   -- | The fields from the start of the list, and the rest of the list.
   gFromValues :: [Node] -> Parser (f p, [Node])
 
-  -- | The fields, each from the same node, for 'Yamlet.Generic.flattenFields'.
-  gFromFlat :: Node -> Parser (f p)
-
 instance GFromFields U1 where
   gFromObject _ _ _ = pure U1
   gFromValues ns = pure (U1, ns)
-  gFromFlat _ = pure U1
 
 instance (GFromFields f, GFromFields g) => GFromFields (f :*: g) where
   gFromObject opts def o =
@@ -1077,10 +1080,8 @@ instance (GFromFields f, GFromFields g) => GFromFields (f :*: g) where
     (a, rest) <- gFromValues ns
     (b, rest') <- gFromValues rest
     pure (a :*: b, rest')
-  gFromFlat n = (:*:) <$> gFromFlat n <*> gFromFlat n
   {-# INLINE gFromObject #-}
   {-# INLINE gFromValues #-}
-  {-# INLINE gFromFlat #-}
 
 instance
   ( KnownSymbol name
@@ -1099,18 +1100,13 @@ instance
       key :: T.Text
       key = fieldKey @name opts
   gFromValues = nextField
-
-  -- A record does not flatten.
-  gFromFlat n = failAt n "expected a field without a name"
   {-# INLINE gFromObject #-}
   {-# INLINE gFromValues #-}
 
 instance FromYaml a => GFromFields (S1 (MetaSel Nothing u s d) (Rec0 a)) where
   gFromObject _ _ o = fail $ "expected a field without a name in " ++ describe (objectNode o).value
   gFromValues = nextField
-  gFromFlat n = M1 . K1 <$> parseNode parseYaml n
   {-# INLINE gFromValues #-}
-  {-# INLINE gFromFlat #-}
 
 -- | A field from the start of the list.
 nextField :: FromYaml a => [Node] -> Parser (S1 m (Rec0 a) p, [Node])

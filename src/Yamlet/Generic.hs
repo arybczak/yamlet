@@ -26,9 +26,14 @@
 -- * A type with one constructor without field names is its field, or a list
 --   of its fields if it has several.
 --
--- * With 'Yamlet.Generic.flattenFields', the entries of fields without names
---   go in the mapping of the constructor, e.g. @{tag: Ahead, distance: 10}@
---   for @Ahead (Distance 10)@.
+-- * With 'FlattenFields', the entries of a field without a name go in the
+--   mapping of the constructor, e.g. @{tag: Ahead, distance: 10}@ for
+--   @Ahead (Distance 10)@:
+--
+-- @
+-- instance GenericYaml Step where
+--   type FlattenFields Step = True
+-- @
 --
 -- = Missing keys
 --
@@ -46,8 +51,8 @@
 --
 -- A present key that holds a mapping takes the missing keys of that mapping
 -- from the default of its own type, not from the outer default. The same
--- holds with 'Yamlet.Generic.flattenFields': the keys of a field without a
--- name are next to the tag, but they belong to the field. The outer default
+-- holds with 'FlattenFields': the keys of a field without a name are next to
+-- the tag, but they belong to the field. The outer default
 -- applies to such a field only if the constructor has no keys besides the
 -- tag.
 --

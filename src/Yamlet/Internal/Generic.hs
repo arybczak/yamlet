@@ -12,6 +12,7 @@ module Yamlet.Internal.Generic
 
     -- * Constructors
   , GConstructors (..)
+  , GFlatten (..)
   , NoConstructors
   , isEnum
   , isTagged
@@ -23,6 +24,7 @@ module Yamlet.Internal.Generic
   ) where
 
 import Data.Char
+import Data.Kind
 import Data.Proxy
 import Data.Text qualified as T
 import GHC.Generics
@@ -43,18 +45,6 @@ data YamlOptions = YamlOptions
   , contentsKey :: T.Text
   -- ^ The key of the fields of a tagged constructor without field names,
   -- @contents@ by default.
-  , flattenFields :: Bool
-  -- ^ Put the entries of the fields without names in the mapping of the
-  -- constructor, next to the tag. Off by default. Each field must encode as
-  -- a mapping with string keys, and the keys must be different and not the
-  -- tag key. Otherwise the constructor encodes as without the option. Thus
-  -- the fields of a type with the same tag key stay under the contents key.
-  -- An enumeration merges if 'Yamlet.Generic.allNullaryToStringTag' is off.
-  --
-  -- 'Yamlet.Generic.rejectUnknownFields' does not apply to the merged
-  -- mapping, because its keys belong to the fields. With several fields,
-  -- each field decodes from the same mapping, so it must accept the keys of
-  -- the others.
   , tagSingleConstructors :: Bool
   -- ^ Give a type with one constructor a tag too. Off by default.
   , allNullaryToStringTag :: Bool
@@ -75,7 +65,6 @@ defaultYamlOptions =
     , constructorTagModifier = id
     , tagKey = "tag"
     , contentsKey = "contents"
-    , flattenFields = False
     , tagSingleConstructors = False
     , allNullaryToStringTag = True
     , omitNullFields = False
@@ -85,6 +74,22 @@ defaultYamlOptions =
 -- | The configuration of the generic instances of 'Yamlet.Decode.FromYaml'
 -- and 'Yamlet.Encode.ToYaml' for a type: the options and the default value.
 class GenericYaml a where
+  -- | Put the entries of the field of a tagged constructor without field
+  -- names in the mapping of the constructor, next to the tag. 'False' by
+  -- default. A constructor with several fields without names is a type
+  -- error.
+  --
+  -- The field must encode as a mapping with a key, and no key can be the tag
+  -- key. Otherwise the constructor encodes as without the option. Thus the
+  -- field of a type with the same tag key stays under the contents key. An
+  -- enumeration merges if 'Yamlet.Generic.allNullaryToStringTag' is off.
+  --
+  -- The keys of the mapping belong to the field, so the options of its type
+  -- apply to them, e.g. 'Yamlet.Generic.rejectUnknownFields'.
+  type FlattenFields a :: Bool
+
+  type FlattenFields a = False
+
   yamlOptions :: YamlOptions
   yamlOptions = defaultYamlOptions
 
@@ -155,6 +160,26 @@ instance (KnownSymbol name, GFields f) => GConstructors (C1 (MetaCons name fixit
 -- as a string.
 isEnum :: forall f. GConstructors f => YamlOptions -> Bool
 isEnum opts = opts.allNullaryToStringTag && gNullary @f
+
+-- | The value of 'FlattenFields', if the constructors allow it.
+class GFlatten (flat :: Bool) f where
+  gFlatten :: Bool
+
+instance GFlatten False f where
+  gFlatten = False
+
+instance FlatConstructors f => GFlatten True f where
+  gFlatten = True
+
+type family FlatConstructors f :: Constraint where
+  FlatConstructors (f :+: g) = (FlatConstructors f, FlatConstructors g)
+  FlatConstructors (C1 (MetaCons name fixity False) (f :*: g)) =
+    TypeError
+      ( Text "FlattenFields allows one field without a name, but the constructor "
+          :<>: Text name
+          :<>: Text " has more"
+      )
+  FlatConstructors f = ()
 
 isTagged :: forall f. GConstructors f => YamlOptions -> Bool
 isTagged opts = opts.tagSingleConstructors || gConstructorCount @f > 1

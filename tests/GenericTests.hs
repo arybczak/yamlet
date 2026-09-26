@@ -90,18 +90,19 @@ data Reply = Answer (Maybe Int) | Silence
 data Step
   = Ahead Distance
   | Rotate Direction
-  | Move Distance Speed
+  | Accelerate Speed
   | Halt
+  | Jump {height :: Int, width :: Int}
   | -- Fields that do not merge.
     Wait Int
-  | Twice Distance Distance
   | Again Step
   | Boxed Box
   deriving stock (Eq, Show, Generic)
   deriving anyclass (FromYaml, ToYaml)
 
 instance GenericYaml Step where
-  yamlOptions = defaultYamlOptions {tagKey = "step", flattenFields = True}
+  type FlattenFields Step = True
+  yamlOptions = defaultYamlOptions {tagKey = "step"}
 
 newtype Distance = Distance {distance :: Maybe Int}
   deriving stock (Eq, Show, Generic)
@@ -121,20 +122,6 @@ data Direction = Clockwise | Anticlockwise
 
 instance GenericYaml Direction where
   yamlOptions = defaultYamlOptions {tagKey = "direction", allNullaryToStringTag = False}
-
-data Velocity = Velocity Distance Speed
-  deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
-
-instance GenericYaml Velocity where
-  yamlOptions = defaultYamlOptions {flattenFields = True}
-
-data Coordinates = Coordinates Int Int
-  deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
-
-instance GenericYaml Coordinates where
-  yamlOptions = defaultYamlOptions {flattenFields = True}
 
 data Settings = Settings {name :: T.Text, retries :: Int, proxy :: Maybe T.Text, limits :: Limits}
   deriving stock (Eq, Show, Generic)
@@ -241,13 +228,9 @@ test_flatten :: Assertion
 test_flatten = do
   assertEqual "record" "step: Ahead\ndistance: 10\n" (encodeText (Ahead (Distance (Just 10))))
   assertEqual "enumeration" "step: Rotate\ndirection: Clockwise\n" (encodeText (Rotate Clockwise))
-  assertEqual "several fields" "step: Move\ndistance: 1\nspeed: 2\n" (encodeText (Move (Distance (Just 1)) (Speed 2)))
   assertEqual "no fields" "step: Halt\n" (encodeText Halt)
+  assertEqual "record constructor" "step: Jump\nheight: 1\nwidth: 2\n" (encodeText (Jump 1 2))
   assertEqual "no mapping" "step: Wait\ncontents: 5\n" (encodeText (Wait 5))
-  assertEqual
-    "equal keys"
-    "step: Twice\ncontents:\n- distance: 1\n- distance: 2\n"
-    (encodeText (Twice (Distance (Just 1)) (Distance (Just 2))))
   assertEqual "tag key" "step: Again\ncontents:\n  step: Halt\n" (encodeText (Again Halt))
   assertEqual "contents key" "step: Boxed\ncontents:\n  contents: 1\n" (encodeText (Boxed (Box 1)))
   mapM_
@@ -255,10 +238,10 @@ test_flatten = do
     [ Ahead (Distance (Just 10))
     , Ahead (Distance Nothing)
     , Rotate Anticlockwise
-    , Move (Distance Nothing) (Speed 2)
+    , Accelerate (Speed 2)
     , Halt
+    , Jump 1 2
     , Wait 5
-    , Twice (Distance (Just 1)) (Distance Nothing)
     , Again (Again (Rotate Clockwise))
     , Boxed (Box 1)
     ]
@@ -266,11 +249,7 @@ test_flatten = do
   assertEqual
     "error in a field"
     (Just (1, 1, "missing key \"speed\""))
-    (errorOf (decodeText @Step "step: Move\ndistance: 1\n"))
-  assertEqual "untagged" "distance: 1\nspeed: 2\n" (encodeText (Velocity (Distance (Just 1)) (Speed 2)))
-  roundTrip "untagged" (Velocity (Distance (Just 1)) (Speed 2))
-  assertEqual "untagged without mappings" "- 1\n- 2\n" (encodeText (Coordinates 1 2))
-  roundTrip "untagged without mappings" (Coordinates 1 2)
+    (errorOf (decodeText @Step "step: Accelerate\n"))
 
 test_default :: Assertion
 test_default = do

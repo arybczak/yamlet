@@ -85,12 +85,13 @@ newtype Box a = Box {item :: a}
   deriving stock (Generic)
   deriving anyclass (GenericYaml, FromYaml, ToYaml)
 
-data Velocity = Velocity Distance Speed
+data Velocity = Velocity Speed
   deriving stock (Generic)
   deriving anyclass (FromYaml, ToYaml)
 
 instance GenericYaml Velocity where
-  yamlOptions = defaultYamlOptions {flattenFields = True}
+  type FlattenFields Velocity = True
+  yamlOptions = defaultYamlOptions {tagSingleConstructors = True}
 
 newtype Distance = Distance {distance :: Maybe Int}
   deriving stock (Generic)
@@ -182,12 +183,13 @@ data Shape = Circle {radius :: Double} | Dot | Line Double Double
   deriving stock (Generic)
   deriving anyclass (GenericYaml, FromYaml, ToYaml)
 
-data Step = Ahead Distance | Move Distance Speed | Halt
+data Step = Ahead Distance | Accelerate Speed | Halt
   deriving stock (Generic)
   deriving anyclass (FromYaml, ToYaml)
 
 instance GenericYaml Step where
-  yamlOptions = defaultYamlOptions {tagKey = "step", flattenFields = True}
+  type FlattenFields Step = True
+  yamlOptions = defaultYamlOptions {tagKey = "step"}
 
 encodeTurn :: Turn -> Node
 encodeTurn = toYaml

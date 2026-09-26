@@ -61,7 +61,14 @@ import Yamlet.Syntax qualified as S
 class ToYaml a where
   toYaml :: a -> Node
   default toYaml
-    :: (Generic a, GenericYaml a, Rep a ~ D1 d f, GConstructors f, GToConstructor f) => a -> Node
+    :: ( Generic a
+       , GenericYaml a
+       , Rep a ~ D1 d f
+       , GConstructors f
+       , GFlatten (FlattenFields a) f
+       , GToConstructor f
+       )
+    => a -> Node
   toYaml = genericToYaml
 
   -- | Convert a list. The instance for 'Char' creates a string instead.
@@ -411,10 +418,11 @@ genericToYaml
      , GenericYaml a
      , Rep a ~ D1 d f
      , GConstructors f
+     , GFlatten (FlattenFields a) f
      , GToConstructor f
      )
   => a -> Node
-genericToYaml x = gToYaml (yamlOptions @a) (from <$> yamlDefault @a) (from x)
+genericToYaml x = gToYaml (yamlOptions @a) (gFlatten @(FlattenFields a) @f) (from <$> yamlDefault @a) (from x)
 {-# INLINE genericToYaml #-}
 
 -- The encoder takes the default for 'omitNullFields': it leaves out a null
@@ -426,16 +434,16 @@ gToYaml
    . ( GConstructors f
      , GToConstructor f
      )
-  => YamlOptions -> Maybe (D1 d f p) -> D1 d f p -> Node
-gToYaml opts def (M1 x)
+  => YamlOptions -> Bool -> Maybe (D1 d f p) -> D1 d f p -> Node
+gToYaml opts flat def (M1 x)
   | isEnum @f opts = node (String (gTag opts x))
-  | otherwise = gToConstructor opts (isTagged @f opts) (unM1 <$> def) x
+  | otherwise = gToConstructor opts (if isTagged @f opts then Just flat else Nothing) (unM1 <$> def) x
 
 class GToConstructor f where
   gTag :: YamlOptions -> f p -> T.Text
 
-  -- | The constructor, with the tag if the flag is set.
-  gToConstructor :: YamlOptions -> Bool -> Maybe (f p) -> f p -> Node
+  -- | The constructor, with the tag if the flag of 'FlattenFields' is given.
+  gToConstructor :: YamlOptions -> Maybe Bool -> Maybe (f p) -> f p -> Node
 
 instance TypeError NoConstructors => GToConstructor V1 where
   gTag _ = \case {}
@@ -445,9 +453,9 @@ instance (GToConstructor f, GToConstructor g) => GToConstructor (f :+: g) where
   gTag opts = \case
     L1 x -> gTag opts x
     R1 x -> gTag opts x
-  gToConstructor opts isTag def = \case
-    L1 x -> gToConstructor opts isTag (def >>= \case L1 d -> Just d; R1 _ -> Nothing) x
-    R1 x -> gToConstructor opts isTag (def >>= \case R1 d -> Just d; L1 _ -> Nothing) x
+  gToConstructor opts flat def = \case
+    L1 x -> gToConstructor opts flat (def >>= \case L1 d -> Just d; R1 _ -> Nothing) x
+    R1 x -> gToConstructor opts flat (def >>= \case R1 d -> Just d; L1 _ -> Nothing) x
   {-# INLINE gTag #-}
   {-# INLINE gToConstructor #-}
 
@@ -459,74 +467,47 @@ instance
   => GToConstructor (C1 (MetaCons name fixity isRecord) f)
   where
   gTag opts _ = constructorTag opts (symbolVal (Proxy @name))
-  gToConstructor opts isTag def c@(M1 x)
-    | gNamed @f = mapping (withTagEntry (gToEntries opts (unM1 <$> def) x))
-    | isTag = case gToValues x of
-        [] -> mapping (withTagEntry [])
-        vs | Just entries <- flatEntries opts isTag vs -> mapping (withTagEntry entries)
-        [v] -> mapping (withTagEntry [opts.contentsKey .= v])
-        vs -> mapping (withTagEntry [opts.contentsKey .= node (Sequence vs)])
-    | otherwise = case gToValues x of
-        [] -> mapping []
-        [v] -> v
-        vs | Just entries <- flatEntries opts isTag vs -> mapping entries
-        vs -> node (Sequence vs)
+  gToConstructor opts tagging def c@(M1 x) = case tagging of
+    Just flat
+      | gNamed @f -> mapping (withTagEntry (gToEntries opts (unM1 <$> def) x))
+      | otherwise -> case gToValues x of
+          [] -> mapping (withTagEntry [])
+          [v]
+            | flat, Just entries <- flatEntries opts v -> mapping (withTagEntry entries)
+            | otherwise -> mapping (withTagEntry [opts.contentsKey .= v])
+          vs -> mapping (withTagEntry [opts.contentsKey .= node (Sequence vs)])
+    Nothing
+      | gNamed @f -> mapping (gToEntries opts (unM1 <$> def) x)
+      | otherwise -> case gToValues x of
+          [] -> mapping []
+          [v] -> v
+          vs -> node (Sequence vs)
     where
       withTagEntry :: [(Node, Node)] -> [(Node, Node)]
-      withTagEntry entries
-        | isTag = (opts.tagKey .= gTag opts c) : entries
-        | otherwise = entries
+      withTagEntry entries = (opts.tagKey .= gTag opts c) : entries
   {-# INLINE gTag #-}
   {-# INLINE gToConstructor #-}
 
--- | The entries of the fields without names in one mapping, if the options
--- flatten them and the decoder can read them back. Each field must be a
--- mapping, and no key can repeat between the fields. A tagged mapping must
--- also have a key, no key can be the tag key, and the keys cannot be the
--- contents key alone, because the decoder reads such a mapping as the other
--- form.
-flatEntries :: YamlOptions -> Bool -> [Node] -> Maybe [(Node, Node)]
-flatEntries opts isTag vs
-  | opts.flattenFields = mergeEntries opts isTag vs
-  | otherwise = Nothing
-
-mergeEntries :: YamlOptions -> Bool -> [Node] -> Maybe [(Node, Node)]
-mergeEntries opts isTag = \case
-  -- The keys of one mapping are different already.
-  [v] -> case v.value of
-    Mapping kvs | not isTag || taggable kvs -> Just kvs
-    _ -> Nothing
-  -- Keys of several mappings are compared as texts, so they must be strings.
-  vs -> do
-    entries <- concat <$> traverse fieldEntries vs
-    keys <- traverse (stringKey . fst) entries
-    if Set.size (Set.fromList keys) == length keys && (not isTag || taggable entries)
-      then Just entries
-      else Nothing
+-- | The entries of a field next to the tag, if the decoder can read them
+-- back. The field must be a mapping with a key, and no key can be the tag
+-- key. The key cannot be the contents key alone, because the decoder reads
+-- such a mapping as the other form.
+flatEntries :: YamlOptions -> Node -> Maybe [(Node, Node)]
+flatEntries opts v = case v.value of
+  Mapping kvs -> case kvs of
+    [] -> Nothing
+    [(k, _)] | isKey opts.contentsKey k -> Nothing
+    _
+      | any (isKey opts.tagKey . fst) kvs -> Nothing
+      | otherwise -> Just kvs
+  _ -> Nothing
   where
-    taggable :: [(Node, Node)] -> Bool
-    taggable = \case
-      [] -> False
-      [(k, _)] | isKey opts.contentsKey k -> False
-      kvs -> not (any (isKey opts.tagKey . fst) kvs)
-
     isKey :: T.Text -> Node -> Bool
     isKey key k = case k.value of
       String t -> t == key
       _ -> False
-
-    fieldEntries :: Node -> Maybe [(Node, Node)]
-    fieldEntries v = case v.value of
-      Mapping kvs -> Just kvs
-      _ -> Nothing
-
-    stringKey :: Node -> Maybe T.Text
-    stringKey k = case k.value of
-      String t -> Just t
-      _ -> Nothing
--- Only the check of the option inlines, so that a type without it does not
--- call this function. The rest does not depend on the type.
-{-# NOINLINE mergeEntries #-}
+-- The function does not depend on the type.
+{-# NOINLINE flatEntries #-}
 
 class GToFields f where
   -- | The entries of the fields, with the given default.

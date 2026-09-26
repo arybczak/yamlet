@@ -72,7 +72,7 @@ data F = F1 A | F2 B | F3 C
   deriving anyclass (NFData, FromYaml, ToYaml)
 
 instance GenericYaml F where
-  yamlOptions = defaultYamlOptions {flattenFields = True}
+  type FlattenFields F = True
 
 mkX :: Int -> X
 mkX i = case i `mod` 3 of
