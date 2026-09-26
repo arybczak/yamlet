@@ -29,6 +29,7 @@ import Data.Fixed
 import Data.Proxy
 import Data.Text qualified as T
 import Math.NumberTheory.Logarithms
+
 #if !MIN_VERSION_text(2,1,4)
 import Data.Text.Internal qualified as T
 #endif

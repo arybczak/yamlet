@@ -25,8 +25,8 @@ module Yamlet.Internal.Emit
 import Data.ByteString qualified as BS
 import Data.Char
 import Data.Text qualified as T
-import Data.Text.Encoding qualified as T
 import Data.Text.Builder.Linear qualified as B
+import Data.Text.Encoding qualified as T
 import Data.Word
 import Numeric
 

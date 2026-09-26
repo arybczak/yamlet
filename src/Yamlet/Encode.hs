@@ -29,9 +29,9 @@ import Data.Semigroup qualified as Sem
 import Data.Sequence qualified as Seq
 import Data.Set qualified as Set
 import Data.Text qualified as T
+import Data.Text.Builder.Linear qualified as B
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Builder qualified as TLB
-import Data.Text.Builder.Linear qualified as B
 import Data.Time
 import Data.Time.Calendar.Month
 import Data.Time.Calendar.Quarter

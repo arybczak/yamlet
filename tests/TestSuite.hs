@@ -20,11 +20,10 @@ import System.FilePath
 import Test.Tasty
 import Test.Tasty.HUnit
 
+import Events
 import Yamlet qualified as Y
 import Yamlet.Error
 import Yamlet.Syntax
-
-import Events
 
 -- | The tests of the suite. The directory with the data branch of the
 -- repository is in @YAML_TEST_SUITE@, or in
