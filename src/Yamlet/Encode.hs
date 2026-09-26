@@ -18,7 +18,6 @@ import Data.Functor.Identity
 import Data.Int
 import Data.IntMap.Strict qualified as IM
 import Data.IntSet qualified as IS
-import Data.List
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
 import Data.Monoid qualified as Mon
@@ -539,9 +538,7 @@ plainText = \case
   Null -> "null"
   Bool b -> if b then "true" else "false"
   Int i -> T.pack (show i)
-  -- The generic format always has a dot or an exponent, so the number reads
-  -- back as a float, not as an integer.
-  Float (Finite s) -> T.pack (finite s)
+  Float (Finite s) -> finite s
   Float Infinity -> ".inf"
   Float NegativeZero -> "-0.0"
   Float NegativeInfinity -> "-.inf"
@@ -550,21 +547,45 @@ plainText = \case
   Sequence _ -> "[]"
   Mapping _ -> "{}"
   where
-    -- For an exponent close to the upper limit of Int, the exponent that
-    -- formatScientific writes overflows. Such a number is beyond the limit of
-    -- the decoder, so the check can use that lower limit.
-    finite :: Sci.Scientific -> String
-    finite s
-      | Sci.base10Exponent s > 10000 =
-          let ds = show (abs c)
-              ex = toInteger (Sci.base10Exponent s) + toInteger (length ds) - 1
-          in case dropWhileEnd (== '0') ds of
-               d : rest -> concat [if c < 0 then "-" else "", [d], ".", if null rest then "0" else rest, "e", show ex]
-               [] -> "0.0"
-      | otherwise = Sci.formatScientific Sci.Generic Nothing s
+    -- The format of Sci.Generic: decimal notation from 0.1 up to 10^7, and
+    -- exponential notation for other numbers. The text always has a dot, so
+    -- the number reads back as a float, not as an integer. Sci.formatScientific
+    -- takes quadratic time in the number of digits, and its exponent
+    -- overflows close to the upper limit of Int.
+    finite :: Sci.Scientific -> T.Text
+    finite s = case T.uncons digits of
+      Nothing -> "0.0"
+      Just (d, rest)
+        | ex >= -1 && ex < 7 ->
+            let (int, frac) = T.splitAt integerDigits digits
+                intPart = if integerDigits == 0 then "0" else T.justifyLeft integerDigits '0' int
+            in T.concat [sign, intPart, ".", orZero frac]
+        | otherwise -> T.concat [sign, T.singleton d, ".", orZero rest, "e", decimal ex]
       where
         c :: Integer
         c = Sci.coefficient s
+
+        written :: T.Text
+        written = decimal (abs c)
+
+        digits :: T.Text
+        digits = T.dropWhileEnd (== '0') written
+
+        -- The exponent of the first digit.
+        ex :: Integer
+        ex = toInteger (Sci.base10Exponent s) + toInteger (T.length written) - 1
+
+        integerDigits :: Int
+        integerDigits = fromInteger ex + 1
+
+        sign :: T.Text
+        sign = if c < 0 then "-" else ""
+
+        orZero :: T.Text -> T.Text
+        orZero t = if T.null t then "0" else t
+
+        decimal :: Integer -> T.Text
+        decimal = B.runBuilder . B.fromUnboundedDec
 
 -- | A literal block scalar for a string with line breaks.
 literal :: Int -> T.Text -> Maybe B.Builder

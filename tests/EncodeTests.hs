@@ -36,6 +36,8 @@ encodeTests =
     [ testCase "block style" test_blockStyle
     , testCase "quoting" test_quoting
     , testCase "floats" test_floats
+    , testProperty "float format" prop_floatFormat
+    , localOption (mkTimeout 10000000) $ testCase "long floats" test_longFloats
     , testCase "literal block scalars" test_literal
     , testCase "tags" test_tags
     , testCase "syntax tree" test_syntax
@@ -208,6 +210,25 @@ test_floats = do
   assertEqual "float not a number" ".nan\n" (encodeText @Float (0 / 0))
   assertEqual "negative zero" "-0.0\n" (encodeText @Double (-0))
   assertEqual "float negative zero" "-0.0\n" (encodeText @Float (-0))
+
+-- | A float has the generic format of the scientific package.
+prop_floatFormat :: Integer -> Property
+prop_floatFormat c = forAll ((,) <$> chooseInt (0, 3) <*> chooseInt (-30, 30)) $ \(zeros, e) ->
+  let s = Sci.scientific (c * 10 ^ zeros) e
+  in encodeText s === T.pack (Sci.formatScientific Sci.Generic Nothing s) <> "\n"
+
+-- | The time to write a float is not quadratic in the number of its digits.
+test_longFloats :: Assertion
+test_longFloats = do
+  let nines = 10 ^ (1000000 :: Int) - 1
+  assertEqual
+    "digits"
+    ("9." <> T.replicate 999999 "9" <> "\n")
+    (encodeText (Sci.scientific nines (-999999)))
+  assertEqual
+    "trailing zeros"
+    "1.5e1000000\n"
+    (encodeText (Sci.scientific (15 * 10 ^ (1000000 :: Int)) (-1)))
 
 test_literal :: Assertion
 test_literal = do
