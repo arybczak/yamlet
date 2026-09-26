@@ -49,6 +49,7 @@ import Data.Text qualified as T
 import GHC.Generics
 
 import Yamlet.Internal.Syntax qualified as S
+import Yamlet.Internal.Utils
 
 -- | A node of a document.
 --
@@ -167,13 +168,13 @@ withoutOffsets n = Node S.noOffset n.tag $ case n.value of
 
 -- | The tags of the core schema, e.g. @tag:yaml.org,2002:null@ for 'nullTag'.
 nullTag, boolTag, intTag, floatTag, strTag, seqTag, mapTag :: T.Text
-nullTag = "tag:yaml.org,2002:null"
-boolTag = "tag:yaml.org,2002:bool"
-intTag = "tag:yaml.org,2002:int"
-floatTag = "tag:yaml.org,2002:float"
-strTag = "tag:yaml.org,2002:str"
-seqTag = "tag:yaml.org,2002:seq"
-mapTag = "tag:yaml.org,2002:map"
+nullTag = coreTagPrefix <> "null"
+boolTag = coreTagPrefix <> "bool"
+intTag = coreTagPrefix <> "int"
+floatTag = coreTagPrefix <> "float"
+strTag = coreTagPrefix <> "str"
+seqTag = coreTagPrefix <> "seq"
+mapTag = coreTagPrefix <> "map"
 
 -- | The tag of a value in the core schema.
 defaultTag :: Value -> T.Text

@@ -183,7 +183,7 @@ line indent l
 tagText :: T.Text -> B.Builder
 tagText tag
   | T.null tag = "!"
-  | Just suffix <- textStripPrefix "tag:yaml.org,2002:" tag
+  | Just suffix <- textStripPrefix coreTagPrefix tag
   , not (T.null suffix) =
       "!!" <> shorthand suffix
   | Just suffix <- textStripPrefix "!" tag
@@ -200,7 +200,7 @@ tagHandle tag = case T.uncons tag of
   Just (c, suffix)
     | c /= '!'
     , not (T.null suffix)
-    , not (textIsPrefixOf "tag:yaml.org,2002:" tag)
+    , not (textIsPrefixOf coreTagPrefix tag)
     , not (isVerbatim tag) ->
         Just c
   _ -> Nothing

@@ -278,7 +278,7 @@ sFlowLinePrefix n = do
 -- Stream
 
 defaultHandles :: M.Map T.Text T.Text
-defaultHandles = M.fromList [("!", "!"), ("!!", "tag:yaml.org,2002:")]
+defaultHandles = M.fromList [("!", "!"), ("!!", coreTagPrefix)]
 
 -- | l-yaml-stream. The markers are the indices of the lines that start with
 -- a document marker.

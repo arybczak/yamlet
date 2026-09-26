@@ -17,6 +17,7 @@ import Data.Text qualified as T
 import Yamlet.Error
 import Yamlet.Internal.Schema
 import Yamlet.Internal.Syntax qualified as S
+import Yamlet.Internal.Utils
 import Yamlet.Node
 
 -- | Resolve the tags and the aliases of a document and check that the keys of
@@ -160,7 +161,7 @@ compose input doc
         | tag == seqTag || tag == mapTag ->
             Left
               $ errorAt input off
-              $ "the tag !!" ++ T.unpack (T.drop 18 tag) ++ " cannot be used on a scalar"
+              $ "the tag !!" ++ T.unpack (T.drop (T.length coreTagPrefix) tag) ++ " cannot be used on a scalar"
         | otherwise -> case resolveTaggedExact tag t of
             Just (Right v) -> Right $ Node off tag v
             Just (Left _) -> Left $ errorAt input off inexact
@@ -168,7 +169,7 @@ compose input doc
               Left
                 $ errorAt input off
                 $ "invalid value for the tag !!"
-                  ++ T.unpack (T.drop 18 tag)
+                  ++ T.unpack (T.drop (T.length coreTagPrefix) tag)
                   ++ if tag == boolTag && isYaml11Bool t
                     then ", " ++ show t ++ " is a boolean only in YAML 1.1"
                     else ""
@@ -189,7 +190,7 @@ compose input doc
             Left
               $ errorAt input off
               $ "the tag !!"
-                ++ T.unpack (T.drop 18 tag)
+                ++ T.unpack (T.drop (T.length coreTagPrefix) tag)
                 ++ " cannot be used on a "
                 ++ (if def == seqTag then "sequence" else "mapping")
 

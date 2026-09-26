@@ -392,7 +392,7 @@ inline opts pos indent n lineComment = case n.content of
     flowItem x = case x.content of
       Scalar Plain ""
         | Props Nothing NoTag <- x.props ->
-            x {props = Props Nothing (Tag "tag:yaml.org,2002:null")}
+            x {props = Props Nothing (Tag (coreTagPrefix <> "null"))}
       _ -> x
 
     flowEntry :: (Node, Node) -> B.Builder

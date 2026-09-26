@@ -10,6 +10,7 @@ module Yamlet.Internal.Utils
   , textIsPrefixOf
   , readBoundedInt
   , maxImplicitKeyLength
+  , coreTagPrefix
   ) where
 
 import Control.Monad
@@ -67,3 +68,7 @@ readBoundedInt t
 -- specification.
 maxImplicitKeyLength :: Int
 maxImplicitKeyLength = 1024
+
+-- | The prefix of the tags of the core schema, and of the @!!@ handle.
+coreTagPrefix :: T.Text
+coreTagPrefix = "tag:yaml.org,2002:"
