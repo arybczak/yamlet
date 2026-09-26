@@ -21,71 +21,114 @@ import Test.Tasty.Bench
 import Yamlet
 import Yamlet.Syntax qualified as S
 
+-- | The benchmarks are grouped by the operation, so that the times of the
+-- libraries for one operation and input are next to each other.
 main :: IO ()
-main =
+main = do
+  printSize "config" configInput
+  printSize "json" jsonInput
+  printSize "text" textInput
   defaultMain
-    [ input @[Config] "config" $ config 5000
-    , input @[Json] "json" $ json 5000
-    , input @(M.Map T.Text T.Text) "text" $ text 2000
+    [ bgroup
+        "parse"
+        [ parsing "config" configInput
+        , parsing "json" jsonInput
+        , parsing "text" textInput
+        ]
+    , bgroup
+        "render"
+        [ rendering "config" configInput
+        , rendering "json" jsonInput
+        , rendering "text" textInput
+        ]
+    , bgroup
+        "decode"
+        [ decoding @[Config] "config" configInput
+        , decoding @[Json] "json" jsonInput
+        , decoding @(M.Map T.Text T.Text) "text" textInput
+        ]
+    , bgroup
+        "encode"
+        [ encoding @[Config] "config" configInput
+        , encoding @[Json] "json" jsonInput
+        , encoding @(M.Map T.Text T.Text) "text" textInput
+        ]
     ]
+  where
+    printSize :: String -> BS.ByteString -> IO ()
+    printSize name bs = putStrLn $ name ++ ": " ++ show (BS.length bs `div` 1024) ++ " KiB"
 
--- | The benchmarks of an input. The type is the result of the benchmarks that
--- decode the input into a Haskell value, and the source of the benchmarks that
--- encode it.
-input
-  :: forall a
-   . ( NFData a
-     , FromYaml a
-     , H.FromYAML a
-     , J.FromJSON a
-     , ToYaml a
-     , H.ToYAML a
-     , J.ToJSON a
-     )
-  => String
-  -> T.Text
-  -> Benchmark
-input name t = env (pure (bs, bl, value)) $ \ ~(strict, lazy, v) ->
+    configInput :: BS.ByteString
+    configInput = T.encodeUtf8 $ config 5000
+
+    jsonInput :: BS.ByteString
+    jsonInput = T.encodeUtf8 $ json 5000
+
+    textInput :: BS.ByteString
+    textInput = T.encodeUtf8 $ text 2000
+
+-- | The benchmarks that parse an input into the trees of each library.
+parsing :: String -> BS.ByteString -> Benchmark
+parsing name bs =
   bgroup
-    (name ++ " (" ++ show (BS.length bs `div` 1024) ++ " KiB)")
+    name
     [ bgroup
         "yamlet"
-        [ bgroup
-            "parse"
-            [ bench "syntax tree" $ nf S.parseDocuments strict
-            , bench "nodes" $ nf (decodeInput >=> decodeNodes) strict
-            ]
-        , bench "decode" $ nf (either (const Nothing) Just . decode @a) strict
-        , bench "encode" $ nf encode v
+        [ bench "syntax tree" $ nf S.parseDocuments bs
+        , bench "nodes" $ nf (decodeInput >=> decodeNodes) bs
         ]
     , bgroup
         "HsYAML"
-        [ bgroup
-            "parse"
-            [ bench "events" $ nf HE.parseEvents lazy
-            , bench "nodes" $ nf (either (const ()) (foldMap (\(H.Doc n) -> forceNode n)) . H.decodeNode) lazy
-            ]
-        , bench "decode" $ nf (either (const Nothing) Just . H.decode1Strict @a) strict
-        , bench "encode" $ nf H.encode1Strict v
+        [ bench "events" $ nf HE.parseEvents lazy
+        , bench "nodes" $ nf (either (const ()) (foldMap (\(H.Doc n) -> forceNode n)) . H.decodeNode) lazy
         ]
     , bgroup
         "yaml"
-        [ bgroup
-            "parse"
-            [bench "aeson value" $ nf (either (const Nothing) Just . Y.decodeEither' @J.Value) strict]
-        , bench "decode" $ nf (either (const Nothing) Just . Y.decodeEither' @a) strict
-        , bench "encode" $ nf Y.encode v
-        ]
+        [bench "aeson value" $ nf (either (const Nothing) Just . Y.decodeEither' @J.Value) bs]
+    ]
+  where
+    lazy :: BL.ByteString
+    lazy = BL.fromStrict bs
+
+-- | The benchmark that renders the syntax tree of an input.
+rendering :: String -> BS.ByteString -> Benchmark
+rendering name bs = bgroup name [bench "yamlet" $ nf (S.renderSyntax S.defaultRenderOptions) trees]
+  where
+    trees :: [S.Document]
+    trees = either (error . show) id $ S.parseDocuments bs
+
+-- | The benchmarks that decode an input into a value of the type.
+decoding
+  :: forall a
+   . (NFData a, FromYaml a, H.FromYAML a, J.FromJSON a)
+  => String
+  -> BS.ByteString
+  -> Benchmark
+decoding name bs =
+  bgroup
+    name
+    [ bench "yamlet" $ nf (either (const Nothing) Just . decode @a) bs
+    , bench "HsYAML" $ nf (either (const Nothing) Just . H.decode1Strict @a) bs
+    , bench "yaml" $ nf (either (const Nothing) Just . Y.decodeEither' @a) bs
+    ]
+
+-- | The benchmarks that encode the value of an input, decoded as the type.
+encoding
+  :: forall a
+   . (NFData a, FromYaml a, ToYaml a, H.ToYAML a, J.ToJSON a)
+  => String
+  -> BS.ByteString
+  -> Benchmark
+encoding name bs =
+  bgroup
+    name
+    [ bench "yamlet" $ nf encode value
+    , bench "HsYAML" $ nf H.encode1Strict value
+    , bench "yaml" $ nf Y.encode value
     ]
   where
     value :: a
     value = either (error . show) id $ decode bs
-
-    bs :: BS.ByteString
-    bs = T.encodeUtf8 t
-
-    bl :: BL.ByteString
-    bl = BL.fromStrict bs
 
 -- | A block sequence of block mappings, as in a configuration file.
 config :: Int -> T.Text
