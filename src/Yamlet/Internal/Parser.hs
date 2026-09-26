@@ -858,26 +858,22 @@ escape e i = case chr (fromIntegral (byteAt e i)) of
   '_' -> simple '\xA0'
   'L' -> simple '\x2028'
   'P' -> simple '\x2029'
-  'x' -> codePoint 2
-  'u' -> case hexAt (i + 1) uDigits of
+  'x' -> codePoint xEscapeDigits
+  'u' -> case hexAt (i + 1) uEscapeDigits of
     -- JSON escapes a character outside the Basic Multilingual Plane as a
     -- pair of surrogates.
     Just hi
       | isHighSurrogate hi
-      , let second = i + 1 + uDigits
+      , let second = i + 1 + uEscapeDigits
       , byteAt e second == BACKSLASH
       , byteAt e (second + 1) == LOWER_U
-      , Just lo <- hexAt (second + 2) uDigits
+      , Just lo <- hexAt (second + 2) uEscapeDigits
       , isLowSurrogate lo ->
-          fromCodePoint (fromSurrogates hi lo) (second + 2 + uDigits)
-    _ -> codePoint uDigits
-  'U' -> codePoint 8
+          fromCodePoint (fromSurrogates hi lo) (second + 2 + uEscapeDigits)
+    _ -> codePoint uEscapeDigits
+  'U' -> codePoint bigUEscapeDigits
   _ -> Nothing
   where
-    -- The number of hex digits of a \u escape.
-    uDigits :: Int
-    uDigits = 4
-
     simple :: Char -> Maybe (T.Text, Int)
     simple ch = Just (T.singleton ch, i + 1)
 

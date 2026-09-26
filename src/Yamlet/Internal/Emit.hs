@@ -89,9 +89,9 @@ doubleQuoted t = "\"" <> T.foldr (\c b -> escape c <> b) mempty t <> "\""
       '\0' -> "\\0"
       c
         | isPrintable c -> B.fromChar c
-        | ord c <= 0xFF -> "\\x" <> hex 2 (ord c)
-        | ord c <= 0xFFFF -> "\\u" <> hex 4 (ord c)
-        | otherwise -> "\\U" <> hex 8 (ord c)
+        | ord c < 16 ^ xEscapeDigits -> "\\x" <> hex xEscapeDigits (ord c)
+        | ord c < 16 ^ uEscapeDigits -> "\\u" <> hex uEscapeDigits (ord c)
+        | otherwise -> "\\U" <> hex bigUEscapeDigits (ord c)
 
     hex :: Int -> Int -> B.Builder
     hex k i = let s = map toUpper (showHex i "") in B.fromText (T.pack (replicate (k - length s) '0' ++ s))

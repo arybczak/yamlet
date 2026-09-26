@@ -17,6 +17,9 @@ module Yamlet.Internal.Utils
   , isLowSurrogate
   , fromSurrogates
   , isScalarValue
+  , xEscapeDigits
+  , uEscapeDigits
+  , bigUEscapeDigits
   ) where
 
 import Control.Monad
@@ -123,3 +126,10 @@ fromSurrogates hi lo = 0x10000 + (hi - 0xD800) * 0x400 + (lo - 0xDC00)
 -- surrogate.
 isScalarValue :: Int -> Bool
 isScalarValue c = c >= 0 && c <= ord maxBound && not (isHighSurrogate c || isLowSurrogate c)
+
+-- | The number of hex digits of the @\\x@, @\\u@ and @\\U@ escapes of a
+-- double-quoted scalar.
+xEscapeDigits, uEscapeDigits, bigUEscapeDigits :: Int
+xEscapeDigits = 2
+uEscapeDigits = 4
+bigUEscapeDigits = 8
