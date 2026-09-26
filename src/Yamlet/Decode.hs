@@ -1040,10 +1040,20 @@ fromObject opts flat keys def o
     merged = fromContents (Node (objectNode o).offset (objectNode o).tag (Mapping others))
 
     others :: [(Node, Node)]
-    others = [kv | kv@(k, _) <- objectEntries o, not (any (`isKey` k) keys)]
+    others = foldr removeKey (objectEntries o) keys
+
+    -- The keys are unique, so the entries after the match stay shared.
+    removeKey :: T.Text -> [(Node, Node)] -> [(Node, Node)]
+    removeKey key = \case
+      kv@(k, _) : kvs
+        | isKey key k -> kvs
+        | otherwise -> kv : removeKey key kvs
+      [] -> []
 
     isKey :: T.Text -> Node -> Bool
-    isKey key k = k.value == String key
+    isKey key k = case k.value of
+      String t -> t == key
+      _ -> False
 
     fromContents :: Node -> Parser (f p)
     fromContents contents = case gArity @f of
