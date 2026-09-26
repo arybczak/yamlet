@@ -37,6 +37,7 @@ module Yamlet.Decode
   ) where
 
 import Control.Monad
+import Data.Char
 import Data.Fixed
 import Data.Functor.Const
 import Data.Functor.Identity
@@ -68,9 +69,9 @@ import Data.Word
 import GHC.Real
 import Math.NumberTheory.Logarithms
 import Numeric.Natural
-import Text.ParserCombinators.ReadP
 
 import Yamlet.Internal.Schema
+import Yamlet.Internal.Utils
 import Yamlet.Node
 
 -- | A parser of nodes. Its errors point to the node that the parser works on,
@@ -593,9 +594,7 @@ instance FromYaml Ordering where
 -- as a number, so a number is an error.
 instance FromYaml Version where
   parseYaml = parseNode $ \n -> case n.value of
-    String t -> case [v | (v, "") <- readP_to_S parseVersion (T.unpack t)] of
-      v : _ -> pure v
-      [] -> fail "expected a version such as 1.2.3"
+    String t -> maybe (fail "expected a version such as 1.2.3") pure (version t)
     v
       | Int _ <- v -> number
       | Float _ <- v -> number
@@ -603,6 +602,16 @@ instance FromYaml Version where
       where
         number :: Parser Version
         number = fail $ "expected a version, but got " ++ describe v ++ ", quote the version, e.g. \"1.10\""
+    where
+      -- The syntax that 'showVersion' writes. 'parseVersion' reads it too,
+      -- but it takes quadratic time in the number of parts, and a part
+      -- beyond the range of Int wraps around.
+      version :: T.Text -> Maybe Version
+      version t = case T.splitOn "-" t of
+        branch : tags
+          | all (\tag -> not (T.null tag) && T.all isAlphaNum tag) tags ->
+              (\parts -> Version parts (map T.unpack tags)) <$> mapM readBoundedInt (T.splitOn "." branch)
+        _ -> Nothing
 
 -- | Null.
 instance FromYaml (Proxy a) where

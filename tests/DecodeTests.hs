@@ -832,6 +832,11 @@ test_typeErrors = do
     (Just (1, 1, "expected a version, but got a floating-point number, quote the version, e.g. \"1.10\""))
     (errorOf (decodeText @Version "1.10"))
   assertEqual "invalid version" (Just (1, 1, "expected a version such as 1.2.3")) (errorOf (decodeText @Version "1..2"))
+  assertEqual "version with tags" (Right (Version [1, 2, 3] ["alpha", "2"])) (decodeText "1.2.3-alpha-2")
+  assertEqual "version with leading zeros" (Right (makeVersion [1, 2])) (decodeText "'01.2'")
+  assertEqual "largest version part" (Right (makeVersion [1, maxBound])) (decodeText "'1.9223372036854775807'")
+  forM_ ["1.2-", "1.2-a.b", "'1.9223372036854775808'"] $ \t ->
+    assertEqual ("invalid version " ++ show t) (Just (1, 1, "expected a version such as 1.2.3")) (errorOf (decodeText @Version t))
   assertEqual "void" (Just (1, 1, "the type Void has no values")) (errorOf (decodeText @Void "a"))
   assertEqual
     "zero denominator"
@@ -1004,6 +1009,10 @@ test_longNumbers = do
     "long integer as a float"
     (Right (Float (Finite (Sci.scientific (10 ^ (1000000 :: Int) - 1) (-1)))))
     ((.value) <$> decodeText @Node (nines 999999 <> ".9"))
+  assertEqual
+    "version with many parts"
+    (Right 500000)
+    (length . versionBranch <$> decodeText @Version (T.intercalate "." (replicate 500000 "1")))
 
 -- | The time of the check for duplicate keys is not quadratic in the number
 -- of keys.
