@@ -45,6 +45,7 @@ import Math.NumberTheory.Logarithms
 import Numeric.Natural
 
 import Yamlet.Internal.Emit
+import Yamlet.Internal.Utils
 import Yamlet.Node
 import Yamlet.Schema
 import Yamlet.Syntax qualified as S
@@ -501,7 +502,7 @@ implicitKey k = case k.value of
   Sequence _ -> Nothing
   Mapping _ -> Nothing
   _
-    | T.length (B.runBuilder key) > 1024 -> Nothing
+    | T.length (B.runBuilder key) > maxImplicitKeyLength -> Nothing
     | otherwise -> Just key
   where
     key :: B.Builder

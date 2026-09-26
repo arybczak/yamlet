@@ -63,6 +63,7 @@ import Data.Text.Array qualified as A
 import Data.Word
 
 import Yamlet.Internal.Parser.Monad
+import Yamlet.Internal.Utils
 
 ----------------------------------------
 -- Characters
@@ -222,11 +223,16 @@ isMarker e i =
        && (let w3 = byteAt e (i + 3) in w3 == 0 || isWhite w3 || isBreak w3)
        && isStartOfLine e i
 
--- | The input between the indices has at most 1024 characters, the limit of
--- an implicit key.
+-- | The input between the indices fits in an implicit key.
 fitsKey :: Env -> Int -> Int -> Bool
-fitsKey e p q = q - p <= 1024 || (q - p <= 4096 && countChars <= 1024)
+fitsKey e p q =
+  q - p <= maxImplicitKeyLength
+    || (q - p <= maxImplicitKeyLength * maxCharBytes && countChars <= maxImplicitKeyLength)
   where
+    -- The longest UTF-8 encoding of a character.
+    maxCharBytes :: Int
+    maxCharBytes = 4
+
     countChars :: Int
     countChars =
       length

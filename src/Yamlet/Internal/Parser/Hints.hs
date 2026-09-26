@@ -23,6 +23,7 @@ import Numeric
 
 import Yamlet.Internal.Parser.Chars
 import Yamlet.Internal.Parser.Monad
+import Yamlet.Internal.Utils
 
 -- | The location and the message of the error for the furthest position at
 -- which the parser failed.
@@ -50,7 +51,9 @@ unexpected e i = case indentationTab (i - 1) Nothing of
       | isBreak w -> "unexpected end of line"
       | i > e.base && isBreak (byteBefore e i), Just msg <- indentationMistake e i -> msg
       | w == COLON && firstColon && not (fitsKey e entryStart i) ->
-          "a key can be at most 1024 characters long, write a longer key after '? '"
+          "a key can be at most "
+            ++ show maxImplicitKeyLength
+            ++ " characters long, write a longer key after '? '"
       | w == COLON && multiLineKey -> "unexpected ':', a key must be on a single line"
       | w == COLON && firstColon && valueColon && onStartMarkerLine ->
           "unexpected ':', a mapping cannot start on the line of '---'"

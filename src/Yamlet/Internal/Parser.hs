@@ -1190,8 +1190,8 @@ nsSImplicitYamlKey c = implicitKey $ nsFlowYamlNode 0 c
 cSImplicitJsonKey :: Ctx -> P Node
 cSImplicitJsonKey c = implicitKey $ cFlowJsonNode 0 c
 
--- | An implicit key with the separation after it. It is at most 1024
--- characters long.
+-- | An implicit key with the separation after it. It is at most
+-- 'maxImplicitKeyLength' characters long.
 implicitKey :: P Node -> P Node
 implicitKey key = do
   e <- env

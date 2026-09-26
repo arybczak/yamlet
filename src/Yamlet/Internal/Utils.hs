@@ -9,6 +9,7 @@ module Yamlet.Internal.Utils
   ( textStripPrefix
   , textIsPrefixOf
   , readBoundedInt
+  , maxImplicitKeyLength
   ) where
 
 import Control.Monad
@@ -61,3 +62,8 @@ readBoundedInt t
       let d = digitToInt c
       guard (n <= (maxBound - d) `quot` 10)
       pure (n * 10 + d)
+
+-- | The largest number of characters of an implicit key, from the YAML 1.2.2
+-- specification.
+maxImplicitKeyLength :: Int
+maxImplicitKeyLength = 1024

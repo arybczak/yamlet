@@ -22,6 +22,7 @@ import Data.Text.Builder.Linear qualified as B
 
 import Yamlet.Internal.Emit
 import Yamlet.Internal.Syntax
+import Yamlet.Internal.Utils
 
 -- | The options of 'renderSyntax'.
 newtype RenderOptions = RenderOptions
@@ -429,7 +430,7 @@ implicitKey opts k
   | isBlock opts k = Nothing
   | isEmpty k = Nothing
   | hasEndLines k = Nothing
-  | T.length (B.runBuilder key) > 1024 = Nothing
+  | T.length (B.runBuilder key) > maxImplicitKeyLength = Nothing
   | otherwise = Just key
   where
     key :: B.Builder
