@@ -30,6 +30,7 @@ import Data.Text.Builder.Linear qualified as B
 import Data.Word
 import Numeric
 
+import Yamlet.Internal.Parser.Chars
 import Yamlet.Internal.Utils
 
 -- | The number of spaces that the content of a block collection or a block
@@ -46,7 +47,7 @@ plainSyntax inFlow t = case T.uncons t of
   Just (c, rest) ->
     firstOk c rest
       && T.all isPlainChar t
-      && not (isWhite (T.last t))
+      && not (asciiChar isWhite (T.last t))
       && T.last t /= ':'
       && not (": " `T.isInfixOf` t)
       && not (" #" `T.isInfixOf` t)
@@ -56,17 +57,14 @@ plainSyntax inFlow t = case T.uncons t of
     firstOk :: Char -> T.Text -> Bool
     firstOk c rest
       | c `elem` ("-?:" :: String) = case T.uncons rest of
-          Just (c', _) -> not (isWhite c')
+          Just (c', _) -> not (asciiChar isWhite c')
           Nothing -> False
-      | otherwise = not (isWhite c) && c `notElem` ("-?:,[]{}#&*!|>'\"%@`" :: String)
+      | otherwise = not (asciiChar isWhite c) && not (asciiChar isIndicator c)
 
     isPlainChar :: Char -> Bool
     isPlainChar c =
       (c == ' ' || (isPrintable c && c /= '\t'))
-        && not (inFlow && c `elem` (",[]{}" :: String))
-
-    isWhite :: Char -> Bool
-    isWhite c = c == ' ' || c == '\t'
+        && not (inFlow && asciiChar isFlowIndicator c)
 
 -- | A single-quoted scalar on one line, if the text has no line breaks.
 singleQuoted :: T.Text -> Maybe B.Builder
@@ -235,16 +233,13 @@ isVerbatim tag = hasScheme && uriChars (T.unpack tag)
     uriChars :: String -> Bool
     uriChars = \case
       '%' : a : b : rest -> isHexDigit a && isHexDigit b && uriChars rest
-      c : rest -> isUriChar c && uriChars rest
+      c : rest -> asciiChar isUriChar c && uriChars rest
       [] -> True
-
-    isUriChar :: Char -> Bool
-    isUriChar c = isTagChar c || c `elem` (",[]!" :: String)
 
 -- | The text of a tag suffix or a tag prefix. A character that the form does
 -- not allow gets a %XX escape, which the parser decodes.
 shorthand :: T.Text -> B.Builder
-shorthand = T.foldr (\c b -> (if isTagChar c then B.fromChar c else percentEscape c) <> b) mempty
+shorthand = T.foldr (\c b -> (if asciiChar isTagChar c then B.fromChar c else percentEscape c) <> b) mempty
 
 -- | The %XX escapes of the UTF-8 bytes of a character.
 percentEscape :: Char -> B.Builder
@@ -252,9 +247,6 @@ percentEscape c = mconcat [B.fromText (T.pack ('%' : hex w)) | w <- BS.unpack (T
   where
     hex :: Word8 -> String
     hex w = let s = map toUpper (showHex w "") in replicate (percentDigits - length s) '0' ++ s
-
-isTagChar :: Char -> Bool
-isTagChar c = isAscii c && (isAlphaNum c || c `elem` ("-#;/?:@&=+$_.~*'()" :: String))
 
 -- | c-printable without the line breaks and the byte order mark.
 isPrintable :: Char -> Bool

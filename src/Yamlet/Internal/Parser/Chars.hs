@@ -48,6 +48,7 @@ module Yamlet.Internal.Parser.Chars
   , isWhite
   , isBreak
   , isAsciiByte
+  , asciiChar
   , isCharStart
   , isNsChar
   , isFlowIndicator
@@ -172,6 +173,11 @@ isBreak w = w == LF || w == CR
 
 isAsciiByte :: Word8 -> Bool
 isAsciiByte w = w < 0x80
+
+-- | A predicate on bytes for a character, e.g. 'isFlowIndicator' for the
+-- emitter. A character beyond ASCII does not satisfy it.
+asciiChar :: (Word8 -> Bool) -> Char -> Bool
+asciiChar p c = isAscii c && p (fromIntegral (ord c))
 
 -- | The byte starts a character in UTF-8, i.e. it is not a continuation byte.
 isCharStart :: Word8 -> Bool

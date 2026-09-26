@@ -21,6 +21,7 @@ import Data.Text qualified as T
 import Data.Text.Builder.Linear qualified as B
 
 import Yamlet.Internal.Emit
+import Yamlet.Internal.Parser.Chars hiding (isAnchorChar)
 import Yamlet.Internal.Syntax
 import Yamlet.Internal.Utils
 
@@ -144,7 +145,7 @@ validAnchors doc
     isAnchorName a = not (T.null a) && T.all isAnchorChar a
 
     isAnchorChar :: Char -> Bool
-    isAnchorChar c = isPrintable c && c /= ' ' && c `notElem` (",[]{}" :: String)
+    isAnchorChar c = isPrintable c && c /= ' ' && not (asciiChar isFlowIndicator c)
 
 -- | A document. The flag tells if it starts the stream or follows a document
 -- end marker.
