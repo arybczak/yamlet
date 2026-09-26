@@ -82,6 +82,9 @@ test_base = do
   roundTrip "fixed" (-123.456 :: Milli)
   roundTrip "nano" (0.000000001 :: Nano)
   roundTrip "resolution of a power of 2" (MkFixed 3 :: Fixed Quarters)
+  assertEqual "resolution of 2s and 5s" "2.5e-2\n" (encodeText (MkFixed 1 :: Fixed Fortieths))
+  roundTrip "resolution of 2s and 5s" (MkFixed 7 :: Fixed Fortieths)
+  assertEqual "resolution without a decimal form" "0.3\n" (encodeText (MkFixed 1 :: Fixed Thirds))
   roundTrip "newtypes" (Down 'a', Sem.Max (1 :: Int), Mon.First (Just True), Sem.Sum (2.5 :: Double), Sem.All False, Const @Int @Bool 3)
 
 -- | A resolution of 1/4, which has an exact decimal form.
@@ -89,6 +92,18 @@ data Quarters
 
 instance HasResolution Quarters where
   resolution _ = 4
+
+-- | A resolution of 1/40, which needs three places after the point.
+data Fortieths
+
+instance HasResolution Fortieths where
+  resolution _ = 40
+
+-- | A resolution of 1/3, which has no exact decimal form.
+data Thirds
+
+instance HasResolution Thirds where
+  resolution _ = 3
 
 test_time :: Assertion
 test_time = do
