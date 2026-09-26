@@ -20,6 +20,7 @@ module Yamlet.Internal.Utils
   , xEscapeDigits
   , uEscapeDigits
   , bigUEscapeDigits
+  , percentDigits
   ) where
 
 import Control.Monad
@@ -133,3 +134,7 @@ xEscapeDigits, uEscapeDigits, bigUEscapeDigits :: Int
 xEscapeDigits = 2
 uEscapeDigits = 4
 bigUEscapeDigits = 8
+
+-- | The number of hex digits of a @%XX@ escape in a tag.
+percentDigits :: Int
+percentDigits = 2

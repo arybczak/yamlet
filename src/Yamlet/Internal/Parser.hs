@@ -544,10 +544,6 @@ tagChars e i
   | isPercentEscape e i = tagChars e (i + percentEscapeLength)
   | otherwise = i
 
--- | The number of hex digits of a @%XX@ escape.
-percentDigits :: Int
-percentDigits = 2
-
 percentEscapeLength :: Int
 percentEscapeLength = 1 + percentDigits
 

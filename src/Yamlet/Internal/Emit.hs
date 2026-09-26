@@ -251,7 +251,7 @@ percentEscape :: Char -> B.Builder
 percentEscape c = mconcat [B.fromText (T.pack ('%' : hex w)) | w <- BS.unpack (T.encodeUtf8 (T.singleton c))]
   where
     hex :: Word8 -> String
-    hex w = let s = map toUpper (showHex w "") in if length s < 2 then '0' : s else s
+    hex w = let s = map toUpper (showHex w "") in replicate (percentDigits - length s) '0' ++ s
 
 isTagChar :: Char -> Bool
 isTagChar c = isAscii c && (isAlphaNum c || c `elem` ("-#;/?:@&=+$_.~*'()" :: String))
