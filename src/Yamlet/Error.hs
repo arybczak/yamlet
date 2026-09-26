@@ -86,6 +86,7 @@ prettyError file err
     pad :: String
     pad = map (const ' ') lineNo
 
+    -- The usual width of a terminal.
     width :: Int
     width = 80
 
