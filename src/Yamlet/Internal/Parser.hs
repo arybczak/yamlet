@@ -533,24 +533,26 @@ cTagHandle = do
 -- | Skip ns-uri-char*.
 uriChars :: Env -> Int -> Int
 uriChars e i
-  | isUriChar w = uriChars e (i + 1)
-  | w == PERCENT && isHexDigit' (byteAt e (i + 1)) && isHexDigit' (byteAt e (i + 2)) =
-      uriChars e (i + 3)
+  | isUriChar (byteAt e i) = uriChars e (i + 1)
+  | isPercentEscape e i = uriChars e (i + percentEscapeLength)
   | otherwise = i
-  where
-    w :: Word8
-    w = byteAt e i
 
 -- | Skip ns-tag-char*.
 tagChars :: Env -> Int -> Int
 tagChars e i
-  | isTagChar w = tagChars e (i + 1)
-  | w == PERCENT && isHexDigit' (byteAt e (i + 1)) && isHexDigit' (byteAt e (i + 2)) =
-      tagChars e (i + 3)
+  | isTagChar (byteAt e i) = tagChars e (i + 1)
+  | isPercentEscape e i = tagChars e (i + percentEscapeLength)
   | otherwise = i
-  where
-    w :: Word8
-    w = byteAt e i
+
+-- | The number of hex digits of a @%XX@ escape.
+percentDigits :: Int
+percentDigits = 2
+
+percentEscapeLength :: Int
+percentEscapeLength = 1 + percentDigits
+
+isPercentEscape :: Env -> Int -> Bool
+isPercentEscape e i = byteAt e i == PERCENT && all (isHexDigit' . byteAt e) [i + 1 .. i + percentDigits]
 
 -- | Stop with an error if a @%@ without two hexadecimal digits after it is at
 -- the index, after the valid characters of a tag.
