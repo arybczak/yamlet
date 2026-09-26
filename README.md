@@ -31,6 +31,40 @@ A YAML 1.2.2 library written in Haskell.
 - `Yamlet.Schema`: the rules of the core schema, e.g. to check how a plain
   scalar reads back.
 
+## Untrusted input
+
+The decoder is safe to use on untrusted input. The time to decode a
+document is close to linear in its size, and the memory is linear in its
+size.
+
+A decoded value is never much larger than its text. So the library limits
+the two parts of the syntax that let a short text stand for a large value,
+aliases and exponents:
+
+- The aliases of a document can add at most 100000 nodes. For a document
+  with more than 100000 nodes, they can add as many nodes as the document
+  has. A document beyond the limit is an error. So a small document with
+  aliases to aliases cannot expand to billions of nodes.
+- The exponent of a float can make its value at most 1000 digits larger
+  than its text. So `1e999999999` is an error, and a program cannot convert
+  it to an integer with a billion digits.
+
+The library also applies these rules:
+
+- Integers and floats can have any number of digits. The time to read and
+  write them is close to linear in the number of digits.
+- The check for duplicate keys takes close to linear time, also for keys
+  that are large collections or aliases.
+- Deeply nested collections, e.g. 100000 levels of flow sequences, take
+  linear time to parse.
+- A fraction is reduced as an `Integer`, and its parts must fit in the
+  target type. A duration of more than about 10^48 seconds is an error.
+- The decoded values do not keep the input in memory, because the decoder
+  copies their texts.
+
+The program must still limit the size of the input, because the memory
+grows with it.
+
 ## Performance
 
 The benchmark in `bench/` uses three generated inputs:
