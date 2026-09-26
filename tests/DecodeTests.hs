@@ -25,7 +25,7 @@ import Data.Version
 import Data.Void
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Tasty.QuickCheck
+import Test.Tasty.QuickCheck hiding (Fixed)
 
 import Yamlet
 import Yamlet.Internal.Parser.Monad qualified as P
@@ -770,6 +770,18 @@ newtype IntOrText = IntOrText (Either Integer T.Text)
 instance FromYaml IntOrText where
   parseYaml n = IntOrText <$> ((Left <$> withInt pure n) `orElse` (Right <$> withText pure n))
 
+-- | A resolution of 1/40, which needs three places after the point.
+data Fortieths
+
+instance HasResolution Fortieths where
+  resolution _ = 40
+
+-- | A resolution of 1/3, which has no exact decimal form.
+data Thirds
+
+instance HasResolution Thirds where
+  resolution _ = 3
+
 test_typeErrors :: Assertion
 test_typeErrors = do
   assertEqual "first alternative" (Right (IntOrText (Left 1))) (decodeText "1")
@@ -860,6 +872,16 @@ test_typeErrors = do
   assertEqual "fixed with an exponent" (Right (120 :: Centi)) (decodeText "1.2e2")
   assertEqual "fixed with too many digits" (Just (1, 1, "expected a multiple of 0.01")) (errorOf (decodeText @Centi "1.239"))
   assertEqual "largest fixed" (Right (10 ^ (1000 :: Int) :: Centi)) (decodeText "1e1000")
+  assertEqual "resolution of 2s and 5s" (Right (MkFixed 7 :: Fixed Fortieths)) (decodeText "0.175")
+  assertEqual
+    "step of a resolution of 2s and 5s"
+    (Just (1, 1, "expected a multiple of 0.025"))
+    (errorOf (decodeText @(Fixed Fortieths) "0.01"))
+  assertEqual "whole number for a resolution without a decimal form" (Right (MkFixed 6 :: Fixed Thirds)) (decodeText "2")
+  assertEqual
+    "step of a resolution without a decimal form"
+    (Just (1, 1, "expected a multiple of 1/3"))
+    (errorOf (decodeText @(Fixed Thirds) "0.7"))
   assertEqual
     "fixed with a huge exponent"
     (Left "the exponent of the number is out of the range from -1000 to 1000")

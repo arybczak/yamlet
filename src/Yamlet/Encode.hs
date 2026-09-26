@@ -191,31 +191,14 @@ instance (Integral a, ToYaml a) => ToYaml (Ratio a) where
 -- | A number. If the resolution is not a product of 2s and 5s, e.g. 3, a value
 -- can have no exact decimal form. It then becomes the nearest number with as
 -- many digits after the point as the resolution has, which does not read back.
+-- For such a resolution, use 'Rational' instead.
 instance HasResolution a => ToYaml (Fixed a) where
-  toYaml (MkFixed n) = node . Float . Finite $
-    if rest == 1
-      then Sci.scientific (n * (10 ^ places `div` res)) (negate places)
-      else Sci.scientific (round (n * 10 ^ digits % res)) (negate digits)
+  toYaml (MkFixed n) = node . Float . Finite $ case decimalPlaces res of
+    Just places -> Sci.scientific (n * (10 ^ places `div` res)) (negate places)
+    Nothing -> Sci.scientific (round (n * 10 ^ digits % res)) (negate digits)
     where
       res :: Integer
       res = resolution (Proxy @a)
-
-      -- The resolution is 2^twos * 5^fives * rest. If rest is 1, the
-      -- resolution divides 10^places, and no smaller power of 10.
-      twos, fives, places :: Int
-      afterTwos, rest :: Integer
-      (twos, afterTwos) = factors 2 res
-      (fives, rest) = factors 5 afterTwos
-      places = max twos fives
-
-      -- The number of factors p of x, and x without them.
-      factors :: Integer -> Integer -> (Int, Integer)
-      factors p = go 0
-        where
-          go :: Int -> Integer -> (Int, Integer)
-          go i x = case x `quotRem` p of
-            (q, 0) | x /= 0 -> go (i + 1) q
-            _ -> (i, x)
 
       digits :: Int
       digits = integerLog10 res + 1

@@ -643,14 +643,29 @@ instance (Integral a, FromYaml a) => FromYaml (Ratio a) where
       then pure (fromInteger (numerator r) :% fromInteger (denominator r))
       else fail "the fraction is out of the range of the type"
 
--- | A number that is a multiple of the resolution, e.g. @1.25@ for 'Centi'.
--- A number with more digits after the point is an error, not a rounded value.
+-- | A number that is a multiple of the step of the type, e.g. @1.25@ for
+-- 'Centi'. A number with more digits after the point is an error, not a
+-- rounded value.
+--
+-- If the resolution is not a product of 2s and 5s, e.g. 3, most multiples of
+-- the step have no decimal form, so they cannot come from YAML. For such a
+-- resolution, use 'Rational' instead.
 instance HasResolution a => FromYaml (Fixed a) where
   parseYaml = withBoundedScientific $ \s ->
-    let scaled = s * fromInteger (resolution (Proxy @a))
+    let scaled = s * fromInteger res
     in if Sci.isInteger scaled
          then pure (MkFixed (truncate scaled))
-         else fail $ "expected a multiple of " ++ show (MkFixed @_ @a 1)
+         else fail $ "expected a multiple of " ++ step
+    where
+      res :: Integer
+      res = resolution (Proxy @a)
+
+      -- 'show' rounds the step to the number of digits of the resolution, e.g.
+      -- 0.03 for 1/40 and 0.4 for 1/3.
+      step :: String
+      step = case decimalPlaces res of
+        Just places -> Sci.formatScientific Sci.Fixed Nothing (Sci.scientific (10 ^ places `div` res) (negate places))
+        Nothing -> "1/" ++ show res
 
 -- | The value inside.
 deriving newtype instance FromYaml a => FromYaml (Identity a)

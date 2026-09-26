@@ -12,6 +12,7 @@ module Yamlet.Internal.Utils
   , maxImplicitKeyLength
   , coreTagPrefix
   , picoDecimals
+  , decimalPlaces
   ) where
 
 import Control.Monad
@@ -81,3 +82,23 @@ coreTagPrefix = "tag:yaml.org,2002:"
 -- the time library.
 picoDecimals :: Int
 picoDecimals = integerLog10 (resolution (Proxy @E12))
+
+-- | The number of decimal places of 1/n, or 'Nothing' if 1/n has no finite
+-- decimal form. It has one if n is 2^a * 5^b, and then it needs max a b
+-- places.
+decimalPlaces :: Integer -> Maybe Int
+decimalPlaces n = if rest == 1 then Just (max twos fives) else Nothing
+  where
+    twos, fives :: Int
+    afterTwos, rest :: Integer
+    (twos, afterTwos) = factors 2 n
+    (fives, rest) = factors 5 afterTwos
+
+    -- The number of factors p of x, and x without them.
+    factors :: Integer -> Integer -> (Int, Integer)
+    factors p = go 0
+      where
+        go :: Int -> Integer -> (Int, Integer)
+        go i x = case x `quotRem` p of
+          (q, 0) | x /= 0 -> go (i + 1) q
+          _ -> (i, x)
