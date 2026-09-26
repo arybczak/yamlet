@@ -43,15 +43,15 @@ main = do
         ]
     , bgroup
         "decode"
-        [ decoding @[Config] "config" configInput
-        , decoding @[Json] "json" jsonInput
-        , decoding @(M.Map T.Text T.Text) "text" textInput
+        [ decoding @[Config] "config" configInput []
+        , decoding @[Json] "json" jsonInput [aesonDecoding @[Json] jsonInput]
+        , decoding @(M.Map T.Text T.Text) "text" textInput []
         ]
     , bgroup
         "encode"
-        [ encoding @[Config] "config" configInput
-        , encoding @[Json] "json" jsonInput
-        , encoding @(M.Map T.Text T.Text) "text" textInput
+        [ encoding @[Config] "config" configInput []
+        , encoding @[Json] "json" jsonInput [aesonEncoding @[Json] jsonInput]
+        , encoding @(M.Map T.Text T.Text) "text" textInput []
         ]
     ]
   where
@@ -97,35 +97,50 @@ rendering name bs = bgroup name [bench "yamlet" $ nf (S.renderSyntax S.defaultRe
     trees :: [S.Document]
     trees = either (error . show) id $ S.parseDocuments bs
 
--- | The benchmarks that decode an input into a value of the type.
+-- | The benchmarks that decode an input into a value of the type, and the
+-- given benchmarks for other libraries.
 decoding
   :: forall a
    . (NFData a, FromYaml a, H.FromYAML a, J.FromJSON a)
   => String
   -> BS.ByteString
+  -> [Benchmark]
   -> Benchmark
-decoding name bs =
-  bgroup
-    name
+decoding name bs others =
+  bgroup name $
     [ bench "yamlet" $ nf (either (const Nothing) Just . decode @a) bs
     , bench "HsYAML" $ nf (either (const Nothing) Just . H.decode1Strict @a) bs
     , bench "yaml" $ nf (either (const Nothing) Just . Y.decodeEither' @a) bs
     ]
+      ++ others
 
--- | The benchmarks that encode the value of an input, decoded as the type.
+-- | The benchmarks that encode the value of an input, decoded as the type,
+-- and the given benchmarks for other libraries.
 encoding
   :: forall a
    . (NFData a, FromYaml a, ToYaml a, H.ToYAML a, J.ToJSON a)
   => String
   -> BS.ByteString
+  -> [Benchmark]
   -> Benchmark
-encoding name bs =
-  bgroup
-    name
+encoding name bs others =
+  bgroup name $
     [ bench "yamlet" $ nf encode value
     , bench "HsYAML" $ nf H.encode1Strict value
     , bench "yaml" $ nf Y.encode value
     ]
+      ++ others
+  where
+    value :: a
+    value = either (error . show) id $ decode bs
+
+-- | The benchmark that decodes a JSON input with aeson.
+aesonDecoding :: forall a. (NFData a, J.FromJSON a) => BS.ByteString -> Benchmark
+aesonDecoding bs = bench "aeson" $ nf (J.decodeStrict' @a) bs
+
+-- | The benchmark that encodes the value of a JSON input as JSON with aeson.
+aesonEncoding :: forall a. (NFData a, FromYaml a, J.ToJSON a) => BS.ByteString -> Benchmark
+aesonEncoding bs = bench "aeson" $ nf J.encode value
   where
     value :: a
     value = either (error . show) id $ decode bs
