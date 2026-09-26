@@ -46,6 +46,7 @@ common language
                         OverloadedRecordDot
                         OverloadedStrings
                         TypeFamilies
+                        UndecidableInstances
 
 library
     import:         language
@@ -165,3 +166,10 @@ benchmark bench
 
     type:           exitcode-stdio-1.0
     main-is:        Main.hs
+
+    other-modules:  Derive
+                    Derive.Generic
+                    Derive.Manual
+                    Inputs
+                    Libraries
+                    Types

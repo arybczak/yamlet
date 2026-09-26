@@ -12,6 +12,7 @@ module Yamlet.Internal.Generic
 
     -- * Constructors
   , GConstructors (..)
+  , NoConstructors
   , isEnum
   , isTagged
   , constructorTag
@@ -137,7 +138,15 @@ instance (GConstructors f, GConstructors g) => GConstructors (f :+: g) where
   gConstructorCount = gConstructorCount @f + gConstructorCount @g
   gNullary = gNullary @f && gNullary @g
 
-instance (KnownSymbol name, GFields f) => GConstructors (C1 ('MetaCons name fixity isRecord) f) where
+instance TypeError NoConstructors => GConstructors V1 where
+  gConstructorNames = []
+  gConstructorCount = 0
+  gNullary = True
+
+-- | The error for a type without constructors, whose representation is 'V1'.
+type NoConstructors = Text "A type without constructors cannot derive FromYaml or ToYaml"
+
+instance (KnownSymbol name, GFields f) => GConstructors (C1 (MetaCons name fixity isRecord) f) where
   gConstructorNames = [symbolVal (Proxy @name)]
   gConstructorCount = 1
   gNullary = gArity @f == 0
@@ -175,12 +184,12 @@ instance (GFields f, GFields g) => GFields (f :*: g) where
   gArity = gArity @f + gArity @g
   gNames opts = gNames @f opts ++ gNames @g opts
 
-instance KnownSymbol name => GFields (S1 ('MetaSel ('Just name) u s d) f) where
+instance KnownSymbol name => GFields (S1 (MetaSel (Just name) u s d) f) where
   gNamed = True
   gArity = 1
   gNames opts = [fieldKey @name opts]
 
-instance GFields (S1 ('MetaSel 'Nothing u s d) f) where
+instance GFields (S1 (MetaSel Nothing u s d) f) where
   gNamed = False
   gArity = 1
   gNames _ = []

@@ -437,6 +437,10 @@ class GToConstructor f where
   -- | The constructor, with the tag if the flag is set.
   gToConstructor :: YamlOptions -> Bool -> Maybe (f p) -> f p -> Node
 
+instance TypeError NoConstructors => GToConstructor V1 where
+  gTag _ = \case {}
+  gToConstructor _ _ _ = \case {}
+
 instance (GToConstructor f, GToConstructor g) => GToConstructor (f :+: g) where
   gTag opts = \case
     L1 x -> gTag opts x
@@ -452,7 +456,7 @@ instance
   , GFields f
   , GToFields f
   )
-  => GToConstructor (C1 ('MetaCons name fixity isRecord) f)
+  => GToConstructor (C1 (MetaCons name fixity isRecord) f)
   where
   gTag opts _ = constructorTag opts (symbolVal (Proxy @name))
   gToConstructor opts isTag def c@(M1 x)
@@ -477,23 +481,40 @@ instance
 
 -- | The entries of the fields without names in one mapping, if the options
 -- flatten them and the decoder can read them back. Each field must be a
--- mapping with string keys, and no key can repeat. A tagged mapping must also
--- have a key, no key can be the tag key, and the keys cannot be the contents
--- key alone, because the decoder reads such a mapping as the other form.
+-- mapping, and no key can repeat between the fields. A tagged mapping must
+-- also have a key, no key can be the tag key, and the keys cannot be the
+-- contents key alone, because the decoder reads such a mapping as the other
+-- form.
 flatEntries :: YamlOptions -> Bool -> [Node] -> Maybe [(Node, Node)]
 flatEntries opts isTag vs
   | opts.flattenFields = mergeEntries opts isTag vs
   | otherwise = Nothing
 
 mergeEntries :: YamlOptions -> Bool -> [Node] -> Maybe [(Node, Node)]
-mergeEntries opts isTag vs = do
-  entries <- concat <$> traverse fieldEntries vs
-  keys <- traverse (stringKey . fst) entries
-  let unique = Set.fromList keys
-  if Set.size unique == length keys && not (isTag && (null keys || keys == [opts.contentsKey] || Set.member opts.tagKey unique))
-    then Just entries
-    else Nothing
+mergeEntries opts isTag = \case
+  -- The keys of one mapping are different already.
+  [v] -> case v.value of
+    Mapping kvs | not isTag || taggable kvs -> Just kvs
+    _ -> Nothing
+  -- Keys of several mappings are compared as texts, so they must be strings.
+  vs -> do
+    entries <- concat <$> traverse fieldEntries vs
+    keys <- traverse (stringKey . fst) entries
+    if Set.size (Set.fromList keys) == length keys && (not isTag || taggable entries)
+      then Just entries
+      else Nothing
   where
+    taggable :: [(Node, Node)] -> Bool
+    taggable = \case
+      [] -> False
+      [(k, _)] | isKey opts.contentsKey k -> False
+      kvs -> not (any (isKey opts.tagKey . fst) kvs)
+
+    isKey :: T.Text -> Node -> Bool
+    isKey key k = case k.value of
+      String t -> t == key
+      _ -> False
+
     fieldEntries :: Node -> Maybe [(Node, Node)]
     fieldEntries v = case v.value of
       Mapping kvs -> Just kvs
@@ -528,7 +549,7 @@ instance
   ( KnownSymbol name
   , ToYaml a
   )
-  => GToFields (S1 ('MetaSel ('Just name) u s d) (Rec0 a))
+  => GToFields (S1 (MetaSel (Just name) u s d) (Rec0 a))
   where
   gToEntries opts def (M1 (K1 x))
     | opts.omitNullFields && v.value == Null && nullDefault = []
@@ -546,7 +567,7 @@ instance
   {-# INLINE gToEntries #-}
   {-# INLINE gToValues #-}
 
-instance ToYaml a => GToFields (S1 ('MetaSel 'Nothing u s d) (Rec0 a)) where
+instance ToYaml a => GToFields (S1 (MetaSel Nothing u s d) (Rec0 a)) where
   gToEntries _ _ _ = []
   gToValues (M1 (K1 x)) = [toYaml x]
   {-# INLINE gToEntries #-}

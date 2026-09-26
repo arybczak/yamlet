@@ -954,6 +954,11 @@ class GFromConstructor f where
   -- | The only constructor, without a tag.
   gFromUntagged :: YamlOptions -> Maybe (f p) -> (f p -> a) -> Node -> Parser a
 
+instance TypeError NoConstructors => GFromConstructor V1 where
+  gFromTag _ _ _ = Nothing
+  gFromTagged _ _ _ _ _ = Nothing
+  gFromUntagged _ _ _ _ = fail "expected a type with constructors"
+
 instance (GFromConstructor f, GFromConstructor g) => GFromConstructor (f :+: g) where
   gFromTag opts k t = gFromTag opts (k . L1) t `mplus` gFromTag opts (k . R1) t
   gFromTagged opts def k t o =
@@ -970,7 +975,7 @@ instance
   , GFields f
   , GFromFields f
   )
-  => GFromConstructor (C1 ('MetaCons name fixity isRecord) f)
+  => GFromConstructor (C1 (MetaCons name fixity isRecord) f)
   where
   gFromTag opts k t
     | t == tag && gArity @f == 0 = Just (k . M1 . fst <$> gFromValues [])
@@ -1081,7 +1086,7 @@ instance
   ( KnownSymbol name
   , FromYaml a
   )
-  => GFromFields (S1 ('MetaSel ('Just name) u s d) (Rec0 a))
+  => GFromFields (S1 (MetaSel (Just name) u s d) (Rec0 a))
   where
   gFromObject opts def o =
     M1 . K1 <$> case lookupKey key o of
@@ -1100,7 +1105,7 @@ instance
   {-# INLINE gFromObject #-}
   {-# INLINE gFromValues #-}
 
-instance FromYaml a => GFromFields (S1 ('MetaSel 'Nothing u s d) (Rec0 a)) where
+instance FromYaml a => GFromFields (S1 (MetaSel Nothing u s d) (Rec0 a)) where
   gFromObject _ _ o = fail $ "expected a field without a name in " ++ describe (objectNode o).value
   gFromValues = nextField
   gFromFlat n = M1 . K1 <$> parseNode parseYaml n
