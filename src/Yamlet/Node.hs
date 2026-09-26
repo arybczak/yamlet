@@ -1,5 +1,3 @@
-{-# LANGUAGE DeriveAnyClass #-}
-
 -- | The representation graph of a YAML document: nodes with resolved tags and
 -- values, and aliases replaced by the nodes that they refer to.
 --
@@ -72,7 +70,7 @@ data Node = Node
 -- | The value of a node.
 --
 -- A scalar with a tag that the schema does not know is a 'String' with its
--- text, and the 'tag' of its node tells what it is.
+-- text, and the 'Yamlet.Node.tag' of its node tells what it is.
 data Value
   = Null
   | Bool !Bool

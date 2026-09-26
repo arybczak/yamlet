@@ -4,6 +4,7 @@ import Test.Tasty
 
 import DecodeTests
 import EncodeTests
+import GenericTests
 import RenderTests
 import TestSuite
 
@@ -15,6 +16,7 @@ main = do
       "yamlet"
       [ decodeTests
       , encodeTests
+      , genericTests
       , renderTests
       , suite
       ]

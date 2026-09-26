@@ -1,5 +1,3 @@
-{-# LANGUAGE DeriveAnyClass #-}
-
 -- | Errors with the position in the input that caused them.
 module Yamlet.Error
   ( -- * Errors

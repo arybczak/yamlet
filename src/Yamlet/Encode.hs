@@ -41,10 +41,13 @@ import Data.UUID.Types qualified as UUID
 import Data.Version
 import Data.Void
 import Data.Word
+import GHC.Generics
+import GHC.TypeLits hiding (Natural)
 import Math.NumberTheory.Logarithms
 import Numeric.Natural
 
 import Yamlet.Internal.Emit
+import Yamlet.Internal.Generic
 import Yamlet.Internal.Utils
 import Yamlet.Node
 import Yamlet.Schema
@@ -53,9 +56,13 @@ import Yamlet.Syntax qualified as S
 ----------------------------------------
 -- Class
 
--- | Types that can be converted to a node.
+-- | Types that can be converted to a node. A type with a 'Generic' instance
+-- can derive the instance, see "Yamlet.Generic".
 class ToYaml a where
   toYaml :: a -> Node
+  default toYaml
+    :: (Generic a, GenericYaml a, Rep a ~ D1 d f, GConstructors f, GToConstructor f) => a -> Node
+  toYaml = genericToYaml
 
   -- | Convert a list. The instance for 'Char' creates a string instead.
   toYamlList :: [a] -> Node
@@ -383,6 +390,167 @@ instance
         , toYaml a9
         , toYaml a10
         ]
+
+----------------------------------------
+-- Generic
+
+-- The default method has no INLINE pragma, because GHC copies the pragma of a
+-- default method to each derived method. Then each use of a derived instance,
+-- e.g. in a list, gets a copy of the whole encoder. The default method calls
+-- this function without the argument, so the function does not inline in the
+-- library. GHC inlines both in the derived method, and it must do so before
+-- the specializer runs. Otherwise the specializer makes a copy of the code for
+-- each node of the representation, and a large type takes several times
+-- longer to compile. For the same reason, the top of the representation goes
+-- to a plain function, not to a class with one method. GHC represents the
+-- dictionary of such a class as a partial application of the method, and it
+-- does not inline that.
+genericToYaml
+  :: forall a d f
+   . ( Generic a
+     , GenericYaml a
+     , Rep a ~ D1 d f
+     , GConstructors f
+     , GToConstructor f
+     )
+  => a -> Node
+genericToYaml x = gToYaml (yamlOptions @a) (from <$> yamlDefault @a) (from x)
+{-# INLINE genericToYaml #-}
+
+-- The encoder takes the default for 'omitNullFields': it leaves out a null
+-- field only if the default of the field is null too. Otherwise the decoder
+-- would fill the missing key from the default, and the value would not read
+-- back.
+gToYaml
+  :: forall f d p
+   . ( GConstructors f
+     , GToConstructor f
+     )
+  => YamlOptions -> Maybe (D1 d f p) -> D1 d f p -> Node
+gToYaml opts def (M1 x)
+  | isEnum @f opts = node (String (gTag opts x))
+  | otherwise = gToConstructor opts (isTagged @f opts) (unM1 <$> def) x
+
+class GToConstructor f where
+  gTag :: YamlOptions -> f p -> T.Text
+
+  -- | The constructor, with the tag if the flag is set.
+  gToConstructor :: YamlOptions -> Bool -> Maybe (f p) -> f p -> Node
+
+instance (GToConstructor f, GToConstructor g) => GToConstructor (f :+: g) where
+  gTag opts = \case
+    L1 x -> gTag opts x
+    R1 x -> gTag opts x
+  gToConstructor opts isTag def = \case
+    L1 x -> gToConstructor opts isTag (def >>= \case L1 d -> Just d; R1 _ -> Nothing) x
+    R1 x -> gToConstructor opts isTag (def >>= \case R1 d -> Just d; L1 _ -> Nothing) x
+  {-# INLINE gTag #-}
+  {-# INLINE gToConstructor #-}
+
+instance
+  ( KnownSymbol name
+  , GFields f
+  , GToFields f
+  )
+  => GToConstructor (C1 ('MetaCons name fixity isRecord) f)
+  where
+  gTag opts _ = constructorTag opts (symbolVal (Proxy @name))
+  gToConstructor opts isTag def c@(M1 x)
+    | gNamed @f = mapping (withTagEntry (gToEntries opts (unM1 <$> def) x))
+    | isTag = case gToValues x of
+        [] -> mapping (withTagEntry [])
+        vs | Just entries <- flatEntries opts isTag vs -> mapping (withTagEntry entries)
+        [v] -> mapping (withTagEntry [opts.contentsKey .= v])
+        vs -> mapping (withTagEntry [opts.contentsKey .= node (Sequence vs)])
+    | otherwise = case gToValues x of
+        [] -> mapping []
+        [v] -> v
+        vs | Just entries <- flatEntries opts isTag vs -> mapping entries
+        vs -> node (Sequence vs)
+    where
+      withTagEntry :: [(Node, Node)] -> [(Node, Node)]
+      withTagEntry entries
+        | isTag = (opts.tagKey .= gTag opts c) : entries
+        | otherwise = entries
+  {-# INLINE gTag #-}
+  {-# INLINE gToConstructor #-}
+
+-- | The entries of the fields without names in one mapping, if the options
+-- flatten them and the decoder can read them back. Each field must be a
+-- mapping with string keys, and no key can repeat. A tagged mapping must also
+-- have a key, no key can be the tag key, and the keys cannot be the contents
+-- key alone, because the decoder reads such a mapping as the other form.
+flatEntries :: YamlOptions -> Bool -> [Node] -> Maybe [(Node, Node)]
+flatEntries opts isTag vs
+  | opts.flattenFields = mergeEntries opts isTag vs
+  | otherwise = Nothing
+
+mergeEntries :: YamlOptions -> Bool -> [Node] -> Maybe [(Node, Node)]
+mergeEntries opts isTag vs = do
+  entries <- concat <$> traverse fieldEntries vs
+  keys <- traverse (stringKey . fst) entries
+  let unique = Set.fromList keys
+  if Set.size unique == length keys && not (isTag && (null keys || keys == [opts.contentsKey] || Set.member opts.tagKey unique))
+    then Just entries
+    else Nothing
+  where
+    fieldEntries :: Node -> Maybe [(Node, Node)]
+    fieldEntries v = case v.value of
+      Mapping kvs -> Just kvs
+      _ -> Nothing
+
+    stringKey :: Node -> Maybe T.Text
+    stringKey k = case k.value of
+      String t -> Just t
+      _ -> Nothing
+-- Only the check of the option inlines, so that a type without it does not
+-- call this function. The rest does not depend on the type.
+{-# NOINLINE mergeEntries #-}
+
+class GToFields f where
+  -- | The entries of the fields, with the given default.
+  gToEntries :: YamlOptions -> Maybe (f p) -> f p -> [(Node, Node)]
+
+  gToValues :: f p -> [Node]
+
+instance GToFields U1 where
+  gToEntries _ _ _ = []
+  gToValues _ = []
+
+instance (GToFields f, GToFields g) => GToFields (f :*: g) where
+  gToEntries opts def (a :*: b) =
+    gToEntries opts ((\(d :*: _) -> d) <$> def) a ++ gToEntries opts ((\(_ :*: d) -> d) <$> def) b
+  gToValues (a :*: b) = gToValues a ++ gToValues b
+  {-# INLINE gToEntries #-}
+  {-# INLINE gToValues #-}
+
+instance
+  ( KnownSymbol name
+  , ToYaml a
+  )
+  => GToFields (S1 ('MetaSel ('Just name) u s d) (Rec0 a))
+  where
+  gToEntries opts def (M1 (K1 x))
+    | opts.omitNullFields && v.value == Null && nullDefault = []
+    | otherwise = [fieldKey @name opts .= v]
+    where
+      v :: Node
+      v = toYaml x
+
+      -- The decoder fills a missing key from the default.
+      nullDefault :: Bool
+      nullDefault = case def of
+        Just (M1 (K1 d)) -> (toYaml d).value == Null
+        Nothing -> True
+  gToValues (M1 (K1 x)) = [toYaml x]
+  {-# INLINE gToEntries #-}
+  {-# INLINE gToValues #-}
+
+instance ToYaml a => GToFields (S1 ('MetaSel 'Nothing u s d) (Rec0 a)) where
+  gToEntries _ _ _ = []
+  gToValues (M1 (K1 x)) = [toYaml x]
+  {-# INLINE gToEntries #-}
+  {-# INLINE gToValues #-}
 
 ----------------------------------------
 -- Rendering

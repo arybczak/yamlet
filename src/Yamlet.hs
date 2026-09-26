@@ -51,6 +51,9 @@ module Yamlet
   , (.=)
   , mapping
 
+    -- * Generic instances
+  , module Yamlet.Generic
+
     -- * Errors
   , module Yamlet.Error
   ) where
@@ -62,6 +65,7 @@ import Data.Text.Encoding qualified as T
 import Yamlet.Decode
 import Yamlet.Encode
 import Yamlet.Error
+import Yamlet.Generic
 import Yamlet.Internal.Compose
 import Yamlet.Internal.Input
 import Yamlet.Internal.Parser

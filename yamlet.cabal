@@ -35,13 +35,17 @@ common language
 
     default-language:   GHC2021
 
-    default-extensions: DerivingStrategies
+    default-extensions: DataKinds
+                        DefaultSignatures
+                        DeriveAnyClass
+                        DerivingStrategies
                         DuplicateRecordFields
                         LambdaCase
                         MultiWayIf
                         NoFieldSelectors
                         OverloadedRecordDot
                         OverloadedStrings
+                        TypeFamilies
 
 library
     import:         language
@@ -66,9 +70,11 @@ library
                      Yamlet.Decode
                      Yamlet.Encode
                      Yamlet.Error
+                     Yamlet.Generic
                      Yamlet.Internal.Comments
                      Yamlet.Internal.Compose
                      Yamlet.Internal.Emit
+                     Yamlet.Internal.Generic
                      Yamlet.Internal.Input
                      Yamlet.Internal.Parser
                      Yamlet.Internal.Parser.Chars
@@ -114,8 +120,29 @@ test-suite test
     other-modules:  DecodeTests
                     EncodeTests
                     Events
+                    GenericTests
                     RenderTests
                     TestSuite
+
+test-suite inspection
+    import:         language
+
+    ghc-options:    -O
+
+    build-depends:    base
+                    , inspection-testing
+                    , tasty
+                    , tasty-hunit
+                    , template-haskell
+                    , text
+                    , yamlet
+
+    hs-source-dirs: inspection
+
+    type:           exitcode-stdio-1.0
+    main-is:        Main.hs
+
+    other-modules:  Obligations
 
 benchmark bench
     import:         language

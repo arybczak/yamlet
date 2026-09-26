@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveAnyClass #-}
 {-# OPTIONS_HADDOCK not-home #-}
 
 -- | The types of the syntax tree.
