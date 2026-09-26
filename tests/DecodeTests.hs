@@ -149,7 +149,7 @@ test_exactFloats = do
     "float without double rounding"
     (Right (1 + 2 ^^ (-23 :: Int)))
     (decodeText @Float "1.000000059604644776257986737988403547205962240695953369140625")
-  forM_ ["[1e1001]", "[10e1000]", "[0.1e-1000]", "[1e99999999999999999999]", "[11e9223372036854775807]"] $ \input ->
+  forM_ ["[1e1001]", "[10e1001]", "[0.1e-1001]", "[1e99999999999999999999]", "[11e9223372036854775807]"] $ \input ->
     assertEqual
       ("exponent beyond the limit in " ++ show input)
       (Just (1, 2, "the exponent of the number is out of the range from -1000 to 1000"))
@@ -159,9 +159,17 @@ test_exactFloats = do
     (Just (1, 9, "the exponent of the number is out of the range from -1000 to 1000"))
     (errorOf (decodeText @Double "!!float 1e-99999999999999999999"))
   assertEqual
-    "integer beyond the limit as a float"
-    (Just (1, 9, "the exponent of the number is out of the range from -1000 to 1000"))
-    (errorOf (decodeText @Double ("!!float 1" <> T.replicate 1001 "0")))
+    "exponent within the limit, value beyond it"
+    (Right [Sci.scientific 1 1001, Sci.scientific 1 (-1001)])
+    (decodeText @[Sci.Scientific] "[10e1000, 0.1e-1000]")
+  assertEqual
+    "exponent beyond the limit, value within it"
+    (Right (Sci.scientific 1 997))
+    (decodeText @Sci.Scientific "0.0001e1001")
+  assertEqual
+    "written digits beyond the limit"
+    (Right [Sci.scientific 1 1001, Sci.scientific 1 1001])
+    (decodeText @[Sci.Scientific] ("[1" <> T.replicate 1001 "0" <> ".0, !!float 1" <> T.replicate 1001 "0" <> "]"))
   assertEqual
     "exponent beyond the limit in the schema"
     [Float Infinity, Float (Finite 0), Float (Finite 0)]
@@ -984,8 +992,8 @@ test_longNumbers = do
     (numerator <$> decodeText @Rational ("{numerator: " <> T.pack (show big) <> ", denominator: " <> T.pack (show (7 ^ (1200000 :: Int) :: Integer)) <> "}"))
   assertEqual
     "long integer as a float"
-    (Just (1, 1, "the exponent of the number is out of the range from -1000 to 1000"))
-    (errorOf (decodeText @Node (nines 999999 <> ".9")))
+    (Right (Float (Finite (Sci.scientific (10 ^ (1000000 :: Int) - 1) (-1)))))
+    ((.value) <$> decodeText @Node (nines 999999 <> ".9"))
 
 -- | The time of the check for duplicate keys is not quadratic in the number
 -- of keys.

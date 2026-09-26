@@ -103,8 +103,8 @@ decodeDocument input doc = resolveDocument input doc >>= convert input
 -- | Resolve the tags and the aliases of a document of a syntax tree. The
 -- resolution fails for a duplicate key, an undefined alias, aliases beyond
 -- the limit in "Yamlet.Node", a value that is not valid for its tag or a
--- number with an exponent beyond the range from -1000 to 1000 in scientific
--- notation.
+-- float whose exponent and value are both beyond the range from -1000 to
+-- 1000 in scientific notation.
 --
 -- The text is the input of the document, for the line in an error. For a
 -- document that the program built, the text can be empty.
