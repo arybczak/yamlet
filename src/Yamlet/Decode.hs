@@ -18,6 +18,7 @@ module Yamlet.Decode
   , withInt
   , withFloat
   , withScientific
+  , withBoundedScientific
   , withText
 
     -- * Collections
@@ -65,6 +66,7 @@ import Data.Version
 import Data.Void
 import Data.Word
 import GHC.Real
+import Math.NumberTheory.Logarithms
 import Numeric.Natural
 import Text.ParserCombinators.ReadP
 
@@ -166,7 +168,12 @@ withFloat f = parseNode $ \n -> case n.value of
   Int i -> f (fromInteger i)
   _ -> typeMismatch "a number" n
 
--- | The exact value of a finite number. An integer counts too.
+-- | The exact value of a finite number. An integer counts too, and negative
+-- zero becomes 0.
+--
+-- For a conversion to an exact type, e.g. with 'truncate', use
+-- 'withBoundedScientific', because a node that a program built can have any
+-- exponent.
 withScientific :: (Sci.Scientific -> Parser a) -> Node -> Parser a
 withScientific f = parseNode $ \n -> case n.value of
   Float (Finite s) -> f s
@@ -174,6 +181,21 @@ withScientific f = parseNode $ \n -> case n.value of
   Int i -> f (Sci.scientific i 0)
   Float _ -> fail "expected a finite number"
   _ -> typeMismatch "a number" n
+
+-- | Like 'withScientific', but the exponent of the first digit must be in
+-- the range from -1000 to 1000. Then a conversion to an exact integer, e.g.
+-- with 'truncate', computes at most about 1000 more digits than the
+-- coefficient has. The decoder applies a similar limit to floats, so the
+-- check matters mostly for a node that a program built.
+withBoundedScientific :: (Sci.Scientific -> Parser a) -> Node -> Parser a
+withBoundedScientific f = withScientific $ \s ->
+  let c = Sci.coefficient s
+  in if
+       -- The exponent of a zero also makes 'truncate' compute its power of 10.
+       | c == 0 -> f 0
+       | abs (toInteger (Sci.base10Exponent s) + toInteger (integerLog10 (abs c))) > maxExponent ->
+           fail "the exponent of the number is out of the range from -1000 to 1000"
+       | otherwise -> f s
 
 -- | The text is a copy, so it does not keep the input alive.
 withText :: (T.Text -> Parser a) -> Node -> Parser a
@@ -401,11 +423,11 @@ instance FromYaml UTCTime where
 
 -- | A number of seconds, rounded down to a picosecond.
 instance FromYaml NominalDiffTime where
-  parseYaml = withScientific $ fmap (secondsToNominalDiffTime . MkFixed) . duration
+  parseYaml = withBoundedScientific $ pure . secondsToNominalDiffTime . MkFixed . picoseconds
 
 -- | A number of seconds, rounded down to a picosecond.
 instance FromYaml DiffTime where
-  parseYaml = withScientific $ fmap picosecondsToDiffTime . duration
+  parseYaml = withBoundedScientific $ pure . picosecondsToDiffTime . picoseconds
 
 -- | The text form with hyphens, e.g. @123e4567-e89b-12d3-a456-426614174000@.
 instance FromYaml UUID.UUID where
@@ -450,28 +472,16 @@ withIso8601 :: String -> (T.Text -> Either String a) -> Node -> Parser a
 withIso8601 mismatch p = withText $ either (const (fail mismatch)) pure . p
 
 -- | The picoseconds in a number of seconds, rounded down.
-duration :: Sci.Scientific -> Parser Integer
-duration = maybe (fail "the duration is out of range") pure . picoseconds
+picoseconds :: Sci.Scientific -> Integer
+picoseconds s
+  | k >= 0 = c * 10 ^ k
+  | otherwise = c `div` 10 ^ negate k
   where
-    -- The result has at most 60 digits, so a huge exponent does not build a
-    -- huge integer.
-    picoseconds :: Sci.Scientific -> Maybe Integer
-    picoseconds s
-      | c == 0 = Just 0
-      -- The check comes before the computation of k, which can overflow.
-      | Sci.base10Exponent s > 48 = Nothing
-      | k >= 0 = if k > 60 - digits then Nothing else Just (c * 10 ^ k)
-      | -k > digits = Just (if c < 0 then -1 else 0)
-      | otherwise = Just (c `div` 10 ^ negate k)
-      where
-        c :: Integer
-        c = Sci.coefficient s
+    c :: Integer
+    c = Sci.coefficient s
 
-        k :: Int
-        k = Sci.base10Exponent s + 12
-
-        digits :: Int
-        digits = length (show (abs c))
+    k :: Integer
+    k = toInteger (Sci.base10Exponent s) + 12
 
 -- | The nearest float. A conversion by way of 'Double' could round twice.
 instance FromYaml Float where
@@ -622,7 +632,7 @@ instance (Integral a, FromYaml a) => FromYaml (Ratio a) where
 -- | A number that is a multiple of the resolution, e.g. @1.25@ for 'Centi'.
 -- A number with more digits after the point is an error, not a rounded value.
 instance HasResolution a => FromYaml (Fixed a) where
-  parseYaml = withScientific $ \s ->
+  parseYaml = withBoundedScientific $ \s ->
     let scaled = s * fromInteger (resolution (Proxy @a))
     in if Sci.isInteger scaled
          then pure (MkFixed (truncate scaled))

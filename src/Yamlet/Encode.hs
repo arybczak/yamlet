@@ -41,6 +41,7 @@ import Data.UUID.Types qualified as UUID
 import Data.Version
 import Data.Void
 import Data.Word
+import Math.NumberTheory.Logarithms
 import Numeric.Natural
 
 import Yamlet.Internal.Emit
@@ -198,7 +199,7 @@ instance HasResolution a => ToYaml (Fixed a) where
       res = resolution (Proxy @a)
 
       digits :: Int
-      digits = length (show res)
+      digits = integerLog10 res + 1
 
 -- | The value inside.
 deriving newtype instance ToYaml a => ToYaml (Identity a)

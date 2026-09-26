@@ -338,19 +338,20 @@ test_time = do
   assertEqual "whole duration" (Right (60 :: DiffTime)) (decodeText "60")
   assertEqual "picosecond" (Right (picosecondsToDiffTime 1)) (decodeText "1e-12")
   assertEqual "tiny duration" (Right (0 :: DiffTime)) (decodeText "1e-1000")
+  assertEqual "largest duration" (Right (10 ^ (1000 :: Int) :: NominalDiffTime)) (decodeText "1e1000")
   assertEqual
     "huge duration"
-    (Just (1, 1, "the duration is out of range"))
-    (errorOf (decodeText @NominalDiffTime "1e1000"))
-  forM_ [maxBound - 11, maxBound] $ \ex ->
+    (Just (1, 1, "the exponent of the number is out of the range from -1000 to 1000"))
+    (errorOf (decodeText @NominalDiffTime ("1" <> T.replicate 1001 "0")))
+  forM_ [minBound, maxBound - 11, maxBound] $ \ex ->
     assertEqual
       ("duration with the exponent " ++ show ex)
-      (Left "the duration is out of range")
+      (Left "the exponent of the number is out of the range from -1000 to 1000")
       (first snd (runParser (parseYaml @NominalDiffTime) (node (Float (Finite (Sci.scientific 1 ex))))))
   assertEqual
     "zero duration with a large exponent"
     (Right (0 :: DiffTime))
-    (runParser parseYaml (node (Float (Finite (Sci.scientific 0 100)))))
+    (runParser parseYaml (node (Float (Finite (Sci.scientific 0 maxBound)))))
 
 test_record :: Assertion
 test_record = do
@@ -853,6 +854,15 @@ test_typeErrors = do
   assertEqual "fixed with fewer digits" (Right (1.5 :: Centi)) (decodeText "1.5")
   assertEqual "fixed with an exponent" (Right (120 :: Centi)) (decodeText "1.2e2")
   assertEqual "fixed with too many digits" (Just (1, 1, "expected a multiple of 0.01")) (errorOf (decodeText @Centi "1.239"))
+  assertEqual "largest fixed" (Right (10 ^ (1000 :: Int) :: Centi)) (decodeText "1e1000")
+  assertEqual
+    "fixed with a huge exponent"
+    (Left "the exponent of the number is out of the range from -1000 to 1000")
+    (first snd (runParser (parseYaml @Centi) (node (Float (Finite (Sci.scientific 1 maxBound))))))
+  assertEqual
+    "zero fixed with a huge exponent"
+    (Right (0 :: Centi))
+    (runParser parseYaml (node (Float (Finite (Sci.scientific 0 maxBound)))))
 
 newtype Vowel = Vowel Char
 

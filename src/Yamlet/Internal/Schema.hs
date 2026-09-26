@@ -12,6 +12,7 @@ module Yamlet.Internal.Schema
   , isPlainString
   , isPlainSafe
   , isYaml11Bool
+  , maxExponent
   ) where
 
 import Data.Bifunctor

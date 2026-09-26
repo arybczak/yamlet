@@ -47,7 +47,9 @@ aliases and exponents:
   aliases to aliases cannot expand to billions of nodes.
 - The exponent of a float can make its value at most 1000 digits larger
   than its text. So `1e999999999` is an error, and a program cannot convert
-  it to an integer with a billion digits.
+  it to an integer with a billion digits. The instances for `Fixed` and the
+  durations apply the same limit with `withBoundedScientific`. Use it in your
+  own instances for exact types too.
 
 The library also applies these rules:
 
@@ -58,7 +60,7 @@ The library also applies these rules:
 - Deeply nested collections, e.g. 100000 levels of flow sequences, take
   linear time to parse.
 - A fraction is reduced as an `Integer`, and its parts must fit in the
-  target type. A duration of more than about 10^48 seconds is an error.
+  target type.
 - The decoded values do not keep the input in memory, because the decoder
   copies their texts.
 
