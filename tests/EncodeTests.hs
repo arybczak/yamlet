@@ -93,9 +93,9 @@ test_time = do
   let noon = LocalTime (fromGregorian 2026 9 25) (TimeOfDay 12 30 5.25)
   assertEqual "day" "2026-09-25\n" (encodeText (fromGregorian 2026 9 25))
   assertEqual "time" "12:30:00\n" (encodeText (TimeOfDay 12 30 0))
-  assertEqual "local time" "2026-09-25T12:30:05.25\n" (encodeText noon)
+  assertEqual "local time" "2026-09-25T12:30:05.250\n" (encodeText noon)
   assertEqual "UTC time" "2026-09-25T12:30:00Z\n" (encodeText (UTCTime (fromGregorian 2026 9 25) (12 * 3600 + 30 * 60)))
-  assertEqual "zoned time" "2026-09-25T12:30:05.25-02:30\n" (encodeText (ZonedTime noon (minutesToTimeZone (-150))))
+  assertEqual "zoned time" "2026-09-25T12:30:05.250-02:30\n" (encodeText (ZonedTime noon (minutesToTimeZone (-150))))
   assertEqual "duration" "1.5\n" (encodeText (1.5 :: NominalDiffTime))
   roundTrip "local time" noon
   roundTrip "UTC time" (UTCTime (fromGregorian (-44) 3 15) 0.000000000001)

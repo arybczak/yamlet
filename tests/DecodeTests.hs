@@ -286,16 +286,32 @@ test_time = do
   assertEqual "short year" (Just (1, 1, "expected a date such as 2026-09-25")) (errorOf (decodeText @Day "26-09-25"))
   assertEqual "time without seconds" (Right (TimeOfDay 12 30 0)) (decodeText "12:30")
   assertEqual "time with a fraction" (Right (TimeOfDay 12 30 5.25)) (decodeText "12:30:05.25")
-  assertEqual "invalid time" (Just (1, 1, "expected a time such as 12:30:00")) (errorOf (decodeText @TimeOfDay "24:00"))
+  assertEqual
+    "fraction of 13 digits"
+    (Just (1, 1, "expected a time such as 12:30:00"))
+    (errorOf (decodeText @TimeOfDay "12:30:05.1234567890123"))
+  assertEqual "end of a day" (Right (TimeOfDay 24 0 0)) (decodeText "24:00")
+  assertEqual "invalid time" (Just (1, 1, "expected a time such as 12:30:00")) (errorOf (decodeText @TimeOfDay "24:01"))
   let noon = LocalTime (fromGregorian 2026 9 25) (TimeOfDay 12 30 0)
   assertEqual "local time with T" (Right noon) (decodeText "2026-09-25T12:30:00")
   assertEqual "local time with a space" (Right noon) (decodeText "2026-09-25 12:30")
   let utcNoon = UTCTime (fromGregorian 2026 9 25) (12 * 3600 + 30 * 60)
   assertEqual "UTC time" (Right utcNoon) (decodeText "2026-09-25T12:30:00Z")
   assertEqual "UTC time from an offset" (Right utcNoon) (decodeText "2026-09-25T14:30:00+02:00")
-  assertEqual "offset without a colon" (Right utcNoon) (decodeText "2026-09-25T14:30:00 +0200")
+  assertEqual "offset without a colon" (Right utcNoon) (decodeText "2026-09-25T14:30:00+0200")
+  assertEqual
+    "space before an offset"
+    (Just (1, 1, "expected a date, a time and a time zone such as 2026-09-25T12:30:00Z"))
+    (errorOf (decodeText @UTCTime "2026-09-25T14:30:00 +02:00"))
   assertEqual "offset in hours" (Right utcNoon) (decodeText "2026-09-25T10:30:00-02")
-  assertEqual "lowercase separator and zone" (Right utcNoon) (decodeText "2026-09-25t12:30:00z")
+  assertEqual
+    "lowercase separator"
+    (Just (1, 1, "expected a date, a time and a time zone such as 2026-09-25T12:30:00Z"))
+    (errorOf (decodeText @UTCTime "2026-09-25t12:30:00Z"))
+  assertEqual
+    "lowercase zone"
+    (Just (1, 1, "expected a date, a time and a time zone such as 2026-09-25T12:30:00Z"))
+    (errorOf (decodeText @UTCTime "2026-09-25T12:30:00z"))
   assertEqual "large offset" (Right utcNoon) (decodeText "2026-09-26T12:29:00+23:59")
   assertEqual
     "offset beyond a day"

@@ -55,6 +55,7 @@ library
                     , scientific >= 0.3.7
                     , text       >= 2.0.2
                     , text-builder-linear >= 0.1.3
+                    , text-iso8601 >= 0.2
                     , time       >= 1.11
                     , uuid-types >= 1.0.6
 
@@ -75,7 +76,6 @@ library
                      Yamlet.Internal.Render
                      Yamlet.Internal.Schema
                      Yamlet.Internal.Syntax
-                     Yamlet.Internal.Time
                      Yamlet.Internal.Utils
                      Yamlet.Node
                      Yamlet.Schema

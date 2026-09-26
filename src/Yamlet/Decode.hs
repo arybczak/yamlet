@@ -58,6 +58,7 @@ import Data.Text.Lazy qualified as TL
 import Data.Time
 import Data.Time.Calendar.Month
 import Data.Time.Calendar.Quarter
+import Data.Time.FromText
 import Data.Tree qualified as Tree
 import Data.UUID.Types qualified as UUID
 import Data.Version
@@ -68,7 +69,6 @@ import Numeric.Natural
 import Text.ParserCombinators.ReadP
 
 import Yamlet.Internal.Schema
-import Yamlet.Internal.Time
 import Yamlet.Node
 
 -- | A parser of nodes. Its errors point to the node that the parser works on,
@@ -377,27 +377,27 @@ instance FromYaml Sci.Scientific where
 
 -- | @YYYY-MM-DD@, e.g. @2026-09-25@.
 instance FromYaml Day where
-  parseYaml = withText $ maybe (fail "expected a date such as 2026-09-25") pure . parseDay
+  parseYaml = withIso8601 "expected a date such as 2026-09-25" parseDay
 
--- | @HH:MM@, with optional seconds and a fraction of a second, e.g.
--- @12:30:05.25@.
+-- | @HH:MM@, with optional seconds and a fraction of a second of at most 12
+-- digits, e.g. @12:30:05.25@.
 instance FromYaml TimeOfDay where
-  parseYaml = withText $ maybe (fail "expected a time such as 12:30:00") pure . parseTimeOfDay
+  parseYaml = withIso8601 "expected a time such as 12:30:00" parseTimeOfDay
 
--- | A date and a time, separated by @T@, @t@ or a space, e.g.
+-- | A date and a time, separated by @T@ or a space, e.g.
 -- @2026-09-25T12:30:00@.
 instance FromYaml LocalTime where
   parseYaml =
-    withText $ maybe (fail "expected a date and a time such as 2026-09-25T12:30:00") pure . parseLocalTime
+    withIso8601 "expected a date and a time such as 2026-09-25T12:30:00" parseLocalTime
 
 -- | A date, a time and a time zone, e.g. @2026-09-25T12:30:00+02:00@. The
--- time zone is @Z@, @z@, @+HH:MM@, @+HHMM@ or @+HH@.
+-- time zone is @Z@, @+HH:MM@, @+HHMM@ or @+HH@.
 instance FromYaml ZonedTime where
-  parseYaml = withText $ maybe (fail zonedTimeMismatch) pure . parseZonedTime
+  parseYaml = withIso8601 zonedTimeMismatch parseZonedTime
 
 -- | Like 'ZonedTime', converted to UTC.
 instance FromYaml UTCTime where
-  parseYaml = withText $ maybe (fail zonedTimeMismatch) pure . parseUTCTime
+  parseYaml = withIso8601 zonedTimeMismatch parseUTCTime
 
 -- | A number of seconds, rounded down to a picosecond.
 instance FromYaml NominalDiffTime where
@@ -413,15 +413,15 @@ instance FromYaml UUID.UUID where
 
 -- | @YYYY-MM@, e.g. @2026-09@.
 instance FromYaml Month where
-  parseYaml = withText $ maybe (fail "expected a month such as 2026-09") pure . parseMonth
+  parseYaml = withIso8601 "expected a month such as 2026-09" parseMonth
 
 -- | @YYYY-qN@, e.g. @2026-q3@.
 instance FromYaml Quarter where
-  parseYaml = withText $ maybe (fail "expected a quarter such as 2026-q3") pure . parseQuarter
+  parseYaml = withIso8601 "expected a quarter such as 2026-q3" parseQuarter
 
 -- | @q1@ to @q4@.
 instance FromYaml QuarterOfYear where
-  parseYaml = withText $ maybe (fail "expected a quarter of a year such as q3") pure . parseQuarterOfYear
+  parseYaml = withIso8601 "expected a quarter of a year such as q3" parseQuarterOfYear
 
 -- | The English name in any case, e.g. @monday@.
 instance FromYaml DayOfWeek where
@@ -445,9 +445,33 @@ instance FromYaml CalendarDiffTime where
 zonedTimeMismatch :: String
 zonedTimeMismatch = "expected a date, a time and a time zone such as 2026-09-25T12:30:00Z"
 
--- | The picoseconds in a number of seconds.
+-- | A string in an ISO 8601 format, with the same rules as aeson.
+withIso8601 :: String -> (T.Text -> Either String a) -> Node -> Parser a
+withIso8601 mismatch p = withText $ either (const (fail mismatch)) pure . p
+
+-- | The picoseconds in a number of seconds, rounded down.
 duration :: Sci.Scientific -> Parser Integer
 duration = maybe (fail "the duration is out of range") pure . picoseconds
+  where
+    -- The result has at most 60 digits, so a huge exponent does not build a
+    -- huge integer.
+    picoseconds :: Sci.Scientific -> Maybe Integer
+    picoseconds s
+      | c == 0 = Just 0
+      -- The check comes before the computation of k, which can overflow.
+      | Sci.base10Exponent s > 48 = Nothing
+      | k >= 0 = if k > 60 - digits then Nothing else Just (c * 10 ^ k)
+      | -k > digits = Just (if c < 0 then -1 else 0)
+      | otherwise = Just (c `div` 10 ^ negate k)
+      where
+        c :: Integer
+        c = Sci.coefficient s
+
+        k :: Int
+        k = Sci.base10Exponent s + 12
+
+        digits :: Int
+        digits = length (show (abs c))
 
 -- | The nearest float. A conversion by way of 'Double' could round twice.
 instance FromYaml Float where

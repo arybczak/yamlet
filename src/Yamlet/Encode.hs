@@ -31,10 +31,12 @@ import Data.Sequence qualified as Seq
 import Data.Set qualified as Set
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
+import Data.Text.Lazy.Builder qualified as TLB
 import Data.Text.Builder.Linear qualified as B
 import Data.Time
 import Data.Time.Calendar.Month
 import Data.Time.Calendar.Quarter
+import Data.Time.ToText
 import Data.Tree qualified as Tree
 import Data.UUID.Types qualified as UUID
 import Data.Version
@@ -43,7 +45,6 @@ import Data.Word
 import Numeric.Natural
 
 import Yamlet.Internal.Emit
-import Yamlet.Internal.Time
 import Yamlet.Node
 import Yamlet.Schema
 import Yamlet.Syntax qualified as S
@@ -88,11 +89,11 @@ instance ToYaml Word64 where toYaml = node . Int . toInteger
 instance ToYaml Double where toYaml = node . Float . doubleToFloatValue
 instance ToYaml Float where toYaml = node . Float . floatToFloatValue
 instance ToYaml Sci.Scientific where toYaml = node . Float . Finite
-instance ToYaml Day where toYaml = node . String . formatDay
-instance ToYaml TimeOfDay where toYaml = node . String . formatTimeOfDay
-instance ToYaml LocalTime where toYaml = node . String . formatLocalTime
-instance ToYaml ZonedTime where toYaml = node . String . formatZonedTime
-instance ToYaml UTCTime where toYaml = node . String . formatUTCTime
+instance ToYaml Day where toYaml = iso8601 buildDay
+instance ToYaml TimeOfDay where toYaml = iso8601 buildTimeOfDay
+instance ToYaml LocalTime where toYaml = iso8601 buildLocalTime
+instance ToYaml ZonedTime where toYaml = iso8601 buildZonedTime
+instance ToYaml UTCTime where toYaml = iso8601 buildUTCTime
 
 -- | A number of seconds.
 instance ToYaml NominalDiffTime where
@@ -105,9 +106,13 @@ instance ToYaml DiffTime where
 -- | The text form with hyphens, e.g. @123e4567-e89b-12d3-a456-426614174000@.
 instance ToYaml UUID.UUID where toYaml = node . String . UUID.toText
 
-instance ToYaml Month where toYaml = node . String . formatMonth
-instance ToYaml Quarter where toYaml = node . String . formatQuarter
-instance ToYaml QuarterOfYear where toYaml = node . String . formatQuarterOfYear
+instance ToYaml Month where toYaml = iso8601 buildMonth
+instance ToYaml Quarter where toYaml = iso8601 buildQuarter
+instance ToYaml QuarterOfYear where toYaml = iso8601 buildQuarterOfYear
+
+-- | A string in an ISO 8601 format, the same as in aeson.
+iso8601 :: (a -> TLB.Builder) -> a -> Node
+iso8601 build = node . String . TL.toStrict . TLB.toLazyText . build
 
 -- | The English name in lowercase, e.g. @monday@.
 instance ToYaml DayOfWeek where
