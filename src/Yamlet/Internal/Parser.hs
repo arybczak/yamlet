@@ -315,7 +315,7 @@ lYamlStream markers0 = do
     document :: [Int] -> Maybe Version -> M.Map T.Text T.Text -> Int -> P [Document]
     document markers version hs prefix = do
       m <- pos
-      advance 3
+      advance markerLength
       p <- pos
       e <- env
       let (limit, markers') = nextMarker e markers p
@@ -390,7 +390,7 @@ lDocumentPrefix = many_ $ do
 -- next document.
 lDocumentSuffix :: P ()
 lDocumentSuffix = do
-  advance 3
+  advance markerLength
   p <- pos
   sBComment <|> throwAt p "unexpected content after the document end marker (...)"
 

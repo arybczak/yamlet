@@ -69,6 +69,7 @@ module Yamlet.Internal.Parser.Chars
   , skipWhites
   , breakEnd
   , isStartOfLine
+  , markerLength
   , isMarker
   , fitsKey
   ) where
@@ -268,14 +269,18 @@ isStartOfLine e i
   | i - bomLength >= e.base && isBom e (i - bomLength) = isStartOfLine e (i - bomLength)
   | otherwise = False
 
+-- | The number of characters of a @---@ or @...@ marker.
+markerLength :: Int
+markerLength = 3
+
 -- | A @---@ or @...@ marker at the start of a line.
 isMarker :: Env -> Int -> Bool
 isMarker e i =
   let w = byteAt e i
+      after = byteAt e (i + markerLength)
   in (w == MINUS || w == DOT)
-       && byteAt e (i + 1) == w
-       && byteAt e (i + 2) == w
-       && (let w3 = byteAt e (i + 3) in w3 == 0 || isWhite w3 || isBreak w3)
+       && all (\j -> byteAt e (i + j) == w) [1 .. markerLength - 1]
+       && (after == 0 || isWhite after || isBreak after)
        && isStartOfLine e i
 
 -- | The input between the indices fits in an implicit key.
