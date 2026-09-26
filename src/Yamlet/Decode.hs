@@ -322,9 +322,14 @@ rejectUnknownKeys known o = forM_ o.entries $ \(k, _) -> case k.value of
   where
     suggestion :: String -> Maybe T.Text
     suggestion t =
-      case L.sortOn fst [(d, s) | s <- known, let d = distance t (T.unpack s), d <= 2, d < length t] of
+      case L.sortOn fst [(d, s) | s <- known, let d = distance t (T.unpack s), d <= maxEdits, d < length t] of
         (_, s) : _ -> Just s
         [] -> Nothing
+      where
+        -- A swap of two adjacent characters, e.g. "hots" for "host", takes
+        -- two edits.
+        maxEdits :: Int
+        maxEdits = 2
 
     -- The Levenshtein distance: the number of characters to insert, delete
     -- or change. After i characters of xs, the row holds the distance from
