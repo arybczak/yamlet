@@ -11,6 +11,9 @@ A YAML 1.2.2 library written in Haskell.
   an excerpt of the input. Messages name the kinds of values in plain words,
   e.g. `expected a list, but got an integer`.
 - Mappings keep the order of their keys, on input and on output.
+- Instances of `FromYaml` and `ToYaml` for the common types. They use the
+  same formats as the instances of aeson, with one difference: the keys of a
+  map keep their type, e.g. `1: a`, while JSON writes every key as a string.
 - The syntax tree keeps the comments and the empty lines, so a program can
   read a file, change it and write it back with its comments.
 - Floating-point numbers are exact, e.g. `0.1` is exactly one tenth. They
