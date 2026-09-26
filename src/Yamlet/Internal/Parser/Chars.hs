@@ -17,24 +17,38 @@ module Yamlet.Internal.Parser.Chars
   , pattern PERCENT
   , pattern AMP
   , pattern SQUOTE
+  , pattern STAR
+  , pattern PLUS
   , pattern COMMA
   , pattern MINUS
   , pattern DOT
+  , pattern DIGIT_0
+  , pattern DIGIT_1
+  , pattern DIGIT_9
   , pattern COLON
   , pattern LESS
   , pattern GREATER
   , pattern QUESTION
   , pattern AT
+  , pattern UPPER_A
+  , pattern UPPER_F
+  , pattern UPPER_Z
   , pattern LBRACKET
   , pattern BACKSLASH
   , pattern RBRACKET
   , pattern GRAVE
+  , pattern LOWER_A
+  , pattern LOWER_F
+  , pattern LOWER_U
+  , pattern LOWER_Z
   , pattern LBRACE
   , pattern PIPE
   , pattern RBRACE
-  , pattern STAR
+  , pattern DEL
   , isWhite
   , isBreak
+  , isAsciiByte
+  , isCharStart
   , isNsChar
   , isFlowIndicator
   , isIndicator
@@ -81,22 +95,34 @@ pattern
   , PERCENT
   , AMP
   , SQUOTE
+  , STAR
+  , PLUS
   , COMMA
   , MINUS
   , DOT
+  , DIGIT_0
+  , DIGIT_1
+  , DIGIT_9
   , COLON
   , LESS
   , GREATER
   , QUESTION
   , AT
+  , UPPER_A
+  , UPPER_F
+  , UPPER_Z
   , LBRACKET
   , BACKSLASH
   , RBRACKET
   , GRAVE
+  , LOWER_A
+  , LOWER_F
+  , LOWER_U
+  , LOWER_Z
   , LBRACE
   , PIPE
   , RBRACE
-  , STAR
+  , DEL
     :: Word8
 pattern TAB = 0x09
 pattern LF = 0x0A
@@ -109,21 +135,33 @@ pattern PERCENT = 0x25
 pattern AMP = 0x26
 pattern SQUOTE = 0x27
 pattern STAR = 0x2A
+pattern PLUS = 0x2B
 pattern COMMA = 0x2C
 pattern MINUS = 0x2D
 pattern DOT = 0x2E
+pattern DIGIT_0 = 0x30
+pattern DIGIT_1 = 0x31
+pattern DIGIT_9 = 0x39
 pattern COLON = 0x3A
 pattern LESS = 0x3C
 pattern GREATER = 0x3E
 pattern QUESTION = 0x3F
 pattern AT = 0x40
+pattern UPPER_A = 0x41
+pattern UPPER_F = 0x46
+pattern UPPER_Z = 0x5A
 pattern LBRACKET = 0x5B
 pattern BACKSLASH = 0x5C
 pattern RBRACKET = 0x5D
 pattern GRAVE = 0x60
+pattern LOWER_A = 0x61
+pattern LOWER_F = 0x66
+pattern LOWER_U = 0x75
+pattern LOWER_Z = 0x7A
 pattern LBRACE = 0x7B
 pattern PIPE = 0x7C
 pattern RBRACE = 0x7D
+pattern DEL = 0x7F
 
 isWhite :: Word8 -> Bool
 isWhite w = w == SPACE || w == TAB
@@ -131,10 +169,17 @@ isWhite w = w == SPACE || w == TAB
 isBreak :: Word8 -> Bool
 isBreak w = w == LF || w == CR
 
+isAsciiByte :: Word8 -> Bool
+isAsciiByte w = w < 0x80
+
+-- | The byte starts a character in UTF-8, i.e. it is not a continuation byte.
+isCharStart :: Word8 -> Bool
+isCharStart w = isAsciiByte w || w >= 0xC0
+
 -- | ns-char. Every byte of a multibyte character counts, because the input
 -- contains printable characters only.
 isNsChar :: Word8 -> Bool
-isNsChar w = w > SPACE && w /= 0x7F
+isNsChar w = w > SPACE && w /= DEL
 
 isFlowIndicator :: Word8 -> Bool
 isFlowIndicator w =
@@ -145,28 +190,28 @@ isFlowIndicator w =
     || w == RBRACE
 
 isIndicator :: Word8 -> Bool
-isIndicator w = w < 0x80 && testBit indicators (fromIntegral w)
+isIndicator w = isAsciiByte w && testBit indicators (fromIntegral w)
   where
     indicators :: Integer
     indicators = foldr (\c acc -> setBit acc (ord c)) 0 ("-?:,[]{}#&*!|>'\"%@`" :: String)
 
 isDecDigit :: Word8 -> Bool
-isDecDigit w = w >= 0x30 && w <= 0x39
+isDecDigit w = w >= DIGIT_0 && w <= DIGIT_9
 
 isHexDigit' :: Word8 -> Bool
-isHexDigit' w = isDecDigit w || (w >= 0x41 && w <= 0x46) || (w >= 0x61 && w <= 0x66)
+isHexDigit' w = isDecDigit w || (w >= UPPER_A && w <= UPPER_F) || (w >= LOWER_A && w <= LOWER_F)
 
 hexValue :: Word8 -> Int
 hexValue w
-  | w <= 0x39 = fromIntegral w - 0x30
-  | w <= 0x46 = fromIntegral w - 0x37
-  | otherwise = fromIntegral w - 0x57
+  | w <= DIGIT_9 = fromIntegral (w - DIGIT_0)
+  | w <= UPPER_F = fromIntegral (w - UPPER_A) + 10
+  | otherwise = fromIntegral (w - LOWER_A) + 10
 
 isWordChar :: Word8 -> Bool
 isWordChar w =
   isDecDigit w
-    || (w >= 0x41 && w <= 0x5A)
-    || (w >= 0x61 && w <= 0x7A)
+    || (w >= UPPER_A && w <= UPPER_Z)
+    || (w >= LOWER_A && w <= LOWER_Z)
     || w == MINUS
 
 -- | ns-uri-char without the escaped characters.
@@ -246,4 +291,4 @@ fitsKey e p q =
     countChars :: Int
     countChars =
       length
-        [() | x <- [p .. q - 1], let w = byteAt e x, w < 0x80 || w >= 0xC0]
+        [() | x <- [p .. q - 1], isCharStart (byteAt e x)]

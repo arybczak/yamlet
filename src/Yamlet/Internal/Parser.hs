@@ -108,13 +108,13 @@ prescan e start = go start [start | isMarker e (skipBoms e start)] []
       | otherwise =
           let w = A.unsafeIndex e.array i
           in if
-               | w >= 0x20 && w < 0x7F -> go (i + 1) acc boms
+               | w >= SPACE && w < DEL -> go (i + 1) acc boms
                | w == LF || (w == CR && byteAt e (i + 1) /= LF) ->
                    let s = i + 1
                        marker = isMarker e (skipBoms e s)
                    in go s (if marker then s : acc else acc) boms
                | w == CR || w == TAB -> go (i + 1) acc boms
-               | w < 0x20 || w == 0x7F -> Left i
+               | w < SPACE || w == DEL -> Left i
                -- C1 control characters except NEL.
                | w == 0xC2 && i + 1 < e.end
                , let w1 = A.unsafeIndex e.array (i + 1)
@@ -863,7 +863,7 @@ escape e i = case chr (fromIntegral (byteAt e i)) of
     Just hi
       | hi >= 0xD800 && hi <= 0xDBFF
       , byteAt e (i + 5) == BACKSLASH
-      , byteAt e (i + 6) == 0x75
+      , byteAt e (i + 6) == LOWER_U
       , Just lo <- hexAt (i + 7) 4
       , lo >= 0xDC00 && lo <= 0xDFFF ->
           fromCodePoint (0x10000 + (hi - 0xD800) * 0x400 + (lo - 0xDC00)) (i + 11)
@@ -1332,12 +1332,12 @@ cBBlockHeader p = do
     chompingOf :: Word8 -> Maybe Chomping
     chompingOf = \case
       MINUS -> Just Strip
-      0x2B -> Just Keep
+      PLUS -> Just Keep
       _ -> Nothing
 
     indentOf :: Word8 -> Maybe Int
     indentOf w
-      | w >= 0x31 && w <= 0x39 = Just (fromIntegral w - 0x30)
+      | w >= DIGIT_1 && w <= DIGIT_9 = Just (fromIntegral (w - DIGIT_0))
       | otherwise = Nothing
 
 -- | Detect the content indentation of a block scalar from its first non-empty

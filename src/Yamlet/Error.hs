@@ -161,7 +161,7 @@ locateIn (T.Text arr base len) (Offset off0) = go base 1 base
     countChars :: Int -> Int -> Int
     countChars i0 i1 =
       length
-        [() | i <- [i0 .. i1 - 1], A.unsafeIndex arr i < 0x80 || A.unsafeIndex arr i >= 0xC0]
+        [() | i <- [i0 .. i1 - 1], isCharStart (A.unsafeIndex arr i)]
 
 -- | The index after a byte order mark at the index, or the index.
 skipBom :: A.Array -> Int -> Int -> Int

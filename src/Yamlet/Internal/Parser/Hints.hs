@@ -317,7 +317,7 @@ indentationMistake e i = go (lineStart e i)
     skipIndicators :: Int -> Int
     skipIndicators j =
       let b = byteBefore e j
-      in if b == MINUS || b == 0x2B || isDecDigit b then skipIndicators (j - 1) else j
+      in if b == MINUS || b == PLUS || isDecDigit b then skipIndicators (j - 1) else j
 
 -- | The error for a line of a block collection that lacks the space after
 -- "-" or the ":" after a key, if the entries above it at the same position
@@ -371,7 +371,7 @@ blockMistake e i = do
 
     startsWord :: Word8 -> Bool
     startsWord b =
-      (b < 0x80 && isAlphaNum (chr (fromIntegral b)))
+      (isAsciiByte b && isAlphaNum (chr (fromIntegral b)))
         || b == SQUOTE
         || b == DQUOTE
         || b == LBRACKET
@@ -424,7 +424,7 @@ isListItem e i = byteAt e i == MINUS && (let b = byteAt e (i + 1) in b == 0 || i
 
 unexpectedChar :: Env -> Int -> String
 unexpectedChar e i
-  | w < 0x80 = "unexpected " ++ show (chr (fromIntegral w))
+  | isAsciiByte w = "unexpected " ++ show (chr (fromIntegral w))
   | isPrint c = "unexpected '" ++ [c] ++ "'"
   | otherwise = "unexpected " ++ codePointName c
   where
