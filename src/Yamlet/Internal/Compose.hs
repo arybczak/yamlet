@@ -23,9 +23,25 @@ import Yamlet.Node
 -- every mapping are unique. The input is for error messages.
 compose :: T.Text -> S.Document -> Either Error Node
 compose input doc
-  | needsNumbering doc.root = fst . fst <$> go (Numbering M.empty M.empty) doc.root
+  | needsNumbering doc.root = fst . fst <$> go (Numbering M.empty M.empty 0) doc.root
   | otherwise = plain doc.root
   where
+    -- The limit of the visits of a traversal of the document. Aliases can add
+    -- as many visits as the document has nodes, or 100000 for a small
+    -- document. Without a limit, the visits of a small input can be
+    -- exponential in its size.
+    limit :: Int
+    limit = n + max 100000 n
+      where
+        n :: Int
+        n = syntaxSize doc.root
+
+        syntaxSize :: S.Node -> Int
+        syntaxSize sn = case sn.content of
+          S.Sequence _ xs -> 1 + sum (map syntaxSize xs)
+          S.Mapping _ kvs -> 1 + sum [syntaxSize k + syntaxSize v | (k, v) <- kvs]
+          _ -> 1
+
     -- Without aliases the anchors do not matter, and without collection keys
     -- only scalar keys compare.
     plain :: S.Node -> Either Error Node
@@ -50,7 +66,12 @@ compose input doc
       let off = sn.offset; props = sn.props
       in case sn.content of
            S.Alias name -> case M.lookup name st.anchors of
-             Just (Just (n, i)) -> Right ((Node off n.tag n.value, i), st)
+             Just (Just (n, i, visits))
+               | st.visits + visits > limit ->
+                   Left
+                     $ errorAt input off
+                     $ "the aliases expand the document to more than " ++ show limit ++ " nodes"
+               | otherwise -> Right ((Node off n.tag n.value, i), st {visits = st.visits + visits})
              Just Nothing ->
                Left
                  $ errorAt input off
@@ -61,17 +82,19 @@ compose input doc
                  $ "undefined alias *" ++ T.unpack name
            S.Scalar style t -> do
              n <- scalar off props style t
-             Right $ number props n (ScalarShape (Key n)) st
+             Right $ number props n (ScalarShape (Key n)) 1 st
            S.Sequence _ xs -> do
              tag <- collectionTag off props seqTag
              (ns, st') <- goList (open props st) xs
-             Right $ number props (Node off tag (Sequence (map fst ns))) (SequenceShape tag (map snd ns)) st'
+             let n = Node off tag (Sequence (map fst ns))
+             Right $ number props n (SequenceShape tag (map snd ns)) (st'.visits - st.visits + 1) st'
            S.Mapping _ kvs -> do
              tag <- collectionTag off props mapTag
              (entries, st') <- goPairs (open props st) kvs
              checkUniqueNumbers entries
              let n = Node off tag (Mapping [(k, v) | ((k, _), (v, _)) <- entries])
-             Right $ number props n (MappingShape tag (L.sort [(i, j) | ((_, i), (_, j)) <- entries])) st'
+                 shape = MappingShape tag (L.sort [(i, j) | ((_, i), (_, j)) <- entries])
+             Right $ number props n shape (st'.visits - st.visits + 1) st'
 
     goList :: Numbering -> [S.Node] -> Either Error ([(Node, Int)], Numbering)
     goList st = \case
@@ -98,9 +121,10 @@ compose input doc
       Just a -> st {anchors = M.insert a Nothing st.anchors}
       Nothing -> st
 
-    -- Give the node the number of its shape, and define its anchor.
-    number :: S.Props -> Node -> Shape -> Numbering -> ((Node, Int), Numbering)
-    number props n shape st = ((n, i), Numbering anchors' shapes')
+    -- Give the node the number of its shape, and define its anchor. The
+    -- visits are those of the node and of everything inside it.
+    number :: S.Props -> Node -> Shape -> Int -> Numbering -> ((Node, Int), Numbering)
+    number props n shape visits st = ((n, i), Numbering anchors' shapes' (st.visits + 1))
       where
         i :: Int
         shapes' :: M.Map Shape Int
@@ -108,9 +132,9 @@ compose input doc
           Just j -> (j, st.shapes)
           Nothing -> let j = M.size st.shapes in (j, M.insert shape j st.shapes)
 
-        anchors' :: M.Map T.Text (Maybe (Node, Int))
+        anchors' :: M.Map T.Text (Maybe (Node, Int, Int))
         anchors' = case props.anchor of
-          Just a -> M.insert a (Just (n, i)) st.anchors
+          Just a -> M.insert a (Just (n, i, visits)) st.anchors
           Nothing -> st.anchors
 
     -- Unlike in 'duplicate', comparing all pairs is not faster for few keys.
@@ -189,9 +213,12 @@ compose input doc
 -- time, even if they are large collections or come from aliases that expand
 -- to huge nodes.
 data Numbering = Numbering
-  { anchors :: !(M.Map T.Text (Maybe (Node, Int)))
-  -- ^ An anchor maps to Nothing while its node is composed.
+  { anchors :: !(M.Map T.Text (Maybe (Node, Int, Int)))
+  -- ^ An anchor maps to its node, the number of the node and the visits of a
+  -- traversal of the node. It maps to Nothing while its node is composed.
   , shapes :: !(M.Map Shape Int)
+  , visits :: !Int
+  -- ^ The visits of a traversal of the nodes so far.
   }
 
 -- | A node with the numbers of its items or entries in place of them. The

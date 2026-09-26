@@ -52,6 +52,7 @@ decodeTests =
     , localOption (mkTimeout 10000000) $ testCase "nesting" test_nesting
     , localOption (mkTimeout 10000000) $ testCase "many keys" test_manyKeys
     , localOption (mkTimeout 10000000) $ testCase "alias keys" test_aliasKeys
+    , localOption (mkTimeout 10000000) $ testCase "alias limit" test_aliasLimit
     , localOption (mkTimeout 10000000) $ testCase "long numbers" test_longNumbers
     , testCase "optional keys" test_optionalKeys
     , testCase "syntax tree" test_syntaxTree
@@ -905,34 +906,54 @@ test_keyErrors = do
     (Just (2, 1, "duplicate key"))
     (errorOf (decodeNodes (withKeys ["{a: 1, b: 2}", "{b: 2, a: 1}"])))
 
--- | The check for duplicate keys does not expand the aliases of a key. The
--- alias *a9 expands to 10^10 nodes.
+-- | The check for duplicate keys compares keys with aliases correctly.
 test_aliasKeys :: Assertion
 test_aliasKeys = do
-  let anchors :: T.Text
-      anchors =
-        T.unlines $
-          "a0: &a0 [x, x, x, x, x, x, x, x, x, x]"
-            : [ T.pack ("a" ++ show i ++ ": &a" ++ show i ++ " [" ++ L.intercalate ", " (replicate 10 ("*a" ++ show (i - 1))) ++ "]")
-              | i <- [1 .. 9 :: Int]
-              ]
-      check :: String -> Maybe (Int, Int, String) -> T.Text -> Assertion
-      check preface expected keys = assertEqual preface expected (errorOf (decodeNodes (anchors <> keys)))
-  check "different keys" Nothing "? *a9\n: 1\n? [*a8, 1]\n: 2\n? [*a8, 2]\n: 3\n"
-  check "duplicate key" (Just (13, 3, "duplicate key")) "? [*a9, 1]\n: 1\n? [*a9, 1]\n: 2\n"
+  let check :: String -> Maybe (Int, Int, String) -> T.Text -> Assertion
+      check preface expected keys = assertEqual preface expected (errorOf (decodeNodes (laughs 3 <> keys)))
+  check "different keys" Nothing "? *a3\n: 1\n? [*a2, 1]\n: 2\n? [*a2, 2]\n: 3\n"
+  check "duplicate key" (Just (7, 3, "duplicate key")) "? [*a3, 1]\n: 1\n? [*a3, 1]\n: 2\n"
   -- Keys from two separate chains of anchors are equal only after an
-  -- expansion to 2^40 items.
+  -- expansion to 2^12 items.
   let chains :: T.Text -> T.Text -> T.Text
       chains x y =
         T.unlines $
           ["- &a0 [" <> x <> "]", "- &b0 [" <> y <> "]"]
             ++ [ T.pack ("- &" ++ c : show i ++ " [*" ++ c : show (i - 1) ++ ", *" ++ c : show (i - 1) ++ "]")
-               | i <- [1 .. 40 :: Int]
+               | i <- [1 .. 12 :: Int]
                , c <- "ab"
                ]
-            ++ ["- ? *a40", "  : 1", "  ? *b40", "  : 2"]
-  assertEqual "equal chains" (Just (85, 5, "duplicate key")) (errorOf (decodeNodes (chains "x" "x")))
+            ++ ["- ? *a12", "  : 1", "  ? *b12", "  : 2"]
+  assertEqual "equal chains" (Just (29, 5, "duplicate key")) (errorOf (decodeNodes (chains "x" "x")))
   assertEqual "different chains" Nothing (errorOf (decodeNodes (chains "x" "y")))
+
+-- | Aliases can add 100000 visits to a traversal of a small document, and as
+-- many visits as the document has nodes to a large one.
+test_aliasLimit :: Assertion
+test_aliasLimit = do
+  assertEqual "small expansion" Nothing (errorOf (decodeNodes (laughs 3)))
+  assertEqual
+    "exponential expansion"
+    (Just (5, 45, "the aliases expand the document to more than 100121 nodes"))
+    (errorOf (decodeNodes (laughs 9)))
+  let items = T.intercalate ", " (replicate 200000 "x")
+      copies :: Int -> T.Text
+      copies k = T.unlines ("- &a [" <> items <> "]" : replicate k "- *a")
+  assertEqual "large document with one copy" Nothing (errorOf (decodeNodes (copies 1)))
+  assertEqual
+    "large document with two copies"
+    (Just (3, 3, "the aliases expand the document to more than 400008 nodes"))
+    (errorOf (decodeNodes (copies 2)))
+
+-- | Anchors a0 to ak, where each anchor after a0 has ten aliases to the one
+-- before it. So the alias *ak expands to about 10^(k+1) nodes.
+laughs :: Int -> T.Text
+laughs k =
+  T.unlines $
+    "a0: &a0 [x, x, x, x, x, x, x, x, x, x]"
+      : [ T.pack ("a" ++ show i ++ ": &a" ++ show i ++ " [" ++ L.intercalate ", " (replicate 10 ("*a" ++ show (i - 1))) ++ "]")
+        | i <- [1 .. k]
+        ]
 
 -- | The time to read a number is not quadratic in the number of its digits.
 test_longNumbers :: Assertion

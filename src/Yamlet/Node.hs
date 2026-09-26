@@ -11,9 +11,10 @@
 -- An alias shares the memory of the node that it refers to, so a small input
 -- with many aliases gives a small graph. But a function that visits every
 -- node, e.g. 'Control.DeepSeq.force' or a 'Yamlet.FromYaml' instance for a
--- list, visits a node once for each alias path to it. For an untrusted input,
--- the time and the memory of such a function can be exponential in the size
--- of the input.
+-- list, visits a node once for each alias path to it. So the decoder limits
+-- these visits: the aliases of a document can add 100000 visits, or as many
+-- visits as the document has nodes if that is more. A document beyond the
+-- limit is an error.
 module Yamlet.Node
   ( -- * Nodes
     Node (..)
