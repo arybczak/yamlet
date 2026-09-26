@@ -98,11 +98,11 @@ instance ToYaml UTCTime where toYaml = iso8601 buildUTCTime
 
 -- | A number of seconds.
 instance ToYaml NominalDiffTime where
-  toYaml d = let MkFixed ps = nominalDiffTimeToSeconds d in node (Float (Finite (Sci.scientific ps (-12))))
+  toYaml d = let MkFixed ps = nominalDiffTimeToSeconds d in node (Float (Finite (Sci.scientific ps (negate picoDecimals))))
 
 -- | A number of seconds.
 instance ToYaml DiffTime where
-  toYaml d = node (Float (Finite (Sci.scientific (diffTimeToPicoseconds d) (-12))))
+  toYaml d = node (Float (Finite (Sci.scientific (diffTimeToPicoseconds d) (negate picoDecimals))))
 
 -- | The text form with hyphens, e.g. @123e4567-e89b-12d3-a456-426614174000@.
 instance ToYaml UUID.UUID where toYaml = node . String . UUID.toText

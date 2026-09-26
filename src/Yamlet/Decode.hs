@@ -482,7 +482,7 @@ picoseconds s
     c = Sci.coefficient s
 
     k :: Integer
-    k = toInteger (Sci.base10Exponent s) + 12
+    k = toInteger (Sci.base10Exponent s) + toInteger picoDecimals
 
 -- | The nearest float. A conversion by way of 'Double' could round twice.
 instance FromYaml Float where

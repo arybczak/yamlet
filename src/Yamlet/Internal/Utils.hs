@@ -11,11 +11,15 @@ module Yamlet.Internal.Utils
   , readBoundedInt
   , maxImplicitKeyLength
   , coreTagPrefix
+  , picoDecimals
   ) where
 
 import Control.Monad
 import Data.Char
+import Data.Fixed
+import Data.Proxy
 import Data.Text qualified as T
+import Math.NumberTheory.Logarithms
 #if !MIN_VERSION_text(2,1,4)
 import Data.Text.Internal qualified as T
 #endif
@@ -72,3 +76,8 @@ maxImplicitKeyLength = 1024
 -- | The prefix of the tags of the core schema, and of the @!!@ handle.
 coreTagPrefix :: T.Text
 coreTagPrefix = "tag:yaml.org,2002:"
+
+-- | The number of decimal places of 'Pico', the resolution of the durations of
+-- the time library.
+picoDecimals :: Int
+picoDecimals = integerLog10 (resolution (Proxy @E12))
