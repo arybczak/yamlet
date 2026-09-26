@@ -16,8 +16,8 @@ import Control.Applicative
 import Data.Maybe
 import Data.Text qualified as T
 import Data.Text.Array qualified as A
-import Data.Word
 
+import Yamlet.Internal.Parser.Chars
 import Yamlet.Internal.Parser.Monad hiding ((<|>))
 import Yamlet.Internal.Syntax
 import Yamlet.Internal.Utils
@@ -226,7 +226,7 @@ mayHaveItems e = go True
     go blank i stop
       | i >= stop = False
       | otherwise = case A.unsafeIndex e.array i of
-          0x23 -> True
+          HASH -> True
           w
             | isBreak w -> blank || go True (i + 1) stop
             | isWhite w -> go blank (i + 1) stop
@@ -277,13 +277,13 @@ scanItems e start stop = go start start False False
           w
             | isBreak w ->
                 let next =
-                      if w == 0x0D && i + 1 < stop && A.unsafeIndex e.array (i + 1) == 0x0A
+                      if w == CR && i + 1 < stop && A.unsafeIndex e.array (i + 1) == LF
                         then i + 2
                         else i + 1
                     blank = not content
                     item = [Item (ls - e.base) (ls - e.base) True EmptyLine | blank, not prevEmpty]
                 in item ++ go next next False blank ranges
-            | w == 0x23 && (i == ls || isWhite (A.unsafeIndex e.array (i - 1))) ->
+            | w == HASH && (i == ls || isWhite (A.unsafeIndex e.array (i - 1))) ->
                 let eol = lineEnd i
                     text = T.stripEnd . dropSpace $ slice e (i + 1) eol
                 in Item (i - e.base) (ls - e.base) (not content) (Comment text)
@@ -306,9 +306,3 @@ scanItems e start stop = go start start False False
 
     dropSpace :: T.Text -> T.Text
     dropSpace t = fromMaybe t (textStripPrefix " " t)
-
-isBreak :: Word8 -> Bool
-isBreak w = w == 0x0A || w == 0x0D
-
-isWhite :: Word8 -> Bool
-isWhite w = w == 0x20 || w == 0x09
