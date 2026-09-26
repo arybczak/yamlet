@@ -523,12 +523,12 @@ cTagHandle = do
       q <- pos
       guardP (q > p + 1)
       char EXCL
-      pure $ slice e p (q + 1)
+      slice e p <$> pos
 
     secondary :: Env -> Int -> P T.Text
     secondary e p = do
       char EXCL
-      pure $ slice e p (p + 2)
+      slice e p <$> pos
 
 -- | Skip ns-uri-char*.
 uriChars :: Env -> Int -> Int
@@ -644,7 +644,8 @@ cNsTagProperty = do
   where
     verbatim :: Env -> Int -> P Tag
     verbatim e p = do
-      advance 2
+      char EXCL
+      char LESS
       q <- pos
       scan uriChars
       r <- pos
