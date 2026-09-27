@@ -252,11 +252,13 @@ withBool :: (Bool -> Parser a) -> S.Node -> Parser a
 withBool f = parseNode $ \n -> case view n of
   BoolView b -> f b
   StringView t
-    | isYaml11Bool t ->
+    | S.Scalar S.Plain _ <- n.content
+    , S.NoTag <- n.props.tag
+    , isYaml11Bool t ->
         failAt n $
           "expected a boolean, but got the string "
             ++ show t
-            ++ ", which is a boolean only in YAML 1.1"
+            ++ ", which is a boolean only in YAML 1.1, use true or false"
   _ -> typeMismatch "a boolean" n
 
 -- | The value of an integer.
