@@ -20,6 +20,22 @@
 --     Left err -> putStrLn $ prettyError "config.yaml" err
 --     Right config -> ...
 -- @
+--
+-- A field of type 'S.Node' keeps a part of the document as it was written,
+-- and the encoder writes it back with its comments and styles:
+--
+-- @
+-- data Workflow = Workflow
+--   { name :: Text
+--   , matrix :: Node
+--   }
+--
+-- instance FromYaml Workflow where
+--   parseYaml = withMapping $ \\o -> Workflow \<$> o .: "name" \<*> o .: "matrix"
+--
+-- instance ToYaml Workflow where
+--   toYaml w = mapping ["name" .= w.name, "matrix" .= w.matrix]
+-- @
 module Yamlet
   ( -- * Decoding
     decode

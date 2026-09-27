@@ -409,8 +409,12 @@ class FromYaml a where
   parseYamlList :: S.Node -> Parser [a]
   parseYamlList = withSequence (mapM (parseNode parseYaml))
 
--- | The node of the syntax tree, with its styles and comments. An alias in
--- the input gives a copy of the node that it refers to.
+-- | The node of the syntax tree, with its styles and comments, e.g. to write
+-- a part of a document back as it was written. An alias in the input gives a
+-- copy of the node that it refers to.
+--
+-- Unlike the values of the other instances, the node shares the memory of
+-- the input. To free the input, copy the node with 'Yamlet.Syntax.copyNode'.
 instance FromYaml S.Node where
   parseYaml = pure
 

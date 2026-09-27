@@ -68,7 +68,8 @@ The library also applies these rules:
 - A fraction is reduced as an `Integer`, and its parts must fit in the
   target type.
 - The decoded values do not keep the input in memory, because the decoder
-  copies their texts.
+  copies their texts. A kept `Node` shares the memory of the input. To free
+  the input, copy the node with `copyNode` from `Yamlet.Syntax`.
 
 The program must still limit the size of the input, because the memory
 grows with it.
