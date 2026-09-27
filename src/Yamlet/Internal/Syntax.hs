@@ -153,8 +153,12 @@ noComments = Comments [] Nothing []
 --
 -- The parser can give these comments to the key or to the value. The decoder
 -- takes them from both and decodes the value without them. The lines above
--- the first entry of a block collection value stay inside the value. A value
--- without a key, e.g. an item of a list, has no comments.
+-- the first entry of a block collection value stay inside the value.
+--
+-- A value without a key, e.g. an item of a list, has the comments of its
+-- node. The decoder gives the lines above a list or a mapping to its first
+-- item or key, so a list of 'Commented' values keeps a comment above its
+-- first item.
 data Commented a = Commented
   { comments :: !Comments
   , value :: a

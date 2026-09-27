@@ -391,9 +391,16 @@ test_commentedKeys = do
     (Right nodes)
     (encodeText <$> decodeText @(M.Map T.Text (Commented Node)) nodes)
   assertEqual
-    "list items have no key"
-    (Right [S.noComments])
-    (map (.comments) <$> decodeText @[Commented Int] "# c\n- 1\n")
+    "list items"
+    (Right [S.Comments [S.Comment "c"] Nothing [], S.Comments [] (Just "d") []])
+    (map (.comments) <$> decodeText @[Commented Int] "# c\n- 1\n- 2 # d\n")
+  -- The comment after the list belongs to the entry, and the comment above
+  -- the first item belongs to the item.
+  let branches = "branches: # which branches\n# the main branch\n- main # the old default\n- dev\n  # more later\n"
+  assertEqual
+    "commented items"
+    (Right branches)
+    (encodeText <$> decodeText @(M.Map T.Text (Commented [Commented T.Text])) branches)
 
 -- | The faster renderer of the encoder gives the same output as the renderer
 -- of syntax trees.

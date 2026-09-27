@@ -9,10 +9,10 @@ module Yamlet.Encode
   , renderDocuments
   ) where
 
+import Control.Applicative
 import Data.Containers.ListUtils
 import Data.Fixed
 import Data.Foldable
-import Data.Functor.Const
 import Data.Functor.Identity
 import Data.Int
 import Data.IntMap.Strict qualified as IM
@@ -100,29 +100,35 @@ instance ToYaml Value where toYaml = toSyntax
 
 -- | The value with the comments of its entry. The lines above and the comment
 -- of the first line go on the key, where the renderer writes them at the same
--- places as on a value. The lines after the value replace its own if the
--- value is a collection. A value without a key loses the comments.
+-- places as on a value. Without a key, they go on the value. The lines after
+-- the value replace its own if the value is a collection.
 instance ToYaml a => ToYaml (S.Commented a) where
-  toYaml c = toYaml c.value
-  toYamlField k c = (key, value)
+  toYaml c =
+    let v = withLinesAfter c.comments.after (toYaml c.value)
+        vc = v.comments
+    in S.Node
+         v.offset
+         v.endOffset
+         v.props
+         vc {S.before = c.comments.before ++ vc.before, S.inline = c.comments.inline <|> vc.inline}
+         v.content
+  toYamlField k c = (key, withLinesAfter c.comments.after (toYaml c.value))
     where
       key :: S.Node
       key = S.Node k.offset k.endOffset k.props (S.Comments c.comments.before c.comments.inline k.comments.after) k.content
 
-      value :: S.Node
-      value
-        | collection && not (null c.comments.after) =
-            S.Node v.offset v.endOffset v.props (v.comments {S.after = c.comments.after}) v.content
-        | otherwise = v
-        where
-          v :: S.Node
-          v = toYaml c.value
-
-          collection :: Bool
-          collection = case v.content of
-            S.Sequence {} -> True
-            S.Mapping {} -> True
-            _ -> False
+-- | The node with the given lines after its last entry in place of its own,
+-- if it is a collection and the lines are not empty.
+withLinesAfter :: [S.Line] -> S.Node -> S.Node
+withLinesAfter ls v
+  | collection && not (null ls) = S.Node v.offset v.endOffset v.props (v.comments {S.after = ls}) v.content
+  | otherwise = v
+  where
+    collection :: Bool
+    collection = case v.content of
+      S.Sequence {} -> True
+      S.Mapping {} -> True
+      _ -> False
 
 instance ToYaml () where toYaml _ = scalar Null
 instance ToYaml Bool where toYaml = scalar . Bool

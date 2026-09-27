@@ -235,11 +235,27 @@ withText f = parseNode $ \n -> case view n of
 ----------------------------------------
 -- Collections
 
--- | The items of a sequence.
+-- | The items of a sequence. As for 'withMapping', the lines above the
+-- sequence go to its first item.
 withSequence :: ([S.Node] -> Parser a) -> S.Node -> Parser a
 withSequence f = parseNode $ \n -> case n.content of
-  S.Sequence _ xs -> f xs
+  S.Sequence _ xs -> f (items n xs)
   _ -> typeMismatch "a list" n
+
+-- | The items of a sequence, with the lines above the sequence moved to its
+-- first item. Out of line, 'withSequence' is small enough to inline, and
+-- the optimizer sees its failure, e.g. in a derived decoder.
+items :: S.Node -> [S.Node] -> [S.Node]
+items n = \case
+  x : xs | not (null n.comments.before) -> withLinesAbove n.comments.before x : xs
+  xs -> xs
+{-# NOINLINE items #-}
+
+-- | The node with the lines above it after the given ones.
+withLinesAbove :: [S.Line] -> S.Node -> S.Node
+withLinesAbove ls n =
+  let c = n.comments
+  in S.Node n.offset n.endOffset n.props c {S.before = ls ++ c.before} n.content
 
 -- | The entries of a mapping. As for 'withText', the tag of a string key does
 -- not matter, so two string keys with the same text are an error, e.g. @a@
@@ -258,10 +274,7 @@ withMapping f = parseNode $ \n -> case n.content of
 -- first key. The renderer writes both at the same place.
 keyEntries :: S.Node -> [(S.Node, S.Node)] -> [(S.Node, S.Node)]
 keyEntries n = \case
-  (k, v) : rest
-    | not (null n.comments.before) ->
-        let c = k.comments
-        in (S.Node k.offset k.endOffset k.props c {S.before = n.comments.before ++ c.before} k.content, v) : rest
+  (k, v) : rest | not (null n.comments.before) -> (withLinesAbove n.comments.before k, v) : rest
   kvs -> kvs
 
 -- | A mapping with fast access to the values of string keys.
@@ -444,10 +457,12 @@ class FromYaml a where
 instance FromYaml S.Node where
   parseYaml = pure . S.copyNode
 
--- | The value with the comments of its entry, copied like every decoded text.
--- A value without a key has no comments.
+-- | The value with the comments of its entry, or of its node if it has no key,
+-- copied like every decoded text.
 instance FromYaml a => FromYaml (S.Commented a) where
-  parseYaml v = S.Commented S.noComments <$> parseYaml v
+  parseYaml v =
+    S.Commented (S.copyComments v.comments)
+      <$> parseYaml (S.Node v.offset v.endOffset v.props S.noComments v.content)
   parseYamlField k v = S.Commented (S.copyComments c) <$> parseYaml v'
     where
       c :: S.Comments
