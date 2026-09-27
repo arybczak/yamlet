@@ -44,7 +44,6 @@ module Yamlet.Decode
 import Control.Applicative
 import Control.Monad
 import Data.Fixed
-import Data.Foldable
 import Data.Functor.Identity
 import Data.Int
 import Data.IntMap.Strict qualified as IM
@@ -486,23 +485,41 @@ infixl 9 .:, .:?, .:!
 infixl 8 .!=
 
 -- | Fail at each key that is not in the list. If a key in the list is close
--- to an unknown key, e.g. "host" to "hots", its error suggests it.
+-- to an unknown key, e.g. "host" to "hots", its error suggests it. Otherwise
+-- the first such error of the mapping lists the known keys, and the others
+-- do not repeat the list.
 rejectUnknownKeys :: [T.Text] -> Object -> Parser ()
-rejectUnknownKeys known o = traverse_ (check . fst) o.entries
+rejectUnknownKeys known o = go True o.entries
   where
-    check :: S.Node -> Parser ()
-    check k = case stringValue k of
-      Just t
-        | t `elem` known -> pure ()
-        | otherwise -> failAt k $ "unknown key " ++ show t ++ alternatives known t
-      _ -> typeMismatch "a string as the key" k
+    -- The flag tells if no error listed the known keys yet.
+    go :: Bool -> [(S.Node, S.Node)] -> Parser ()
+    go unlisted = \case
+      [] -> pure ()
+      (k, _) : rest -> case stringValue k of
+        Just t
+          | t `elem` known -> go unlisted rest
+          | Just s <- closeName known t -> unknown k t (didYouMean s) *> go unlisted rest
+          | unlisted -> unknown k t (expectedOneOf known) *> go False rest
+          | otherwise -> unknown k t "" *> go False rest
+        _ -> typeMismatch "a string as the key" k *> go unlisted rest
+
+    unknown :: S.Node -> T.Text -> String -> Parser ()
+    unknown k t hint = failAt k $ "unknown key " ++ show t ++ hint
 
 -- | The end of the error for an unknown name: the known name that is close to
--- it, e.g. "host" for "hots", or else all known names.
+-- it, or else all known names.
 alternatives :: [T.Text] -> T.Text -> String
-alternatives known t = case suggestion (T.unpack t) of
-  Just s -> ", did you mean " ++ show s ++ "?"
-  Nothing -> ", expected one of: " ++ L.intercalate ", " (map T.unpack known)
+alternatives known t = maybe (expectedOneOf known) didYouMean (closeName known t)
+
+didYouMean :: T.Text -> String
+didYouMean s = ", did you mean " ++ show s ++ "?"
+
+expectedOneOf :: [T.Text] -> String
+expectedOneOf known = ", expected one of: " ++ L.intercalate ", " (map T.unpack known)
+
+-- | The known name that is close to the name, e.g. "host" for "hots".
+closeName :: [T.Text] -> T.Text -> Maybe T.Text
+closeName known t = suggestion (T.unpack t)
   where
     suggestion :: String -> Maybe T.Text
     suggestion u =
