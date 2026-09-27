@@ -41,10 +41,7 @@ main =
           ]
       , testGroup
           "sums"
-          [ -- GHC 9.4 shares the code of the last constructors in a join point,
-            -- as for other sums. The arguments are constants, so each one
-            -- runs once.
-            testCase "encode Turn" $ assertFailureIf (ghcVersion == (9, 4)) $(inspectTest $ hasNoGenericRep 'encodeTurn)
+          [ testCase "encode Turn" $ assertSuccess $(inspectTest $ hasNoGenericRep 'encodeTurn)
           , testCase "decode Turn" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeTurn)
           , testCase "decode Shape" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeShape)
           , testCase "decode Step" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeStep)
