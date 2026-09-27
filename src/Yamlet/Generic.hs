@@ -46,10 +46,11 @@
 --
 -- = Missing keys
 --
--- A missing field takes its value from 'yamlDefault', if the type has a
--- default. Otherwise it decodes like a field with the value null, and so
--- does a missing contents key. Thus a field of type 'Maybe' is optional, and
--- a missing field of another type is an error.
+-- A missing field takes its value from the 'yamlDefault' of the type that
+-- has the field, if that type has a default. Otherwise it decodes like a
+-- field with the value null, and so does a missing contents key. Thus a
+-- field of type 'Maybe' is optional, and a missing field of another type is
+-- an error, also if the type of the field has a default.
 --
 -- A type with a default configuration derives the decoder like this:
 --
@@ -66,7 +67,9 @@
 -- tag.
 --
 -- An explicit null is no missing key, so it goes to the decoder of the
--- field, e.g. @proxy: null@ gives 'Nothing' for a field of type 'Maybe'.
+-- field, e.g. @proxy: null@ gives 'Nothing' for a field of type 'Maybe'. So
+-- does @proxy:@ without a value. An empty document is null too, so a type
+-- with a default does not decode from it.
 module Yamlet.Generic
   ( YamlOptions (..)
   , defaultYamlOptions

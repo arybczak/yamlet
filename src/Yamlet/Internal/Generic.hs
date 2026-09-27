@@ -94,8 +94,9 @@ class GenericYaml a where
   yamlOptions = defaultYamlOptions
 
   -- | The value that gives the fields of missing keys, e.g. the default
-  -- configuration. Without it, a missing key decodes like null. For a sum
-  -- type, the default applies only to its own constructor.
+  -- configuration. Without it, a missing key decodes like null. A key with
+  -- the value null is not missing. For a sum type, the default applies only
+  -- to its own constructor.
   yamlDefault :: Maybe a
   yamlDefault = Nothing
 
