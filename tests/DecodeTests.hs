@@ -1225,6 +1225,9 @@ test_errorPaths = do
     decodeText @(M.Map T.Text (M.Map T.Text Int)) "\"a.b\":\n  c: x\n"
   check "key with escapes" (Right "\"a\\nb\\t\\\"\\x07\\u2028\\U000e0001\"") $
     decodeText @(M.Map T.Text Int) "\"a\\nb\\t\\\"\\a\\L\\U000E0001\": x\n"
+  check "inside a key" (Right "a") $ decodeText @(M.Map T.Text (M.Map [Int] Int)) "a:\n  ? [1, x]\n  : 1\n"
+  check "inside a key at the root" (Right "") $ decodeText @(M.Map (M.Map T.Text Int) Int) "? {port: x}\n: 1\n"
+  check "in the value of a collection key" (Right "?[1]") $ decodeText @(M.Map [Int] [Int]) "? [1, 2]\n: [3, y]\n"
   check "duplicate key" (Right "a") $ decodeText @Value "a:\n  b: 1\n  b: 2\n"
   check "root" (Right "") $ decodeText @Int "x"
   let key = S.plainNode "a"

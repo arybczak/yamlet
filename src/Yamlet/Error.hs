@@ -191,7 +191,8 @@ renderPath = \case
 
 -- | The path from the root to the node at the offset. If several nodes start
 -- there, e.g. a block mapping and its first key, the outermost one counts. A
--- key does not add to the path.
+-- key does not add to the path, and a node inside a key that is a collection
+-- has the path of the mapping.
 nodePath :: Offset -> Node -> [PathElement]
 nodePath off root = fromMaybe [] (listToMaybe (nodePaths [off] root))
 
@@ -209,7 +210,7 @@ nodePaths offs root = map (\off -> M.findWithDefault [] off found) offs
       | Set.null inside = here
       | otherwise = case n.content of
           Sequence _ xs -> L.foldl' (\a (i, x) -> walk inside (Index i : rpath) x a) here (zip [0 ..] xs)
-          Mapping _ kvs -> L.foldl' (\a (k, v) -> walk inside (keyElement k : rpath) v (walk inside rpath k a)) here kvs
+          Mapping _ kvs -> L.foldl' (\a (k, v) -> walk inside (keyElement k : rpath) v (key inside rpath k a)) here kvs
           _ -> here
       where
         here :: M.Map Offset [PathElement]
@@ -218,7 +219,18 @@ nodePaths offs root = map (\off -> M.findWithDefault [] off found) offs
           | otherwise = acc
 
         inside :: Set.Set Offset
-        inside = Set.takeWhileAntitone (<= n.endOffset) (Set.dropWhileAntitone (< n.offset) wanted)
+        inside = within n wanted
+
+    -- Every node of a key has the path of the mapping. An index or a key
+    -- inside the key would read as a step into the mapping.
+    key :: Set.Set Offset -> [PathElement] -> Node -> M.Map Offset [PathElement] -> M.Map Offset [PathElement]
+    key wanted rpath k acc = Set.foldl' (\a off -> M.insertWith (\_ old -> old) off path a) acc (within k wanted)
+      where
+        path :: [PathElement]
+        path = reverse rpath
+
+    within :: Node -> Set.Set Offset -> Set.Set Offset
+    within n = Set.takeWhileAntitone (<= n.endOffset) . Set.dropWhileAntitone (< n.offset)
 
     keyElement :: Node -> PathElement
     keyElement k = case k.content of
