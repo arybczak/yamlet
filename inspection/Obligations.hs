@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskellQuotes #-}
 
 -- | Obligations for the inspection tests. They are in their own module,
 -- because a splice cannot use a function of the module that holds it.

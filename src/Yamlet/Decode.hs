@@ -1142,7 +1142,7 @@ gParseYaml
   => YamlOptions -> Bool -> Maybe (D1 d f p) -> (D1 d f p -> a) -> S.Node -> Parser a
 gParseYaml opts flat def k n
   | isEnum @f opts =
-      withText (\t -> maybe (unknown "value" t) id (gFromTag opts (k . M1) n t)) n
+      withText (\t -> fromMaybe (unknown "value" t) (gFromTag opts (k . M1) n t)) n
   | isTagged @f opts = withMapping tagged n
   | otherwise = gFromUntagged opts (unM1 <$> def) (k . M1) n
   where
@@ -1151,7 +1151,7 @@ gParseYaml opts flat def k n
       Nothing -> missingKey o opts.tagKey
       Just tn -> do
         t <- parseNode (parseYaml @T.Text) tn
-        maybe (parseNode (\_ -> unknown "tag" t) tn) id (gFromTagged opts flat (unM1 <$> def) (k . M1) t o)
+        fromMaybe (parseNode (\_ -> unknown "tag" t) tn) (gFromTagged opts flat (unM1 <$> def) (k . M1) t o)
 
     unknown :: String -> T.Text -> Parser a
     unknown what t =

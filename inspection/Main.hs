@@ -169,7 +169,7 @@ newtype Box a = Box {item :: a}
   deriving stock (Generic)
   deriving anyclass (GenericYaml, FromYaml, ToYaml)
 
-data Velocity = Velocity Speed
+newtype Velocity = Velocity Speed
   deriving stock (Generic)
   deriving anyclass (FromYaml, ToYaml)
 

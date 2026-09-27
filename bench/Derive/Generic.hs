@@ -89,7 +89,7 @@ mkF i = case i `mod` 3 of
 mkA :: Int -> A
 mkA i =
   A
-    (T.pack (show (i * 1)))
+    (T.pack (show i))
     (if even i then Nothing else Just 2)
     (i + 3)
     (T.pack (show (i * 4)))
@@ -103,7 +103,7 @@ mkA i =
 mkB :: Int -> B
 mkB i =
   B
-    (T.pack (show (i * 1)))
+    (T.pack (show i))
     (if even i then Nothing else Just 2)
     (i + 3)
     (T.pack (show (i * 4)))
@@ -117,7 +117,7 @@ mkB i =
 mkC :: Int -> C
 mkC i =
   C
-    (T.pack (show (i * 1)))
+    (T.pack (show i))
     (if even i then Nothing else Just 2)
     (i + 3)
     (T.pack (show (i * 4)))
