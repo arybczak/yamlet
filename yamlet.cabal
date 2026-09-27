@@ -75,6 +75,7 @@ library
                      Yamlet.Internal.Comments
                      Yamlet.Internal.Compose
                      Yamlet.Internal.Emit
+                     Yamlet.Internal.Encoder
                      Yamlet.Internal.Generic
                      Yamlet.Internal.Input
                      Yamlet.Internal.Parser

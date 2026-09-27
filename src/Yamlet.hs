@@ -70,9 +70,7 @@ module Yamlet
   , module Yamlet.Decode
 
     -- * Conversion to nodes
-  , ToYaml (..)
-  , (.=)
-  , mapping
+  , module Yamlet.Encode
 
     -- * Generic instances
   , module Yamlet.Generic
@@ -92,6 +90,7 @@ import Yamlet.Encode
 import Yamlet.Error
 import Yamlet.Generic
 import Yamlet.Internal.Compose
+import Yamlet.Internal.Encoder
 import Yamlet.Internal.Input
 import Yamlet.Internal.Parser
 import Yamlet.Internal.Syntax qualified as S
