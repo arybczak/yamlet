@@ -25,6 +25,7 @@ renderTests =
         , testCase "configuration" test_configuration
         , testCase "round trip" test_commentRoundTrip
         , testCase "moved comments" test_movedComments
+        , testCase "lines after a list" test_linesAfterList
         ]
     , testProperty "round trip" prop_roundTrip
     ]
@@ -403,6 +404,18 @@ test_commentRoundTrip = case parseDocumentsText configuration of
   Left err -> assertFailure (show err)
 
 -- | A comment without a place at its node moves to one that has it.
+-- | The lines after a list under a key stay at the end of the list. Without
+-- indentation, a block collection as the last item would take them in.
+test_linesAfterList :: Assertion
+test_linesAfterList = do
+  let check :: String -> T.Text -> Assertion
+      check preface input = assertEqual preface (Right input) (renderSyntax defaultRenderOptions <$> parseDocumentsText input)
+  check "mapping as the last item" "a:\n  - b: 1\n  # c\n"
+  check "list as the last item" "a:\n  - - b\n  # c\n"
+  check "block scalar as the last item" "a:\n  - |\n    b\n  # c\n"
+  check "scalar as the last item" "a:\n- b\n  # c\n"
+  check "no lines after the list" "a:\n- b: 1\n"
+
 test_movedComments :: Assertion
 test_movedComments = do
   let render :: Node -> T.Text
@@ -436,8 +449,8 @@ test_movedComments = do
           , (plainNode "b", plainNode "2")
           ]
   assertEqual
-    "end of an indentless list"
-    "a:\n- x: 1\n  # c\nb: 2\n"
+    "end of a list with a mapping"
+    "a:\n  - x: 1\n  # c\nb: 2\n"
     (render (list (mappingNode [(plainNode "x", plainNode "1")])))
   assertEqual
     "end of a list with a block scalar"
