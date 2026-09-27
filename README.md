@@ -15,6 +15,10 @@ A YAML 1.2.2 library written in Haskell.
 - Instances of `FromYaml` and `ToYaml` for the common types. They use the
   same formats as the instances of aeson, with one difference: the keys of a
   map keep their type, e.g. `1: a`, while JSON writes every key as a string.
+- Generic instances with the formats of aeson, for fewer shapes of types. A
+  constructor cannot have several fields without names, and a type cannot
+  mix named fields with a field without a name. Such a type is a compile
+  error.
 - The syntax tree keeps the comments and the empty lines, so a program can
   read a file, change it and write it back with its comments.
 - A decoded type can keep a part of a document as a `Node`. The encoder

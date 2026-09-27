@@ -19,12 +19,11 @@
 --
 -- * A type with several constructors is a mapping with the name of the
 --   constructor under the tag key, next to the fields of the constructor,
---   e.g. @{tag: Circle, radius: 1}@. A constructor without field names has
---   its field under the contents key, e.g. @{tag: Forward, contents: 10}@, or
---   a list of its fields if it has several.
+--   e.g. @{tag: Circle, radius: 1}@. A constructor with a field without a
+--   name has its field under the contents key, e.g.
+--   @{tag: Forward, contents: 10}@.
 --
--- * A type with one constructor without field names is its field, or a list
---   of its fields if it has several.
+-- * A type with one constructor and a field without a name is its field.
 --
 -- * With 'FlattenFields', the entries of a field without a name go in the
 --   mapping of the constructor, e.g. @{tag: Ahead, distance: 10}@ for
@@ -34,6 +33,16 @@
 -- instance GenericYaml Step where
 --   type FlattenFields Step = True
 -- @
+--
+-- = Shapes
+--
+-- Every constructor has no fields, one field without a name, or named
+-- fields. A type with several constructors cannot mix named fields with a
+-- field without a name, but a constructor without fields fits with both.
+-- 'FlattenFields' needs constructors with a field without a name. Another
+-- type is a compile error that names the constructors, e.g. for a
+-- constructor with several fields without names. Give such fields names, or
+-- put them in a tuple.
 --
 -- = Missing keys
 --
