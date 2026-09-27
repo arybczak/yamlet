@@ -947,6 +947,12 @@ test_collectedErrors = do
     ]
     (errorsOf (decodeText @Config "name: [x]\npaths: 1\njobs: x\n"))
   assertEqual
+    "unknown keys"
+    [ (2, 1, "unknown key \"job\", did you mean \"jobs\"?")
+    , (3, 1, "unknown key \"bogus\", expected one of: name, paths, jobs")
+    ]
+    (errorsOf (decodeText @Config "name: x\njob: 1\nbogus: 2\n"))
+  assertEqual
     "statement of a do block"
     [(2, 1, "unknown key \"bogus\", expected one of: name, paths, jobs")]
     (errorsOf (decodeText @Config "name: [x]\nbogus: 1\n"))

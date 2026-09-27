@@ -492,19 +492,22 @@ p .!= def = fromMaybe def <$> p
 infixl 9 .:, .:?, .:!
 infixl 8 .!=
 
--- | Fail at the first key that is not in the list. If a key in the list is
--- close to the unknown key, e.g. "host" to "hots", the error suggests it.
+-- | Fail at each key that is not in the list. If a key in the list is close
+-- to an unknown key, e.g. "host" to "hots", its error suggests it.
 rejectUnknownKeys :: [T.Text] -> Object -> Parser ()
-rejectUnknownKeys known o = forM_ o.entries $ \(k, _) -> case stringValue k of
-  Just t
-    | t `elem` known -> pure ()
-    | otherwise ->
-        failAt k $
-          "unknown key " ++ show t ++ case suggestion (T.unpack t) of
-            Just s -> ", did you mean " ++ show s ++ "?"
-            Nothing -> ", expected one of: " ++ L.intercalate ", " (map T.unpack known)
-  _ -> typeMismatch "a string as the key" k
+rejectUnknownKeys known o = foldr (\(k, _) rest -> liftA2 const (check k) rest) (pure ()) o.entries
   where
+    check :: S.Node -> Parser ()
+    check k = case stringValue k of
+      Just t
+        | t `elem` known -> pure ()
+        | otherwise ->
+            failAt k $
+              "unknown key " ++ show t ++ case suggestion (T.unpack t) of
+                Just s -> ", did you mean " ++ show s ++ "?"
+                Nothing -> ", expected one of: " ++ L.intercalate ", " (map T.unpack known)
+      _ -> typeMismatch "a string as the key" k
+
     suggestion :: String -> Maybe T.Text
     suggestion t =
       case L.sortOn fst [(d, s) | s <- known, let d = distance t (T.unpack s), d <= maxEdits, d < length t] of

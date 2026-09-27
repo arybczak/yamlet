@@ -336,6 +336,12 @@ test_collectedErrors = do
     [(1, 7, "expected an integer, but got a string"), (2, 1, "unknown key \"colour\", expected one of: size, note")]
     (errorsOf (decodeText @Strict "size: x\ncolour: red\n"))
   assertEqual
+    "unknown keys"
+    [ (1, 1, "unknown key \"colour\", expected one of: size, note")
+    , (3, 1, "unknown key \"nate\", did you mean \"note\"?")
+    ]
+    (errorsOf (decodeText @Strict "colour: red\nsize: 1\nnate: x\n"))
+  assertEqual
     "fields of a constructor"
     [(1, 25, "expected a number, but got a string"), (1, 36, "expected a number, but got a string")]
     (errorsOf (decodeText @Shape "{tag: Rectangle, width: x, height: y}"))
