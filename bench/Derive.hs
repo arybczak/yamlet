@@ -12,6 +12,7 @@ import Test.Tasty.Bench
 import Derive.Generic qualified as G
 import Derive.Manual qualified as M
 import Yamlet
+import Yamlet.Syntax qualified as S
 
 -- | Fail if the two versions of a type give different YAML.
 checkDerived :: IO ()
@@ -73,8 +74,8 @@ format name mkG mkM =
     ms = map mkM values
 
     -- Both versions give the same YAML, see 'checkDerived'.
-    yaml :: Node
-    yaml = toYaml gs
+    yaml :: S.Node
+    yaml = toSyntax (toYaml gs)
 
     bs :: BS.ByteString
     bs = encode gs

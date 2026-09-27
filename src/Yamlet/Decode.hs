@@ -12,6 +12,11 @@ module Yamlet.Decode
   , typeMismatch
   , orElse
 
+    -- * Views
+  , View (..)
+  , view
+  , describeNode
+
     -- * Scalars
   , withNull
   , withBool
@@ -72,8 +77,10 @@ import GHC.TypeLits hiding (Natural)
 import Math.NumberTheory.Logarithms
 import Numeric.Natural
 
+import Yamlet.Internal.Compose
 import Yamlet.Internal.Generic
 import Yamlet.Internal.Schema
+import Yamlet.Internal.Syntax qualified as S
 import Yamlet.Internal.Utils
 import Yamlet.Node
 
@@ -107,28 +114,90 @@ instance MonadFail Parser where
 
 -- | Run a parser on a node. Return the offset of the node that caused an
 -- error with the error message.
-runParser :: (Node -> Parser a) -> Node -> Either (Offset, String) a
-runParser f n = let Parser g = parseNode f n in g n.offset
+--
+-- The node first goes through the checks of 'Yamlet.resolveDocument', e.g.
+-- for duplicate keys, and its aliases are replaced with the nodes that they
+-- refer to.
+runParser :: (S.Node -> Parser a) -> S.Node -> Either (Offset, String) a
+runParser f n0 = prepare n0 >>= runChecked f
+
+-- | Run a parser on a node that passed 'prepare'.
+runChecked :: (S.Node -> Parser a) -> S.Node -> Either (Offset, String) a
+runChecked f n = let Parser g = parseNode f n in g n.offset
 
 -- | Run a parser on a node, so that 'fail' points to the node.
-parseNode :: (Node -> Parser a) -> Node -> Parser a
+parseNode :: (S.Node -> Parser a) -> S.Node -> Parser a
 parseNode f n = let Parser g = f n in Parser $ \_ -> g n.offset
 
 -- | Fail with an error that points to the given node.
-failAt :: Node -> String -> Parser a
+failAt :: S.Node -> String -> Parser a
 failAt n msg = Parser $ \_ -> Left (n.offset, msg)
 
 -- | Fail with an error about the kind of the node, e.g. "expected a list, but
 -- got a string".
-typeMismatch :: String -> Node -> Parser a
+typeMismatch :: String -> S.Node -> Parser a
 typeMismatch expected n = failAt n (mismatchMessage expected n)
 
 -- Without the message, 'typeMismatch' is small enough to inline. Then the
 -- optimizer sees the failure and removes the code after it, e.g. the generic
 -- representation in a derived decoder.
-mismatchMessage :: String -> Node -> String
-mismatchMessage expected n = "expected " ++ expected ++ ", but got " ++ describe n.value
+mismatchMessage :: String -> S.Node -> String
+mismatchMessage expected n = "expected " ++ expected ++ ", but got " ++ describeNode n
 {-# NOINLINE mismatchMessage #-}
+
+-- | The value of a node with its tag resolved. The items and the entries of a
+-- collection stay nodes of the syntax tree.
+data View
+  = ScalarView !Value
+  | SequenceView [S.Node]
+  | MappingView [(S.Node, S.Node)]
+  | -- | 'runParser' replaces the aliases, so only a node that a parser builds
+    -- can have one.
+    AliasView !T.Text
+
+-- | The view of a node.
+view :: S.Node -> View
+view n = case n.content of
+  S.Scalar style t -> ScalarView (scalarValue n.props.tag style t)
+  S.Sequence _ xs -> SequenceView xs
+  S.Mapping _ kvs -> MappingView kvs
+  S.Alias name -> AliasView name
+{-# INLINE view #-}
+
+-- | The value of a scalar with the tag and the style.
+scalarValue :: S.Tag -> S.ScalarStyle -> T.Text -> Value
+scalarValue tag style t = case tag of
+  S.NoTag
+    | style == S.Plain -> resolvePlain t
+    | otherwise -> String t
+  S.NonSpecificTag -> String t
+  -- 'runParser' rejects a value that is not valid for its tag.
+  S.Tag tag' -> fromMaybe (String t) (resolveTagged tag' t)
+{-# NOINLINE scalarValue #-}
+
+-- | The kind of a node in plain words, e.g. "a list".
+describeNode :: S.Node -> String
+describeNode n = case view n of
+  ScalarView v -> describe v
+  SequenceView _ -> "a list"
+  MappingView _ -> "a mapping"
+  AliasView _ -> "an alias"
+
+-- | The node is null.
+isNullNode :: S.Node -> Bool
+isNullNode n = case view n of
+  ScalarView Null -> True
+  _ -> False
+
+-- | The text of a string node.
+stringValue :: S.Node -> Maybe T.Text
+stringValue n = case view n of
+  ScalarView (String t) -> Just t
+  _ -> Nothing
+
+-- | The null node for a missing value.
+nullNode :: S.Node
+nullNode = S.Node S.noOffset S.noOffset S.noProps S.noComments (S.Scalar S.Plain "")
 
 -- | Run the second parser if the first one fails. The error of the second one
 -- wins, e.g.
@@ -147,16 +216,16 @@ infixl 3 `orElse`
 -- Scalars
 
 -- | Run the parser if the node is null.
-withNull :: Parser a -> Node -> Parser a
-withNull p = parseNode $ \n -> case n.value of
-  Null -> p
+withNull :: Parser a -> S.Node -> Parser a
+withNull p = parseNode $ \n -> case view n of
+  ScalarView Null -> p
   _ -> typeMismatch "null" n
 
 -- | The value of a boolean.
-withBool :: (Bool -> Parser a) -> Node -> Parser a
-withBool f = parseNode $ \n -> case n.value of
-  Bool b -> f b
-  String t
+withBool :: (Bool -> Parser a) -> S.Node -> Parser a
+withBool f = parseNode $ \n -> case view n of
+  ScalarView (Bool b) -> f b
+  ScalarView (String t)
     | isYaml11Bool t ->
         failAt n $
           "expected a boolean, but got the string "
@@ -165,16 +234,16 @@ withBool f = parseNode $ \n -> case n.value of
   _ -> typeMismatch "a boolean" n
 
 -- | The value of an integer.
-withInt :: (Integer -> Parser a) -> Node -> Parser a
-withInt f = parseNode $ \n -> case n.value of
-  Int i -> f i
+withInt :: (Integer -> Parser a) -> S.Node -> Parser a
+withInt f = parseNode $ \n -> case view n of
+  ScalarView (Int i) -> f i
   _ -> typeMismatch "an integer" n
 
 -- | The nearest double. An integer counts as a floating-point number too.
-withFloat :: (Double -> Parser a) -> Node -> Parser a
-withFloat f = parseNode $ \n -> case n.value of
-  Float v -> f (floatValueToDouble v)
-  Int i -> f (fromInteger i)
+withFloat :: (Double -> Parser a) -> S.Node -> Parser a
+withFloat f = parseNode $ \n -> case view n of
+  ScalarView (Float v) -> f (floatValueToDouble v)
+  ScalarView (Int i) -> f (fromInteger i)
   _ -> typeMismatch "a number" n
 
 -- | The exact value of a finite number. An integer counts too, and negative
@@ -183,12 +252,12 @@ withFloat f = parseNode $ \n -> case n.value of
 -- For a conversion to an exact type, e.g. with 'truncate', use
 -- 'withBoundedScientific', because a node that a program built can have any
 -- exponent.
-withScientific :: (Sci.Scientific -> Parser a) -> Node -> Parser a
-withScientific f = parseNode $ \n -> case n.value of
-  Float (Finite s) -> f s
-  Float NegativeZero -> f 0
-  Int i -> f (Sci.scientific i 0)
-  Float _ -> fail "expected a finite number"
+withScientific :: (Sci.Scientific -> Parser a) -> S.Node -> Parser a
+withScientific f = parseNode $ \n -> case view n of
+  ScalarView (Float (Finite s)) -> f s
+  ScalarView (Float NegativeZero) -> f 0
+  ScalarView (Int i) -> f (Sci.scientific i 0)
+  ScalarView (Float _) -> fail "expected a finite number"
   _ -> typeMismatch "a number" n
 
 -- | Like 'withScientific', but the exponent of the first digit must be in
@@ -196,7 +265,7 @@ withScientific f = parseNode $ \n -> case n.value of
 -- with 'truncate', computes at most about 1000 more digits than the
 -- coefficient has. The decoder applies a similar limit to floats, so the
 -- check matters mostly for a node that a program built.
-withBoundedScientific :: (Sci.Scientific -> Parser a) -> Node -> Parser a
+withBoundedScientific :: (Sci.Scientific -> Parser a) -> S.Node -> Parser a
 withBoundedScientific f = withScientific $ \s ->
   let c = Sci.coefficient s
   in if
@@ -207,40 +276,40 @@ withBoundedScientific f = withScientific $ \s ->
        | otherwise -> f s
 
 -- | The text is a copy, so it does not keep the input alive.
-withText :: (T.Text -> Parser a) -> Node -> Parser a
-withText f = parseNode $ \n -> case n.value of
-  String t -> f (T.copy t)
+withText :: (T.Text -> Parser a) -> S.Node -> Parser a
+withText f = parseNode $ \n -> case view n of
+  ScalarView (String t) -> f (T.copy t)
   _ -> typeMismatch "a string" n
 
 ----------------------------------------
 -- Collections
 
 -- | The items of a sequence.
-withSequence :: ([Node] -> Parser a) -> Node -> Parser a
-withSequence f = parseNode $ \n -> case n.value of
-  Sequence xs -> f xs
+withSequence :: ([S.Node] -> Parser a) -> S.Node -> Parser a
+withSequence f = parseNode $ \n -> case n.content of
+  S.Sequence _ xs -> f xs
   _ -> typeMismatch "a list" n
 
 -- | The entries of a mapping. As for 'withText', the tag of a string key does
 -- not matter, so two string keys with the same text are an error, e.g. @a@
 -- and @!foo a@.
-withMapping :: (Object -> Parser a) -> Node -> Parser a
-withMapping f = parseNode $ \n -> case n.value of
-  Mapping kvs -> mkObject n kvs >>= f
+withMapping :: (Object -> Parser a) -> S.Node -> Parser a
+withMapping f = parseNode $ \n -> case n.content of
+  S.Mapping _ kvs -> mkObject n kvs >>= f
   _ -> typeMismatch "a mapping" n
 
 -- | A mapping with fast access to the values of string keys.
 data Object = Object
-  { node :: !Node
-  , entries :: [(Node, Node)]
-  , index :: M.Map T.Text (Node, Node)
-  , otherKeys :: [Node]
+  { node :: !S.Node
+  , entries :: [(S.Node, S.Node)]
+  , index :: M.Map T.Text (S.Node, S.Node)
+  , otherKeys :: [(S.Node, Value)]
   -- ^ The keys that are not strings, for the error of a lookup.
   }
 
 -- A list with linear lookups is faster only up to about 10 keys, and it saves
 -- only about 1% of the time to decode a typical record.
-mkObject :: Node -> [(Node, Node)] -> Parser Object
+mkObject :: S.Node -> [(S.Node, S.Node)] -> Parser Object
 mkObject n kvs = do
   index <- foldM insert M.empty kvs
   pure
@@ -248,30 +317,30 @@ mkObject n kvs = do
       { node = n
       , entries = kvs
       , index = index
-      , otherKeys = [k | (k, _) <- kvs, case k.value of String _ -> False; _ -> True]
+      , otherKeys = [(k, v) | (k, _) <- kvs, ScalarView v <- [view k], case v of String _ -> False; _ -> True]
       }
   where
-    insert :: M.Map T.Text (Node, Node) -> (Node, Node) -> Parser (M.Map T.Text (Node, Node))
-    insert m kv@(k, _) = case k.value of
-      String t -> case M.insertLookupWithKey (\_ _ old -> old) t kv m of
+    insert :: M.Map T.Text (S.Node, S.Node) -> (S.Node, S.Node) -> Parser (M.Map T.Text (S.Node, S.Node))
+    insert m kv@(k, _) = case stringValue k of
+      Just t -> case M.insertLookupWithKey (\_ _ old -> old) t kv m of
         (Just _, _) -> failAt k $ "duplicate key " ++ show t
         (Nothing, m') -> pure m'
       _ -> pure m
 
 -- | The node of the mapping.
-objectNode :: Object -> Node
+objectNode :: Object -> S.Node
 objectNode o = o.node
 
 -- | The entries of the mapping in the order of the input.
-objectEntries :: Object -> [(Node, Node)]
+objectEntries :: Object -> [(S.Node, S.Node)]
 objectEntries o = o.entries
 
 -- | The string keys of the mapping in the order of the input.
 objectKeys :: Object -> [T.Text]
-objectKeys o = [T.copy t | (k, _) <- o.entries, String t <- [k.value]]
+objectKeys o = [T.copy t | (k, _) <- o.entries, Just t <- [stringValue k]]
 
 -- | The value of a string key.
-lookupKey :: T.Text -> Object -> Maybe Node
+lookupKey :: T.Text -> Object -> Maybe S.Node
 lookupKey key o = snd <$> M.lookup key o.index
 
 -- | The value of a key. It is an error if the key is missing.
@@ -285,7 +354,7 @@ o .: key = case lookupKey key o of
 (.:?) :: FromYaml a => Object -> T.Text -> Parser (Maybe a)
 o .:? key =
   findKey o key >>= \case
-    Just v | Null <- v.value -> pure Nothing
+    Just v | isNullNode v -> pure Nothing
     mv -> traverse (parseNode parseYaml) mv
 
 -- | The value of a key, or 'Nothing' if the key is missing. Unlike '.:?', a
@@ -297,11 +366,11 @@ o .:! key = findKey o key >>= traverse (parseNode parseYaml)
 -- | The value of a string key, or 'Nothing' if the key is missing. A key with
 -- the same text that is not a string, e.g. 404, is an error, so that its
 -- value does not go away.
-findKey :: Object -> T.Text -> Parser (Maybe Node)
+findKey :: Object -> T.Text -> Parser (Maybe S.Node)
 findKey o key = case M.lookup key o.index of
   Just (_, v) -> pure (Just v)
-  Nothing -> case L.find (\k -> k.value == plain) o.otherKeys of
-    Just k -> failAt k $ "the key " ++ T.unpack key ++ " is " ++ describe k.value ++ ", not a string"
+  Nothing -> case L.find (\(_, v) -> v == plain) o.otherKeys of
+    Just (k, v) -> failAt k $ "the key " ++ T.unpack key ++ " is " ++ describe v ++ ", not a string"
     Nothing -> pure Nothing
   where
     plain :: Value
@@ -332,8 +401,8 @@ infixl 8 .!=
 -- | Fail at the first key that is not in the list. If a key in the list is
 -- close to the unknown key, e.g. "host" to "hots", the error suggests it.
 rejectUnknownKeys :: [T.Text] -> Object -> Parser ()
-rejectUnknownKeys known o = forM_ o.entries $ \(k, _) -> case k.value of
-  String t
+rejectUnknownKeys known o = forM_ o.entries $ \(k, _) -> case stringValue k of
+  Just t
     | t `elem` known -> pure ()
     | otherwise ->
         failAt k $
@@ -373,7 +442,7 @@ rejectUnknownKeys known o = forM_ o.entries $ \(k, _) -> case k.value of
 -- | Types that can be parsed from a node. A type with a 'Generic' instance
 -- can derive the instance, see "Yamlet.Generic".
 class FromYaml a where
-  parseYaml :: Node -> Parser a
+  parseYaml :: S.Node -> Parser a
   default parseYaml
     :: ( Generic a
        , GenericYaml a
@@ -382,15 +451,23 @@ class FromYaml a where
        , GFlatten (FlattenFields a) f
        , GFromConstructor f
        )
-    => Node -> Parser a
+    => S.Node -> Parser a
   parseYaml = genericParseYaml
 
   -- | Parse a list. The instance for 'Char' parses a string instead.
-  parseYamlList :: Node -> Parser [a]
+  parseYamlList :: S.Node -> Parser [a]
   parseYamlList = withSequence (mapM (parseNode parseYaml))
 
-instance FromYaml Node where
+-- | The node of the syntax tree, with its styles and comments. An alias in
+-- the input gives a copy of the node that it refers to.
+instance FromYaml S.Node where
   parseYaml = pure
+
+-- | The node with its tag and value resolved.
+instance FromYaml Node where
+  parseYaml n = case represent n of
+    Right r -> pure r
+    Left err -> Parser $ \_ -> Left err
 
 instance FromYaml () where
   parseYaml = withNull (pure ())
@@ -419,7 +496,7 @@ instance FromYaml Word32 where parseYaml = bounded
 instance FromYaml Word64 where parseYaml = bounded
 
 -- | An integer in the range of a bounded type.
-bounded :: forall a. (Bounded a, Integral a) => Node -> Parser a
+bounded :: forall a. (Bounded a, Integral a) => S.Node -> Parser a
 bounded = withInt $ \i ->
   if i < toInteger (minBound @a) || i > toInteger (maxBound @a)
     then
@@ -507,7 +584,7 @@ zonedTimeMismatch :: String
 zonedTimeMismatch = "expected a date, a time and a time zone such as 2026-09-25T12:30:00Z"
 
 -- | A string in an ISO 8601 format, with the same rules as aeson.
-withIso8601 :: String -> (T.Text -> Either String a) -> Node -> Parser a
+withIso8601 :: String -> (T.Text -> Either String a) -> S.Node -> Parser a
 withIso8601 mismatch p = withText $ either (const (fail mismatch)) pure . p
 
 -- | The picoseconds in a number of seconds, rounded down.
@@ -524,9 +601,9 @@ picoseconds s
 
 -- | The nearest float. A conversion by way of 'Double' could round twice.
 instance FromYaml Float where
-  parseYaml = parseNode $ \n -> case n.value of
-    Float v -> pure (floatValueToFloat v)
-    Int i -> pure (fromInteger i)
+  parseYaml = parseNode $ \n -> case view n of
+    ScalarView (Float v) -> pure (floatValueToFloat v)
+    ScalarView (Int i) -> pure (fromInteger i)
     _ -> typeMismatch "a number" n
 
 instance FromYaml T.Text where
@@ -551,8 +628,8 @@ instance FromYaml a => FromYaml (NE.NonEmpty a) where
 
 -- | Null is 'Nothing'.
 instance FromYaml a => FromYaml (Maybe a) where
-  parseYaml n = case n.value of
-    Null -> pure Nothing
+  parseYaml n = case view n of
+    ScalarView Null -> pure Nothing
     _ -> Just <$> parseYaml n
 
 -- | Two keys that convert to the same key, e.g. @1@ and @1.0@ for 'Double',
@@ -564,11 +641,11 @@ instance FromYaml a => FromYaml (Maybe a) where
 -- use a key type that matches it, e.g. 'Int'.
 instance (Ord k, FromYaml k, FromYaml v) => FromYaml (M.Map k v) where
   -- The index of 'withMapping' would be of no use here.
-  parseYaml = parseNode $ \n -> case n.value of
-    Mapping kvs -> foldM insert M.empty kvs
+  parseYaml = parseNode $ \n -> case n.content of
+    S.Mapping _ kvs -> foldM insert M.empty kvs
     _ -> typeMismatch "a mapping" n
     where
-      insert :: M.Map k v -> (Node, Node) -> Parser (M.Map k v)
+      insert :: M.Map k v -> (S.Node, S.Node) -> Parser (M.Map k v)
       insert m (k, v) = do
         k' <- parseNode parseYaml k
         M.alterF value k' m
@@ -580,11 +657,11 @@ instance (Ord k, FromYaml k, FromYaml v) => FromYaml (M.Map k v) where
 
 -- | Two keys that convert to the same key are an error.
 instance FromYaml v => FromYaml (IM.IntMap v) where
-  parseYaml = parseNode $ \n -> case n.value of
-    Mapping kvs -> foldM insert IM.empty kvs
+  parseYaml = parseNode $ \n -> case n.content of
+    S.Mapping _ kvs -> foldM insert IM.empty kvs
     _ -> typeMismatch "a mapping" n
     where
-      insert :: IM.IntMap v -> (Node, Node) -> Parser (IM.IntMap v)
+      insert :: IM.IntMap v -> (S.Node, S.Node) -> Parser (IM.IntMap v)
       insert m (k, v) = do
         k' <- parseNode parseYaml k
         IM.alterF value k' m
@@ -599,7 +676,7 @@ instance FromYaml v => FromYaml (IM.IntMap v) where
 instance (Ord a, FromYaml a) => FromYaml (Set.Set a) where
   parseYaml = withSequence (foldM insert Set.empty)
     where
-      insert :: Set.Set a -> Node -> Parser (Set.Set a)
+      insert :: Set.Set a -> S.Node -> Parser (Set.Set a)
       insert s n = do
         x <- parseNode parseYaml n
         Set.alterF (\present -> if present then failAt n "duplicate element after conversion" else pure True) x s
@@ -608,7 +685,7 @@ instance (Ord a, FromYaml a) => FromYaml (Set.Set a) where
 instance FromYaml IS.IntSet where
   parseYaml = withSequence (foldM insert IS.empty)
     where
-      insert :: IS.IntSet -> Node -> Parser IS.IntSet
+      insert :: IS.IntSet -> S.Node -> Parser IS.IntSet
       insert s n = do
         x <- parseNode parseYaml n
         IS.alterF (\present -> if present then failAt n "duplicate element" else pure True) x s
@@ -631,15 +708,15 @@ instance FromYaml Ordering where
 -- | A string such as @1.2.3@. YAML reads a version with one dot, e.g. @1.10@,
 -- as a number, so a number is an error.
 instance FromYaml Version where
-  parseYaml = parseNode $ \n -> case n.value of
-    String t -> maybe (fail "expected a version such as 1.2.3") pure (version t)
-    v
+  parseYaml = parseNode $ \n -> case view n of
+    ScalarView (String t) -> maybe (fail "expected a version such as 1.2.3") pure (version t)
+    ScalarView v
       | Int _ <- v -> number
       | Float _ <- v -> number
-      | otherwise -> typeMismatch "a version" n
       where
         number :: Parser Version
         number = fail $ "expected a version, but got " ++ describe v ++ ", quote the version, e.g. \"1.10\""
+    _ -> typeMismatch "a version" n
     where
       -- The syntax that 'showVersion' writes. 'parseVersion' reads it too,
       -- but it takes quadratic time in the number of parts, and a part
@@ -745,9 +822,9 @@ deriving newtype instance FromYaml Sem.Any
 -- | A mapping with one key, @Left@ or @Right@, e.g. @{Left: 1}@.
 instance (FromYaml a, FromYaml b) => FromYaml (Either a b) where
   parseYaml = withMapping $ \o -> case objectEntries o of
-    [(k, v)] -> case k.value of
-      String "Left" -> Left <$> parseNode parseYaml v
-      String "Right" -> Right <$> parseNode parseYaml v
+    [(k, v)] -> case stringValue k of
+      Just "Left" -> Left <$> parseNode parseYaml v
+      Just "Right" -> Right <$> parseNode parseYaml v
       _ -> failAt k "expected the key Left or Right"
     _ -> fail "expected a mapping with one key, Left or Right"
 
@@ -880,11 +957,11 @@ instance
     xs -> tupleSize 10 xs
 
 -- | An element of a tuple.
-element :: FromYaml a => Node -> Parser a
+element :: FromYaml a => S.Node -> Parser a
 element = parseNode parseYaml
 
 -- | The error for a list with the wrong number of elements for a tuple.
-tupleSize :: Int -> [Node] -> Parser a
+tupleSize :: Int -> [S.Node] -> Parser a
 tupleSize n xs = fail $ "expected a list of " ++ show n ++ " elements, but got " ++ show (length xs)
 
 ----------------------------------------
@@ -901,7 +978,7 @@ genericParseYaml
      , GFlatten (FlattenFields a) f
      , GFromConstructor f
      )
-  => Node -> Parser a
+  => S.Node -> Parser a
 genericParseYaml n = gParseYaml (yamlOptions @a) (gFlatten @(FlattenFields a) @f) (from <$> yamlDefault @a) to n
 {-# INLINE genericParseYaml #-}
 
@@ -926,7 +1003,7 @@ gParseYaml
    . ( GConstructors f
      , GFromConstructor f
      )
-  => YamlOptions -> Bool -> Maybe (D1 d f p) -> (D1 d f p -> a) -> Node -> Parser a
+  => YamlOptions -> Bool -> Maybe (D1 d f p) -> (D1 d f p -> a) -> S.Node -> Parser a
 gParseYaml opts flat def k n
   | isEnum @f opts =
       withText (\t -> maybe (unknown "value" t) id (gFromTag opts (k . M1) t)) n
@@ -960,7 +1037,7 @@ class GFromConstructor f where
   gFromTagged :: YamlOptions -> Bool -> Maybe (f p) -> (f p -> a) -> T.Text -> Object -> Maybe (Parser a)
 
   -- | The only constructor, without a tag.
-  gFromUntagged :: YamlOptions -> Maybe (f p) -> (f p -> a) -> Node -> Parser a
+  gFromUntagged :: YamlOptions -> Maybe (f p) -> (f p -> a) -> S.Node -> Parser a
 
 instance TypeError NoConstructors => GFromConstructor V1 where
   gFromTag _ _ _ = Nothing
@@ -1029,33 +1106,38 @@ fromObject opts flat keys def o
         -- field can also have only optional keys.
         Nothing
           | Just fields <- def -> pure fields
-          | flat -> either (const merged) pure (runParser fromContents (node Null))
-          | otherwise -> either (const (missingKey o opts.contentsKey)) pure (runParser fromContents (node Null))
+          | flat -> either (const merged) pure (runChecked fromContents nullNode)
+          | otherwise -> either (const (missingKey o opts.contentsKey)) pure (runChecked fromContents nullNode)
   where
     reject :: [T.Text] -> Parser ()
     reject fields = when opts.rejectUnknownFields $ rejectUnknownKeys (keys ++ fields) o
 
     -- The field decodes from the mapping without the given keys.
     merged :: Parser (f p)
-    merged = fromContents (Node (objectNode o).offset (objectNode o).tag (Mapping others))
+    merged =
+      let n = objectNode o
+          style = case n.content of
+            S.Mapping s _ -> s
+            _ -> S.Block
+      in fromContents (S.Node n.offset n.endOffset n.props n.comments (S.Mapping style others))
 
-    others :: [(Node, Node)]
+    others :: [(S.Node, S.Node)]
     others = foldr removeKey (objectEntries o) keys
 
     -- The keys are unique, so the entries after the match stay shared.
-    removeKey :: T.Text -> [(Node, Node)] -> [(Node, Node)]
+    removeKey :: T.Text -> [(S.Node, S.Node)] -> [(S.Node, S.Node)]
     removeKey key = \case
       kv@(k, _) : kvs
         | isKey key k -> kvs
         | otherwise -> kv : removeKey key kvs
       [] -> []
 
-    isKey :: T.Text -> Node -> Bool
-    isKey key k = case k.value of
-      String t -> t == key
+    isKey :: T.Text -> S.Node -> Bool
+    isKey key k = case stringValue k of
+      Just t -> t == key
       _ -> False
 
-    fromContents :: Node -> Parser (f p)
+    fromContents :: S.Node -> Parser (f p)
     fromContents contents = case gArity @f of
       1 -> fst <$> gFromValues [contents]
       k -> withSequence (fromList k) contents
@@ -1064,7 +1146,7 @@ fromObject opts flat keys def o
 {-# INLINE fromObject #-}
 
 -- | The fields of a constructor without field names from a list.
-fromList :: GFromFields f => Int -> [Node] -> Parser (f p)
+fromList :: GFromFields f => Int -> [S.Node] -> Parser (f p)
 fromList k ns
   | length ns == k = fst <$> gFromValues ns
   | otherwise = fail $ "expected a list of " ++ show k ++ " elements, but got " ++ show (length ns)
@@ -1075,7 +1157,7 @@ class GFromFields f where
   gFromObject :: YamlOptions -> Maybe (f p) -> Object -> Parser (f p)
 
   -- | The fields from the start of the list, and the rest of the list.
-  gFromValues :: [Node] -> Parser (f p, [Node])
+  gFromValues :: [S.Node] -> Parser (f p, [S.Node])
 
 instance GFromFields U1 where
   gFromObject _ _ _ = pure U1
@@ -1105,7 +1187,7 @@ instance
       Nothing -> case def of
         Just (M1 (K1 x)) -> pure x
         -- A missing field is null, if its type accepts null.
-        Nothing -> either (const (missingKey o key)) pure (runParser parseYaml (node Null))
+        Nothing -> either (const (missingKey o key)) pure (runChecked parseYaml nullNode)
     where
       key :: T.Text
       key = fieldKey @name opts
@@ -1114,12 +1196,12 @@ instance
   {-# INLINE gFromValues #-}
 
 instance FromYaml a => GFromFields (S1 (MetaSel Nothing u s d) (Rec0 a)) where
-  gFromObject _ _ o = fail $ "expected a field without a name in " ++ describe (objectNode o).value
+  gFromObject _ _ o = fail $ "expected a field without a name in " ++ describeNode (objectNode o)
   gFromValues = nextField
   {-# INLINE gFromValues #-}
 
 -- | A field from the start of the list.
-nextField :: FromYaml a => [Node] -> Parser (S1 m (Rec0 a) p, [Node])
+nextField :: FromYaml a => [S.Node] -> Parser (S1 m (Rec0 a) p, [S.Node])
 nextField = \case
   n : ns -> (\x -> (M1 (K1 x), ns)) <$> parseNode parseYaml n
   [] -> fail "expected another field"

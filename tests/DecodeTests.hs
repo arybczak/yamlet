@@ -347,11 +347,11 @@ test_time = do
     assertEqual
       ("duration with the exponent " ++ show ex)
       (Left "the exponent of the number is out of the range from -1000 to 1000")
-      (first snd (runParser (parseYaml @NominalDiffTime) (node (Float (Finite (Sci.scientific 1 ex))))))
+      (first snd (runParser (parseYaml @NominalDiffTime) (toSyntax (node (Float (Finite (Sci.scientific 1 ex)))))))
   assertEqual
     "zero duration with a large exponent"
     (Right (0 :: DiffTime))
-    (runParser parseYaml (node (Float (Finite (Sci.scientific 0 maxBound)))))
+    (runParser parseYaml (toSyntax (node (Float (Finite (Sci.scientific 0 maxBound))))))
 
 test_record :: Assertion
 test_record = do
@@ -885,11 +885,11 @@ test_typeErrors = do
   assertEqual
     "fixed with a huge exponent"
     (Left "the exponent of the number is out of the range from -1000 to 1000")
-    (first snd (runParser (parseYaml @Centi) (node (Float (Finite (Sci.scientific 1 maxBound))))))
+    (first snd (runParser (parseYaml @Centi) (toSyntax (node (Float (Finite (Sci.scientific 1 maxBound)))))))
   assertEqual
     "zero fixed with a huge exponent"
     (Right (0 :: Centi))
-    (runParser parseYaml (node (Float (Finite (Sci.scientific 0 maxBound)))))
+    (runParser parseYaml (toSyntax (node (Float (Finite (Sci.scientific 0 maxBound))))))
 
 newtype Vowel = Vowel Char
 

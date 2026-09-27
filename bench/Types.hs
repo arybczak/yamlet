@@ -132,11 +132,11 @@ instance J.FromJSON Json where
       <*> o J..: "child"
 
 instance FromYaml Item where
-  parseYaml n = case n.value of
-    Int i -> pure $ ItemNumber (fromInteger i)
-    Float f -> pure $ ItemNumber (floatValueToDouble f)
-    Bool b -> pure $ ItemBool b
-    Null -> pure ItemNull
+  parseYaml n = case view n of
+    ScalarView (Int i) -> pure $ ItemNumber (fromInteger i)
+    ScalarView (Float f) -> pure $ ItemNumber (floatValueToDouble f)
+    ScalarView (Bool b) -> pure $ ItemBool b
+    ScalarView Null -> pure ItemNull
     _ -> typeMismatch "a number, a boolean or null" n
 
 instance H.FromYAML Item where

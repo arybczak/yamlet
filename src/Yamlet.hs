@@ -83,14 +83,16 @@ decodeAll bs = decodeInput bs >>= decodeAllText
 -- | Decode a stream with one document. An empty stream is null.
 decodeText :: FromYaml a => T.Text -> Either Error a
 decodeText input =
-  decodeNodes input >>= \case
-    [] -> convert input (Node (Offset 0) nullTag Null)
-    [n] -> convert input n
-    _ : n : _ -> Left $ errorAt input n.offset "expected a single document, but got a second one"
+  parseStream input >>= \case
+    [] -> convert input (S.Node (Offset 0) (Offset 0) S.noProps S.noComments (S.Scalar S.Plain ""))
+    [doc] -> convert input doc.root
+    docs@(_ : doc : _) -> do
+      mapM_ (compose input) docs
+      Left $ errorAt input doc.root.offset "expected a single document, but got a second one"
 
 -- | Decode every document of a stream.
 decodeAllText :: FromYaml a => T.Text -> Either Error [a]
-decodeAllText input = decodeNodes input >>= mapM (convert input)
+decodeAllText input = parseStream input >>= mapM (convert input . (.root))
 
 -- | Parse a stream into the root nodes of its documents.
 decodeNodes :: T.Text -> Either Error [Node]
@@ -102,7 +104,7 @@ decodeNodes input = parseStream input >>= mapM (compose input)
 -- The text is the input of the document, for the line in an error. For a
 -- document that the program built, the text can be empty.
 decodeDocument :: FromYaml a => T.Text -> S.Document -> Either Error a
-decodeDocument input doc = resolveDocument input doc >>= convert input
+decodeDocument input doc = convert input doc.root
 
 -- | Resolve the tags and the aliases of a document of a syntax tree. The
 -- resolution fails for a duplicate key, an undefined alias, aliases beyond
@@ -115,7 +117,7 @@ decodeDocument input doc = resolveDocument input doc >>= convert input
 resolveDocument :: T.Text -> S.Document -> Either Error Node
 resolveDocument = compose
 
-convert :: FromYaml a => T.Text -> Node -> Either Error a
+convert :: FromYaml a => T.Text -> S.Node -> Either Error a
 convert input n = case runParser parseYaml n of
   Right a -> Right a
   Left (off, msg) -> Left $ errorAt input off msg

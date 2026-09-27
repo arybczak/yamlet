@@ -6,8 +6,14 @@
 -- in subsequent releases.
 module Yamlet.Internal.Compose
   ( compose
+  , prepare
+  , represent
+  , Failure
   ) where
 
+import Data.Bifunctor
+import Data.Char
+import Data.Foldable
 import Data.IntSet qualified as IS
 import Data.List qualified as L
 import Data.Map.Strict qualified as M
@@ -23,9 +29,106 @@ import Yamlet.Node
 -- | Resolve the tags and the aliases of a document and check that the keys of
 -- every mapping are unique. The input is for error messages.
 compose :: T.Text -> S.Document -> Either Error Node
-compose input doc
-  | needsNumbering doc.root = fst . fst <$> go (Numbering M.empty M.empty 0) doc.root
-  | otherwise = plain doc.root
+compose input doc = first (uncurry (errorAt input)) (composeNode doc.root)
+
+-- | Check a node with the rules of 'compose', and replace each alias with the
+-- node that it refers to. The result has no aliases. A node without aliases
+-- comes back unchanged.
+prepare :: S.Node -> Either Failure S.Node
+prepare root
+  | needsNumbering root = expandAliases root <$ composeNode root
+  | otherwise = root <$ check root
+
+-- | Resolve the tags of a node, as 'compose' does for a whole document.
+represent :: S.Node -> Either Failure Node
+represent = composeNode
+
+-- | The offset of the node that caused an error, and the message.
+type Failure = (S.Offset, String)
+
+failure :: S.Offset -> String -> Failure
+failure = (,)
+
+-- | The checks of 'compose' for a node without aliases and collection keys.
+-- Only the keys become nodes, for the comparison.
+check :: S.Node -> Either Failure ()
+check sn =
+  let off = sn.offset; props = sn.props
+  in case sn.content of
+       S.Scalar style t
+         -- Only a number can fail without a tag.
+         | S.NoTag <- props.tag
+         , style /= S.Plain || not (maybeNumber t) ->
+             Right ()
+         | otherwise -> () <$ scalar off props style t
+       S.Sequence _ xs -> collectionTag off props seqTag *> traverse_ check xs
+       S.Mapping _ kvs -> do
+         _ <- collectionTag off props mapTag
+         keys <- traverse (\(k, v) -> key k <* check v) kvs
+         checkUniqueKeys [(k, k) | k <- keys]
+       S.Alias _ -> Left $ failure off "unexpected alias"
+  where
+    maybeNumber :: T.Text -> Bool
+    maybeNumber t = case T.uncons t of
+      Just (c, _) -> isDigit c || c == '-' || c == '+' || c == '.'
+      Nothing -> False
+
+    key :: S.Node -> Either Failure Node
+    key k = case k.content of
+      S.Scalar style t -> scalar k.offset k.props style t
+      _ -> Left $ failure k.offset "unexpected collection key"
+
+-- | Replace each alias with a copy of the node that it refers to. The copy
+-- has the offsets and the comments of the alias, and no anchor. The node
+-- must pass 'composeNode', so every alias refers to an earlier anchor.
+expandAliases :: S.Node -> S.Node
+expandAliases = fst . go M.empty
+  where
+    go :: M.Map T.Text S.Node -> S.Node -> (S.Node, M.Map T.Text S.Node)
+    go anchors sn = case sn.content of
+      S.Alias name -> case M.lookup name anchors of
+        Just target ->
+          ( S.Node sn.offset sn.endOffset (S.Props Nothing target.props.tag) sn.comments target.content
+          , anchors
+          )
+        Nothing -> (sn, anchors)
+      S.Scalar {} -> define sn anchors
+      S.Sequence style xs ->
+        let (xs', anchors') = goList anchors xs
+        in define (withContent (S.Sequence style xs')) anchors'
+      S.Mapping style kvs ->
+        let (kvs', anchors') = goPairs anchors kvs
+        in define (withContent (S.Mapping style kvs')) anchors'
+      where
+        withContent :: S.Content -> S.Node
+        withContent = S.Node sn.offset sn.endOffset sn.props sn.comments
+
+    define :: S.Node -> M.Map T.Text S.Node -> (S.Node, M.Map T.Text S.Node)
+    define sn anchors = case sn.props.anchor of
+      Just a -> (sn, M.insert a sn anchors)
+      Nothing -> (sn, anchors)
+
+    goList :: M.Map T.Text S.Node -> [S.Node] -> ([S.Node], M.Map T.Text S.Node)
+    goList anchors = \case
+      [] -> ([], anchors)
+      x : xs ->
+        let (x', anchors') = go anchors x
+            (xs', anchors'') = goList anchors' xs
+        in (x' : xs', anchors'')
+
+    goPairs :: M.Map T.Text S.Node -> [(S.Node, S.Node)] -> ([(S.Node, S.Node)], M.Map T.Text S.Node)
+    goPairs anchors = \case
+      [] -> ([], anchors)
+      (k, v) : kvs ->
+        let (k', anchors') = go anchors k
+            (v', anchors'') = go anchors' v
+            (kvs', anchors''') = goPairs anchors'' kvs
+        in ((k', v') : kvs', anchors''')
+
+composeNode :: S.Node -> Either Failure Node
+composeNode root
+  | needsNumbering root = fst . fst <$> go (Numbering M.empty M.empty 0) root
+  | otherwise = plain root
   where
     -- The limit of the visits of a traversal of the document. Aliases can add
     -- as many visits as the document has nodes, or 'smallBudget' for a small
@@ -35,7 +138,7 @@ compose input doc
     limit = n + max smallBudget n
       where
         n :: Int
-        n = syntaxSize doc.root
+        n = syntaxSize root
 
         -- A traversal of 100000 nodes takes about 5 ms and 6 MB, measured
         -- with a copy of the nodes. go-yaml allows about 400000 nodes from
@@ -51,7 +154,7 @@ compose input doc
 
     -- Without aliases the anchors do not matter, and without collection keys
     -- only scalar keys compare.
-    plain :: S.Node -> Either Error Node
+    plain :: S.Node -> Either Failure Node
     plain sn =
       let off = sn.offset; props = sn.props
       in case sn.content of
@@ -65,10 +168,10 @@ compose input doc
              entries <- mapM (\(k, v) -> (,) <$> plain k <*> plain v) kvs
              checkUniqueKeys entries
              Right $ Node off tag (Mapping entries)
-           S.Alias _ -> Left $ errorAt input off "unexpected alias"
+           S.Alias _ -> Left $ failure off "unexpected alias"
 
     -- Each node comes with its number.
-    go :: Numbering -> S.Node -> Either Error ((Node, Int), Numbering)
+    go :: Numbering -> S.Node -> Either Failure ((Node, Int), Numbering)
     go st sn =
       let off = sn.offset; props = sn.props
       in case sn.content of
@@ -76,16 +179,16 @@ compose input doc
              Just (Just (n, i, visits))
                | st.visits + visits > limit ->
                    Left
-                     $ errorAt input off
+                     $ failure off
                      $ "the aliases expand the document to more than " ++ show limit ++ " nodes"
                | otherwise -> Right ((Node off n.tag n.value, i), st {visits = st.visits + visits})
              Just Nothing ->
                Left
-                 $ errorAt input off
+                 $ failure off
                  $ "the alias *" ++ T.unpack name ++ " refers to a node that contains it"
              Nothing ->
                Left
-                 $ errorAt input off
+                 $ failure off
                  $ "undefined alias *" ++ T.unpack name
            S.Scalar style t -> do
              n <- scalar off props style t
@@ -103,7 +206,7 @@ compose input doc
                  shape = MappingShape tag (L.sort [(i, j) | ((_, i), (_, j)) <- entries])
              Right $ number props n shape (st'.visits - st.visits + 1) st'
 
-    goList :: Numbering -> [S.Node] -> Either Error ([(Node, Int)], Numbering)
+    goList :: Numbering -> [S.Node] -> Either Failure ([(Node, Int)], Numbering)
     goList st = \case
       [] -> Right ([], st)
       x : xs -> do
@@ -114,7 +217,7 @@ compose input doc
     goPairs
       :: Numbering
       -> [(S.Node, S.Node)]
-      -> Either Error ([((Node, Int), (Node, Int))], Numbering)
+      -> Either Failure ([((Node, Int), (Node, Int))], Numbering)
     goPairs st = \case
       [] -> Right ([], st)
       (k, v) : kvs -> do
@@ -145,72 +248,72 @@ compose input doc
           Nothing -> st.anchors
 
     -- Unlike in 'duplicate', comparing all pairs is not faster for few keys.
-    checkUniqueNumbers :: [((Node, Int), (Node, Int))] -> Either Error ()
+    checkUniqueNumbers :: [((Node, Int), (Node, Int))] -> Either Failure ()
     checkUniqueNumbers = loop IS.empty
       where
-        loop :: IS.IntSet -> [((Node, Int), (Node, Int))] -> Either Error ()
+        loop :: IS.IntSet -> [((Node, Int), (Node, Int))] -> Either Failure ()
         loop seen = \case
           [] -> Right ()
           ((k, i), _) : rest
             | i `IS.member` seen -> Left $ duplicateKey k
             | otherwise -> loop (IS.insert i seen) rest
 
-    scalar :: S.Offset -> S.Props -> S.ScalarStyle -> T.Text -> Either Error Node
-    scalar off props style t = case props.tag of
-      S.NoTag
-        | style == S.Plain -> case resolvePlainExact t of
-            Right v -> Right $ node' v
-            Left _ -> Left $ errorAt input off exponentOutOfRange
-        | otherwise -> Right $ Node off strTag (String t)
-      S.NonSpecificTag -> Right $ Node off strTag (String t)
-      S.Tag tag
-        | tag == seqTag || tag == mapTag ->
-            Left
-              $ errorAt input off
-              $ "the tag !!" ++ T.unpack (T.drop (T.length coreTagPrefix) tag) ++ " cannot be used on a scalar"
-        | otherwise -> case resolveTaggedExact tag t of
-            Just (Right v) -> Right $ Node off tag v
-            Just (Left _) -> Left $ errorAt input off exponentOutOfRange
-            Nothing ->
-              Left
-                $ errorAt input off
-                $ "invalid value for the tag !!"
-                  ++ T.unpack (T.drop (T.length coreTagPrefix) tag)
-                  ++ if tag == boolTag && isYaml11Bool t
-                    then ", " ++ show t ++ " is a boolean only in YAML 1.1"
-                    else ""
-      where
-        node' :: Value -> Node
-        node' v = Node off (defaultTag v) v
+scalar :: S.Offset -> S.Props -> S.ScalarStyle -> T.Text -> Either Failure Node
+scalar off props style t = case props.tag of
+  S.NoTag
+    | style == S.Plain -> case resolvePlainExact t of
+        Right v -> Right $ node' v
+        Left _ -> Left $ failure off exponentOutOfRange
+    | otherwise -> Right $ Node off strTag (String t)
+  S.NonSpecificTag -> Right $ Node off strTag (String t)
+  S.Tag tag
+    | tag == seqTag || tag == mapTag ->
+        Left
+          $ failure off
+          $ "the tag !!" ++ T.unpack (T.drop (T.length coreTagPrefix) tag) ++ " cannot be used on a scalar"
+    | otherwise -> case resolveTaggedExact tag t of
+        Just (Right v) -> Right $ Node off tag v
+        Just (Left _) -> Left $ failure off exponentOutOfRange
+        Nothing ->
+          Left
+            $ failure off
+            $ "invalid value for the tag !!"
+              ++ T.unpack (T.drop (T.length coreTagPrefix) tag)
+              ++ if tag == boolTag && isYaml11Bool t
+                then ", " ++ show t ++ " is a boolean only in YAML 1.1"
+                else ""
+  where
+    node' :: Value -> Node
+    node' v = Node off (defaultTag v) v
 
-    collectionTag :: S.Offset -> S.Props -> T.Text -> Either Error T.Text
-    collectionTag off props def = case props.tag of
-      S.NoTag -> Right def
-      S.NonSpecificTag -> Right def
-      S.Tag tag
-        | tag == def || not (isCoreTag tag) -> Right tag
-        | otherwise ->
-            Left
-              $ errorAt input off
-              $ "the tag !!"
-                ++ T.unpack (T.drop (T.length coreTagPrefix) tag)
-                ++ " cannot be used on a "
-                ++ (if def == seqTag then "sequence" else "mapping")
+collectionTag :: S.Offset -> S.Props -> T.Text -> Either Failure T.Text
+collectionTag off props def = case props.tag of
+  S.NoTag -> Right def
+  S.NonSpecificTag -> Right def
+  S.Tag tag
+    | tag == def || not (isCoreTag tag) -> Right tag
+    | otherwise ->
+        Left
+          $ failure off
+          $ "the tag !!"
+            ++ T.unpack (T.drop (T.length coreTagPrefix) tag)
+            ++ " cannot be used on a "
+            ++ (if def == seqTag then "sequence" else "mapping")
 
-    isCoreTag :: T.Text -> Bool
-    isCoreTag tag = tag `elem` [nullTag, boolTag, intTag, floatTag, strTag, seqTag, mapTag]
+isCoreTag :: T.Text -> Bool
+isCoreTag tag = tag `elem` [nullTag, boolTag, intTag, floatTag, strTag, seqTag, mapTag]
 
-    checkUniqueKeys :: [(Node, Node)] -> Either Error ()
-    checkUniqueKeys entries = case duplicate (map fst entries) of
-      Just k -> Left $ duplicateKey k
-      Nothing -> Right ()
+checkUniqueKeys :: [(Node, Node)] -> Either Failure ()
+checkUniqueKeys entries = case duplicate (map fst entries) of
+  Just k -> Left $ duplicateKey k
+  Nothing -> Right ()
 
-    duplicateKey :: Node -> Error
-    duplicateKey k = errorAt input k.offset $ case k.value of
-      -- YAML 1.1 used "<<" to merge mappings, and some tools still do.
-      String "<<" -> "duplicate key \"<<\", merge keys are not supported"
-      String t -> "duplicate key " ++ show t
-      _ -> "duplicate key"
+duplicateKey :: Node -> Failure
+duplicateKey k = failure k.offset $ case k.value of
+  -- YAML 1.1 used "<<" to merge mappings, and some tools still do.
+  String "<<" -> "duplicate key \"<<\", merge keys are not supported"
+  String t -> "duplicate key " ++ show t
+  _ -> "duplicate key"
 
 -- | The state of the composition of a document with aliases or collection
 -- keys. Equal nodes get the same number, so that keys compare in constant

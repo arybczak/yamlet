@@ -15,6 +15,7 @@ import Test.Tasty.HUnit
 
 import Obligations
 import Yamlet
+import Yamlet.Syntax qualified as S
 
 main :: IO ()
 main =
@@ -123,37 +124,37 @@ instance GenericYaml Preset where
 encodeServer :: Server -> Node
 encodeServer = toYaml
 
-decodeServer :: Node -> Either (Offset, String) Server
+decodeServer :: S.Node -> Either (Offset, String) Server
 decodeServer = runParser parseYaml
 
 encodeWide :: Wide -> Node
 encodeWide = toYaml
 
-decodeWide :: Node -> Either (Offset, String) Wide
+decodeWide :: S.Node -> Either (Offset, String) Wide
 decodeWide = runParser parseYaml
 
 encodeName :: Name -> Node
 encodeName = toYaml
 
-decodeName :: Node -> Either (Offset, String) Name
+decodeName :: S.Node -> Either (Offset, String) Name
 decodeName = runParser parseYaml
 
 encodeRow :: Row -> Node
 encodeRow = toYaml
 
-decodeRow :: Node -> Either (Offset, String) Row
+decodeRow :: S.Node -> Either (Offset, String) Row
 decodeRow = runParser parseYaml
 
 encodeBox :: Box Int -> Node
 encodeBox = toYaml
 
-decodeBox :: Node -> Either (Offset, String) (Box Int)
+decodeBox :: S.Node -> Either (Offset, String) (Box Int)
 decodeBox = runParser parseYaml
 
 encodeVelocity :: Velocity -> Node
 encodeVelocity = toYaml
 
-decodeVelocity :: Node -> Either (Offset, String) Velocity
+decodeVelocity :: S.Node -> Either (Offset, String) Velocity
 decodeVelocity = runParser parseYaml
 
 encodeConfig :: Config -> Node
@@ -162,10 +163,10 @@ encodeConfig = toYaml
 encodePreset :: Preset -> Node
 encodePreset = toYaml
 
-decodePreset :: Node -> Either (Offset, String) Preset
+decodePreset :: S.Node -> Either (Offset, String) Preset
 decodePreset = runParser parseYaml
 
-decodeConfig :: Node -> Either (Offset, String) Config
+decodeConfig :: S.Node -> Either (Offset, String) Config
 decodeConfig = runParser parseYaml
 
 ----------------------------------------
@@ -194,11 +195,11 @@ instance GenericYaml Step where
 encodeTurn :: Turn -> Node
 encodeTurn = toYaml
 
-decodeTurn :: Node -> Either (Offset, String) Turn
+decodeTurn :: S.Node -> Either (Offset, String) Turn
 decodeTurn = runParser parseYaml
 
-decodeShape :: Node -> Either (Offset, String) Shape
+decodeShape :: S.Node -> Either (Offset, String) Shape
 decodeShape = runParser parseYaml
 
-decodeStep :: Node -> Either (Offset, String) Step
+decodeStep :: S.Node -> Either (Offset, String) Step
 decodeStep = runParser parseYaml
