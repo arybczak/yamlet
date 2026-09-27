@@ -131,7 +131,7 @@ test_fallbacks :: Assertion
 test_fallbacks = do
   let render :: Node -> T.Text
       render n = renderSyntax defaultRenderOptions [document n]
-  assertEqual "plain with a colon" "\"a: b\"\n" (render (plainNode "a: b"))
+  assertEqual "plain with a colon" "'a: b'\n" (render (plainNode "a: b"))
   assertEqual "plain number stays plain" "12\n" (render (plainNode "12"))
   assertEqual "single-quoted line break" "\"a\\nb\"\n" (render (scalarNode SingleQuoted "a\nb"))
   assertEqual "literal with an indicator at the top level" "\" a\\nb\"\n" (render (scalarNode Literal " a\nb"))

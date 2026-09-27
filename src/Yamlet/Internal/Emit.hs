@@ -8,6 +8,7 @@ module Yamlet.Internal.Emit
   ( -- * Scalars
     plainSyntax
   , singleQuoted
+  , quotedPlain
   , doubleQuoted
   , literalBlock
   , foldedBlock
@@ -24,6 +25,7 @@ module Yamlet.Internal.Emit
 
 import Data.ByteString qualified as BS
 import Data.Char
+import Data.Maybe
 import Data.Text qualified as T
 import Data.Text.Builder.Linear qualified as B
 import Data.Text.Encoding qualified as T
@@ -81,6 +83,14 @@ singleQuoted t
   | T.all (\c -> c == '\t' || isPrintable c) t =
       Just $ "'" <> B.fromText (T.replace "'" "''" t) <> "'"
   | otherwise = Nothing
+
+-- | The quoted form of a plain scalar whose text cannot be plain: in single
+-- quotes, or in double quotes if the text has a tab or a character that
+-- single quotes cannot hold. A tab in single quotes is not visible.
+quotedPlain :: T.Text -> B.Builder
+quotedPlain t
+  | T.any (== '\t') t = doubleQuoted t
+  | otherwise = fromMaybe (doubleQuoted t) (singleQuoted t)
 
 -- | A double-quoted scalar with escapes for the characters that need them.
 doubleQuoted :: T.Text -> B.Builder

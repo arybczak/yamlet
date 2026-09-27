@@ -42,7 +42,7 @@ defaultRenderOptions =
 -- | Render documents with their comments and empty lines.
 --
 -- A scalar keeps its style if the style can hold its text, otherwise it gets
--- double quotes. An empty line from the comments after a block scalar with the @+@
+-- quotes. An empty line from the comments after a block scalar with the @+@
 -- indicator goes away, because it would become part of the scalar. A flow
 -- collection with comments inside becomes a block collection, so that every
 -- comment has a line.
@@ -425,7 +425,7 @@ scalar pos style t = case style of
   Plain
     | T.null t -> mempty
     | plainSyntax (pos == InFlow) t -> B.fromText t
-    | otherwise -> doubleQuoted t
+    | otherwise -> quotedPlain t
   SingleQuoted -> quoted
   _ -> doubleQuoted t
   where
