@@ -47,10 +47,16 @@ data Error = Error
 
 -- | A step of a path into a document.
 data PathElement
-  = -- | The value of a key. A key that is a collection is @?@.
+  = -- | The value of a key that is a scalar, with the text of the key, e.g.
+    -- @1@ for the integer key 1.
     Key !T.Text
   | -- | The item of a sequence, from 0.
     Index !Int
+  | -- | The value of a key that is a collection, e.g. @? [1, 2]@. The path
+    -- has no steps into the key.
+    CollectionKey
+  | -- | The value of a key that is an alias, with the name of the anchor.
+    AliasKey !T.Text
   deriving stock (Eq, Show, Generic)
   deriving anyclass (NFData)
 
@@ -144,25 +150,32 @@ prettyError file err
     caret :: String
     caret = map (\c -> if c == '\t' then '\t' else ' ') (take before shown)
 
--- | A path in the form @jobs[1].name@. A key with a character of this form,
--- white space or no characters is in double quotes, e.g. @\"a.b\"@. In the
--- quotes, a character that cannot be printed has an escape as in YAML, e.g.
+-- | A path in the form @jobs[1].name@. A key that is a collection is @?@,
+-- and a key that is an alias is its alias, e.g. @*base@. A key with a
+-- character of this form, white space or no characters is in double quotes,
+-- e.g. @\"a.b\"@. So is a key that starts with @?@ or @*@. In the quotes, a
+-- character that cannot be printed has an escape as in YAML, e.g.
 -- @\"a\\nb\"@.
 renderPath :: [PathElement] -> String
 renderPath = \case
   [] -> ""
-  Key k : rest -> key k ++ go rest
-  Index i : rest -> index i ++ go rest
+  e : rest -> step e ++ concatMap next rest
   where
-    go :: [PathElement] -> String
-    go = \case
-      [] -> ""
-      Key k : rest -> "." ++ key k ++ go rest
-      Index i : rest -> index i ++ go rest
+    next :: PathElement -> String
+    next = \case
+      Index i -> index i
+      e -> "." ++ step e
+
+    step :: PathElement -> String
+    step = \case
+      Key k -> key k
+      Index i -> index i
+      CollectionKey -> "?"
+      AliasKey name -> '*' : T.unpack name
 
     key :: T.Text -> String
     key k
-      | not (T.null k) && T.all plain k = T.unpack k
+      | not (T.null k) && T.all plain k && not (T.isPrefixOf "?" k || T.isPrefixOf "*" k) = T.unpack k
       | otherwise = "\"" ++ concatMap escape (T.unpack k) ++ "\""
       where
         plain :: Char -> Bool
@@ -235,8 +248,8 @@ nodePaths offs root = map (\off -> M.findWithDefault [] off found) offs
     keyElement :: Node -> PathElement
     keyElement k = case k.content of
       Scalar _ t -> Key t
-      Alias name -> Key ("*" <> name)
-      _ -> Key "?"
+      Alias name -> AliasKey name
+      _ -> CollectionKey
 
 -- | Create an error at the given offset of the input.
 errorAt :: T.Text -> Offset -> String -> Error

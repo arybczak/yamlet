@@ -1228,6 +1228,13 @@ test_errorPaths = do
   check "inside a key" (Right "a") $ decodeText @(M.Map T.Text (M.Map [Int] Int)) "a:\n  ? [1, x]\n  : 1\n"
   check "inside a key at the root" (Right "") $ decodeText @(M.Map (M.Map T.Text Int) Int) "? {port: x}\n: 1\n"
   check "in the value of a collection key" (Right "?[1]") $ decodeText @(M.Map [Int] [Int]) "? [1, 2]\n: [3, y]\n"
+  check "string key ?" (Right "\"?\"[1]") $ decodeText @(M.Map T.Text [Int]) "'?': [3, y]\n"
+  check "alias key" (Right "*a[1]") $ decodeText @(M.Map Value [Int]) "m: [&a 1]\n*a : [3, y]\n"
+  check "string key like an alias" (Right "\"*a\"[1]") $ decodeText @(M.Map T.Text [Int]) "'*a': [3, y]\n"
+  assertEqual
+    "path elements"
+    (Left [CollectionKey, Index 1])
+    (first ((.path) . NE.head) (decodeText @(M.Map [Int] [Int]) "? [1, 2]\n: [3, y]\n"))
   check "duplicate key" (Right "a") $ decodeText @Value "a:\n  b: 1\n  b: 2\n"
   check "root" (Right "") $ decodeText @Int "x"
   let key = S.plainNode "a"
