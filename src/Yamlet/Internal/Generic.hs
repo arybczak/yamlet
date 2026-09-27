@@ -33,17 +33,27 @@ import GHC.TypeLits
 -- Options
 
 -- | How a type is encoded and decoded.
+--
+-- The instances do not check the options. Options that give two keys of a
+-- mapping or two constructors the same text encode values that do not read
+-- back, as the fields below describe.
 data YamlOptions = YamlOptions
   { fieldLabelModifier :: String -> String
-  -- ^ The key of a field from the name of the field.
+  -- ^ The key of a field from the name of the field. If two fields of a
+  -- constructor get the same key, e.g. @fooBar@ and @foo_bar@ with
+  -- 'snakeCase', the constructor encodes as a mapping with two equal keys,
+  -- which does not read back.
   , constructorTagModifier :: String -> String
-  -- ^ The tag of a constructor from the name of the constructor.
+  -- ^ The tag of a constructor from the name of the constructor. If two
+  -- constructors get the same tag, e.g. @FooBar@ and @Foo_bar@ with
+  -- 'snakeCase', the decoder reads the tag as the first of them.
   , tagKey :: T.Text
   -- ^ The key of the tag, @tag@ by default. A record with a field of the same
   -- key encodes as a mapping with two equal keys, which does not read back.
   , contentsKey :: T.Text
   -- ^ The key of the fields of a tagged constructor without field names,
-  -- @contents@ by default.
+  -- @contents@ by default. If it is the same as 'tagKey', such a constructor
+  -- encodes as a mapping with two equal keys, which does not read back.
   , tagSingleConstructors :: Bool
   -- ^ Give a type with one constructor a tag too. Off by default.
   , allNullaryToStringTag :: Bool
