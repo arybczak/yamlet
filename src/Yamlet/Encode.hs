@@ -79,6 +79,7 @@ class ToYaml a where
 -- | An entry of a mapping with a string key.
 (.=) :: ToYaml a => T.Text -> a -> (S.Node, S.Node)
 key .= v = (string key, toYaml v)
+
 infixr 8 .=
 
 -- | A mapping with the entries in the given order. A mapping with two equal
@@ -617,16 +618,19 @@ blockSequence indent atLineStart n = case n.content of
   _ -> mempty
   where
     entry :: Int -> S.Node -> B.Builder
-    entry i x = (if i > 0 || atLineStart then spaces indent else mempty) <> "-" <> item x
+    entry i x = (if i > 0 || atLineStart then spaces indent else mempty) <> "-" <> afterIndicator indent x
 
-    item :: S.Node -> B.Builder
-    item x = case x.content of
-      S.Sequence _ (_ : _) -> collection x $ blockSequence (indent + indentStep) False x
-      S.Mapping _ (_ : _) -> collection x $ blockMapping (indent + indentStep) False x
-      _ -> " " <> inlineValue (indent + indentStep) x <> "\n"
-
-    collection :: S.Node -> B.Builder -> B.Builder
-    collection x body = case tagPrefix x of
+-- | A node after the indicator of a sequence item or an explicit entry at the
+-- given indentation, with the line break. A block collection starts on the
+-- line of the indicator, unless it has a tag.
+afterIndicator :: Int -> S.Node -> B.Builder
+afterIndicator indent x = case x.content of
+  S.Sequence _ (_ : _) -> collection $ blockSequence (indent + indentStep) False x
+  S.Mapping _ (_ : _) -> collection $ blockMapping (indent + indentStep) False x
+  _ -> " " <> inlineValue (indent + indentStep) x <> "\n"
+  where
+    collection :: B.Builder -> B.Builder
+    collection body = case tagPrefix x of
       Just t -> " " <> t <> "\n" <> spaces (indent + indentStep) <> body
       Nothing -> " " <> body
 
@@ -641,20 +645,13 @@ blockMapping indent atLineStart n = case n.content of
     entry i (k, v) =
       (if i > 0 || atLineStart then spaces indent else mempty) <> case implicitKey k of
         Just key -> key <> ":" <> value v
-        Nothing -> "?" <> explicit k <> spaces indent <> ":" <> explicit v
+        Nothing -> "?" <> afterIndicator indent k <> spaces indent <> ":" <> afterIndicator indent v
 
     value :: S.Node -> B.Builder
     value v = case v.content of
       S.Sequence _ (_ : _) -> tagged v <> "\n" <> blockSequence indent True v
       S.Mapping _ (_ : _) -> tagged v <> "\n" <> blockMapping (indent + indentStep) True v
       _ -> " " <> inlineValue (indent + indentStep) v <> "\n"
-
-    -- The key or the value of an explicit entry.
-    explicit :: S.Node -> B.Builder
-    explicit x = case x.content of
-      S.Sequence _ (_ : _) -> tagged x <> "\n" <> blockSequence (indent + indentStep) True x
-      S.Mapping _ (_ : _) -> tagged x <> "\n" <> blockMapping (indent + indentStep) True x
-      _ -> " " <> inlineValue (indent + indentStep) x <> "\n"
 
     tagged :: S.Node -> B.Builder
     tagged x = maybe mempty (" " <>) (tagPrefix x)
