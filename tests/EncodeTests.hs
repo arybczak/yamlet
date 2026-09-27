@@ -396,6 +396,18 @@ test_commentedKeys = do
     "key of an either"
     (Right either_)
     (encodeText <$> decodeText @(Either (Commented T.Text) Int) either_)
+  let set = "# first\n- a # one\n- b\n"
+  assertEqual "set" (Right set) (encodeText <$> decodeText @(Set.Set (Commented T.Text)) set)
+  -- The comment after 1 belongs to the value, which an integer cannot keep.
+  assertEqual
+    "keys of a map"
+    (Right "# above\na: 1\n")
+    (encodeText <$> decodeText @(M.Map (Commented T.Text) Int) "# above\na: 1 # c\n")
+  -- Both take the comments of the key, and the encoder writes them once.
+  assertEqual
+    "keys and values of a map"
+    (Right "# above\na: 1 # c\n")
+    (encodeText <$> decodeText @(M.Map (Commented T.Text) (Commented Int)) "# above\na: 1 # c\n")
   let nodes = "os: [a, b] # two\nsteps:\n- x\n  # end\n"
   assertEqual
     "nodes keep their comments once"

@@ -137,7 +137,7 @@ data Comments = Comments
   -- ^ The lines after the last entry of a collection, or between the brackets
   -- of an empty collection.
   }
-  deriving stock (Eq, Show, Generic)
+  deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (NFData)
 
 -- | No comments and no empty lines.
@@ -172,11 +172,16 @@ noComments = Comments [] Nothing []
 -- entry to the value inside. So in @data Name = Name (Commented Text)@, the
 -- comments of the key are lost. Declare such a type as a newtype and derive
 -- its instances with @deriving newtype@, which gives the key to the value.
+--
+-- In a map with a 'Commented' key and a 'Commented' value, both get the
+-- comments of the key, and the encoder writes those of the value. The order
+-- compares the values first and then the comments, e.g. in a set.
 data Commented a = Commented
-  { comments :: !Comments
-  , value :: a
+  { value :: a
+  , comments :: !Comments
   }
-  deriving stock (Eq, Show, Functor, Foldable, Traversable, Generic)
+  -- The derived order compares the fields in this order.
+  deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable, Generic)
   deriving anyclass (NFData)
 
 -- | A line of comments. Several empty lines in a row count as one.
@@ -186,7 +191,7 @@ data Line
     -- end. The renderer writes a text with line breaks as several comment
     -- lines, and the parser reads them back as several comments.
     Comment !T.Text
-  deriving stock (Eq, Show, Generic)
+  deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (NFData)
 
 -- | The offset of a byte in the input text, in its UTF-8 encoding. For an

@@ -259,6 +259,10 @@ withLinesAbove ls n =
   let c = n.comments
   in S.Node n.offset n.endOffset n.props c {S.before = ls ++ c.before} n.content
 
+-- | The node without its comments.
+withoutComments :: S.Node -> S.Node
+withoutComments n = S.Node n.offset n.endOffset n.props S.noComments n.content
+
 -- | The entries of a mapping. As for 'withText', the tag of a string key does
 -- not matter, so two string keys with the same text are an error, e.g. @a@
 -- and @!foo a@.
@@ -463,9 +467,9 @@ instance FromYaml S.Node where
 -- copied like every decoded text.
 instance FromYaml a => FromYaml (S.Commented a) where
   parseYaml v =
-    S.Commented (S.copyComments v.comments)
-      <$> parseYaml (S.Node v.offset v.endOffset v.props S.noComments v.content)
-  parseYamlField k v = S.Commented (S.copyComments c) <$> parseYaml v'
+    flip S.Commented (S.copyComments v.comments)
+      <$> parseYaml (withoutComments v)
+  parseYamlField k v = flip S.Commented (S.copyComments c) <$> parseYaml v'
     where
       c :: S.Comments
       v' :: S.Node
