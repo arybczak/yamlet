@@ -91,8 +91,8 @@ attachNode e limit minColumn known n items0 =
   ( n
       { comments =
           Comments
-            { before = [i.line | i <- pre, not (isFallback i)]
-            , inline = fallback <|> header <|> trailing
+            { before = [i.line | i <- pre, isJust own || not (isFallback i)]
+            , inline = own <|> fallback
             , after = afterLines
             }
       , content = content'
@@ -109,7 +109,8 @@ attachNode e limit minColumn known n items0 =
     column = s - lineStart
 
     -- The lines above the node. A comment at the end of a line that no node
-    -- took, e.g. in "- # comment" above a mapping, belongs to the node.
+    -- took, e.g. in "- # comment" above a mapping, belongs to the node. It is
+    -- a line above the node if the node has a comment on its own line.
     (pre, items1) = span (\i -> i.at < s) items0
     fallbackItem :: Maybe Item
     fallbackItem = case reverse (filter (not . (.own)) pre) of
@@ -121,6 +122,9 @@ attachNode e limit minColumn known n items0 =
 
     isFallback :: Item -> Bool
     isFallback i = maybe False (\f -> f.at == i.at) fallbackItem
+
+    own :: Maybe T.Text
+    own = header <|> trailing
 
     -- The comment on the line of a block scalar header.
     (header, items2) = case (n.content, items1) of

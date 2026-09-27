@@ -23,6 +23,10 @@
 --   key in @key: # comment@. A comment on the line of a block scalar header
 --   belongs to the block scalar.
 --
+-- * A comment at the end of a line with no node before it, e.g. after @- @,
+--   belongs to the node below it. If that node also has a comment at the end
+--   of its line, the first comment becomes a line above the node.
+--
 -- * A comment after the last entry of a block collection belongs to the end
 --   of the collection if it is indented at least as deep as the entries, and
 --   deeper than the key of the collection. Otherwise it belongs to the node
