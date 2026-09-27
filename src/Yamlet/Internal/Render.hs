@@ -111,24 +111,31 @@ validAnchors doc
         Scalar _ _ -> acc
 
     newNames :: M.Map T.Text T.Text
-    newNames = snd $ L.foldl' add (S.fromList (filter isAnchorName names), M.empty) names
+    newNames = (\(_, _, m) -> m) $ L.foldl' add (S.fromList (filter isAnchorName names), M.empty, M.empty) names
 
-    add :: (S.Set T.Text, M.Map T.Text T.Text) -> T.Text -> (S.Set T.Text, M.Map T.Text T.Text)
-    add (used, m) a
-      | isAnchorName a || M.member a m = (used, m)
+    -- The state has the used names, the next suffix to try for each base, and
+    -- the new names. A suffix below the next one is used already, so the
+    -- search does not try it again.
+    add
+      :: (S.Set T.Text, M.Map T.Text Int, M.Map T.Text T.Text)
+      -> T.Text
+      -> (S.Set T.Text, M.Map T.Text Int, M.Map T.Text T.Text)
+    add (used, next, m) a
+      | isAnchorName a || M.member a m = (used, next, m)
       | otherwise =
           let base = if T.null a then "anchor" else T.map (\c -> if isAnchorChar c then c else '_') a
-              new = fresh used base firstSuffix
-          in (S.insert new used, M.insert a new m)
+              (new, i) = fresh used base (M.findWithDefault firstSuffix base next)
+          in (S.insert new used, M.insert base i next, M.insert a new m)
 
     -- The name without a suffix is the first one, so the suffixes start at 2.
     firstSuffix :: Int
     firstSuffix = 2
 
-    fresh :: S.Set T.Text -> T.Text -> Int -> T.Text
+    -- The free name and the next suffix to try.
+    fresh :: S.Set T.Text -> T.Text -> Int -> (T.Text, Int)
     fresh used base i
-      | S.notMember base used = base
-      | S.notMember candidate used = candidate
+      | S.notMember base used = (base, i)
+      | S.notMember candidate used = (candidate, i + 1)
       | otherwise = fresh used base (i + 1)
       where
         candidate :: T.Text

@@ -19,6 +19,7 @@ renderTests =
     , testCase "fallbacks" test_fallbacks
     , testCase "force block" test_forceBlock
     , testCase "documents" test_documents
+    , localOption (mkTimeout 10000000) $ testCase "many invalid anchor names" test_manyAnchors
     , testGroup
         "comments"
         [ testCase "attachment" test_attachment
@@ -208,6 +209,20 @@ test_fallbacks = do
     "taken anchor name"
     "- &a_b x\n- &a_b_2 y\n- *a_b_2\n"
     (render (sequenceNode [anchored "a_b" (plainNode "x"), anchored "a b" (plainNode "y"), contentNode (Alias "a b")]))
+
+-- | The new names of many invalid anchor names with one base take linear
+-- time, not quadratic.
+test_manyAnchors :: Assertion
+test_manyAnchors = do
+  let names = map T.pack (mapM (const " ,[]{}") [1 .. 6 :: Int])
+      tree = sequenceNode [(plainNode "x") {props = noProps {anchor = Just a}} | a <- names]
+  assertEqual
+    "first and last names"
+    ["- &______ x", "- &_______" <> T.pack (show (length names)) <> " x"]
+    ( case T.lines (renderSyntax defaultRenderOptions [document tree]) of
+        first : rest -> first : take 1 (reverse rest)
+        [] -> []
+    )
 
 test_forceBlock :: Assertion
 test_forceBlock = do
