@@ -34,7 +34,6 @@ import Data.Time.Calendar.Quarter
 import Data.Time.ToText
 import Data.Tree qualified as Tree
 import Data.UUID.Types qualified as UUID
-import Data.Version
 import Data.Void
 import Data.Word
 import GHC.Generics
@@ -231,10 +230,6 @@ instance ToYaml a => ToYaml (Tree.Tree a) where
 -- | @LT@, @EQ@ or @GT@.
 instance ToYaml Ordering where
   toYaml = scalar . String . T.pack . show
-
--- | A string such as @1.2.3@.
-instance ToYaml Version where
-  toYaml = scalar . String . T.pack . showVersion
 
 -- | Null.
 instance ToYaml (Proxy a) where

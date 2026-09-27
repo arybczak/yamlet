@@ -43,7 +43,6 @@ module Yamlet.Decode
 
 import Control.Applicative
 import Control.Monad
-import Data.Char
 import Data.Fixed
 import Data.Foldable
 import Data.Functor.Identity
@@ -69,7 +68,6 @@ import Data.Time.Calendar.Quarter
 import Data.Time.FromText
 import Data.Tree qualified as Tree
 import Data.UUID.Types qualified as UUID
-import Data.Version
 import Data.Void
 import Data.Word
 import GHC.Generics
@@ -861,29 +859,6 @@ instance FromYaml Ordering where
     "EQ" -> pure EQ
     "GT" -> pure GT
     _ -> fail "expected LT, EQ or GT"
-
--- | A string such as @1.2.3@. YAML reads a version with one dot, e.g. @1.10@,
--- as a number, so a number is an error.
-instance FromYaml Version where
-  parseYaml = parseNode $ \n -> case view n of
-    StringView t -> maybe (fail "expected a version such as 1.2.3") pure (version t)
-    IntView _ -> number n
-    FloatView _ -> number n
-    _ -> typeMismatch "a version" n
-    where
-      -- The syntax that 'showVersion' writes. 'parseVersion' reads it too,
-      -- but it takes quadratic time in the number of parts, and a part
-      -- beyond the range of Int wraps around.
-      version :: T.Text -> Maybe Version
-      version t = case T.splitOn "-" t of
-        branch : tags
-          | all (\tag -> not (T.null tag) && T.all isAlphaNum tag) tags ->
-              (\parts -> Version parts (map T.unpack tags)) <$> mapM readBoundedInt (T.splitOn "." branch)
-        _ -> Nothing
-
-      number :: S.Node -> Parser Version
-      number n =
-        fail $ "expected a version, but got " ++ describeNode n ++ ", quote the version, e.g. '1.10'"
 
 -- | Null.
 instance FromYaml (Proxy a) where
