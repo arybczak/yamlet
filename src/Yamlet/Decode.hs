@@ -243,13 +243,14 @@ withSequence f = parseNode $ \n -> case n.content of
   _ -> typeMismatch "a list" n
 
 -- | The items of a sequence, with the lines above the sequence moved to its
--- first item. Out of line, 'withSequence' is small enough to inline, and
--- the optimizer sees its failure, e.g. in a derived decoder. Without the
--- pragma, the inspection test of the derived decoder of a sum type fails.
+-- first item.
 items :: S.Node -> [S.Node] -> [S.Node]
 items n = \case
   x : xs | not (null n.comments.before) -> withLinesAbove n.comments.before x : xs
   xs -> xs
+-- If GHC inlines this function into 'withSequence', 'withSequence' becomes
+-- too large to inline. A derived decoder then keeps the code after its type
+-- error, and the inspection test of the derived decoder of a sum type fails.
 {-# NOINLINE items #-}
 
 -- | The node with the lines above it after the given ones.
