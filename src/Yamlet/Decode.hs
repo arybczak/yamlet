@@ -231,7 +231,7 @@ withText f = parseNode $ \n -> case view n of
   _ -> failAt n (stringMismatch n)
 
 -- | The message for a node that is not a string, with the hint to quote a
--- plain number or boolean.
+-- plain number, boolean or written null.
 stringMismatch :: S.Node -> String
 stringMismatch n = mismatchMessage "a string" n ++ hint
   where
@@ -239,15 +239,17 @@ stringMismatch n = mismatchMessage "a string" n ++ hint
     hint = case n.content of
       S.Scalar S.Plain t
         | S.NoTag <- n.props.tag
-        , numberOrBool ->
+        , notString t ->
             ", quote the value, e.g. '" ++ T.unpack t ++ "'"
       _ -> ""
 
-    numberOrBool :: Bool
-    numberOrBool = case view n of
+    notString :: T.Text -> Bool
+    notString t = case view n of
       IntView _ -> True
       FloatView _ -> True
       BoolView _ -> True
+      -- An empty value is more likely a forgotten value than a string.
+      NullView -> not (T.null t)
       _ -> False
 -- Without the pragma, the interface file has no unfolding of 'withText', so
 -- other modules cannot inline it.

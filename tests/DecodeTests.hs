@@ -831,7 +831,15 @@ test_typeErrors = do
     "integer instead of string"
     (Just (1, 1, "expected a string, but got an integer, quote the value, e.g. '007'"))
     (errorOf (decodeText @T.Text "007"))
-  assertEqual "null instead of string" (Just (1, 6, "expected a string, but got null")) (errorOf (decodeText @Config "name:\n"))
+  assertEqual "empty value instead of string" (Just (1, 6, "expected a string, but got null")) (errorOf (decodeText @Config "name:\n"))
+  assertEqual
+    "null instead of string"
+    (Just (1, 1, "expected a string, but got null, quote the value, e.g. 'null'"))
+    (errorOf (decodeText @T.Text "null"))
+  assertEqual
+    "tilde instead of string"
+    (Just (1, 1, "expected a string, but got null, quote the value, e.g. '~'"))
+    (errorOf (decodeText @T.Text "~"))
   assertEqual
     "tagged integer instead of string"
     (Just (1, 7, "expected a string, but got an integer"))
