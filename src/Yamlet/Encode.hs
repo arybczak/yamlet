@@ -95,7 +95,7 @@ instance ToYaml Value where toYaml = toSyntax
 -- | The value with the comments of its entry. The lines above and the comment
 -- of the first line go on the key, where the renderer writes them at the same
 -- places as on a value. Without a key, they go on the value. The lines after
--- the value replace its own if the value is a collection.
+-- the value replace its own.
 instance ToYaml a => ToYaml (S.Commented a) where
   toYaml c =
     let v = withLinesAfter c.comments.after (toYaml c.value)
@@ -117,18 +117,12 @@ instance ToYaml a => ToYaml (S.Located a) where
   toYaml l = toYaml l.value
   toYamlField k l = toYamlField k l.value
 
--- | The node with the given lines after its last entry in place of its own,
--- if it is a collection and the lines are not empty.
+-- | The node with the given lines after it in place of its own, if the lines
+-- are not empty.
 withLinesAfter :: [S.Line] -> S.Node -> S.Node
 withLinesAfter ls v
-  | collection && not (null ls) = S.Node v.offset v.endOffset v.props (v.comments {S.after = ls}) v.content
-  | otherwise = v
-  where
-    collection :: Bool
-    collection = case v.content of
-      S.Sequence {} -> True
-      S.Mapping {} -> True
-      _ -> False
+  | null ls = v
+  | otherwise = S.Node v.offset v.endOffset v.props (v.comments {S.after = ls}) v.content
 
 -- | An empty list, as a tuple without elements.
 instance ToYaml () where toYaml _ = S.sequenceNode []

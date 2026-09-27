@@ -346,6 +346,12 @@ test_keptNodes = do
     "kept nodes in a list"
     (Right "- ['9.10', \"9.12\"] # versions\n- {a: 1}\n")
     (encodeText <$> decodeText @[Node] "- ['9.10', \"9.12\"] # versions\n- {a: 1}\n")
+  let commentedRoot = "# c1\n1 # c2\n# c3\n"
+  assertEqual "commented scalar root" (Right commentedRoot) (encodeText <$> decodeText @(Commented Int) commentedRoot)
+  assertEqual
+    "lines after a commented scalar value"
+    "a: 1\n# c\nb: 2\n"
+    (encodeText (M.fromList [("a" :: T.Text, Commented (1 :: Int) noComments {after = [Comment "c"]}), ("b", Commented 2 noComments)]))
   let scalarRoot = "|\n  text\n# end\n"
   assertEqual "lines at the end of a scalar root" (Right scalarRoot) (encodeText <$> decodeText @Node scalarRoot)
   assertEqual

@@ -151,7 +151,7 @@ noComments = Comments [] Nothing []
 --
 -- * 'before': the lines above the entry,
 -- * 'inline': the comment at the end of the first line of the entry,
--- * 'after': the lines after the last entry of the value, if the value is a
+-- * 'after': the lines after the value, e.g. after the last entry of a
 --   collection.
 --
 -- The parser can give these comments to the key or to the value. The decoder
