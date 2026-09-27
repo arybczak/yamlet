@@ -391,6 +391,11 @@ test_commentedKeys = do
     "comments of the document"
     (Right "# top\na: 1\n# end\n")
     (encodeText <$> decodeText @(Commented (M.Map T.Text Int)) "# top\n---\na: 1\n# end\n")
+  let either_ = "# The name.\nLeft: foo # current\n"
+  assertEqual
+    "key of an either"
+    (Right either_)
+    (encodeText <$> decodeText @(Either (Commented T.Text) Int) either_)
   let nodes = "os: [a, b] # two\nsteps:\n- x\n  # end\n"
   assertEqual
     "nodes keep their comments once"

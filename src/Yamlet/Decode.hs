@@ -865,8 +865,8 @@ deriving newtype instance FromYaml Sem.Any
 instance (FromYaml a, FromYaml b) => FromYaml (Either a b) where
   parseYaml = withMapping $ \o -> case objectEntries o of
     [(k, v)] -> case stringValue k of
-      Just "Left" -> Left <$> parseNode parseYaml v
-      Just "Right" -> Right <$> parseNode parseYaml v
+      Just "Left" -> Left <$> parseEntry (k, v)
+      Just "Right" -> Right <$> parseEntry (k, v)
       _ -> failAt k "expected the key Left or Right"
     _ -> fail "expected a mapping with one key, Left or Right"
 
