@@ -5,6 +5,7 @@ import Data.Bifunctor
 import Data.ByteString qualified as BS
 import Data.Either
 import Data.Fixed
+import Data.Foldable
 import Data.Int
 import Data.IntMap.Strict qualified as IM
 import Data.IntSet qualified as IS
@@ -64,6 +65,7 @@ decodeTests =
         [ testCase "syntax" test_syntaxErrors
         , testCase "types" test_typeErrors
         , testCase "keys" test_keyErrors
+        , testCase "collected" test_collectedErrors
         , testCase "pretty" test_prettyError
         , testCase "paths" test_errorPaths
         , testProperty "locations of several errors" prop_errorsAt
@@ -575,6 +577,12 @@ errorOf = \case
   Left errs -> error $ "expected one error, but got " ++ show (map (.message) (NE.toList errs))
   Right _ -> Nothing
 
+-- | The line, the column and the message of each error.
+errorsOf :: Either (NE.NonEmpty Error) a -> [(Int, Int, String)]
+errorsOf = \case
+  Left errs -> [(err.location.line, err.location.column, err.message) | err <- NE.toList errs]
+  Right _ -> []
+
 test_syntaxErrors :: Assertion
 test_syntaxErrors = do
   let check :: String -> (Int, Int, String) -> T.Text -> Assertion
@@ -926,6 +934,39 @@ instance FromYaml Vowel where
   parseYaml = withText $ \t -> case T.unpack t of
     [c] | c `elem` ("aeiou" :: String) -> pure (Vowel c)
     _ -> fail "not a vowel"
+
+-- | A combination that keeps both results collects the errors of both, and a
+-- combination that drops a result stops at the first error.
+test_collectedErrors :: Assertion
+test_collectedErrors = do
+  assertEqual
+    "fields"
+    [ (1, 7, "expected a string, but got a list")
+    , (2, 8, "expected a list, but got an integer")
+    , (3, 7, "expected an integer, but got a string")
+    ]
+    (errorsOf (decodeText @Config "name: [x]\npaths: 1\njobs: x\n"))
+  assertEqual
+    "statement of a do block"
+    [(2, 1, "unknown key \"bogus\", expected one of: name, paths, jobs")]
+    (errorsOf (decodeText @Config "name: [x]\nbogus: 1\n"))
+  assertEqual
+    "items of a list"
+    [(1, 5, "expected an integer, but got a string"), (1, 11, "expected an integer, but got a string")]
+    (errorsOf (decodeText @[Int] "[1, x, 2, y]"))
+  let count :: (S.Node -> Parser ()) -> Int
+      count p = either (error . show) (either length (const 0) . runParser p) (decodeText @Node "[x, y]")
+      item :: S.Node -> Parser Int
+      item = parseNode parseYaml
+      pair :: (Parser Int -> Parser Int -> Parser r) -> S.Node -> Parser ()
+      pair op = withSequence $ \case
+        [a, b] -> void (op (item a) (item b))
+        _ -> fail "expected two items"
+  assertEqual "traverse" 2 (count (withSequence (void . traverse item)))
+  assertEqual "traverse_" 1 (count (withSequence (traverse_ item)))
+  assertEqual "<*>" 2 (count (pair (\a b -> (,) <$> a <*> b)))
+  assertEqual "*>" 1 (count (pair (*>)))
+  assertEqual "<*" 1 (count (pair (<*)))
 
 test_keyErrors :: Assertion
 test_keyErrors = do

@@ -1,6 +1,7 @@
 module GenericTests (genericTests) where
 
 import Data.Aeson qualified as A
+import Data.Bifunctor
 import Data.Char
 import Data.List.NonEmpty qualified as NE
 import Data.Text qualified as T
@@ -16,6 +17,7 @@ genericTests =
   testGroup
     "Generic"
     [ testCase "record" test_record
+    , testCase "collected errors" test_collectedErrors
     , testCase "enumeration" test_enumeration
     , testCase "sum" test_sum
     , shapes
@@ -312,6 +314,36 @@ test_record = do
   assertEqual "encoded" "host: a\nport: 1\ntags: null\n" (encodeText (Server "a" 1 Nothing))
   roundTrip "round trip" (Server "a" 1 (Just ["x", "y"]))
 
+-- | A derived decoder reports the errors of all its fields.
+test_collectedErrors :: Assertion
+test_collectedErrors = do
+  let fields = decodeText @Server "host: [a]\nport: x\ntags: [1, b, 2]\n"
+  assertEqual
+    "fields"
+    [ (1, 7, "expected a string, but got a list")
+    , (2, 7, "expected an integer, but got a string")
+    , (3, 8, "expected a string, but got an integer, quote the value, e.g. '1'")
+    , (3, 14, "expected a string, but got an integer, quote the value, e.g. '2'")
+    ]
+    (errorsOf fields)
+  assertEqual "paths" (Left ["host", "port", "tags[0]", "tags[2]"]) (first (map (renderPath . (.path)) . NE.toList) fields)
+  assertEqual
+    "missing and invalid fields"
+    [(1, 1, "missing key \"host\""), (1, 7, "expected an integer, but got a string")]
+    (errorsOf (decodeText @Server "port: x\n"))
+  assertEqual
+    "unknown key and invalid field"
+    [(1, 7, "expected an integer, but got a string"), (2, 1, "unknown key \"colour\", expected one of: size, note")]
+    (errorsOf (decodeText @Strict "size: x\ncolour: red\n"))
+  assertEqual
+    "fields of a constructor"
+    [(1, 25, "expected a number, but got a string"), (1, 36, "expected a number, but got a string")]
+    (errorsOf (decodeText @Shape "{tag: Rectangle, width: x, height: y}"))
+  assertEqual
+    "items of a list"
+    [(1, 19, "expected an integer, but got a string"), (2, 3, "missing key \"port\"")]
+    (errorsOf (decodeText @[Server] "- {host: a, port: x}\n- host: b\n"))
+
 test_enumeration :: Assertion
 test_enumeration = do
   assertEqual "decoded" (Right [TurnLeft, TurnRight]) (decodeText "[TurnLeft, TurnRight]")
@@ -413,3 +445,9 @@ errorOf = \case
   Left (err NE.:| []) -> Just (err.location.line, err.location.column, err.message)
   Left errs -> error $ "expected one error, but got " ++ show (map (.message) (NE.toList errs))
   Right _ -> Nothing
+
+-- | The line, the column and the message of each error.
+errorsOf :: Either (NE.NonEmpty Error) a -> [(Int, Int, String)]
+errorsOf = \case
+  Left errs -> [(err.location.line, err.location.column, err.message) | err <- NE.toList errs]
+  Right _ -> []

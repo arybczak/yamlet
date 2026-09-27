@@ -96,38 +96,98 @@ import Yamlet.Value
 -- port <- parseYaml n
 -- unless (port > 0 && port < 65536) $ fail "the port must be from 1 to 65535"
 -- @
-newtype Parser a = Parser (S.Offset -> Either Errors a)
+--
+-- A combination that keeps the results of both parts collects the errors of
+-- both: '<*>', 'liftA2', and the functions that use them, e.g. 'traverse'
+-- and 'mapM' on a list. Thus the errors of all fields in
+-- @Config \<$> o .: \"name\" \<*> o .: \"paths\"@ come back together. A
+-- combination that drops a result stops at the first error: '>>=', '>>',
+-- '*>' and '<*', and so a statement of a @do@ block, e.g. the check above.
+-- So do the functions that use them, e.g. 'Data.Foldable.for_' and
+-- 'Control.Monad.mapM_'. To collect the errors of such a loop, use
+-- @'Data.Functor.void' . 'traverse'@.
+--
+-- The choice changes only the errors, never the result. With
+-- @ApplicativeDo@, GHC turns the independent statements of a @do@ block that
+-- ends with 'pure' into '<*>', so they collect errors.
+newtype Parser a = Parser (S.Offset -> Result a)
+
+-- | The errors of a parser and its value. The value of a parser with errors
+-- is 'failed'.
+--
+-- '<*>' joins the errors of both parts and applies the values without a
+-- branch on the errors. So the optimizer can combine the values of a derived
+-- decoder as for a pure function, and the generic representation goes away.
+data Result a = Result !Errors a
 
 -- | The errors of a parser in a tree, so that two sets of errors join in
 -- constant time.
 data Errors
-  = OneError !S.Offset String
+  = NoErrors
+  | OneError !S.Offset String
   | BothErrors Errors Errors
+
+bothErrors :: Errors -> Errors -> Errors
+bothErrors e1 e2 = case (e1, e2) of
+  (NoErrors, _) -> e2
+  (_, NoErrors) -> e1
+  _ -> BothErrors e1 e2
+-- If GHC inlines this function into '<*>', the branches on the errors take
+-- the values of the parts with them. Then the inspection test of the derived
+-- decoder with 100 fields fails.
+{-# NOINLINE bothErrors #-}
+
+-- | The value of a parser with errors. Nothing reads it, because each
+-- consumer of a result looks at the errors first.
+failed :: a
+failed = errorWithoutStackTrace "Yamlet.Decode: the value of a failed parser"
+
+-- | A result with one error.
+failure :: S.Offset -> String -> Result a
+failure off msg = Result (OneError off msg) failed
 
 -- | The errors in the order of their offsets. Errors at the same offset keep
 -- their order.
-sortedErrors :: Errors -> NE.NonEmpty (S.Offset, String)
-sortedErrors = NE.sortWith fst . NE.fromList . flip go []
+sortedErrors :: Errors -> [(S.Offset, String)]
+sortedErrors = L.sortOn fst . flip go []
   where
     go :: Errors -> [(S.Offset, String)] -> [(S.Offset, String)]
     go = \case
+      NoErrors -> id
       OneError off msg -> ((off, msg) :)
       BothErrors e1 e2 -> go e1 . go e2
 
 instance Functor Parser where
-  fmap f (Parser g) = Parser $ fmap f . g
+  fmap f (Parser g) = Parser $ \off -> case g off of
+    Result e a -> Result e (f a)
 
+-- '<*>' differs from 'ap', and '*>' and '<*' differ from their definitions
+-- with '<*>', in the errors, but not in the results.
 instance Applicative Parser where
-  pure a = Parser $ \_ -> Right a
-  (<*>) = ap
+  pure a = Parser $ \_ -> Result NoErrors a
+  Parser f <*> Parser g = Parser $ \off -> case f off of
+    Result e1 h -> case g off of
+      Result e2 a -> Result (bothErrors e1 e2) (h a)
+
+  -- '>>' is '*>', and a statement of a @do@ block must not run after a failed
+  -- check, e.g. an index into a list after the check of its length.
+  Parser f *> Parser g = Parser $ \off -> case f off of
+    Result NoErrors _ -> g off
+    Result e _ -> Result e failed
+
+  Parser f <* Parser g = Parser $ \off -> case f off of
+    Result NoErrors a -> case g off of
+      Result NoErrors _ -> Result NoErrors a
+      Result e _ -> Result e failed
+    Result e _ -> Result e failed
 
 instance Monad Parser where
   Parser g >>= k = Parser $ \off -> case g off of
-    Right a -> let Parser h = k a in h off
-    Left err -> Left err
+    Result NoErrors a -> let Parser h = k a in h off
+    Result e _ -> Result e failed
 
 instance MonadFail Parser where
-  fail msg = Parser $ \off -> Left (OneError off msg)
+  fail msg = Parser $ \off -> failure off msg
 
 -- | Run a parser on a node. Return each error as the offset of the node that
 -- caused it with the error message, in the order of the offsets.
@@ -138,11 +198,20 @@ instance MonadFail Parser where
 runParser :: (S.Node -> Parser a) -> S.Node -> Either (NE.NonEmpty (S.Offset, String)) a
 runParser f n0 = case prepare n0 of
   Left err -> Left (err NE.:| [])
-  Right n -> either (Left . sortedErrors) Right (runChecked f n)
+  Right n -> case runChecked f n of
+    Result NoErrors a -> Right a
+    Result e _ -> Left (NE.fromList (sortedErrors e))
 
 -- | Run a parser on a node that passed 'prepare'.
-runChecked :: (S.Node -> Parser a) -> S.Node -> Either Errors a
+runChecked :: (S.Node -> Parser a) -> S.Node -> Result a
 runChecked f n = let Parser g = parseNode f n in g n.offset
+
+-- | The value of a parser on a node that passed 'prepare', if it has no
+-- errors.
+succeeds :: (S.Node -> Parser a) -> S.Node -> Maybe a
+succeeds f n = case runChecked f n of
+  Result NoErrors a -> Just a
+  Result _ _ -> Nothing
 
 -- | Run a parser on a node, so that 'fail' points to the node.
 parseNode :: (S.Node -> Parser a) -> S.Node -> Parser a
@@ -150,7 +219,7 @@ parseNode f n = let Parser g = f n in Parser $ \_ -> g n.offset
 
 -- | Fail with an error that points to the given node.
 failAt :: S.Node -> String -> Parser a
-failAt n msg = Parser $ \_ -> Left (OneError n.offset msg)
+failAt n msg = Parser $ \_ -> failure n.offset msg
 
 -- | Fail with an error about the kind of the node, e.g. "expected a list, but
 -- got a string".
@@ -172,8 +241,8 @@ nullNode = S.Node S.noOffset S.noOffset S.noProps S.noComments (S.Scalar S.Plain
 -- @
 orElse :: Parser a -> Parser a -> Parser a
 orElse (Parser g) (Parser h) = Parser $ \off -> case g off of
-  Left _ -> h off
-  r -> r
+  r@(Result NoErrors _) -> r
+  _ -> h off
 
 infixl 3 `orElse`
 
@@ -411,15 +480,10 @@ findKey o key = case M.lookup key o.index of
 -- instead.
 missingKey :: Object -> T.Text -> Parser a
 missingKey o key = Parser $ \off ->
-  -- The 'Left' must stay outside. Then the optimizer splits the function
-  -- into a worker for the error and a small wrapper that adds the 'Left'.
-  -- The wrapper inlines, so the failure is visible at the call site, and the
-  -- code after it goes away, e.g. the generic representation in a derived
-  -- decoder.
   let Parser g = findKey o key
-  in Left $ case g off of
-       Left err -> err
-       Right _ -> OneError o.node.offset ("missing key " ++ show key)
+  in case g off of
+       Result NoErrors _ -> failure o.node.offset ("missing key " ++ show key)
+       Result e _ -> Result e failed
 
 -- | A default for an optional value.
 (.!=) :: Parser (Maybe a) -> a -> Parser a
@@ -550,7 +614,7 @@ entryComments k v = (S.Comments before inline v.comments.after, value)
 instance FromYaml Value where
   parseYaml n = case represent n of
     Right r -> pure r
-    Left (off, msg) -> Parser $ \_ -> Left (OneError off msg)
+    Left (off, msg) -> Parser $ \_ -> failure off msg
 
 instance FromYaml () where
   parseYaml = withNull (pure ())
@@ -1182,26 +1246,23 @@ fromObject
      )
   => YamlOptions -> Bool -> [T.Text] -> Maybe (f p) -> Object -> Parser (f p)
 fromObject opts flat keys def o
-  | gNamed @f = do
-      reject (gNames @f opts)
-      gFromObject opts def o
-  | gArity @f == 0 = do
-      reject []
-      fst <$> gFromValues []
+  | gNamed @f = checked (gNames @f opts) (gFromObject opts def o)
+  | gArity @f == 0 = checked [] (fst <$> gFromValues [])
   | flat && not (all (isKey opts.contentsKey . fst) others) = merged
-  | otherwise = do
-      reject [opts.contentsKey]
-      case M.lookup opts.contentsKey o.index of
-        Just entry -> gFromEntry entry
-        -- A missing contents key is null, if the fields accept null. A flat
-        -- field can also have only optional keys.
-        Nothing
-          | Just fields <- def -> pure fields
-          | flat -> either (const merged) pure (runChecked fromContents nullNode)
-          | otherwise -> either (const (missingKey o opts.contentsKey)) pure (runChecked fromContents nullNode)
+  | otherwise = checked [opts.contentsKey] $ case M.lookup opts.contentsKey o.index of
+      Just entry -> gFromEntry entry
+      -- A missing contents key is null, if the fields accept null. A flat
+      -- field can also have only optional keys.
+      Nothing
+        | Just fields <- def -> pure fields
+        | flat -> maybe merged pure (succeeds fromContents nullNode)
+        | otherwise -> maybe (missingKey o opts.contentsKey) pure (succeeds fromContents nullNode)
   where
-    reject :: [T.Text] -> Parser ()
-    reject fields = when opts.rejectUnknownFields $ rejectUnknownKeys (keys ++ fields) o
+    -- The fields, with the errors of the unknown keys if the options reject
+    -- them.
+    checked :: [T.Text] -> Parser (f p) -> Parser (f p)
+    checked fields =
+      liftA2 (\_ x -> x) (when opts.rejectUnknownFields $ rejectUnknownKeys (keys ++ fields) o)
 
     -- The field decodes from the mapping without the given keys. The first
     -- key already has the lines above the mapping.
@@ -1276,7 +1337,7 @@ instance
       Nothing -> case def of
         Just (M1 (K1 x)) -> pure x
         -- A missing field is null, if its type accepts null.
-        Nothing -> either (const (missingKey o key)) pure (runChecked parseYaml nullNode)
+        Nothing -> maybe (missingKey o key) pure (succeeds parseYaml nullNode)
     where
       key :: T.Text
       key = fieldKey @name opts
