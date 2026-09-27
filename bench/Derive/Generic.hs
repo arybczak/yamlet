@@ -72,7 +72,7 @@ data F = F1 A | F2 B | F3 C
   deriving anyclass (NFData, FromYaml, ToYaml)
 
 instance GenericYaml F where
-  type FlattenFields F = True
+  type SumEncoding F = TaggedFlat
 
 mkX :: Int -> X
 mkX i = case i `mod` 3 of

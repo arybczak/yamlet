@@ -6,13 +6,14 @@ module Yamlet.Internal.Generic
   ( -- * Options
     YamlOptions (..)
   , defaultYamlOptions
+  , SumEncodingKind (..)
   , GenericYaml (..)
   , snakeCase
   , kebabCase
 
     -- * Constructors
   , GConstructors (..)
-  , GFlatten (..)
+  , GEncoding (..)
   , isEnum
   , isTagged
   , constructorTag
@@ -81,27 +82,37 @@ defaultYamlOptions =
     , rejectUnknownFields = False
     }
 
+-- | How a tagged constructor goes in a mapping. The choice is a type, see
+-- 'SumEncoding', because it changes the shapes of the constructors that a
+-- type can have.
+data SumEncodingKind
+  = -- | The fields go next to the tag, e.g. @{tag: Circle, radius: 1}@, and a
+    -- field without a name goes under the contents key, e.g.
+    -- @{tag: Forward, contents: 10}@.
+    TaggedObject
+  | -- | The entries of a field without a name go next to the tag, e.g.
+    -- @{tag: Ahead, distance: 10}@ for @Ahead (Distance 10)@. The
+    -- constructors must have one field without a name or no fields,
+    -- otherwise the type is a type error.
+    --
+    -- The field must encode as a mapping with a key, and no key can be the
+    -- tag key. Otherwise the constructor encodes as with 'TaggedObject'.
+    -- Thus the field of a type with the same tag key stays under the
+    -- contents key. An enumeration uses the form if
+    -- 'Yamlet.Generic.allNullaryToStringTag' is off.
+    --
+    -- The keys of the mapping belong to the field, so the options of its
+    -- type apply to them, e.g. 'Yamlet.Generic.rejectUnknownFields'.
+    TaggedFlat
+  deriving stock (Eq, Show)
+
 -- | The configuration of the generic instances of t'Yamlet.Decode.FromYaml'
 -- and t'Yamlet.Encode.ToYaml' for a type: the options and the default value.
 class GenericYaml a where
-  -- | Put the entries of the field of a tagged constructor without field
-  -- names in the mapping of the constructor, next to the tag. 'False' by
-  -- default. The constructors must have one field without a name or no
-  -- fields, otherwise the type is a type error.
-  --
-  -- The field must encode as a mapping with a key, and no key can be the tag
-  -- key. Otherwise the constructor encodes as without the option. Thus the
-  -- field of a type with the same tag key stays under the contents key. An
-  -- enumeration merges if 'Yamlet.Generic.allNullaryToStringTag' is off. A
-  -- type without a tag, e.g. a type with one constructor without
-  -- 'Yamlet.Generic.tagSingleConstructors', encodes as its field, so the
-  -- option has no effect.
-  --
-  -- The keys of the mapping belong to the field, so the options of its type
-  -- apply to them, e.g. 'Yamlet.Generic.rejectUnknownFields'.
-  type FlattenFields a :: Bool
+  -- | How a tagged constructor goes in a mapping, 'TaggedObject' by default.
+  type SumEncoding a :: SumEncodingKind
 
-  type FlattenFields a = False
+  type SumEncoding a = TaggedObject
 
   yamlOptions :: YamlOptions
   yamlOptions = defaultYamlOptions
@@ -175,17 +186,17 @@ instance (KnownSymbol name, GFields f) => GConstructors (C1 (MetaCons name fixit
 isEnum :: forall f. GConstructors f => YamlOptions -> Bool
 isEnum opts = opts.allNullaryToStringTag && gNullary @f
 
--- | The value of 'FlattenFields', if the constructors allow it. The instances
+-- | The value of 'SumEncoding', if the constructors allow it. The instances
 -- also check the shape of the constructors, because every derived instance
 -- needs this class.
-class GFlatten (flat :: Bool) f where
-  gFlatten :: Bool
+class GEncoding (e :: SumEncodingKind) f where
+  gEncoding :: SumEncodingKind
 
-instance ValidShape (GShape f) => GFlatten False f where
-  gFlatten = validShape @(GShape f) `seq` False
+instance ValidShape (GShape f) => GEncoding TaggedObject f where
+  gEncoding = validShape @(GShape f) `seq` TaggedObject
 
-instance ValidShape (FlatShape (GShape f)) => GFlatten True f where
-  gFlatten = validShape @(FlatShape (GShape f)) `seq` True
+instance ValidShape (FlatShape (GShape f)) => GEncoding TaggedFlat f where
+  gEncoding = validShape @(FlatShape (GShape f)) `seq` TaggedFlat
 
 -- | The fields of the constructors of a type. A constructor without fields
 -- fits with both kinds of fields.
@@ -242,11 +253,11 @@ instance ValidShape NoFields where validShape = ()
 instance ValidShape (UnnamedField name) where validShape = ()
 instance ValidShape (NamedFields name) where validShape = ()
 
--- | The shape, if 'FlattenFields' has fields to flatten in it.
+-- | The shape, if 'TaggedFlat' has fields to flatten in it.
 type family FlatShape (s :: Shape) :: Shape where
   FlatShape (NamedFields name) =
     TypeError
-      ( Text "FlattenFields needs constructors with one field without a name, but the constructor "
+      ( Text "TaggedFlat needs constructors with one field without a name, but the constructor "
           :<>: Text name
           :<>: Text " has named fields."
       )

@@ -25,13 +25,13 @@
 --
 -- * A type with one constructor and a field without a name is its field.
 --
--- * With 'FlattenFields', the entries of a field without a name go in the
---   mapping of the constructor, e.g. @{tag: Ahead, distance: 10}@ for
+-- * With the encoding 'TaggedFlat', the entries of a field without a name go
+--   in the mapping of the constructor, e.g. @{tag: Ahead, distance: 10}@ for
 --   @Ahead (Distance 10)@:
 --
 -- @
 -- instance GenericYaml Step where
---   type FlattenFields Step = True
+--   type SumEncoding Step = TaggedFlat
 -- @
 --
 -- = Shapes
@@ -39,7 +39,7 @@
 -- Every constructor has no fields, one field without a name, or named
 -- fields. A type with several constructors cannot mix named fields with a
 -- field without a name, but a constructor without fields fits with both.
--- 'FlattenFields' needs constructors with a field without a name. Another
+-- 'TaggedFlat' needs constructors with a field without a name. Another
 -- type is a compile error that names the constructors, e.g. for a
 -- constructor with several fields without names. Give such fields names, or
 -- put them in a tuple.
@@ -61,7 +61,7 @@
 --
 -- A present key that holds a mapping takes the missing keys of that mapping
 -- from the default of its own type, not from the outer default. The same
--- holds with 'FlattenFields': the keys of a field without a name are next to
+-- holds with 'TaggedFlat': the keys of a field without a name are next to
 -- the tag, but they belong to the field. The outer default
 -- applies to such a field only if the constructor has no keys besides the
 -- tag.
@@ -74,6 +74,7 @@ module Yamlet.Generic
   ( YamlOptions (..)
   , defaultYamlOptions
   , GenericYaml (..)
+  , SumEncodingKind (..)
 
     -- * Modifiers
   , snakeCase

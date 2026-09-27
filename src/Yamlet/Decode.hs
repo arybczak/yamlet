@@ -601,7 +601,7 @@ class FromYaml a where
        , GenericYaml a
        , Rep a ~ D1 d f
        , GConstructors f
-       , GFlatten (FlattenFields a) f
+       , GEncoding (SumEncoding a) f
        , GFromConstructor f
        )
     => S.Node -> Parser a
@@ -1185,15 +1185,15 @@ genericParseYaml
      , GenericYaml a
      , Rep a ~ D1 d f
      , GConstructors f
-     , GFlatten (FlattenFields a) f
+     , GEncoding (SumEncoding a) f
      , GFromConstructor f
      )
   => S.Node -> Parser a
 genericParseYaml n =
-  -- Forcing the flag forces the check of the shape, e.g. with deferred type
-  -- errors in a test of the errors.
-  let flat = gFlatten @(FlattenFields a) @f
-  in flat `seq` gParseYaml (yamlOptions @a) flat (from <$> yamlDefault @a) to n
+  -- Forcing the encoding forces the check of the shape, e.g. with deferred
+  -- type errors in a test of the errors.
+  let enc = gEncoding @(SumEncoding a) @f
+  in enc `seq` gParseYaml (yamlOptions @a) (enc == TaggedFlat) (from <$> yamlDefault @a) to n
 {-# INLINE genericParseYaml #-}
 
 -- The decoders of the constructors take a continuation, which starts as
@@ -1243,7 +1243,7 @@ class GFromConstructor f where
   gFromTag :: YamlOptions -> (f p -> a) -> S.Node -> T.Text -> Maybe (Parser a)
 
   -- | The constructor with the tag, from the mapping that holds the tag, with
-  -- the flag of 'FlattenFields'.
+  -- the flag of 'TaggedFlat'.
   gFromTagged :: YamlOptions -> Bool -> Maybe (f p) -> (f p -> a) -> T.Text -> Object -> Maybe (Parser a)
 
   -- | The only constructor, without a tag.

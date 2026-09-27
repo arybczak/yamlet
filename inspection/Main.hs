@@ -174,7 +174,7 @@ newtype Velocity = Velocity Speed
   deriving anyclass (FromYaml, ToYaml)
 
 instance GenericYaml Velocity where
-  type FlattenFields Velocity = True
+  type SumEncoding Velocity = TaggedFlat
   yamlOptions = defaultYamlOptions {tagSingleConstructors = True}
 
 newtype Distance = Distance {distance :: Maybe Int}
@@ -267,7 +267,7 @@ data Step = Ahead Distance | Accelerate Speed | Halt
   deriving anyclass (FromYaml, ToYaml)
 
 instance GenericYaml Step where
-  type FlattenFields Step = True
+  type SumEncoding Step = TaggedFlat
   yamlOptions = defaultYamlOptions {tagKey = "step"}
 
 encodeTurn :: Turn -> Node

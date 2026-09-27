@@ -61,7 +61,7 @@ class ToYaml a where
        , GenericYaml a
        , Rep a ~ D1 d f
        , GConstructors f
-       , GFlatten (FlattenFields a) f
+       , GEncoding (SumEncoding a) f
        , GToConstructor f
        )
     => a -> S.Node
@@ -450,15 +450,15 @@ genericToYaml
      , GenericYaml a
      , Rep a ~ D1 d f
      , GConstructors f
-     , GFlatten (FlattenFields a) f
+     , GEncoding (SumEncoding a) f
      , GToConstructor f
      )
   => a -> S.Node
 genericToYaml x =
-  -- Forcing the flag forces the check of the shape, e.g. with deferred type
-  -- errors in a test of the errors.
-  let flat = gFlatten @(FlattenFields a) @f
-  in flat `seq` gToYaml (yamlOptions @a) flat (from <$> yamlDefault @a) (from x)
+  -- Forcing the encoding forces the check of the shape, e.g. with deferred
+  -- type errors in a test of the errors.
+  let enc = gEncoding @(SumEncoding a) @f
+  in enc `seq` gToYaml (yamlOptions @a) (enc == TaggedFlat) (from <$> yamlDefault @a) (from x)
 {-# INLINE genericToYaml #-}
 
 -- The encoder takes the default for 'omitNullFields': it leaves out a null
@@ -482,7 +482,7 @@ gToYaml opts flat def (M1 x)
 class GToConstructor f where
   gTag :: YamlOptions -> f p -> T.Text
 
-  -- | The constructor, with the tag if the flag of 'FlattenFields' is given.
+  -- | The constructor, with the tag if the flag of 'TaggedFlat' is given.
   gToConstructor :: YamlOptions -> Maybe Bool -> Maybe (f p) -> f p -> S.Node
 
 instance GToConstructor V1 where

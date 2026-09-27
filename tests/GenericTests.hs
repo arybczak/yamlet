@@ -103,7 +103,7 @@ data Motion = Go Distance | Hurry Speed
   deriving anyclass (FromYaml, ToYaml)
 
 instance GenericYaml Motion where
-  type FlattenFields Motion = True
+  type SumEncoding Motion = TaggedFlat
 
 data Strict = Strict {size :: Int, note :: Maybe T.Text}
   deriving stock (Eq, Show, Generic)
@@ -161,7 +161,7 @@ data Step
   deriving anyclass (FromYaml, ToYaml)
 
 instance GenericYaml Step where
-  type FlattenFields Step = True
+  type SumEncoding Step = TaggedFlat
   yamlOptions = defaultYamlOptions {tagKey = "step"}
 
 newtype Distance = Distance {distance :: Maybe Int}
