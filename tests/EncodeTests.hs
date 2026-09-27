@@ -6,6 +6,7 @@ import Data.Functor.Identity
 import Data.IntMap.Strict qualified as IM
 import Data.IntSet qualified as IS
 import Data.List qualified as L
+import Data.Map.Strict qualified as M
 import Data.Monoid qualified as Mon
 import Data.Ord
 import Data.Proxy
@@ -42,6 +43,7 @@ encodeTests =
     , testCase "tags" test_tags
     , testCase "syntax tree" test_syntax
     , testCase "kept nodes" test_keptNodes
+    , testCase "comments of keys" test_commentedKeys
     , -- The renderers differ only in rare cases, e.g. for a key that needs an
       -- explicit entry. 10000 cases take about 0.2 s.
       localOption (QuickCheckTests 10000) $ testProperty "fast renderer" prop_fastRenderer
@@ -365,6 +367,29 @@ test_keptNodes = do
         , "  copy:"
         , "    x: 1"
         ]
+
+-- | A record that keeps the comments of a key.
+data Job = Job {name :: T.Text, permissions :: Commented Node}
+
+instance FromYaml Job where
+  parseYaml = withMapping $ \o -> Job <$> o .: "name" <*> o .: "permissions"
+
+instance ToYaml Job where
+  toYaml j = mapping ["name" .= j.name, "permissions" .= j.permissions]
+
+test_commentedKeys :: Assertion
+test_commentedKeys = do
+  let job = T.unlines ["name: build", "# The test reporter writes check runs.", "permissions: # read-only", "  contents: read"]
+  assertEqual "record" (Right job) (encodeText <$> decodeText @Job job)
+  -- The comment after 2 belongs to the value, which an integer cannot keep.
+  assertEqual
+    "map"
+    (Right "# one\na: 1\nb: 2\n")
+    (encodeText <$> decodeText @(M.Map T.Text (Commented Int)) "# one\na: 1\nb: 2 # two\n")
+  assertEqual
+    "list items have no key"
+    (Right [S.noComments])
+    (map (.comments) <$> decodeText @[Commented Int] "# c\n- 1\n")
 
 -- | The faster renderer of the encoder gives the same output as the renderer
 -- of syntax trees.

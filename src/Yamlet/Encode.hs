@@ -48,6 +48,7 @@ import Numeric.Natural
 
 import Yamlet.Internal.Emit
 import Yamlet.Internal.Generic
+import Yamlet.Internal.Syntax qualified as S
 import Yamlet.Internal.Utils
 import Yamlet.Internal.View
 import Yamlet.Schema
@@ -76,9 +77,16 @@ class ToYaml a where
   toYamlList :: [a] -> S.Node
   toYamlList = S.sequenceNode . map toYaml
 
+  -- | Convert the value of a mapping entry, with the node of its key, e.g. to
+  -- put comments on the key as 'Yamlet.Commented' does. '.=', the derived
+  -- encoders and the instances for maps use it. The default returns the key
+  -- unchanged.
+  toYamlField :: S.Node -> a -> (S.Node, S.Node)
+  toYamlField k v = (k, toYaml v)
+
 -- | An entry of a mapping with a string key.
 (.=) :: ToYaml a => T.Text -> a -> (S.Node, S.Node)
-key .= v = (string key, toYaml v)
+key .= v = toYamlField (string key) v
 
 infixr 8 .=
 
@@ -89,6 +97,13 @@ mapping = S.mappingNode
 
 instance ToYaml S.Node where toYaml = id
 instance ToYaml Value where toYaml = toSyntax
+
+-- | The value with the comments on its key. A value without a key loses the
+-- comments.
+instance ToYaml a => ToYaml (S.Commented a) where
+  toYaml c = toYaml c.value
+  toYamlField k c = (S.Node k.offset k.endOffset k.props c.comments k.content, toYaml c.value)
+
 instance ToYaml () where toYaml _ = scalar Null
 instance ToYaml Bool where toYaml = scalar . Bool
 instance ToYaml Integer where toYaml = scalar . Int
@@ -164,10 +179,10 @@ instance ToYaml a => ToYaml (Maybe a) where
 -- | Two keys that give the same node, e.g. 'Nothing' and @'Just' ()@, or two
 -- NaN values, give a mapping that does not read back.
 instance (ToYaml k, ToYaml v) => ToYaml (M.Map k v) where
-  toYaml m = mapping [(toYaml k, toYaml v) | (k, v) <- M.toList m]
+  toYaml m = mapping [toYamlField (toYaml k) v | (k, v) <- M.toList m]
 
 instance ToYaml v => ToYaml (IM.IntMap v) where
-  toYaml m = mapping [(toYaml k, toYaml v) | (k, v) <- IM.toList m]
+  toYaml m = mapping [toYamlField (toYaml k) v | (k, v) <- IM.toList m]
 
 -- | A list in ascending order.
 instance ToYaml a => ToYaml (Set.Set a) where
@@ -526,11 +541,11 @@ instance
   => GToFields (S1 (MetaSel (Just name) u s d) (Rec0 a))
   where
   gToEntries opts def (M1 (K1 x))
-    | opts.omitNullFields && isNullNode v && nullDefault = []
-    | otherwise = [fieldKey @name opts .= v]
+    | opts.omitNullFields && isNullNode (snd entry) && nullDefault = []
+    | otherwise = [entry]
     where
-      v :: S.Node
-      v = toYaml x
+      entry :: (S.Node, S.Node)
+      entry = fieldKey @name opts .= x
 
       -- The decoder fills a missing key from the default.
       nullDefault :: Bool

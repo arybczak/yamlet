@@ -18,7 +18,9 @@ A YAML 1.2.2 library written in Haskell.
 - The syntax tree keeps the comments and the empty lines, so a program can
   read a file, change it and write it back with its comments.
 - A decoded type can keep a part of a document as a `Node`. The encoder
-  writes it back as it was written, with its comments and styles.
+  writes it back as it was written, with its comments and styles. A field of
+  type `Commented a` also keeps the comments of its key, e.g. the comment
+  above `permissions:`.
 - Floating-point numbers are exact, e.g. `0.1` is exactly one tenth. They
   convert to `Scientific` without loss and to `Double` on request.
 - If a string reads back the same as a plain scalar, the encoder does not

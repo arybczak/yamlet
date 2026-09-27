@@ -21,6 +21,7 @@ module Yamlet.Internal.Syntax
     -- * Comments
   , Comments (..)
   , noComments
+  , Commented (..)
   , Line (..)
 
     -- * Positions
@@ -30,6 +31,7 @@ module Yamlet.Internal.Syntax
     -- * Copies
   , copyDocument
   , copyNode
+  , copyComments
   ) where
 
 import Control.DeepSeq
@@ -141,6 +143,20 @@ data Comments = Comments
 -- | No comments and no empty lines.
 noComments :: Comments
 noComments = Comments [] Nothing []
+
+-- | A value with the comments of its key in a mapping, e.g. the comment above
+-- @permissions:@ and the comment after it on its line. Comments that belong
+-- to the value, e.g. the comment after @x@ in @name: x # c@, stay with the
+-- value, so only a value such as a node keeps them.
+--
+-- The decoder takes the comments from the key, and the encoder puts them back
+-- on the key. A value without a key, e.g. an item of a list, has no comments.
+data Commented a = Commented
+  { comments :: !Comments
+  , value :: a
+  }
+  deriving stock (Eq, Show, Functor, Foldable, Traversable, Generic)
+  deriving anyclass (NFData)
 
 -- | A line of comments. Several empty lines in a row count as one.
 data Line

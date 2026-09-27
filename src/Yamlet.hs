@@ -57,6 +57,11 @@ module Yamlet
   , S.Node
   , S.Offset (..)
 
+    -- * Comments of keys
+  , S.Commented (..)
+  , S.Comments (..)
+  , S.Line (..)
+
     -- * Values
   , module Yamlet.Value
 

@@ -244,10 +244,25 @@ withSequence f = parseNode $ \n -> case n.content of
 -- | The entries of a mapping. As for 'withText', the tag of a string key does
 -- not matter, so two string keys with the same text are an error, e.g. @a@
 -- and @!foo a@.
+--
+-- The lines above the mapping go to its first key. The parser gives the
+-- lines above the first entry of a block mapping to the mapping, e.g. a
+-- comment at the top of a file, but they read as the lines of the first key,
+-- and 'Yamlet.Commented' keeps them there.
 withMapping :: (Object -> Parser a) -> S.Node -> Parser a
 withMapping f = parseNode $ \n -> case n.content of
-  S.Mapping _ kvs -> mkObject n kvs >>= f
+  S.Mapping _ kvs -> mkObject n (keyEntries n kvs) >>= f
   _ -> typeMismatch "a mapping" n
+
+-- | The entries of a mapping, with the lines above the mapping moved to its
+-- first key. The renderer writes both at the same place.
+keyEntries :: S.Node -> [(S.Node, S.Node)] -> [(S.Node, S.Node)]
+keyEntries n = \case
+  (k, v) : rest
+    | not (null n.comments.before) ->
+        let c = k.comments
+        in (S.Node k.offset k.endOffset k.props c {S.before = n.comments.before ++ c.before} k.content, v) : rest
+  kvs -> kvs
 
 -- | A mapping with fast access to the values of string keys.
 data Object = Object
@@ -296,8 +311,8 @@ lookupKey key o = snd <$> M.lookup key o.index
 
 -- | The value of a key. It is an error if the key is missing.
 (.:) :: FromYaml a => Object -> T.Text -> Parser a
-o .: key = case lookupKey key o of
-  Just v -> parseNode parseYaml v
+o .: key = case M.lookup key o.index of
+  Just entry -> parseEntry entry
   Nothing -> missingKey o key
 
 -- | The value of a key, or 'Nothing' if the key is missing or its value is
@@ -305,21 +320,25 @@ o .: key = case lookupKey key o of
 (.:?) :: FromYaml a => Object -> T.Text -> Parser (Maybe a)
 o .:? key =
   findKey o key >>= \case
-    Just v | isNullNode v -> pure Nothing
-    mv -> traverse (parseNode parseYaml) mv
+    Just (_, v) | isNullNode v -> pure Nothing
+    entry -> traverse parseEntry entry
 
 -- | The value of a key, or 'Nothing' if the key is missing. Unlike '.:?', a
 -- null value goes to the parser of the value, e.g. @'Maybe' a@ gives
 -- @'Just' 'Nothing'@ for a null value.
 (.:!) :: FromYaml a => Object -> T.Text -> Parser (Maybe a)
-o .:! key = findKey o key >>= traverse (parseNode parseYaml)
+o .:! key = findKey o key >>= traverse parseEntry
 
--- | The value of a string key, or 'Nothing' if the key is missing. A key with
+-- | The value of an entry, with errors that point to the value.
+parseEntry :: FromYaml a => (S.Node, S.Node) -> Parser a
+parseEntry (k, v) = parseNode (parseYamlField k) v
+
+-- | The entry of a string key, or 'Nothing' if the key is missing. A key with
 -- the same text that is not a string, e.g. 404, is an error, so that its
 -- value does not go away.
-findKey :: Object -> T.Text -> Parser (Maybe S.Node)
+findKey :: Object -> T.Text -> Parser (Maybe (S.Node, S.Node))
 findKey o key = case M.lookup key o.index of
-  Just (_, v) -> pure (Just v)
+  Just entry -> pure (Just entry)
   Nothing -> case L.find (\(_, v) -> v == plain) o.otherKeys of
     Just (k, v) -> failAt k $ "the key " ++ T.unpack key ++ " is " ++ describe v ++ ", not a string"
     Nothing -> pure Nothing
@@ -409,6 +428,12 @@ class FromYaml a where
   parseYamlList :: S.Node -> Parser [a]
   parseYamlList = withSequence (mapM (parseNode parseYaml))
 
+  -- | Parse the value of a mapping entry, with its key, e.g. to keep the
+  -- comments of the key as 'Yamlet.Commented' does. '.:', the derived decoders
+  -- and the instances for maps use it. The default ignores the key.
+  parseYamlField :: S.Node -> S.Node -> Parser a
+  parseYamlField _ = parseYaml
+
 -- | The node of the syntax tree, with its styles and comments, e.g. to write
 -- a part of a document back as it was written. An alias in the input gives a
 -- copy of the node that it refers to.
@@ -418,6 +443,12 @@ class FromYaml a where
 -- 'Yamlet.Syntax.parseDocuments'.
 instance FromYaml S.Node where
   parseYaml = pure . S.copyNode
+
+-- | The value with the comments of its key, copied like every decoded text.
+-- A value without a key has no comments.
+instance FromYaml a => FromYaml (S.Commented a) where
+  parseYaml v = S.Commented S.noComments <$> parseYaml v
+  parseYamlField k v = S.Commented (S.copyComments k.comments) <$> parseYaml v
 
 -- | The value of the node, with the tags resolved and the aliases replaced.
 instance FromYaml Value where
@@ -598,7 +629,7 @@ instance FromYaml a => FromYaml (Maybe a) where
 instance (Ord k, FromYaml k, FromYaml v) => FromYaml (M.Map k v) where
   -- The index of 'withMapping' would be of no use here.
   parseYaml = parseNode $ \n -> case n.content of
-    S.Mapping _ kvs -> foldM insert M.empty kvs
+    S.Mapping _ kvs -> foldM insert M.empty (keyEntries n kvs)
     _ -> typeMismatch "a mapping" n
     where
       insert :: M.Map k v -> (S.Node, S.Node) -> Parser (M.Map k v)
@@ -609,12 +640,12 @@ instance (Ord k, FromYaml k, FromYaml v) => FromYaml (M.Map k v) where
           value :: Maybe v -> Parser (Maybe v)
           value = \case
             Just _ -> failAt k "duplicate key after conversion"
-            Nothing -> Just <$> parseNode parseYaml v
+            Nothing -> Just <$> parseEntry (k, v)
 
 -- | Two keys that convert to the same key are an error.
 instance FromYaml v => FromYaml (IM.IntMap v) where
   parseYaml = parseNode $ \n -> case n.content of
-    S.Mapping _ kvs -> foldM insert IM.empty kvs
+    S.Mapping _ kvs -> foldM insert IM.empty (keyEntries n kvs)
     _ -> typeMismatch "a mapping" n
     where
       insert :: IM.IntMap v -> (S.Node, S.Node) -> Parser (IM.IntMap v)
@@ -625,7 +656,7 @@ instance FromYaml v => FromYaml (IM.IntMap v) where
           value :: Maybe v -> Parser (Maybe v)
           value = \case
             Just _ -> failAt k "duplicate key after conversion"
-            Nothing -> Just <$> parseNode parseYaml v
+            Nothing -> Just <$> parseEntry (k, v)
 
 -- | A list. Two elements that convert to the same value, e.g. @1@ and @1.0@
 -- for 'Double', are an error.
@@ -1068,14 +1099,15 @@ fromObject opts flat keys def o
     reject :: [T.Text] -> Parser ()
     reject fields = when opts.rejectUnknownFields $ rejectUnknownKeys (keys ++ fields) o
 
-    -- The field decodes from the mapping without the given keys.
+    -- The field decodes from the mapping without the given keys. The first
+    -- key already has the lines above the mapping.
     merged :: Parser (f p)
     merged =
       let n = objectNode o
           style = case n.content of
             S.Mapping s _ -> s
             _ -> S.Block
-      in fromContents (S.Node n.offset n.endOffset n.props n.comments (S.Mapping style others))
+      in fromContents (S.Node n.offset n.endOffset n.props S.noComments (S.Mapping style others))
 
     others :: [(S.Node, S.Node)]
     others = foldr removeKey (objectEntries o) keys
@@ -1138,8 +1170,8 @@ instance
   => GFromFields (S1 (MetaSel (Just name) u s d) (Rec0 a))
   where
   gFromObject opts def o =
-    M1 . K1 <$> case lookupKey key o of
-      Just v -> parseNode parseYaml v
+    M1 . K1 <$> case M.lookup key o.index of
+      Just entry -> parseEntry entry
       Nothing -> case def of
         Just (M1 (K1 x)) -> pure x
         -- A missing field is null, if its type accepts null.

@@ -23,6 +23,7 @@ genericTests =
     , testCase "flat fields" test_flatten
     , testCase "default" test_default
     , testCase "modifiers" test_modifiers
+    , testCase "commented fields" test_commentedFields
     , testProperty "snakeCase is camelTo2 of aeson" $ forAll name $ \s -> snakeCase s === A.camelTo2 '_' s
     , testProperty "kebabCase is camelTo2 of aeson" $ forAll name $ \s -> kebabCase s === A.camelTo2 '-' s
     ]
@@ -158,6 +159,34 @@ data Profile = Profile {user :: T.Text, proxy :: Maybe T.Text, note :: Maybe T.T
 instance GenericYaml Profile where
   yamlOptions = defaultYamlOptions {omitNullFields = True}
   yamlDefault = Just (Profile "app" (Just "proxy") Nothing)
+
+-- | Records that keep the comments of their keys.
+data Pipeline = Pipeline {name :: Commented T.Text, lint :: Commented Lint}
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+
+data Lint = Lint {version :: Commented T.Text, level :: T.Text}
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+
+-- | The comment at the top and the comment above a first key belong to the
+-- mapping in the syntax tree, but the decoder gives them to the first key.
+test_commentedFields :: Assertion
+test_commentedFields =
+  assertEqual "round trip" (Right input) (encodeText <$> decodeText @Pipeline input)
+  where
+    input :: T.Text
+    input =
+      T.unlines
+        [ "# The name of the pipeline."
+        , "name: ci"
+        , ""
+        , "# The linter."
+        , "lint: # optional"
+        , "  # The version of the linter."
+        , "  version: '3.8'"
+        , "  level: warning"
+        ]
 
 test_record :: Assertion
 test_record = do
