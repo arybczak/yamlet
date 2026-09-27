@@ -47,6 +47,8 @@ view n = case n.content of
   S.Sequence _ xs -> SequenceView xs
   S.Mapping _ kvs -> MappingView kvs
   S.Alias name -> AliasView name
+-- GHC does not inline it without the pragma. Inlined, a match on the view
+-- allocates no view.
 {-# INLINE view #-}
 
 -- | The value of a scalar with the tag and the style, without the tag.
