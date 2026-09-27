@@ -139,12 +139,8 @@ failAt n msg = Parser $ \_ -> Left (n.offset, msg)
 typeMismatch :: String -> S.Node -> Parser a
 typeMismatch expected n = failAt n (mismatchMessage expected n)
 
--- Without the message, 'typeMismatch' is small enough to inline. Then the
--- optimizer sees the failure and removes the code after it, e.g. the generic
--- representation in a derived decoder.
 mismatchMessage :: String -> S.Node -> String
 mismatchMessage expected n = "expected " ++ expected ++ ", but got " ++ describeNode n
-{-# NOINLINE mismatchMessage #-}
 
 -- | The null node for a missing value.
 nullNode :: S.Node
