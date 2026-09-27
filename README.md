@@ -11,6 +11,9 @@ A YAML 1.2.2 library written in Haskell.
   an excerpt of the input. A decoder error also gives the keys and indices
   that lead to the problem, e.g. `jobs[1].name`. Messages name the kinds of
   values in plain words, e.g. `expected a list, but got an integer`.
+- The decoder reports the errors of independent parts together, e.g. every
+  bad field of a record, every bad item of a list and every unknown key. A
+  syntax error stops the parser at the first one.
 - Mappings keep the order of their keys, on input and on output.
 - Instances of `FromYaml` and `ToYaml` for the common types. They use the
   same formats as the instances of aeson, with one difference: the keys of a
@@ -76,6 +79,10 @@ The library also applies these rules:
   target type.
 - The decoded values do not keep the input in memory, because the decoder
   copies their texts. This holds for a kept `Node` too.
+- With the instances of the library and the derived instances, the number
+  of decoder errors grows at most linearly with the size of the document.
+  The time to locate the errors in the input and to find their paths is
+  close to linear, also for many errors on one line.
 
 The program must still limit the size of the input, because the memory
 grows with it.
