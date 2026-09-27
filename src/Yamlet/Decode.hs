@@ -105,7 +105,13 @@ import Yamlet.Value
 -- '*>' and '<*', and so a statement of a @do@ block, e.g. the check above.
 -- So do the functions that use them, e.g. 'Data.Foldable.for_' and
 -- 'Control.Monad.mapM_'. To collect the errors of such a loop, use
--- @'Data.Functor.void' . 'traverse'@.
+-- @'Data.Functor.void' . 'traverse'@. To collect the errors of a check and of
+-- another part, use 'liftA2' in place of '*>':
+--
+-- @
+-- liftA2 (\\_ c -> c) (rejectUnknownKeys [\"name\", \"paths\"] o) $
+--   Config \<$> o .: \"name\" \<*> o .: \"paths\"
+-- @
 --
 -- The choice changes only the errors, never the result. With
 -- @ApplicativeDo@, GHC turns the independent statements of a @do@ block that
