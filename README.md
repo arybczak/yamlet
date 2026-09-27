@@ -35,8 +35,6 @@ A YAML 1.2.2 library written in Haskell.
   column and the path.
 - Floating-point numbers are exact, e.g. `0.1` is exactly one tenth. They
   convert to `Scientific` without loss and to `Double` on request.
-- If a string reads back the same as a plain scalar, the encoder does not
-  quote it. Thus `dist-newstyle` stays unquoted.
 - The input can be UTF-8, UTF-16 or UTF-32. The library detects the encoding
   as the specification describes.
 
