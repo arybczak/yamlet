@@ -9,13 +9,18 @@ module Yamlet.Error
 
     -- * Construction
   , errorAt
+  , errorsAt
   , locate
   , nodePath
+  , nodePaths
   ) where
 
 import Control.DeepSeq
 import Data.Char
+import Data.List qualified as L
+import Data.Map.Strict qualified as M
 import Data.Maybe
+import Data.Set qualified as Set
 import Data.Text qualified as T
 import Data.Text.Array qualified as A
 import Data.Text.Internal qualified as T
@@ -171,26 +176,32 @@ renderPath = \case
 -- there, e.g. a block mapping and its first key, the outermost one counts. A
 -- key does not add to the path.
 nodePath :: Offset -> Node -> [PathElement]
-nodePath off root
-  | off == noOffset = []
-  | otherwise = fromMaybe [] (go root)
+nodePath off root = fromMaybe [] (listToMaybe (nodePaths [off] root))
+
+-- | The paths of 'nodePath' for several offsets, in the order of the offsets,
+-- from one walk of the tree.
+nodePaths :: [Offset] -> Node -> [[PathElement]]
+nodePaths offs root = map (\off -> M.findWithDefault [] off found) offs
   where
-    go :: Node -> Maybe [PathElement]
-    go n
-      | n.offset == off = Just []
-      | not (inside n) = Nothing
+    found :: M.Map Offset [PathElement]
+    found = walk (Set.delete noOffset (Set.fromList offs)) [] root M.empty
+
+    -- The path is in reverse.
+    walk :: Set.Set Offset -> [PathElement] -> Node -> M.Map Offset [PathElement] -> M.Map Offset [PathElement]
+    walk wanted rpath n acc
+      | Set.null inside = here
       | otherwise = case n.content of
-          Sequence _ xs -> listToMaybe [Index i : p | (i, x) <- zip [0 ..] xs, Just p <- [go x]]
-          Mapping _ kvs -> listToMaybe [p | (k, v) <- kvs, Just p <- [entry k v]]
-          _ -> Nothing
+          Sequence _ xs -> L.foldl' (\a (i, x) -> walk inside (Index i : rpath) x a) here (zip [0 ..] xs)
+          Mapping _ kvs -> L.foldl' (\a (k, v) -> walk inside (keyElement k : rpath) v (walk inside rpath k a)) here kvs
+          _ -> here
+      where
+        here :: M.Map Offset [PathElement]
+        here
+          | n.offset `Set.member` wanted = M.insertWith (\_ old -> old) n.offset (reverse rpath) acc
+          | otherwise = acc
 
-    entry :: Node -> Node -> Maybe [PathElement]
-    entry k v = case go k of
-      Just _ -> Just []
-      Nothing -> (keyElement k :) <$> go v
-
-    inside :: Node -> Bool
-    inside n = n.offset <= off && off <= n.endOffset
+        inside :: Set.Set Offset
+        inside = Set.takeWhileAntitone (<= n.endOffset) (Set.dropWhileAntitone (< n.offset) wanted)
 
     keyElement :: Node -> PathElement
     keyElement k = case k.content of
@@ -211,35 +222,79 @@ errorAt input off msg =
     loc :: Location
     loc = locate input off
 
+-- | Create errors at the given offsets of the input, in the order of the
+-- list. One scan of the input locates all of them, and the errors on one
+-- line share the copy of the line.
+errorsAt :: T.Text -> [(Offset, String)] -> [Error]
+errorsAt input@(T.Text arr base len) errs =
+  map snd . L.sortOn fst $ go (startScan input) Nothing (L.sortOn (fst . snd) (zip [0 :: Int ..] errs))
+  where
+    -- The line of the previous error, with the copy of its text.
+    go :: Scan -> Maybe (Int, T.Text) -> [(Int, (Offset, String))] -> [(Int, Error)]
+    go s prev = \case
+      [] -> []
+      (i, (off, msg)) : rest
+        | off == noOffset -> (i, Error (locate input off) msg T.empty []) : go s prev rest
+        | otherwise ->
+            let (loc, s') = locateFrom input s off
+                sourceLine = case prev of
+                  Just (ln, t) | ln == loc.line, not (betweenCrLf off) -> t
+                  _ -> T.copy (lineAt input off)
+            in (i, Error loc msg sourceLine []) : go s' (Just (loc.line, sourceLine)) rest
+
+    -- 'lineAt' gives no text for an offset between the characters of a CRLF
+    -- line break, but the line of the offset is the line before the break.
+    betweenCrLf :: Offset -> Bool
+    betweenCrLf (Offset o) =
+      o > 0 && o < len && A.unsafeIndex arr (base + o) == LF && A.unsafeIndex arr (base + o - 1) == CR
+
 -- | Compute the line and the column of an offset. A byte order mark at the
 -- start of a line is not a column, because it is not content. For
 -- 'noOffset', the line and the column are 0.
 locate :: T.Text -> Offset -> Location
 locate input off
   | off == noOffset = Location {offset = off, line = 0, column = 0}
-  | otherwise = locateIn input off
+  | otherwise = fst (locateFrom input (startScan input) off)
 
-locateIn :: T.Text -> Offset -> Location
-locateIn (T.Text arr base len) (Offset off0) = go base 1 base
+-- | A scan of the input: the index, the line, the index where the columns of
+-- the line start, and an index on the line with its column.
+data Scan = Scan !Int !Int !Int !Int !Int
+
+startScan :: T.Text -> Scan
+startScan (T.Text arr base len) = Scan base 1 start start 1
   where
-    off :: Int
+    start :: Int
+    start = skipBom arr (base + len) base
+
+-- | Locate an offset that is not before the index of the scan, and continue
+-- the scan from there.
+locateFrom :: T.Text -> Scan -> Offset -> (Location, Scan)
+locateFrom (T.Text arr base len) s0 (Offset off0) = go s0
+  where
+    end, off :: Int
+    end = base + len
     off = base + max 0 (min len off0)
 
-    go :: Int -> Int -> Int -> Location
-    go i !ln lineStart
+    go :: Scan -> (Location, Scan)
+    go s@(Scan i ln start ci col)
       | i >= off =
-          Location
-            { offset = Offset (off - base)
-            , line = ln
-            , column = 1 + countChars (min off (skipBom arr (base + len) lineStart)) off
-            }
+          if off <= ci
+            -- An offset before the start of the columns is in a byte order
+            -- mark.
+            then (location ln (if off == ci then col else 1), s)
+            else let col' = col + countChars ci off in (location ln col', Scan i ln start off col')
       | otherwise = case A.unsafeIndex arr i of
-          LF -> go (i + 1) (ln + 1) (i + 1)
+          LF -> newLine (i + 1)
           CR
-            | i + 1 < base + len && A.unsafeIndex arr (i + 1) == LF ->
-                go (i + 1) ln lineStart
-            | otherwise -> go (i + 1) (ln + 1) (i + 1)
-          _ -> go (i + 1) ln lineStart
+            | i + 1 < end && A.unsafeIndex arr (i + 1) == LF -> go (Scan (i + 1) ln start ci col)
+            | otherwise -> newLine (i + 1)
+          _ -> go (Scan (i + 1) ln start ci col)
+      where
+        newLine :: Int -> (Location, Scan)
+        newLine j = let start' = skipBom arr end j in go (Scan j (ln + 1) start' start' 1)
+
+    location :: Int -> Int -> Location
+    location ln col = Location {offset = Offset (off - base), line = ln, column = col}
 
     countChars :: Int -> Int -> Int
     countChars i0 i1 =

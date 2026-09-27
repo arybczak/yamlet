@@ -66,6 +66,9 @@ decodeTests =
         , testCase "keys" test_keyErrors
         , testCase "pretty" test_prettyError
         , testCase "paths" test_errorPaths
+        , testProperty "locations of several errors" prop_errorsAt
+        , testCase "paths of several errors" test_nodePaths
+        , localOption (mkTimeout 10000000) $ testCase "many errors" test_manyErrors
         ]
     ]
 
@@ -1113,6 +1116,51 @@ test_errorPaths = do
   where
     check :: String -> Either String String -> Either (NE.NonEmpty Error) a -> Assertion
     check preface expected r = assertEqual preface expected (either (Right . renderPath . (.path) . NE.head) (const (Left "no error")) r)
+
+-- | 'errorsAt' gives the errors of 'errorAt', also for several errors on one
+-- line and for offsets in any order.
+prop_errorsAt :: Property
+prop_errorsAt =
+  forAll (T.pack <$> listOf (elements "ab \n\r\xFEFF\x17C\x1F600")) $ \input ->
+    forAll (listOf (choose (-1, BS.length (T.encodeUtf8 input) + 1))) $ \offs ->
+      let errs = [(Offset o, show o) | o <- offs]
+      in errorsAt input errs === map (uncurry (errorAt input)) errs
+
+-- | 'nodePaths' gives the paths of 'nodePath' for every offset of a document.
+test_nodePaths :: Assertion
+test_nodePaths = do
+  let input = "a:\n  - [b, {c: d}]\n  - ? [e]\n    : f\nb: &x {g: h}\nc: *x\n"
+  case S.parseDocumentsText input of
+    Right [doc] -> do
+      let offs = map Offset [-1 .. T.length input + 1]
+      assertEqual "in order" (map (`nodePath` doc.root) offs) (nodePaths offs doc.root)
+      assertEqual "in reverse" (map (`nodePath` doc.root) (reverse offs)) (nodePaths (reverse offs) doc.root)
+    r -> assertFailure (show r)
+
+-- | The time to locate errors and to find their paths is linear in the number
+-- of errors, also for errors on one line.
+test_manyErrors :: Assertion
+test_manyErrors = do
+  let n = 100000 :: Int
+  check "flow" ("[" <> T.intercalate ", " (replicate n "x") <> "]") (\i -> 1 + 3 * i) (\i -> (1, 2 + 3 * i))
+  check "block" (T.concat (replicate n "- x\n")) (\i -> 2 + 4 * i) (\i -> (i + 1, 3))
+  where
+    check :: String -> T.Text -> (Int -> Int) -> (Int -> (Int, Int)) -> Assertion
+    check preface input offset location = case S.parseDocumentsText input of
+      Right [doc] -> do
+        let n = length (items doc.root)
+            offs = [Offset (offset i) | i <- [0 .. n - 1]]
+        assertEqual
+          (preface ++ ", locations")
+          [location i | i <- [0 .. n - 1]]
+          [(err.location.line, err.location.column) | err <- errorsAt input [(o, "e") | o <- offs]]
+        assertEqual (preface ++ ", paths") [[Index i] | i <- [0 .. n - 1]] (nodePaths offs doc.root)
+      _ -> assertFailure "expected one document"
+
+    items :: S.Node -> [S.Node]
+    items node = case node.content of
+      S.Sequence _ xs -> xs
+      _ -> []
 
 test_prettyError :: Assertion
 test_prettyError = do

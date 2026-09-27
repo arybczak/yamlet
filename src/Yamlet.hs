@@ -167,7 +167,15 @@ documentRoot doc
         }
 
 convert :: FromYaml a => T.Text -> S.Node -> Either (NE.NonEmpty Error) a
-convert input n = first (fmap (uncurry (decoderError input n))) (runParser parseYaml n)
+convert input n = first located (runParser parseYaml n)
+  where
+    located :: NE.NonEmpty (S.Offset, String) -> NE.NonEmpty Error
+    located errs =
+      NE.fromList $
+        zipWith
+          (\err p -> err {path = p})
+          (errorsAt input (NE.toList errs))
+          (nodePaths (map fst (NE.toList errs)) n)
 
 -- | An error of the decoder in the document with the root, with the path to
 -- the node at the offset.
