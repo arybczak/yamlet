@@ -253,6 +253,9 @@ stringMismatch n = mismatchMessage "a string" n ++ hint
       FloatView _ -> True
       BoolView _ -> True
       _ -> False
+-- Without the pragma, the interface file has no unfolding of 'withText', so
+-- other modules cannot inline it.
+{-# NOINLINE stringMismatch #-}
 
 ----------------------------------------
 -- Collections
