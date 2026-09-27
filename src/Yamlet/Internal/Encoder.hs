@@ -132,12 +132,13 @@ implicitKey k = case k.content of
     , style == S.Plain
     , plainSyntax False t ->
         if T.length t > maxImplicitKeyLength then Nothing else Just (B.fromText t)
-    | T.length (B.runBuilder key) > maxImplicitKeyLength -> Nothing
-    | otherwise -> Just key
-    where
-      key :: B.Builder
-      key = withTag k (scalarText style t)
+    | otherwise -> fits (withTag k (scalarText style t))
+  S.Sequence _ [] -> fits (inlineValue 0 k)
+  S.Mapping _ [] -> fits (inlineValue 0 k)
   _ -> Nothing
+  where
+    fits :: B.Builder -> Maybe B.Builder
+    fits key = if T.length (B.runBuilder key) > maxImplicitKeyLength then Nothing else Just key
 
 -- | A scalar, or an empty collection in the flow style.
 inlineValue :: Int -> S.Node -> B.Builder

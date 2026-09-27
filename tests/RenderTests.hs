@@ -194,7 +194,7 @@ test_fallbacks = do
         Left err -> Left (show err)
   assertEqual "empty tag" "! x\n" (render (tagged ""))
   assertEqual "global tag" "!<tag:example.com,2000:x> x\n" (render (tagged "tag:example.com,2000:x"))
-  assertEqual "tag with a directive" "%TAG !t74! %74\n--- !t74!ag:x%3Ey x\n" (render (tagged "tag:x>y"))
+  assertEqual "tag with a directive" "%TAG !t74! %74\n---\n!t74!ag:x%3Ey x\n" (render (tagged "tag:x>y"))
   mapM_
     (\t -> assertEqual ("tag " ++ show t) (Right [Tag t]) (tagOf t))
     ["tag:x>y", "x%2", "foo", "#a b", "!a b", "tag:x%41", "tag:yaml.org,2002:a%", "\x100\&z"]
@@ -242,7 +242,8 @@ test_documents = do
   check "markers" $
     T.unlines
       [ "first"
-      , "--- second"
+      , "---"
+      , "second"
       , "..."
       , "%YAML 1.2"
       , "---"
@@ -250,16 +251,16 @@ test_documents = do
       , "---"
       ]
   check "comment after the end marker" "a: b\n...\n# c\nd: e\n"
-  check "comment before the directives" "a\n...\n# b\n%YAML 1.2\n--- c\n"
+  check "comment before the directives" "a\n...\n# b\n%YAML 1.2\n---\nc\n"
   let commented :: Document -> Document
       commented d = d {docComments = noComments {before = [Comment "c"]}}
   assertEqual
     "comment above a document without an end marker above it"
-    "a\n...\n# c\n--- b\n"
+    "a\n...\n# c\n---\nb\n"
     (renderSyntax defaultRenderOptions [document (plainNode "a"), commented (document (plainNode "b"))])
   assertEqual
     "comment above a document with directives"
-    "a\n...\n# c\n%YAML 1.2\n--- b\n"
+    "a\n...\n# c\n%YAML 1.2\n---\nb\n"
     (renderSyntax defaultRenderOptions [document (plainNode "a"), commented (document (plainNode "b")) {version = Just (Version 1 2)}])
 
 -- | The comments of a document with the path of their nodes.

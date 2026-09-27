@@ -47,6 +47,7 @@ encodeTests =
     , -- The renderers differ only in rare cases, e.g. for a key that needs an
       -- explicit entry. 10000 cases take about 0.2 s.
       localOption (QuickCheckTests 10000) $ testProperty "fast renderer" prop_fastRenderer
+    , testProperty "fast renderer of several documents" prop_fastRendererAll
     , testCase "containers" test_containers
     , testCase "base" test_base
     , testCase "time" test_time
@@ -445,6 +446,14 @@ prop_fastRenderer :: Doc -> Property
 prop_fastRenderer (Doc n) =
   encodeText n === S.renderSyntax S.defaultRenderOptions [S.document (toYaml n)]
 
+-- | The same for several documents.
+prop_fastRendererAll :: [Doc] -> Property
+prop_fastRendererAll docs =
+  encodeAllText ns === S.renderSyntax S.defaultRenderOptions (map (S.document . toYaml) ns)
+  where
+    ns :: [Value]
+    ns = [n | Doc n <- docs]
+
 -- | Encoding a value and decoding the result gives the same value.
 prop_roundTrip :: Doc -> Property
 prop_roundTrip (Doc n) = readsBack (encodeText n) n
@@ -477,6 +486,7 @@ genValue size
         , (1, Sequence <$> genList)
         , (1, Mapping <$> genEntries)
         , (1, tagged <$> genScalar)
+        , (1, Tagged <$> genTag <*> (Sequence <$> genList))
         ]
   where
     genList :: Gen [Value]
@@ -487,8 +497,15 @@ genValue size
     genEntries :: Gen [(Value, Value)]
     genEntries = do
       k <- choose (0, 4)
-      keys <- L.nub <$> vectorOf k genScalar
+      keys <- L.nub <$> vectorOf k genKey
       mapM (\key -> (key,) <$> genValue (size `div` 3)) keys
+
+    genKey :: Gen Value
+    genKey = frequency [(4, genScalar), (1, elements [Sequence [], Mapping []])]
+
+    -- A tag that is not a valid URI needs a %TAG directive.
+    genTag :: Gen T.Text
+    genTag = elements ["!custom", "xy"]
 
     tagged :: Value -> Value
     tagged v = case v of

@@ -43,6 +43,8 @@ defaultRenderOptions =
 
 -- | Render documents with their comments and empty lines.
 --
+-- A @---@ marker is on a line of its own, with at most a comment after it.
+--
 -- A scalar keeps its style if the style can hold its text, otherwise it gets
 -- quotes. An empty line from the comments after a block scalar with the @+@
 -- indicator goes away, because it would become part of the scalar. A flow
@@ -224,19 +226,10 @@ document opts afterEnd doc =
     body :: B.Builder
     body
       | isBlock opts r =
-          mconcat
-            [ if marker
-                then
-                  "---"
-                    <> maybe mempty (" " <>) (props r)
-                    <> comment markerComment
-                    <> "\n"
-                    <> lines_ 0 rootLines
-                else
-                  lines_ 0 (rootLines ++ (if isJust (props r) then firstLines opts r else []))
-                    <> maybe mempty (<> "\n") (props r)
-            , block opts 0 0 True (not marker && isJust (props r)) r
-            ]
+          (if marker then "---" <> comment markerComment <> "\n" else mempty)
+            <> lines_ 0 (rootLines ++ (if isJust (props r) then firstLines opts r else []))
+            <> maybe mempty (<> "\n") (props r)
+            <> block opts 0 0 True (isJust (props r)) r
       | otherwise = scalarBody <> linesBelow 0 r
 
     scalarBody :: B.Builder
@@ -244,8 +237,6 @@ document opts afterEnd doc =
       | isEmpty r = case (doc.docComments.inline, r.comments.inline) of
           (Just dc, Just rc) -> "---" <> comment (Just dc) <> "\n" <> lines_ 0 (r.comments.before ++ [Comment rc])
           (dc, rc) -> "---" <> comment (dc <|> rc) <> "\n" <> lines_ 0 r.comments.before
-      | marker && null r.comments.before && isNothing doc.docComments.inline =
-          "--- " <> inline opts InValue indentStep r r.comments.inline <> "\n"
       | marker =
           "---"
             <> comment doc.docComments.inline
