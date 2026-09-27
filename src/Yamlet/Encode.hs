@@ -130,7 +130,9 @@ withLinesAfter ls v
       S.Mapping {} -> True
       _ -> False
 
-instance ToYaml () where toYaml _ = scalar Null
+-- | An empty list, as a tuple without elements.
+instance ToYaml () where toYaml _ = S.sequenceNode []
+
 instance ToYaml Bool where toYaml = scalar . Bool
 instance ToYaml Integer where toYaml = scalar . Int
 instance ToYaml Natural where toYaml = scalar . Int . toInteger

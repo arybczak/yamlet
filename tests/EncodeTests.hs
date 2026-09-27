@@ -75,6 +75,16 @@ test_base :: Assertion
 test_base = do
   assertEqual "ordering" "- LT\n- EQ\n- GT\n" (encodeText [LT, EQ, GT])
   assertEqual "proxy" "null\n" (encodeText (Proxy @Int))
+  assertEqual "unit" "[]\n" (encodeText ())
+  roundTrip "unit" ()
+  assertEqual
+    "unit from null"
+    (Left "expected an empty list, but got null")
+    (either (Left . (.message) . NE.head) Right (decodeText @() "null"))
+  assertEqual
+    "unit from a list with items"
+    (Left "expected an empty list, but got a list")
+    (either (Left . (.message) . NE.head) Right (decodeText @() "[1]"))
   assertEqual "ratio" "numerator: 1\ndenominator: 3\n" (encodeText (1 % 3 :: Rational))
   assertEqual "fixed" "1.25\n" (encodeText (1.25 :: Centi))
   assertEqual "fixed with a trailing zero" "1.5\n" (encodeText (1.5 :: Milli))
@@ -155,7 +165,7 @@ test_blockStyle = assertEqual "output" expected (encodeText value)
         , "exclude_paths" .= ["dist" :: T.Text, "dist-newstyle"]
         , "language" .= ("Haskell2010" :: T.Text)
         , "nested" .= mapping ["a" .= (1 :: Int), "b" .= [[True, False]]]
-        , "records" .= [mapping ["x" .= (1.5 :: Double), "y" .= ()]]
+        , "records" .= [mapping ["x" .= (1.5 :: Double), "y" .= Null]]
         , "empty_list" .= ([] :: [Int])
         , "empty_map" .= mapping []
         ]

@@ -640,8 +640,11 @@ instance FromYaml Value where
     Right r -> pure r
     Left (off, msg) -> Parser $ \_ -> failure off msg
 
+-- | An empty list, as a tuple without elements.
 instance FromYaml () where
-  parseYaml = withNull (pure ())
+  parseYaml = parseNode $ \n -> case view n of
+    SequenceView [] -> pure ()
+    _ -> typeMismatch "an empty list" n
 
 instance FromYaml Bool where
   parseYaml = withBool pure
