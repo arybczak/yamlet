@@ -104,6 +104,18 @@ data Strict = Strict {size :: Int, note :: Maybe T.Text}
 instance GenericYaml Strict where
   yamlOptions = defaultYamlOptions {rejectUnknownFields = True, omitNullFields = True}
 
+-- | The name of the field reads as a boolean.
+newtype Switch = Switch {true :: Maybe Int}
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+
+newtype DefaultSwitch = DefaultSwitch {true :: Int}
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (FromYaml, ToYaml)
+
+instance GenericYaml DefaultSwitch where
+  yamlDefault = Just (DefaultSwitch 0)
+
 data Command = Forward {stepCount :: Int} | Stop
   deriving stock (Eq, Show, Generic)
   deriving anyclass (FromYaml, ToYaml)
@@ -311,6 +323,15 @@ test_record = do
   assertEqual "optional field" (Right (Server "a" 1 Nothing)) (decodeText "host: a\nport: 1\n")
   assertEqual "all fields" (Right (Server "a" 1 (Just ["x"]))) (decodeText "host: a\nport: 1\ntags: [x]\n")
   assertEqual "missing field" (Just (1, 1, "missing key \"port\"")) (errorOf (decodeText @Server "host: a\n"))
+  assertEqual
+    "optional field with a key that is not a string"
+    (Just (1, 1, "the key true is a boolean, not a string"))
+    (errorOf (decodeText @Switch "true: 1\n"))
+  assertEqual
+    "field with a default and a key that is not a string"
+    (Just (1, 1, "the key true is a boolean, not a string"))
+    (errorOf (decodeText @DefaultSwitch "true: 1\n"))
+  assertEqual "quoted key" (Right (Switch (Just 1))) (decodeText "'true': 1\n")
   assertEqual "encoded" "host: a\nport: 1\ntags: null\n" (encodeText (Server "a" 1 Nothing))
   roundTrip "round trip" (Server "a" 1 (Just ["x", "y"]))
 

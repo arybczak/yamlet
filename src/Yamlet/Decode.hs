@@ -1322,9 +1322,9 @@ instance
     M1 . K1 <$> case M.lookup key o.index of
       Just entry -> parseEntry entry
       Nothing -> case def of
-        Just (M1 (K1 x)) -> pure x
+        Just (M1 (K1 x)) -> x <$ findKey o key
         -- A missing field is null, if its type accepts null.
-        Nothing -> maybe (missingKey o key) pure (succeeds parseYaml nullNode)
+        Nothing -> maybe (missingKey o key) (<$ findKey o key) (succeeds parseYaml nullNode)
     where
       key :: T.Text
       key = fieldKey @name opts
