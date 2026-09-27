@@ -207,18 +207,19 @@ check sn =
       _ -> Left $ failure k.offset "unexpected collection key"
 
 -- | Replace each alias with a copy of the node that it refers to. The copy
--- has the offsets and the comments of the alias, and no anchor. The node
--- must pass 'represent', so every alias refers to an earlier anchor.
+-- has the offsets and the comments of the alias, and no anchor. The nodes
+-- inside the copy have no comments, because the comments are at the anchor
+-- already. The node must pass 'represent', so every alias refers to an
+-- earlier anchor.
 expandAliases :: S.Node -> S.Node
 expandAliases = fst . go M.empty
   where
-    go :: M.Map T.Text S.Node -> S.Node -> (S.Node, M.Map T.Text S.Node)
+    -- An anchor maps to its tag and to its content without comments, which
+    -- its aliases share.
+    go :: M.Map T.Text (S.Tag, S.Content) -> S.Node -> (S.Node, M.Map T.Text (S.Tag, S.Content))
     go anchors sn = case sn.content of
       S.Alias name -> case M.lookup name anchors of
-        Just target ->
-          ( S.Node sn.offset sn.endOffset (S.Props Nothing target.props.tag) sn.comments target.content
-          , anchors
-          )
+        Just (tag, content) -> (S.Node sn.offset sn.endOffset (S.Props Nothing tag) sn.comments content, anchors)
         Nothing -> (sn, anchors)
       S.Scalar {} -> define sn anchors
       S.Sequence style xs ->
@@ -231,12 +232,21 @@ expandAliases = fst . go M.empty
         withContent :: S.Content -> S.Node
         withContent = S.Node sn.offset sn.endOffset sn.props sn.comments
 
-    define :: S.Node -> M.Map T.Text S.Node -> (S.Node, M.Map T.Text S.Node)
+    define :: S.Node -> M.Map T.Text (S.Tag, S.Content) -> (S.Node, M.Map T.Text (S.Tag, S.Content))
     define sn anchors = case sn.props.anchor of
-      Just a -> (sn, M.insert a sn anchors)
+      Just a -> (sn, M.insert a (sn.props.tag, withoutComments sn.content) anchors)
       Nothing -> (sn, anchors)
 
-    goList :: M.Map T.Text S.Node -> [S.Node] -> ([S.Node], M.Map T.Text S.Node)
+    withoutComments :: S.Content -> S.Content
+    withoutComments = \case
+      S.Sequence style xs -> S.Sequence style (map node xs)
+      S.Mapping style kvs -> S.Mapping style [(node k, node v) | (k, v) <- kvs]
+      c -> c
+      where
+        node :: S.Node -> S.Node
+        node n = S.Node n.offset n.endOffset n.props S.noComments (withoutComments n.content)
+
+    goList :: M.Map T.Text (S.Tag, S.Content) -> [S.Node] -> ([S.Node], M.Map T.Text (S.Tag, S.Content))
     goList anchors = \case
       [] -> ([], anchors)
       x : xs ->
@@ -244,7 +254,7 @@ expandAliases = fst . go M.empty
             (xs', anchors'') = goList anchors' xs
         in (x' : xs', anchors'')
 
-    goPairs :: M.Map T.Text S.Node -> [(S.Node, S.Node)] -> ([(S.Node, S.Node)], M.Map T.Text S.Node)
+    goPairs :: M.Map T.Text (S.Tag, S.Content) -> [(S.Node, S.Node)] -> ([(S.Node, S.Node)], M.Map T.Text (S.Tag, S.Content))
     goPairs anchors = \case
       [] -> ([], anchors)
       (k, v) : kvs ->

@@ -347,6 +347,10 @@ test_keptNodes = do
     (Right "- ['9.10', \"9.12\"] # versions\n- {a: 1}\n")
     (encodeText <$> decodeText @[Node] "- ['9.10', \"9.12\"] # versions\n- {a: 1}\n")
   assertEqual
+    "comments inside an alias"
+    (Right "a: &x\n  k: v # c1\nb: # c2\n  k: v\n")
+    (encodeText <$> decodeText @Node "a: &x\n  k: v # c1\nb: *x # c2\n")
+  assertEqual
     "comment after the tag of a mapping"
     (Right "# c1\na: 1\n")
     (encodeText <$> decodeText @(M.Map T.Text (Commented Node)) "!!map # c1\na: 1\n")
