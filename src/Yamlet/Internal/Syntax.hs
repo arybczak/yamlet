@@ -159,6 +159,17 @@ noComments = Comments [] Nothing []
 -- node. The decoder gives the lines above a list or a mapping to its first
 -- item or key, so a list of 'Commented' values keeps a comment above its
 -- first item.
+--
+-- A comment survives only if its node decodes into a type with a place for
+-- it, i.e. a node or a 'Commented' value. E.g. a comment at the end of a
+-- nested mapping survives only if the field that holds the mapping is
+-- 'Commented', because a record has no place for the end of its mapping.
+--
+-- A type that derives its instances through 'Generic' and has one
+-- constructor with one field without a name does not give the key of its
+-- entry to the value inside. So in @data Name = Name (Commented Text)@, the
+-- comments of the key are lost. Declare such a type as a newtype and derive
+-- its instances with @deriving newtype@, which gives the key to the value.
 data Commented a = Commented
   { comments :: !Comments
   , value :: a
