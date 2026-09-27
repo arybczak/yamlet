@@ -346,6 +346,14 @@ test_keptNodes = do
     "kept nodes in a list"
     (Right "- ['9.10', \"9.12\"] # versions\n- {a: 1}\n")
     (encodeText <$> decodeText @[Node] "- ['9.10', \"9.12\"] # versions\n- {a: 1}\n")
+  assertEqual
+    "comment after the tag of a mapping"
+    (Right "# c1\na: 1\n")
+    (encodeText <$> decodeText @(M.Map T.Text (Commented Node)) "!!map # c1\na: 1\n")
+  assertEqual
+    "comment after the tag of a list"
+    (Right "# c1\n- 1\n")
+    (encodeText <$> decodeText @[Commented Node] "!!seq # c1\n- 1\n")
   let commentedRoot = "# c1\n1 # c2\n# c3\n"
   assertEqual "commented scalar root" (Right commentedRoot) (encodeText <$> decodeText @(Commented Int) commentedRoot)
   assertEqual

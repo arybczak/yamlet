@@ -381,12 +381,17 @@ withSequence f = parseNode $ \n -> case n.content of
 -- first item.
 items :: S.Node -> [S.Node] -> [S.Node]
 items n = \case
-  x : xs | not (null n.comments.before) -> withLinesAbove n.comments.before x : xs
+  x : xs | ls@(_ : _) <- linesAbove n -> withLinesAbove ls x : xs
   xs -> xs
 -- If GHC inlines this function into 'withSequence', 'withSequence' becomes
 -- too large to inline. A derived decoder then keeps the code after its type
 -- error, and the inspection test of the derived decoder of a sum type fails.
 {-# NOINLINE items #-}
+
+-- | The lines above a collection, and the comment on its first line as a line
+-- too, e.g. after its tag. They go above its first item or key.
+linesAbove :: S.Node -> [S.Line]
+linesAbove n = n.comments.before ++ [S.Comment c | Just c <- [n.comments.inline]]
 
 -- | The node with the lines above it after the given ones.
 withLinesAbove :: [S.Line] -> S.Node -> S.Node
@@ -402,7 +407,8 @@ withoutComments n = S.Node n.offset n.endOffset n.props S.noComments n.content
 -- not matter, so two string keys with the same text are an error, e.g. @a@
 -- and @!foo a@.
 --
--- The lines above the mapping go to its first key. The parser gives the
+-- The lines above the mapping go to its first key, and so does the comment
+-- on its first line as a line, e.g. after its tag. The parser gives the
 -- lines above the first entry of a block mapping to the mapping, e.g. a
 -- comment at the top of a file, but they read as the lines of the first key,
 -- and 'Yamlet.Commented' keeps them there.
@@ -415,7 +421,7 @@ withMapping f = parseNode $ \n -> case n.content of
 -- first key. The renderer writes both at the same place.
 keyEntries :: S.Node -> [(S.Node, S.Node)] -> [(S.Node, S.Node)]
 keyEntries n = \case
-  (k, v) : rest | not (null n.comments.before) -> (withLinesAbove n.comments.before k, v) : rest
+  (k, v) : rest | ls@(_ : _) <- linesAbove n -> (withLinesAbove ls k, v) : rest
   kvs -> kvs
 
 -- | A mapping with fast access to the values of string keys.

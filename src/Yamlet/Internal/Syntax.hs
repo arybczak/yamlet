@@ -161,7 +161,8 @@ noComments = Comments [] Nothing []
 -- A value without a key, e.g. an item of a list, has the comments of its
 -- node. The decoder gives the lines above a list or a mapping to its first
 -- item or key, so a list of 'Commented' values keeps a comment above its
--- first item.
+-- first item. The comment on the first line of the list or the mapping, e.g.
+-- after its tag, becomes one of these lines.
 --
 -- A comment survives only if its node decodes into a type with a place for
 -- it, i.e. a node or a 'Commented' value. A key without a corresponding
