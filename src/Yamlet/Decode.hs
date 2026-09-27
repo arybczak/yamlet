@@ -195,7 +195,26 @@ runParser f n0 = case prepare n0 of
   Left err -> Left err
   Right n -> case runChecked f n of
     Result NoErrors a -> Right a
-    Result e _ -> Left (NE.fromList (sortedErrors e))
+    Result e _ -> Left (NE.fromList (map (withMergeHint (mergeValues n)) (sortedErrors e)))
+  where
+    -- An error at the value of a key << that is a collection, e.g. an alias of
+    -- a mapping, is likely from a merge key of YAML 1.1.
+    withMergeHint :: Set.Set S.Offset -> (S.Offset, String) -> (S.Offset, String)
+    withMergeHint offs (off, msg)
+      | off `Set.member` offs = (off, msg ++ ", " ++ noMergeKeys)
+      | otherwise = (off, msg)
+
+    mergeValues :: S.Node -> Set.Set S.Offset
+    mergeValues n = case n.content of
+      S.Sequence _ xs -> foldMap mergeValues xs
+      S.Mapping _ kvs -> foldMap (\(k, v) -> mergeValue k v <> mergeValues k <> mergeValues v) kvs
+      _ -> Set.empty
+
+    mergeValue :: S.Node -> S.Node -> Set.Set S.Offset
+    mergeValue k v = case (stringValue k, v.content) of
+      (Just "<<", S.Mapping {}) -> Set.singleton v.offset
+      (Just "<<", S.Sequence {}) -> Set.singleton v.offset
+      _ -> Set.empty
 
 -- | Run a parser on a node that passed 'prepare'.
 runChecked :: (S.Node -> Parser a) -> S.Node -> Result a
@@ -480,7 +499,9 @@ missingKey :: Object -> T.Text -> Parser a
 missingKey o key = Parser $ \off ->
   let Parser g = findKey o key
   in case g off of
-       Result NoErrors _ -> failure o.node.offset ("missing key " ++ show key)
+       Result NoErrors _
+         | M.member "<<" o.index -> failure o.node.offset ("missing key " ++ show key ++ ", " ++ noMergeKeys)
+         | otherwise -> failure o.node.offset ("missing key " ++ show key)
        Result e _ -> Result e failed
 
 -- | A default for an optional value.
@@ -504,6 +525,7 @@ rejectUnknownKeys known o = go True o.entries
       (k, _) : rest -> case stringValue k of
         Just t
           | t `elem` known -> go unlisted rest
+          | t == "<<" -> unknown k t (", " ++ noMergeKeys) *> go unlisted rest
           | Just s <- closeName known t -> unknown k t (didYouMean s) *> go unlisted rest
           | unlisted -> unknown k t (expectedOneOf known) *> go False rest
           | otherwise -> unknown k t "" *> go False rest

@@ -9,6 +9,7 @@ module Yamlet.Internal.Compose
   ( prepare
   , represent
   , Failure
+  , noMergeKeys
   ) where
 
 import Control.Monad
@@ -313,14 +314,18 @@ duplicateKey (kn, k) (firstNode, first) = (kn.offset, message) NE.:| [(firstNode
   where
     message :: String
     message = case (k, keyText kn k, keyText firstNode first) of
-      -- YAML 1.1 used "<<" to merge mappings, and some tools still do.
-      (String "<<", _, _) -> "duplicate key \"<<\", merge keys are not supported"
+      (String "<<", _, _) -> "duplicate key \"<<\", " ++ noMergeKeys
       (_, Just t, Just f) | t /= f -> "duplicate key " ++ t ++ ", the same value as the first key"
       (_, Just t, _) -> "duplicate key " ++ t
       (_, Nothing, _) -> "duplicate key"
 
     note :: String
     note = "the first key" ++ maybe "" (' ' :) (keyText firstNode first)
+
+-- | The hint for a key @<<@. YAML 1.1 used it to merge mappings, and some
+-- tools still do, but in YAML 1.2 it is a string.
+noMergeKeys :: String
+noMergeKeys = "merge keys are not supported"
 
 -- | The key as the input writes it, a string in quotes. A collection and an
 -- empty scalar have no text.

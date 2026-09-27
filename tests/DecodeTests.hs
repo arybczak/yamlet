@@ -1078,6 +1078,19 @@ test_collectedErrors = do
 
 test_keyErrors :: Assertion
 test_keyErrors = do
+  let merged = "base: &b\n  x: 1\nc:\n  <<: *b\n"
+  assertEqual
+    "value of a merge key"
+    (Just (4, 7, "expected an integer, but got a mapping, merge keys are not supported"))
+    (errorOf (decodeText @(M.Map T.Text (M.Map T.Text Int)) merged))
+  assertEqual
+    "unknown merge key"
+    (Just (4, 3, "unknown key \"<<\", merge keys are not supported"))
+    (errorOf (decodeText @[Config] "- &b\n  name: x\n  jobs: 2\n- <<: *b\n"))
+  assertEqual
+    "key missing next to a merge key"
+    (Right (Left (pure (Offset 0, "missing key \"x\", merge keys are not supported"))))
+    (runParser (withMapping (.: "x")) <$> decodeText @Node "<<: {x: 1}\n" :: Either (NE.NonEmpty Error) (Either (NE.NonEmpty (Offset, String)) Int))
   assertEqual
     "missing key"
     (Just (1, 1, "missing key \"name\""))
