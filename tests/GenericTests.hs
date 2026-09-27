@@ -17,7 +17,7 @@ genericTests =
     [ testCase "record" test_record
     , testCase "enumeration" test_enumeration
     , testCase "sum" test_sum
-    , testCase "one constructor without field names" test_positional
+    , shapes
     , testCase "options" test_options
     , testCase "missing contents" test_missingContents
     , testCase "flat fields" test_flatten
@@ -45,8 +45,10 @@ data Shape
   = Circle {radius :: Double}
   | Rectangle {width :: Double, height :: Double}
   | Dot
-  | Line Double Double
-  | Label T.Text
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+
+data Token = Label T.Text | Number Int | End
   deriving stock (Eq, Show, Generic)
   deriving anyclass (GenericYaml, FromYaml, ToYaml)
 
@@ -54,9 +56,43 @@ newtype Name = Name T.Text
   deriving stock (Eq, Show, Generic)
   deriving anyclass (GenericYaml, FromYaml, ToYaml)
 
-data Pair = Pair Int T.Text
+-- The types of the table of shapes that no other test uses.
+
+data Unit = Unit
   deriving stock (Eq, Show, Generic)
   deriving anyclass (GenericYaml, FromYaml, ToYaml)
+
+data UnitMapping = UnitMapping
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (FromYaml, ToYaml)
+
+instance GenericYaml UnitMapping where
+  yamlOptions = defaultYamlOptions {allNullaryToStringTag = False}
+
+data UnitTagged = UnitTagged
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (FromYaml, ToYaml)
+
+instance GenericYaml UnitTagged where
+  yamlOptions = defaultYamlOptions {allNullaryToStringTag = False, tagSingleConstructors = True}
+
+newtype NameTagged = NameTagged T.Text
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (FromYaml, ToYaml)
+
+instance GenericYaml NameTagged where
+  yamlOptions = defaultYamlOptions {tagSingleConstructors = True}
+
+data Literal = Whole Int | Words T.Text
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+
+data Motion = Go Distance | Hurry Speed
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (FromYaml, ToYaml)
+
+instance GenericYaml Motion where
+  type FlattenFields Motion = True
 
 data Strict = Strict {size :: Int, note :: Maybe T.Text}
   deriving stock (Eq, Show, Generic)
@@ -94,7 +130,6 @@ data Step
   | Rotate Direction
   | Accelerate Speed
   | Halt
-  | Jump {height :: Int, width :: Int}
   | -- Fields that do not merge.
     Wait Int
   | Again Step
@@ -229,6 +264,39 @@ test_commentedValues = do
         , "name: x # c"
         ]
 
+-- | Each supported shape of constructors, with the options that change its
+-- encoding.
+shapes :: TestTree
+shapes =
+  testGroup
+    "shapes"
+    [ shape "one constructor without fields" Unit "Unit\n"
+    , shape "one constructor without fields as a mapping" UnitMapping "{}\n"
+    , shape "one constructor without fields with a tag" UnitTagged "tag: UnitTagged\n"
+    , shape "one field without a name" (Name "x") "x\n"
+    , shape "one field without a name with a tag" (NameTagged "x") "tag: NameTagged\ncontents: x\n"
+    , shape "one named field" (Speed 1) "speed: 1\n"
+    , shape "named fields" (Server "a" 1 Nothing) "host: a\nport: 1\ntags: null\n"
+    , shape "named fields with a tag" (Single 1) "tag: Single\nvalue: 1\n"
+    , shape "enumeration" TurnLeft "TurnLeft\n"
+    , shape "enumeration as a mapping" Clockwise "direction: Clockwise\n"
+    , shape "fields without names" (Whole 1) "tag: Whole\ncontents: 1\n"
+    , shape "fields without names, with fields" (Label "x") "tag: Label\ncontents: x\n"
+    , shape "fields without names, without fields" End "tag: End\n"
+    , shape "flat fields" (Go (Distance (Just 1))) "tag: Go\ndistance: 1\n"
+    , shape "flat fields, with fields" (Ahead (Distance (Just 10))) "step: Ahead\ndistance: 10\n"
+    , shape "flat fields, without fields" Halt "step: Halt\n"
+    , shape "named fields in a sum, one field" (Fast 1) "tag: Fast\nlevel: 1\n"
+    , shape "named fields in a sum, several fields" (Slow 1 2) "tag: Slow\nlevel: 1\ndelay: 2\n"
+    , shape "named fields in a sum, with fields" (Rectangle 2 3) "tag: Rectangle\nwidth: 2.0\nheight: 3.0\n"
+    , shape "named fields in a sum, without fields" Dot "tag: Dot\n"
+    ]
+  where
+    shape :: (Eq a, Show a, FromYaml a, ToYaml a) => String -> a -> T.Text -> TestTree
+    shape preface x yaml = testCase preface $ do
+      assertEqual "encoded" yaml (encodeText x)
+      assertEqual "decoded" (Right x) (decodeText yaml)
+
 test_record :: Assertion
 test_record = do
   assertEqual "optional field" (Right (Server "a" 1 Nothing)) (decodeText "host: a\nport: 1\n")
@@ -248,31 +316,13 @@ test_enumeration = do
 
 test_sum :: Assertion
 test_sum = do
-  assertEqual "record" "tag: Circle\nradius: 1.0\n" (encodeText (Circle 1))
-  assertEqual "no fields" "tag: Dot\n" (encodeText Dot)
-  assertEqual "fields without names" "tag: Line\ncontents:\n- 1.0\n- 2.0\n" (encodeText (Line 1 2))
-  assertEqual "one field without a name" "tag: Label\ncontents: x\n" (encodeText (Label "x"))
-  mapM_ (\s -> roundTrip (show s) s) [Circle 1, Rectangle 2 3, Dot, Line 1 2, Label "x"]
+  mapM_ (\s -> roundTrip (show s) s) [Circle 1, Rectangle 2 3, Dot]
+  mapM_ (\s -> roundTrip (show s) s) [Label "x", Number 1, End]
   assertEqual
     "unknown tag"
-    (Just (1, 6, "unknown tag \"Square\", expected one of: Circle, Rectangle, Dot, Line, Label"))
+    (Just (1, 6, "unknown tag \"Square\", expected one of: Circle, Rectangle, Dot"))
     (errorOf (decodeText @Shape "tag: Square\n"))
   assertEqual "missing tag" (Just (1, 1, "missing key \"tag\"")) (errorOf (decodeText @Shape "radius: 1\n"))
-  assertEqual
-    "wrong number of fields"
-    (Just (2, 11, "expected a list of 2 elements, but got 1"))
-    (errorOf (decodeText @Shape "tag: Line\ncontents: [1]\n"))
-
-test_positional :: Assertion
-test_positional = do
-  assertEqual "one field" "x\n" (encodeText (Name "x"))
-  roundTrip "one field" (Name "x")
-  assertEqual "several fields" "- 1\n- a\n" (encodeText (Pair 1 "a"))
-  roundTrip "several fields" (Pair 1 "a")
-  assertEqual
-    "wrong number of fields"
-    (Just (1, 1, "expected a list of 2 elements, but got 3"))
-    (errorOf (decodeText @Pair "[1, a, b]"))
 
 test_options :: Assertion
 test_options = do
@@ -292,14 +342,13 @@ test_missingContents = do
   assertEqual
     "field that does not accept null"
     (Just (1, 1, "missing key \"contents\""))
-    (errorOf (decodeText @Shape "tag: Label\n"))
+    (errorOf (decodeText @Token "tag: Label\n"))
 
 test_flatten :: Assertion
 test_flatten = do
   assertEqual "record" "step: Ahead\ndistance: 10\n" (encodeText (Ahead (Distance (Just 10))))
   assertEqual "enumeration" "step: Rotate\ndirection: Clockwise\n" (encodeText (Rotate Clockwise))
   assertEqual "no fields" "step: Halt\n" (encodeText Halt)
-  assertEqual "record constructor" "step: Jump\nheight: 1\nwidth: 2\n" (encodeText (Jump 1 2))
   assertEqual "no mapping" "step: Wait\ncontents: 5\n" (encodeText (Wait 5))
   assertEqual "tag key" "step: Again\ncontents:\n  step: Halt\n" (encodeText (Again Halt))
   assertEqual "contents key" "step: Boxed\ncontents:\n  contents: 1\n" (encodeText (Boxed (Box 1)))
@@ -310,7 +359,6 @@ test_flatten = do
     , Rotate Anticlockwise
     , Accelerate (Speed 2)
     , Halt
-    , Jump 1 2
     , Wait 5
     , Again (Again (Rotate Clockwise))
     , Boxed (Box 1)

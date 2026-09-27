@@ -1021,7 +1021,11 @@ genericParseYaml
      , GFromConstructor f
      )
   => S.Node -> Parser a
-genericParseYaml n = gParseYaml (yamlOptions @a) (gFlatten @(FlattenFields a) @f) (from <$> yamlDefault @a) to n
+genericParseYaml n =
+  -- Forcing the flag forces the check of the shape, e.g. with deferred type
+  -- errors in a test of the errors.
+  let flat = gFlatten @(FlattenFields a) @f
+  in flat `seq` gParseYaml (yamlOptions @a) flat (from <$> yamlDefault @a) to n
 {-# INLINE genericParseYaml #-}
 
 -- The decoders of the constructors take a continuation, which starts as
@@ -1081,7 +1085,7 @@ class GFromConstructor f where
   -- | The only constructor, without a tag.
   gFromUntagged :: YamlOptions -> Maybe (f p) -> (f p -> a) -> S.Node -> Parser a
 
-instance TypeError NoConstructors => GFromConstructor V1 where
+instance GFromConstructor V1 where
   gFromTag _ _ _ = Nothing
   gFromTagged _ _ _ _ _ _ = Nothing
   gFromUntagged _ _ _ _ = fail "expected a type with constructors"

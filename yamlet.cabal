@@ -125,6 +125,7 @@ test-suite test
                     GenericTests
                     RenderTests
                     TestSuite
+                    TypeErrorTests
 
 test-suite inspection
     import:         language

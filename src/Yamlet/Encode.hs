@@ -458,7 +458,11 @@ genericToYaml
      , GToConstructor f
      )
   => a -> S.Node
-genericToYaml x = gToYaml (yamlOptions @a) (gFlatten @(FlattenFields a) @f) (from <$> yamlDefault @a) (from x)
+genericToYaml x =
+  -- Forcing the flag forces the check of the shape, e.g. with deferred type
+  -- errors in a test of the errors.
+  let flat = gFlatten @(FlattenFields a) @f
+  in flat `seq` gToYaml (yamlOptions @a) flat (from <$> yamlDefault @a) (from x)
 {-# INLINE genericToYaml #-}
 
 -- The encoder takes the default for 'omitNullFields': it leaves out a null
@@ -481,7 +485,7 @@ class GToConstructor f where
   -- | The constructor, with the tag if the flag of 'FlattenFields' is given.
   gToConstructor :: YamlOptions -> Maybe Bool -> Maybe (f p) -> f p -> S.Node
 
-instance TypeError NoConstructors => GToConstructor V1 where
+instance GToConstructor V1 where
   gTag _ = \case {}
   gToConstructor _ _ _ = \case {}
 

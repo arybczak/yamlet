@@ -13,7 +13,6 @@ module Yamlet.Internal.Generic
     -- * Constructors
   , GConstructors (..)
   , GFlatten (..)
-  , NoConstructors
   , isEnum
   , isTagged
   , constructorTag
@@ -76,8 +75,8 @@ defaultYamlOptions =
 class GenericYaml a where
   -- | Put the entries of the field of a tagged constructor without field
   -- names in the mapping of the constructor, next to the tag. 'False' by
-  -- default. A constructor with several fields without names is a type
-  -- error.
+  -- default. The constructors must have one field without a name or no
+  -- fields, otherwise the type is a type error.
   --
   -- The field must encode as a mapping with a key, and no key can be the tag
   -- key. Otherwise the constructor encodes as without the option. Thus the
@@ -143,7 +142,7 @@ instance (GConstructors f, GConstructors g) => GConstructors (f :+: g) where
   gConstructorCount = gConstructorCount @f + gConstructorCount @g
   gNullary = gNullary @f && gNullary @g
 
-instance TypeError NoConstructors => GConstructors V1 where
+instance GConstructors V1 where
   gConstructorNames = []
   gConstructorCount = 0
   gNullary = True
@@ -161,25 +160,82 @@ instance (KnownSymbol name, GFields f) => GConstructors (C1 (MetaCons name fixit
 isEnum :: forall f. GConstructors f => YamlOptions -> Bool
 isEnum opts = opts.allNullaryToStringTag && gNullary @f
 
--- | The value of 'FlattenFields', if the constructors allow it.
+-- | The value of 'FlattenFields', if the constructors allow it. The instances
+-- also check the shape of the constructors, because every derived instance
+-- needs this class.
 class GFlatten (flat :: Bool) f where
   gFlatten :: Bool
 
-instance GFlatten False f where
-  gFlatten = False
+instance ValidShape (GShape f) => GFlatten False f where
+  gFlatten = validShape @(GShape f) `seq` False
 
-instance FlatConstructors f => GFlatten True f where
-  gFlatten = True
+instance ValidShape (FlatShape (GShape f)) => GFlatten True f where
+  gFlatten = validShape @(FlatShape (GShape f)) `seq` True
 
-type family FlatConstructors f :: Constraint where
-  FlatConstructors (f :+: g) = (FlatConstructors f, FlatConstructors g)
-  FlatConstructors (C1 (MetaCons name fixity False) (f :*: g)) =
+-- | The fields of the constructors of a type. A constructor without fields
+-- fits with both kinds of fields.
+data Shape
+  = NoFields
+  | -- | One field without a name, in the constructor with the name.
+    UnnamedField Symbol
+  | -- | Named fields, in the constructor with the name.
+    NamedFields Symbol
+
+-- | The shape of the constructors. A constructor with several fields without
+-- names, and a type that mixes named fields with a field without a name, are
+-- type errors.
+type family GShape (f :: Type -> Type) :: Shape where
+  GShape (f :+: g) = CombineShapes (GShape f) (GShape g)
+  GShape (C1 (MetaCons name fixity True) f) = NamedFields name
+  GShape (C1 (MetaCons name fixity False) U1) = NoFields
+  GShape (C1 (MetaCons name fixity False) (S1 m f)) = UnnamedField name
+  GShape (C1 (MetaCons name fixity False) (f :*: g)) =
     TypeError
-      ( Text "FlattenFields allows one field without a name, but the constructor "
+      ( Text "The constructor "
           :<>: Text name
-          :<>: Text " has more"
+          :<>: Text " has several fields without names."
+          :$$: Text "Give the fields names, or use a tuple."
       )
-  FlatConstructors f = ()
+  GShape V1 = TypeError NoConstructors
+
+type family CombineShapes (a :: Shape) (b :: Shape) :: Shape where
+  CombineShapes NoFields b = b
+  CombineShapes a NoFields = a
+  CombineShapes (NamedFields a) (NamedFields _) = NamedFields a
+  CombineShapes (UnnamedField a) (UnnamedField _) = UnnamedField a
+  CombineShapes (NamedFields a) (UnnamedField b) = MixedFields a b
+  CombineShapes (UnnamedField b) (NamedFields a) = MixedFields a b
+
+type family MixedFields (named :: Symbol) (unnamed :: Symbol) :: Shape where
+  MixedFields named unnamed =
+    TypeError
+      ( Text "The constructor "
+          :<>: Text named
+          :<>: Text " has named fields and the constructor "
+          :<>: Text unnamed
+          :<>: Text " has one field without a name."
+          :$$: Text "The constructors of a type must all have named fields or all have one field without a name."
+      )
+
+-- | The shape is valid. The instances match on the shape, so that GHC
+-- reduces it and reports its type errors. With deferred type errors, e.g. in
+-- a test of the errors, the method throws the error at run time.
+class ValidShape (s :: Shape) where
+  validShape :: ()
+
+instance ValidShape NoFields where validShape = ()
+instance ValidShape (UnnamedField name) where validShape = ()
+instance ValidShape (NamedFields name) where validShape = ()
+
+-- | The shape, if 'FlattenFields' has fields to flatten in it.
+type family FlatShape (s :: Shape) :: Shape where
+  FlatShape (NamedFields name) =
+    TypeError
+      ( Text "FlattenFields needs constructors with one field without a name, but the constructor "
+          :<>: Text name
+          :<>: Text " has named fields."
+      )
+  FlatShape s = s
 
 isTagged :: forall f. GConstructors f => YamlOptions -> Bool
 isTagged opts = opts.tagSingleConstructors || gConstructorCount @f > 1

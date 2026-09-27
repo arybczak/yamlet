@@ -29,8 +29,6 @@ main =
           , testCase "decode Wide" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeWide)
           , testCase "encode Name" $ assertSuccess $(inspectTest $ hasNoGenericRep 'encodeName)
           , testCase "decode Name" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeName)
-          , testCase "encode Row" $ assertSuccess $(inspectTest $ hasNoGenericRep 'encodeRow)
-          , testCase "decode Row" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeRow)
           , testCase "encode Box" $ assertSuccess $(inspectTest $ hasNoGenericRep 'encodeBox)
           , testCase "decode Box" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeBox)
           , testCase "encode Velocity" $ assertSuccess $(inspectTest $ hasNoGenericRep 'encodeVelocity)
@@ -74,10 +72,6 @@ data Wide = Wide
   deriving anyclass (GenericYaml, FromYaml, ToYaml)
 
 newtype Name = Name T.Text
-  deriving stock (Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
-
-data Row = Row Int T.Text Int T.Text Int T.Text Int T.Text Int T.Text Int T.Text Int T.Text Int T.Text Int T.Text Int T.Text
   deriving stock (Generic)
   deriving anyclass (GenericYaml, FromYaml, ToYaml)
 
@@ -138,12 +132,6 @@ encodeName = toYaml
 decodeName :: Node -> Either (Offset, String) Name
 decodeName = runParser parseYaml
 
-encodeRow :: Row -> Node
-encodeRow = toYaml
-
-decodeRow :: Node -> Either (Offset, String) Row
-decodeRow = runParser parseYaml
-
 encodeBox :: Box Int -> Node
 encodeBox = toYaml
 
@@ -179,7 +167,7 @@ data Turn = TurnLeft | TurnRight | TurnBack
   deriving stock (Generic)
   deriving anyclass (GenericYaml, FromYaml, ToYaml)
 
-data Shape = Circle {radius :: Double} | Dot | Line Double Double
+data Shape = Circle {radius :: Double} | Dot | Square {side :: Double, angle :: Double}
   deriving stock (Generic)
   deriving anyclass (GenericYaml, FromYaml, ToYaml)
 
