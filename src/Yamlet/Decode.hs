@@ -793,53 +793,52 @@ instance FromYaml a => FromYaml (Maybe a) where
 instance (Ord k, FromYaml k, FromYaml v) => FromYaml (M.Map k v) where
   -- The index of 'withMapping' would be of no use here.
   parseYaml = parseNode $ \n -> case n.content of
-    S.Mapping _ kvs -> foldM insert M.empty (keyEntries n kvs)
+    S.Mapping _ kvs ->
+      insertUnique fst mapEntry (\(k, v) -> M.alterF (\old -> (isJust old, old <|> Just v)) k) M.empty "duplicate key after conversion" (keyEntries n kvs)
     _ -> typeMismatch "a mapping" n
-    where
-      insert :: M.Map k v -> (S.Node, S.Node) -> Parser (M.Map k v)
-      insert m (k, v) = do
-        k' <- parseNode parseYaml k
-        M.alterF value k' m
-        where
-          value :: Maybe v -> Parser (Maybe v)
-          value = \case
-            Just _ -> failAt k "duplicate key after conversion"
-            Nothing -> Just <$> parseEntry (k, v)
 
 -- | Two keys that convert to the same key are an error.
 instance FromYaml v => FromYaml (IM.IntMap v) where
   parseYaml = parseNode $ \n -> case n.content of
-    S.Mapping _ kvs -> foldM insert IM.empty (keyEntries n kvs)
+    S.Mapping _ kvs ->
+      insertUnique fst mapEntry (\(k, v) -> IM.alterF (\old -> (isJust old, old <|> Just v)) k) IM.empty "duplicate key after conversion" (keyEntries n kvs)
     _ -> typeMismatch "a mapping" n
-    where
-      insert :: IM.IntMap v -> (S.Node, S.Node) -> Parser (IM.IntMap v)
-      insert m (k, v) = do
-        k' <- parseNode parseYaml k
-        IM.alterF value k' m
-        where
-          value :: Maybe v -> Parser (Maybe v)
-          value = \case
-            Just _ -> failAt k "duplicate key after conversion"
-            Nothing -> Just <$> parseEntry (k, v)
 
 -- | A list. Two elements that convert to the same value, e.g. @1@ and @1.0@
 -- for 'Double', are an error.
 instance (Ord a, FromYaml a) => FromYaml (Set.Set a) where
-  parseYaml = withSequence (foldM insert Set.empty)
-    where
-      insert :: Set.Set a -> S.Node -> Parser (Set.Set a)
-      insert s n = do
-        x <- parseNode parseYaml n
-        Set.alterF (\present -> if present then failAt n "duplicate element after conversion" else pure True) x s
+  parseYaml =
+    withSequence $
+      insertUnique id (parseNode parseYaml) (Set.alterF (,True)) Set.empty "duplicate element after conversion"
 
 -- | A list. Two equal elements are an error.
 instance FromYaml IS.IntSet where
-  parseYaml = withSequence (foldM insert IS.empty)
-    where
-      insert :: IS.IntSet -> S.Node -> Parser IS.IntSet
-      insert s n = do
-        x <- parseNode parseYaml n
-        IS.alterF (\present -> if present then failAt n "duplicate element" else pure True) x s
+  parseYaml =
+    withSequence $
+      insertUnique id (parseNode parseYaml) (IS.alterF (,True)) IS.empty "duplicate element"
+
+-- | The key and the value of a map entry.
+mapEntry :: (FromYaml k, FromYaml v) => (S.Node, S.Node) -> Parser (k, v)
+mapEntry (k, v) = (,) <$> parseNode parseYaml k <*> parseEntry (k, v)
+
+-- | Decode the items and insert them in their order, with the errors of all
+-- items. Each item that is already there is an error at its node. The insert
+-- tells if the item was there.
+insertUnique :: forall a x s. (a -> S.Node) -> (a -> Parser x) -> (x -> s -> (Bool, s)) -> s -> String -> [a] -> Parser s
+insertUnique node item insert start msg xs = Parser $ \off -> go off start NoErrors xs
+  where
+    go :: S.Offset -> s -> Errors -> [a] -> Result s
+    go off !acc errs = \case
+      [] -> case errs of
+        NoErrors -> Result NoErrors acc
+        _ -> Result errs failed
+      a : rest ->
+        let Parser p = item a
+        in case p off of
+             Result NoErrors x -> case insert x acc of
+               (False, acc') -> go off acc' errs rest
+               (True, acc') -> go off acc' (bothErrors errs (OneError (node a).offset msg)) rest
+             Result e _ -> go off acc (bothErrors errs e) rest
 
 instance FromYaml a => FromYaml (Seq.Seq a) where
   parseYaml = fmap Seq.fromList . parseYaml

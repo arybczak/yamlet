@@ -954,6 +954,33 @@ test_collectedErrors = do
     "items of a list"
     [(1, 5, "expected an integer, but got a string"), (1, 11, "expected an integer, but got a string")]
     (errorsOf (decodeText @[Int] "[1, x, 2, y]"))
+  assertEqual
+    "keys and values of a map"
+    [ (1, 5, "expected an integer, but got a string")
+    , (1, 8, "expected a string, but got an integer, quote the value, e.g. '1'")
+    , (1, 17, "expected an integer, but got a string")
+    ]
+    (errorsOf (decodeText @(M.Map T.Text Int) "{a: x, 1: 2, b: y}"))
+  assertEqual
+    "duplicate keys of a map"
+    [(1, 8, "duplicate key after conversion"), (1, 22, "duplicate key after conversion")]
+    (errorsOf (decodeText @(M.Map Double T.Text) "{1: a, 1.0: b, 2: c, 2.0: d}"))
+  assertEqual
+    "duplicate elements of a set"
+    [(1, 5, "duplicate element after conversion"), (1, 13, "duplicate element after conversion")]
+    (errorsOf (decodeText @(Set.Set Double) "[1, 1.0, 2, 2.0]"))
+  assertEqual
+    "elements of a set"
+    [(1, 2, "expected a number, but got a string"), (1, 5, "expected a number, but got a string")]
+    (errorsOf (decodeText @(Set.Set Double) "[x, y]"))
+  assertEqual
+    "duplicate and invalid elements of a set"
+    [(1, 5, "duplicate element after conversion"), (1, 10, "expected a number, but got a string")]
+    (errorsOf (decodeText @(Set.Set Double) "[1, 1.0, x]"))
+  assertEqual
+    "duplicate elements of an int set"
+    [(1, 5, "duplicate element"), (1, 10, "duplicate element")]
+    (errorsOf (decodeText @IS.IntSet "[1, 0x1, 1]"))
   let count :: (S.Node -> Parser ()) -> Int
       count p = either (error . show) (either length (const 0) . runParser p) (decodeText @Node "[x, y]")
       item :: S.Node -> Parser Int
