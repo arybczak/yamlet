@@ -388,6 +388,9 @@ test_copies = do
     Right docs ->
       assertBool "syntax texts are copies" $
         all (all isCopy . texts . (.root) . S.copyDocument) docs
+  case decodeText @(M.Map T.Text Node) "key: value\nother: [a, &x b] # c\n" of
+    Left err -> assertFailure (show err)
+    Right m -> assertBool "texts of kept nodes are copies" $ all (all isCopy . texts) (M.elems m)
   where
     -- A copy starts at the beginning of its own array.
     isCopy :: T.Text -> Bool

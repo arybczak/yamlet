@@ -413,10 +413,11 @@ class FromYaml a where
 -- a part of a document back as it was written. An alias in the input gives a
 -- copy of the node that it refers to.
 --
--- Unlike the values of the other instances, the node shares the memory of
--- the input. To free the input, copy the node with 'Yamlet.Syntax.copyNode'.
+-- The texts of the node are copies, so that a small part of a document does
+-- not keep the whole input alive. For a whole document without a copy, use
+-- 'Yamlet.Syntax.parseDocuments'.
 instance FromYaml S.Node where
-  parseYaml = pure
+  parseYaml = pure . S.copyNode
 
 -- | The value of the node, with the tags resolved and the aliases replaced.
 instance FromYaml Value where

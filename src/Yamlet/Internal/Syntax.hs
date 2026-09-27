@@ -26,6 +26,10 @@ module Yamlet.Internal.Syntax
     -- * Positions
   , Offset (..)
   , noOffset
+
+    -- * Copies
+  , copyDocument
+  , copyNode
   ) where
 
 import Control.DeepSeq
@@ -157,3 +161,51 @@ newtype Offset = Offset Int
 -- | The offset of a node that does not come from an input.
 noOffset :: Offset
 noOffset = Offset (-1)
+
+-- | Copy every text of a document, so that the document does not keep the
+-- input alive.
+copyDocument :: Document -> Document
+copyDocument doc =
+  doc
+    { docComments = copyComments doc.docComments
+    , root = copyNode doc.root
+    }
+
+-- | Copy every text of a node, so that the node does not keep the input
+-- alive.
+copyNode :: Node -> Node
+copyNode n =
+  n
+    { props = case n.props of
+        -- Most nodes share one empty value, which a copy would duplicate.
+        Props Nothing (Tag t) -> Props Nothing (Tag (T.copy t))
+        Props Nothing _ -> n.props
+        Props anchor tag ->
+          Props
+            { anchor = T.copy <$> anchor
+            , tag = case tag of
+                Tag t -> Tag (T.copy t)
+                t -> t
+            }
+    , comments = copyComments n.comments
+    , content = case n.content of
+        Scalar style t -> Scalar style (T.copy t)
+        Sequence style xs -> Sequence style (map copyNode xs)
+        Mapping style kvs -> Mapping style [(copyNode k, copyNode v) | (k, v) <- kvs]
+        Alias name -> Alias (T.copy name)
+    }
+
+copyComments :: Comments -> Comments
+copyComments c = case c of
+  Comments [] Nothing [] -> c
+  _ ->
+    Comments
+      { before = map copyLine c.before
+      , inline = T.copy <$> c.inline
+      , after = map copyLine c.after
+      }
+  where
+    copyLine :: Line -> Line
+    copyLine = \case
+      Comment t -> Comment (T.copy t)
+      EmptyLine -> EmptyLine
