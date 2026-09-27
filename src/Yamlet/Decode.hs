@@ -1,3 +1,6 @@
+-- The '>>' of 'Parser' differs from '*>' on purpose.
+{-# OPTIONS_GHC -Wno-noncanonical-monad-instances #-}
+
 -- | Conversion of nodes to Haskell values, with errors that point to the
 -- node that caused them.
 module Yamlet.Decode
@@ -45,6 +48,7 @@ import Control.Applicative
 import Control.Monad
 import Data.Char
 import Data.Fixed
+import Data.Foldable
 import Data.Functor.Identity
 import Data.Int
 import Data.IntMap.Strict qualified as IM
@@ -97,21 +101,18 @@ import Yamlet.Value
 -- unless (port > 0 && port < 65536) $ fail "the port must be from 1 to 65535"
 -- @
 --
--- A combination that keeps the results of both parts collects the errors of
--- both: '<*>', 'liftA2', and the functions that use them, e.g. 'traverse'
--- and 'mapM' on a list. Thus the errors of all fields in
--- @Config \<$> o .: \"name\" \<*> o .: \"paths\"@ come back together. A
--- combination that drops a result stops at the first error: '>>=', '>>',
--- '*>' and '<*', and so a statement of a @do@ block, e.g. the check above.
--- So do the functions that use them, e.g. 'Data.Foldable.for_' and
--- 'Control.Monad.mapM_'. To collect the errors of such a loop, use
--- @'Data.Functor.void' . 'traverse'@. To collect the errors of a check and of
--- another part, use 'liftA2' in place of '*>':
+-- The applicative operators collect the errors of both parts: '<*>', '*>',
+-- '<*', 'liftA2', and the functions that use them, e.g. 'traverse',
+-- 'mapM' on a list and 'Data.Foldable.for_'. Thus all errors of
 --
 -- @
--- liftA2 (\\_ c -> c) (rejectUnknownKeys [\"name\", \"paths\"] o) $
---   Config \<$> o .: \"name\" \<*> o .: \"paths\"
+-- rejectUnknownKeys [\"name\", \"paths\"] o
+--   *> (Config \<$> o .: \"name\" \<*> o .: \"paths\")
 -- @
+--
+-- come back together. '>>=' and '>>' stop at the first error, and so does a
+-- statement of a @do@ block, e.g. after the check above. The functions that
+-- use '>>' also stop, e.g. 'Control.Monad.mapM_' and 'Control.Monad.forM_'.
 --
 -- The choice changes only the errors, never the result. With
 -- @ApplicativeDo@, GHC turns the independent statements of a @do@ block that
@@ -167,30 +168,23 @@ instance Functor Parser where
   fmap f (Parser g) = Parser $ \off -> case g off of
     Result e a -> Result e (f a)
 
--- '<*>' differs from 'ap', and '*>' and '<*' differ from their definitions
--- with '<*>', in the errors, but not in the results.
+-- '<*>' differs from 'ap', and '>>' differs from '*>', in the errors, but not
+-- in the results.
 instance Applicative Parser where
   pure a = Parser $ \_ -> Result NoErrors a
   Parser f <*> Parser g = Parser $ \off -> case f off of
     Result e1 h -> case g off of
       Result e2 a -> Result (bothErrors e1 e2) (h a)
 
-  -- '>>' is '*>', and a statement of a @do@ block must not run after a failed
-  -- check, e.g. an index into a list after the check of its length.
-  Parser f *> Parser g = Parser $ \off -> case f off of
-    Result NoErrors _ -> g off
-    Result e _ -> Result e failed
-
-  Parser f <* Parser g = Parser $ \off -> case f off of
-    Result NoErrors a -> case g off of
-      Result NoErrors _ -> Result NoErrors a
-      Result e _ -> Result e failed
-    Result e _ -> Result e failed
-
 instance Monad Parser where
   Parser g >>= k = Parser $ \off -> case g off of
     Result NoErrors a -> let Parser h = k a in h off
     Result e _ -> Result e failed
+
+  -- A statement of a @do@ block must not run after a failed check, e.g. an
+  -- index into a list after the check of its length. The default is '*>',
+  -- which runs it.
+  m >> k = m >>= const k
 
 instance MonadFail Parser where
   fail msg = Parser $ \off -> failure off msg
@@ -501,7 +495,7 @@ infixl 8 .!=
 -- | Fail at each key that is not in the list. If a key in the list is close
 -- to an unknown key, e.g. "host" to "hots", its error suggests it.
 rejectUnknownKeys :: [T.Text] -> Object -> Parser ()
-rejectUnknownKeys known o = foldr (\(k, _) rest -> liftA2 const (check k) rest) (pure ()) o.entries
+rejectUnknownKeys known o = traverse_ (check . fst) o.entries
   where
     check :: S.Node -> Parser ()
     check k = case stringValue k of
@@ -1269,8 +1263,7 @@ fromObject opts flat keys def o
     -- The fields, with the errors of the unknown keys if the options reject
     -- them.
     checked :: [T.Text] -> Parser (f p) -> Parser (f p)
-    checked fields =
-      liftA2 (\_ x -> x) (when opts.rejectUnknownFields $ rejectUnknownKeys (keys ++ fields) o)
+    checked fields = (when opts.rejectUnknownFields (rejectUnknownKeys (keys ++ fields) o) *>)
 
     -- The field decodes from the mapping without the given keys. The first
     -- key already has the lines above the mapping.

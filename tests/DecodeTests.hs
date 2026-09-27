@@ -935,8 +935,8 @@ instance FromYaml Vowel where
     [c] | c `elem` ("aeiou" :: String) -> pure (Vowel c)
     _ -> fail "not a vowel"
 
--- | A combination that keeps both results collects the errors of both, and a
--- combination that drops a result stops at the first error.
+-- | The applicative operators collect the errors of both parts, and '>>=' and
+-- '>>' stop at the first error.
 test_collectedErrors :: Assertion
 test_collectedErrors = do
   assertEqual
@@ -996,10 +996,13 @@ test_collectedErrors = do
         [a, b] -> void (op (item a) (item b))
         _ -> fail "expected two items"
   assertEqual "traverse" 2 (count (withSequence (void . traverse item)))
-  assertEqual "traverse_" 1 (count (withSequence (traverse_ item)))
+  assertEqual "traverse_" 2 (count (withSequence (traverse_ item)))
+  assertEqual "mapM_" 1 (count (withSequence (mapM_ item)))
   assertEqual "<*>" 2 (count (pair (\a b -> (,) <$> a <*> b)))
-  assertEqual "*>" 1 (count (pair (*>)))
-  assertEqual "<*" 1 (count (pair (<*)))
+  assertEqual "*>" 2 (count (pair (*>)))
+  assertEqual "<*" 2 (count (pair (<*)))
+  assertEqual ">>" 1 (count (pair (>>)))
+  assertEqual ">>=" 1 (count (pair (\a b -> a >>= const b)))
 
 test_keyErrors :: Assertion
 test_keyErrors = do

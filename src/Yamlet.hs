@@ -9,9 +9,9 @@
 --   }
 --
 -- instance FromYaml Config where
---   parseYaml = withMapping $ \\o -> do
+--   parseYaml = withMapping $ \\o ->
 --     rejectUnknownKeys ["name", "paths"] o
---     Config \<$> o .: "name" \<*> o .:? "paths" .!= []
+--       *> (Config \<$> o .: "name" \<*> o .:? "paths" .!= [])
 --
 -- main :: IO ()
 -- main = do
