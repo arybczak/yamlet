@@ -91,17 +91,17 @@ Decoding:
 
 | Input              | yamlet | HsYAML  | yaml   |
 |--------------------|--------|---------|--------|
-| `config`, 1105 KiB | 37 ms  | 3021 ms | 115 ms |
-| `json`, 432 KiB    | 20 ms  | 2444 ms | 60 ms  |
-| `text`, 834 KiB    | 7.2 ms | 640 ms  | 13 ms  |
+| `config`, 1105 KiB | 29 ms  | 3021 ms | 115 ms |
+| `json`, 432 KiB    | 17 ms  | 2444 ms | 60 ms  |
+| `text`, 834 KiB    | 6.9 ms | 640 ms  | 13 ms  |
 
 Encoding:
 
 | Input              | yamlet | HsYAML | yaml   |
 |--------------------|--------|--------|--------|
-| `config`, 1105 KiB | 18 ms  | 39 ms  | 56 ms  |
+| `config`, 1105 KiB | 20 ms  | 39 ms  | 56 ms  |
 | `json`, 432 KiB    | 11 ms  | 19 ms  | 34 ms  |
-| `text`, 834 KiB    | 2.9 ms | 10 ms  | 9.6 ms |
+| `text`, 834 KiB    | 3.0 ms | 10 ms  | 9.6 ms |
 
 ## Tests
 
