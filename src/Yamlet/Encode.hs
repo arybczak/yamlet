@@ -79,9 +79,6 @@ class ToYaml a where
 -- | An entry of a mapping with a string key.
 (.=) :: ToYaml a => T.Text -> a -> (S.Node, S.Node)
 key .= v = (string key, toYaml v)
--- Inlined, the key node of a literal key is computed once.
-{-# INLINE (.=) #-}
-
 infixr 8 .=
 
 -- | A mapping with the entries in the given order. A mapping with two equal
