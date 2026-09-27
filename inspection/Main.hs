@@ -57,15 +57,106 @@ data Server = Server {host :: T.Text, port :: Int, tags :: Maybe [T.Text]}
   deriving anyclass (GenericYaml, FromYaml, ToYaml)
 
 data Wide = Wide
-  { i00, i01, i02, i03, i04, i05, i06, i07, i08, i09, i10, i11, i12, i13, i14,
-    i15, i16, i17, i18, i19, i20, i21, i22, i23, i24, i25, i26, i27, i28, i29,
-    i30, i31, i32, i33 :: Int
-  , t00, t01, t02, t03, t04, t05, t06, t07, t08, t09, t10, t11, t12, t13, t14,
-    t15, t16, t17, t18, t19, t20, t21, t22, t23, t24, t25, t26, t27, t28, t29,
-    t30, t31, t32 :: T.Text
-  , m00, m01, m02, m03, m04, m05, m06, m07, m08, m09, m10, m11, m12, m13, m14,
-    m15, m16, m17, m18, m19, m20, m21, m22, m23, m24, m25, m26, m27, m28, m29,
-    m30, m31, m32 :: Maybe Int
+  { i00 :: Int
+  , i01 :: Int
+  , i02 :: Int
+  , i03 :: Int
+  , i04 :: Int
+  , i05 :: Int
+  , i06 :: Int
+  , i07 :: Int
+  , i08 :: Int
+  , i09 :: Int
+  , i10 :: Int
+  , i11 :: Int
+  , i12 :: Int
+  , i13 :: Int
+  , i14 :: Int
+  , i15 :: Int
+  , i16 :: Int
+  , i17 :: Int
+  , i18 :: Int
+  , i19 :: Int
+  , i20 :: Int
+  , i21 :: Int
+  , i22 :: Int
+  , i23 :: Int
+  , i24 :: Int
+  , i25 :: Int
+  , i26 :: Int
+  , i27 :: Int
+  , i28 :: Int
+  , i29 :: Int
+  , i30 :: Int
+  , i31 :: Int
+  , i32 :: Int
+  , i33 :: Int
+  , t00 :: T.Text
+  , t01 :: T.Text
+  , t02 :: T.Text
+  , t03 :: T.Text
+  , t04 :: T.Text
+  , t05 :: T.Text
+  , t06 :: T.Text
+  , t07 :: T.Text
+  , t08 :: T.Text
+  , t09 :: T.Text
+  , t10 :: T.Text
+  , t11 :: T.Text
+  , t12 :: T.Text
+  , t13 :: T.Text
+  , t14 :: T.Text
+  , t15 :: T.Text
+  , t16 :: T.Text
+  , t17 :: T.Text
+  , t18 :: T.Text
+  , t19 :: T.Text
+  , t20 :: T.Text
+  , t21 :: T.Text
+  , t22 :: T.Text
+  , t23 :: T.Text
+  , t24 :: T.Text
+  , t25 :: T.Text
+  , t26 :: T.Text
+  , t27 :: T.Text
+  , t28 :: T.Text
+  , t29 :: T.Text
+  , t30 :: T.Text
+  , t31 :: T.Text
+  , t32 :: T.Text
+  , m00 :: Maybe Int
+  , m01 :: Maybe Int
+  , m02 :: Maybe Int
+  , m03 :: Maybe Int
+  , m04 :: Maybe Int
+  , m05 :: Maybe Int
+  , m06 :: Maybe Int
+  , m07 :: Maybe Int
+  , m08 :: Maybe Int
+  , m09 :: Maybe Int
+  , m10 :: Maybe Int
+  , m11 :: Maybe Int
+  , m12 :: Maybe Int
+  , m13 :: Maybe Int
+  , m14 :: Maybe Int
+  , m15 :: Maybe Int
+  , m16 :: Maybe Int
+  , m17 :: Maybe Int
+  , m18 :: Maybe Int
+  , m19 :: Maybe Int
+  , m20 :: Maybe Int
+  , m21 :: Maybe Int
+  , m22 :: Maybe Int
+  , m23 :: Maybe Int
+  , m24 :: Maybe Int
+  , m25 :: Maybe Int
+  , m26 :: Maybe Int
+  , m27 :: Maybe Int
+  , m28 :: Maybe Int
+  , m29 :: Maybe Int
+  , m30 :: Maybe Int
+  , m31 :: Maybe Int
+  , m32 :: Maybe Int
   }
   deriving stock (Generic)
   deriving anyclass (GenericYaml, FromYaml, ToYaml)
