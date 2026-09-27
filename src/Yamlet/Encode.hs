@@ -537,8 +537,6 @@ flatEntries opts v = case v.content of
     isKey key k = case stringValue k of
       Just t -> t == key
       _ -> False
--- The function does not depend on the type.
-{-# NOINLINE flatEntries #-}
 
 -- The shape check allows named fields, no fields, or one field without a
 -- name. The default methods are for the kind of fields that never calls
