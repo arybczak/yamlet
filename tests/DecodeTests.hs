@@ -488,20 +488,26 @@ test_located :: Assertion
 test_located = do
   assertEqual "items" (Right [Located "a" (Offset 1), Located "b" (Offset 4)]) (decodeText @[Located T.Text] "[a, b]")
   let input = "skip:\n  - x\n  - y\n"
-  case S.parseDocumentsText input of
-    Right [doc] -> case decodeDocument @(M.Map T.Text [Located T.Text]) input doc of
-      Right m -> do
-        let errs = [(item.offset, "unknown package " ++ show item.value) | item <- M.findWithDefault [] "skip" m, item.value == "y"]
-        assertEqual
-          "error at a located value"
-          [(3, 5, "skip[1]", "unknown package \"y\"")]
-          [(e.location.line, e.location.column, renderPath e.path, e.message) | e <- documentErrors input doc errs]
-        assertEqual
-          "error without an offset"
-          ["conf.yml: not from the input"]
-          (map (prettyError "conf.yml") (documentErrors input doc [(noOffset, "not from the input")]))
-      Left errs -> assertFailure (show errs)
-    r -> assertFailure (show r)
+  case decodeWithDocument @(M.Map T.Text [Located T.Text]) input of
+    Right (m, doc) -> do
+      let errs = [(item.offset, "unknown package " ++ show item.value) | item <- M.findWithDefault [] "skip" m, item.value == "y"]
+      assertEqual
+        "error at a located value"
+        [(3, 5, "skip[1]", "unknown package \"y\"")]
+        [(e.location.line, e.location.column, renderPath e.path, e.message) | e <- documentErrors input doc errs]
+      assertEqual
+        "error without an offset"
+        ["conf.yml: not from the input"]
+        (map (prettyError "conf.yml") (documentErrors input doc [(noOffset, "not from the input")]))
+    Left errs -> assertFailure (show errs)
+  assertEqual
+    "second document"
+    (errorOf (decodeText @Int "1\n--- 2\n"))
+    (errorOf (decodeWithDocument @Int "1\n--- 2\n"))
+  assertEqual
+    "empty stream"
+    (Right (Nothing, S.document (S.Node (Offset 0) (Offset 0) S.noProps S.noComments (S.Scalar S.Plain ""))))
+    (decodeWithDocument @(Maybe Int) "")
   assertEqual
     "comments of the key"
     (Right (Just (Offset 3, Just "c")))

@@ -45,6 +45,7 @@ module Yamlet
   , decodeInput
 
     -- * Syntax trees
+  , decodeWithDocument
   , decodeDocument
 
     -- * Encoding
@@ -116,13 +117,22 @@ decodeAll bs = single (decodeInput bs) >>= decodeAllText
 -- | Decode a stream with one document. An empty stream is null. The errors
 -- are as for 'decode'.
 decodeText :: FromYaml a => T.Text -> Either (NE.NonEmpty Error) a
-decodeText input =
+decodeText = fmap fst . decodeWithDocument
+
+-- | Decode a stream with one document as 'decodeText' does, and give the
+-- document too, e.g. for 'documentErrors' or to write the file back with its
+-- comments. An empty stream is a document with null.
+decodeWithDocument :: FromYaml a => T.Text -> Either (NE.NonEmpty Error) (a, S.Document)
+decodeWithDocument input =
   single (parseStream input) >>= \case
-    [] -> convert input (S.document (S.Node (S.Offset 0) (S.Offset 0) S.noProps S.noComments (S.Scalar S.Plain "")))
-    [doc] -> convert input doc
+    [] -> withDocument (S.document (S.Node (S.Offset 0) (S.Offset 0) S.noProps S.noComments (S.Scalar S.Plain "")))
+    [doc] -> withDocument doc
     docs@(_ : doc : _) -> single $ do
       mapM_ (\d -> first (uncurry (decoderError input d.root)) (prepare d.root)) docs
       Left $ errorAt input doc.root.offset "expected a single document, but got a second one"
+  where
+    withDocument :: FromYaml a => S.Document -> Either (NE.NonEmpty Error) (a, S.Document)
+    withDocument doc = (,doc) <$> convert input doc
 
 -- | Decode every document of a stream. The errors are as for 'decodeAll'.
 decodeAllText :: FromYaml a => T.Text -> Either (NE.NonEmpty Error) [a]

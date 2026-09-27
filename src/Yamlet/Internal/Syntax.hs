@@ -193,16 +193,14 @@ data Commented a = Commented
 --
 -- 'Yamlet.documentErrors' turns the offsets into errors with lines, columns
 -- and paths. It needs the text and the document of the decode, so decode with
--- 'Yamlet.Syntax.parseDocumentsText' and 'Yamlet.decodeDocument':
+-- 'Yamlet.decodeWithDocument':
 --
 -- @
--- case parseDocumentsText input of
---   Right [doc] -> case decodeDocument input doc of
---     Right config -> case check config of
---       [] -> run config
---       errs -> mapM_ (putStrLn . prettyError file) (documentErrors input doc errs)
---     Left errs -> ...
---   ...
+-- case decodeWithDocument input of
+--   Right (config, doc) -> case check config of
+--     [] -> run config
+--     errs -> mapM_ (putStrLn . prettyError file) (documentErrors input doc errs)
+--   Left errs -> ...
 -- @
 --
 -- Here @check@ gives an offset and a message for each problem, e.g.
