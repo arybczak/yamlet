@@ -474,6 +474,10 @@ gToYaml
 gToYaml opts flat def (M1 x)
   | isEnum @f opts = scalar (String (gTag opts x))
   | otherwise = gToConstructor opts (if isTagged @f opts then Just flat else Nothing) (unM1 <$> def) x
+-- GHC 9.2 does not inline this function without the pragma, and the
+-- inspection tests of the derived encoders fail there. Later versions inline
+-- it anyway.
+{-# INLINE gToYaml #-}
 
 class GToConstructor f where
   gTag :: YamlOptions -> f p -> T.Text
