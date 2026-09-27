@@ -226,11 +226,33 @@ withBoundedScientific f = withScientific $ \s ->
            fail exponentOutOfRange
        | otherwise -> f s
 
--- | The text is a copy, so it does not keep the input alive.
+-- | The text is a copy, so it does not keep the input alive. For a plain
+-- scalar that YAML reads as a number or a boolean, e.g. @3.10@, the error
+-- suggests quotes.
 withText :: (T.Text -> Parser a) -> S.Node -> Parser a
 withText f = parseNode $ \n -> case view n of
   StringView t -> f (T.copy t)
-  _ -> typeMismatch "a string" n
+  _ -> failAt n (stringMismatch n)
+
+-- | The message for a node that is not a string, with the hint to quote a
+-- plain number or boolean.
+stringMismatch :: S.Node -> String
+stringMismatch n = mismatchMessage "a string" n ++ hint
+  where
+    hint :: String
+    hint = case n.content of
+      S.Scalar S.Plain t
+        | S.NoTag <- n.props.tag
+        , numberOrBool ->
+            ", quote the value, e.g. '" ++ T.unpack t ++ "'"
+      _ -> ""
+
+    numberOrBool :: Bool
+    numberOrBool = case view n of
+      IntView _ -> True
+      FloatView _ -> True
+      BoolView _ -> True
+      _ -> False
 
 ----------------------------------------
 -- Collections
@@ -772,7 +794,7 @@ instance FromYaml Version where
 
       number :: S.Node -> Parser Version
       number n =
-        fail $ "expected a version, but got " ++ describeNode n ++ ", quote the version, e.g. \"1.10\""
+        fail $ "expected a version, but got " ++ describeNode n ++ ", quote the version, e.g. '1.10'"
 
 -- | Null.
 instance FromYaml (Proxy a) where

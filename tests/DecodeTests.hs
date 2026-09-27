@@ -789,7 +789,7 @@ test_typeErrors = do
   assertEqual "second alternative" (Right (IntOrText (Right "a"))) (decodeText "a")
   assertEqual
     "error of the second alternative"
-    (Just (1, 1, "expected a string, but got a boolean"))
+    (Just (1, 1, "expected a string, but got a boolean, quote the value, e.g. 'true'"))
     (errorOf (decodeText @IntOrText "true"))
   assertEqual
     "pair"
@@ -821,8 +821,21 @@ test_typeErrors = do
     (errorOf (decodeText @Config "name: x\npaths: 42\n"))
   assertEqual
     "element of a list"
-    (Just (2, 12, "expected a string, but got a boolean"))
+    (Just (2, 12, "expected a string, but got a boolean, quote the value, e.g. 'true'"))
     (errorOf (decodeText @Config "name: x\npaths: [a, true]\n"))
+  assertEqual
+    "float instead of string"
+    (Just (1, 1, "expected a string, but got a floating-point number, quote the value, e.g. '9.10'"))
+    (errorOf (decodeText @T.Text "9.10"))
+  assertEqual
+    "integer instead of string"
+    (Just (1, 1, "expected a string, but got an integer, quote the value, e.g. '007'"))
+    (errorOf (decodeText @T.Text "007"))
+  assertEqual "null instead of string" (Just (1, 6, "expected a string, but got null")) (errorOf (decodeText @Config "name:\n"))
+  assertEqual
+    "tagged integer instead of string"
+    (Just (1, 7, "expected a string, but got an integer"))
+    (errorOf (decodeText @T.Text "!!int 5"))
   assertEqual
     "out of range"
     (Just (1, 1, "the integer is out of the range from -128 to 127"))
@@ -842,7 +855,7 @@ test_typeErrors = do
     (errorOf (decodeText @UUID.UUID "123e4567e89b12d3a456426614174000"))
   assertEqual
     "version as a number"
-    (Just (1, 1, "expected a version, but got a floating-point number, quote the version, e.g. \"1.10\""))
+    (Just (1, 1, "expected a version, but got a floating-point number, quote the version, e.g. '1.10'"))
     (errorOf (decodeText @Version "1.10"))
   assertEqual "invalid version" (Just (1, 1, "expected a version such as 1.2.3")) (errorOf (decodeText @Version "1..2"))
   assertEqual "version with tags" (Right (Version [1, 2, 3] ["alpha", "2"])) (decodeText "1.2.3-alpha-2")
