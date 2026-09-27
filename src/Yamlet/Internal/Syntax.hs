@@ -136,7 +136,9 @@ data Comments = Comments
   -- writes a line break in it as a space.
   , after :: [Line]
   -- ^ The lines after the last entry of a collection, or between the brackets
-  -- of an empty collection.
+  -- of an empty collection. The parser gives no such lines to a scalar or an
+  -- alias, but the renderer writes them below it, e.g. the lines at the end
+  -- of a document that 'Yamlet.decode' keeps at a root t'Node'.
   }
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (NFData)

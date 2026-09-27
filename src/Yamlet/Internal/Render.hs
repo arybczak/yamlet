@@ -237,6 +237,10 @@ document opts afterEnd doc =
                     <> maybe mempty (<> "\n") (props r)
             , block opts 0 0 True (not marker && isJust (props r)) r
             ]
+      | otherwise = scalarBody <> linesBelow 0 r
+
+    scalarBody :: B.Builder
+    scalarBody
       | isEmpty r = case (doc.docComments.inline, r.comments.inline) of
           (Just dc, Just rc) -> "---" <> comment (Just dc) <> "\n" <> lines_ 0 (r.comments.before ++ [Comment rc])
           (dc, rc) -> "---" <> comment (dc <|> rc) <> "\n" <> lines_ 0 r.comments.before
@@ -327,8 +331,8 @@ value opts indent v lineComment extra
             header <> lines_ indent below <> block opts indent (indent + indentStep) True False v
         | otherwise -> header <> lines_ (indent + indentStep) below <> block opts (indent + indentStep) (indent + indentStep) True False v
       _ -> header <> lines_ (indent + indentStep) below <> block opts (indent + indentStep) (indent + indentStep) True False v
-  | isEmpty v = comment lineComment <> "\n"
-  | otherwise = " " <> inline opts InValue (indent + indentStep) v lineComment <> "\n"
+  | isEmpty v = comment lineComment <> "\n" <> linesBelow indent v
+  | otherwise = " " <> inline opts InValue (indent + indentStep) v lineComment <> "\n" <> linesBelow indent v
   where
     header :: B.Builder
     header = maybe mempty (" " <>) (props v) <> comment lineComment <> "\n"
@@ -355,8 +359,8 @@ after opts indent n
             <> comment n.comments.inline
             <> "\n"
             <> block opts (indent + indentStep) (indent + indentStep) True True n
-  | isEmpty n = comment n.comments.inline <> "\n"
-  | otherwise = " " <> inline opts InValue (indent + indentStep) n n.comments.inline <> "\n"
+  | isEmpty n = comment n.comments.inline <> "\n" <> linesBelow indent n
+  | otherwise = " " <> inline opts InValue (indent + indentStep) n n.comments.inline <> "\n" <> linesBelow indent n
 
 -- | Where an inline node is.
 data Position = InValue | InKey | InFlow
@@ -472,16 +476,24 @@ hasComments n =
     commentLines :: [Line] -> [Line]
     commentLines = filter (/= EmptyLine)
 
--- | The node is an empty collection with comments at its end, which go
--- between its brackets.
+-- | The node has comments at its end, which go between the brackets of an
+-- empty collection and below a scalar or an alias.
 hasEndLines :: Node -> Bool
 hasEndLines n = case n.content of
-  Sequence _ [] -> hasComment
-  Mapping _ [] -> hasComment
-  _ -> False
+  Sequence _ (_ : _) -> False
+  Mapping _ (_ : _) -> False
+  _ -> hasComment
   where
     hasComment :: Bool
     hasComment = not (null [() | Comment _ <- n.comments.after])
+
+-- | The lines at the end of a scalar or an alias at the given indentation.
+-- They cannot be deeper, because a block scalar would take them in.
+linesBelow :: Int -> Node -> B.Builder
+linesBelow indent n = case n.content of
+  Scalar {} -> lines_ indent n.comments.after
+  Alias {} -> lines_ indent n.comments.after
+  _ -> mempty
 
 -- | The node is an empty plain scalar without properties.
 isEmpty :: Node -> Bool

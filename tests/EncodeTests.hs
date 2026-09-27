@@ -335,6 +335,12 @@ test_keptNodes = do
     "kept nodes in a list"
     (Right "- ['9.10', \"9.12\"] # versions\n- {a: 1}\n")
     (encodeText <$> decodeText @[Node] "- ['9.10', \"9.12\"] # versions\n- {a: 1}\n")
+  let scalarRoot = "|\n  text\n# end\n"
+  assertEqual "lines at the end of a scalar root" (Right scalarRoot) (encodeText <$> decodeText @Node scalarRoot)
+  assertEqual
+    "scalar root in a list"
+    (Right "- |\n  text\n# end\n- 1\n")
+    (encodeText . (: [toYaml @Int 1]) <$> decodeText @Node scalarRoot)
   where
     input :: T.Text
     input =
