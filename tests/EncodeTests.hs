@@ -42,7 +42,9 @@ encodeTests =
     , testCase "tags" test_tags
     , testCase "syntax tree" test_syntax
     , testCase "kept nodes" test_keptNodes
-    , testProperty "fast renderer" prop_fastRenderer
+    , -- The renderers differ only in rare cases, e.g. for a key that needs an
+      -- explicit entry. 10000 cases take about 0.2 s.
+      localOption (QuickCheckTests 10000) $ testProperty "fast renderer" prop_fastRenderer
     , testCase "containers" test_containers
     , testCase "base" test_base
     , testCase "time" test_time
