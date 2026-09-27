@@ -1121,8 +1121,8 @@ instance
 
   gFromUntagged opts def k n
     | gNamed @f || gArity @f == 0 = withMapping (fmap (k . M1) . fromObject opts False [] (unM1 <$> def)) n
-    | gArity @f == 1 = k . M1 . fst <$> gFromValues [n]
-    | otherwise = withSequence (fmap (k . M1) . fromList (gArity @f)) n
+    -- The shape check allows only one field without a name.
+    | otherwise = k . M1 . fst <$> gFromValues [n]
 
   {-# INLINE gFromTag #-}
   {-# INLINE gFromTagged #-}
@@ -1184,20 +1184,12 @@ fromObject opts flat keys def o
       Just t -> t == key
       _ -> False
 
+    -- The shape check allows only one field without a name.
     fromContents :: S.Node -> Parser (f p)
-    fromContents contents = case gArity @f of
-      1 -> fst <$> gFromValues [contents]
-      k -> withSequence (fromList k) contents
+    fromContents contents = fst <$> gFromValues [contents]
     {-# INLINE merged #-}
     {-# INLINE fromContents #-}
 {-# INLINE fromObject #-}
-
--- | The fields of a constructor without field names from a list.
-fromList :: GFromFields f => Int -> [S.Node] -> Parser (f p)
-fromList k ns
-  | length ns == k = fst <$> gFromValues ns
-  | otherwise = fail $ "expected a list of " ++ show k ++ " elements, but got " ++ show (length ns)
-{-# INLINE fromList #-}
 
 class GFromFields f where
   -- | The fields from a mapping, with the given default for missing keys.

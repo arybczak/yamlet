@@ -510,18 +510,17 @@ instance
   gToConstructor opts tagging def c@(M1 x) = case tagging of
     Just flat
       | gNamed @f -> mapping (withTagEntry (gToEntries opts (unM1 <$> def) x))
+      -- The shape check allows only one field without a name.
       | otherwise -> case gToValues x of
           [] -> mapping (withTagEntry [])
-          [v]
+          v : _
             | flat, Just entries <- flatEntries opts v -> mapping (withTagEntry entries)
             | otherwise -> mapping (withTagEntry [opts.contentsKey .= v])
-          vs -> mapping (withTagEntry [opts.contentsKey .= S.sequenceNode vs])
     Nothing
       | gNamed @f -> mapping (gToEntries opts (unM1 <$> def) x)
       | otherwise -> case gToValues x of
           [] -> mapping []
-          [v] -> v
-          vs -> S.sequenceNode vs
+          v : _ -> v
     where
       withTagEntry :: [(S.Node, S.Node)] -> [(S.Node, S.Node)]
       withTagEntry entries = (opts.tagKey .= gTag opts c) : entries
