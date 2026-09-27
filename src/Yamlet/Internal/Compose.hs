@@ -1,18 +1,17 @@
 {-# OPTIONS_HADDOCK not-home #-}
 
--- | Composition of the representation graph from the syntax tree.
+-- | The checks of a syntax tree before the decoder reads it, and the values
+-- of its nodes.
 --
 -- This module is intended for internal use only, and may change without warning
 -- in subsequent releases.
 module Yamlet.Internal.Compose
-  ( compose
-  , prepare
+  ( prepare
   , represent
   , Failure
   ) where
 
 import Control.Monad
-import Data.Bifunctor
 import Data.Char
 import Data.Foldable
 import Data.IntSet qualified as IS
@@ -21,28 +20,154 @@ import Data.Map.Strict qualified as M
 import Data.Set qualified as Set
 import Data.Text qualified as T
 
-import Yamlet.Error
 import Yamlet.Internal.Schema
 import Yamlet.Internal.Syntax qualified as S
 import Yamlet.Internal.Utils
-import Yamlet.Node
+import Yamlet.Value
 
--- | Resolve the tags and the aliases of a document and check that the keys of
--- every mapping are unique. The input is for error messages.
-compose :: T.Text -> S.Document -> Either Error Node
-compose input doc = first (uncurry (errorAt input)) (composeNode doc.root)
-
--- | Check a node with the rules of 'compose', and replace each alias with the
--- node that it refers to. The result has no aliases. A node without aliases
--- comes back unchanged.
+-- | Check that the tags of a node are valid and that the keys of every
+-- mapping are unique, and replace each alias with the node that it refers
+-- to. The result has no aliases. A node without aliases comes back
+-- unchanged.
 prepare :: S.Node -> Either Failure S.Node
 prepare root
-  | needsNumbering root = expandAliases root <$ composeNode root
+  | needsNumbering root = expandAliases root <$ represent root
   | otherwise = root <$ check root
 
--- | Resolve the tags of a node, as 'compose' does for a whole document.
-represent :: S.Node -> Either Failure Node
-represent = composeNode
+-- | The value of a node, with the checks of 'prepare'.
+represent :: S.Node -> Either Failure Value
+represent root
+  | needsNumbering root = fst . fst <$> go (Numbering M.empty M.empty 0) root
+  | otherwise = plain root
+  where
+    -- The limit of the visits of a traversal of the document. Aliases can add
+    -- as many visits as the document has nodes, or 'smallBudget' for a small
+    -- document. Without a limit, the visits of a small input can be
+    -- exponential in its size.
+    limit :: Int
+    limit = n + max smallBudget n
+      where
+        n :: Int
+        n = syntaxSize root
+
+        -- A traversal of 100000 nodes takes about 5 ms and 6 MB, measured
+        -- with a copy of the nodes. go-yaml allows about 400000 nodes from
+        -- aliases in a small document.
+        smallBudget :: Int
+        smallBudget = 100000
+
+        syntaxSize :: S.Node -> Int
+        syntaxSize sn = case sn.content of
+          S.Sequence _ xs -> 1 + sum (map syntaxSize xs)
+          S.Mapping _ kvs -> 1 + sum [syntaxSize k + syntaxSize v | (k, v) <- kvs]
+          _ -> 1
+
+    -- Without aliases the anchors do not matter, and without collection keys
+    -- only scalar keys compare.
+    plain :: S.Node -> Either Failure Value
+    plain sn =
+      let off = sn.offset; props = sn.props
+      in case sn.content of
+           S.Scalar style t -> scalar off props style t
+           S.Sequence _ xs -> do
+             tag <- collectionTag off props seqTag
+             vs <- mapM plain xs
+             Right $ withTag tag (Sequence vs)
+           S.Mapping _ kvs -> do
+             tag <- collectionTag off props mapTag
+             entries <- mapM (\(k, v) -> (,) <$> plain k <*> plain v) kvs
+             checkUniqueKeys (zip (map ((.offset) . fst) kvs) (map fst entries))
+             Right $ withTag tag (Mapping entries)
+           S.Alias _ -> Left $ failure off "unexpected alias"
+
+    -- Each value comes with its number.
+    go :: Numbering -> S.Node -> Either Failure ((Value, Int), Numbering)
+    go st sn =
+      let off = sn.offset; props = sn.props
+      in case sn.content of
+           S.Alias name -> case M.lookup name st.anchors of
+             Just (Just (v, i, visits))
+               | st.visits + visits > limit ->
+                   Left
+                     $ failure off
+                     $ "the aliases expand the document to more than " ++ show limit ++ " nodes"
+               | otherwise -> Right ((v, i), st {visits = st.visits + visits})
+             Just Nothing ->
+               Left
+                 $ failure off
+                 $ "the alias *" ++ T.unpack name ++ " refers to a node that contains it"
+             Nothing ->
+               Left
+                 $ failure off
+                 $ "undefined alias *" ++ T.unpack name
+           S.Scalar style t -> do
+             v <- scalar off props style t
+             Right $ number props v (ScalarShape v) 1 st
+           S.Sequence _ xs -> do
+             tag <- collectionTag off props seqTag
+             (vs, st') <- goList (open props st) xs
+             let v = withTag tag (Sequence (map fst vs))
+             Right $ number props v (SequenceShape tag (map snd vs)) (st'.visits - st.visits + 1) st'
+           S.Mapping _ kvs -> do
+             tag <- collectionTag off props mapTag
+             (entries, st') <- goPairs (open props st) kvs
+             checkUniqueNumbers entries
+             let v = withTag tag (Mapping [(k, x) | (_, (k, _), (x, _)) <- entries])
+                 shape = MappingShape tag (L.sort [(i, j) | (_, (_, i), (_, j)) <- entries])
+             Right $ number props v shape (st'.visits - st.visits + 1) st'
+
+    goList :: Numbering -> [S.Node] -> Either Failure ([(Value, Int)], Numbering)
+    goList st = \case
+      [] -> Right ([], st)
+      x : xs -> do
+        (v, st') <- go st x
+        (vs, st'') <- goList st' xs
+        Right (v : vs, st'')
+
+    -- The entries come with the offsets of their keys.
+    goPairs
+      :: Numbering
+      -> [(S.Node, S.Node)]
+      -> Either Failure ([(S.Offset, (Value, Int), (Value, Int))], Numbering)
+    goPairs st = \case
+      [] -> Right ([], st)
+      (k, v) : kvs -> do
+        (kv, st') <- go st k
+        (vv, st'') <- go st' v
+        (rest, st''') <- goPairs st'' kvs
+        Right ((k.offset, kv, vv) : rest, st''')
+
+    open :: S.Props -> Numbering -> Numbering
+    open props st = case props.anchor of
+      Just a -> st {anchors = M.insert a Nothing st.anchors}
+      Nothing -> st
+
+    -- Give the value the number of its shape, and define its anchor. The
+    -- visits are those of the node and of everything inside it.
+    number :: S.Props -> Value -> Shape -> Int -> Numbering -> ((Value, Int), Numbering)
+    number props v shape visits st = ((v, i), Numbering anchors' shapes' (st.visits + 1))
+      where
+        i :: Int
+        shapes' :: M.Map Shape Int
+        (i, shapes') = case M.lookup shape st.shapes of
+          Just j -> (j, st.shapes)
+          Nothing -> let j = M.size st.shapes in (j, M.insert shape j st.shapes)
+
+        anchors' :: M.Map T.Text (Maybe (Value, Int, Int))
+        anchors' = case props.anchor of
+          Just a -> M.insert a (Just (v, i, visits)) st.anchors
+          Nothing -> st.anchors
+
+    -- Unlike in 'duplicate', comparing all pairs is not faster for few keys.
+    checkUniqueNumbers :: [(S.Offset, (Value, Int), (Value, Int))] -> Either Failure ()
+    checkUniqueNumbers = loop IS.empty
+      where
+        loop :: IS.IntSet -> [(S.Offset, (Value, Int), (Value, Int))] -> Either Failure ()
+        loop seen = \case
+          [] -> Right ()
+          (off, (k, i), _) : rest
+            | i `IS.member` seen -> Left $ duplicateKey (off, k)
+            | otherwise -> loop (IS.insert i seen) rest
 
 -- | The offset of the node that caused an error, and the message.
 type Failure = (S.Offset, String)
@@ -50,8 +175,8 @@ type Failure = (S.Offset, String)
 failure :: S.Offset -> String -> Failure
 failure = (,)
 
--- | The checks of 'compose' for a node without aliases and collection keys.
--- Only the keys become nodes, for the comparison.
+-- | The checks of 'represent' for a node without aliases and collection keys.
+-- Only the keys get values, for the comparison.
 check :: S.Node -> Either Failure ()
 check sn =
   let off = sn.offset; props = sn.props
@@ -66,7 +191,7 @@ check sn =
        S.Mapping _ kvs -> do
          _ <- collectionTag off props mapTag
          keys <- traverse (\(k, v) -> key k <* check v) kvs
-         checkUniqueKeys [(k, k) | k <- keys]
+         checkUniqueKeys keys
        S.Alias _ -> Left $ failure off "unexpected alias"
   where
     maybeNumber :: T.Text -> Bool
@@ -74,14 +199,14 @@ check sn =
       Just (c, _) -> isDigit c || c == '-' || c == '+' || c == '.'
       Nothing -> False
 
-    key :: S.Node -> Either Failure Node
+    key :: S.Node -> Either Failure (S.Offset, Value)
     key k = case k.content of
-      S.Scalar style t -> scalar k.offset k.props style t
+      S.Scalar style t -> (k.offset,) <$> scalar k.offset k.props style t
       _ -> Left $ failure k.offset "unexpected collection key"
 
 -- | Replace each alias with a copy of the node that it refers to. The copy
 -- has the offsets and the comments of the alias, and no anchor. The node
--- must pass 'composeNode', so every alias refers to an earlier anchor.
+-- must pass 'represent', so every alias refers to an earlier anchor.
 expandAliases :: S.Node -> S.Node
 expandAliases = fst . go M.empty
   where
@@ -126,154 +251,28 @@ expandAliases = fst . go M.empty
             (kvs', anchors''') = goPairs anchors'' kvs
         in ((k', v') : kvs', anchors''')
 
-composeNode :: S.Node -> Either Failure Node
-composeNode root
-  | needsNumbering root = fst . fst <$> go (Numbering M.empty M.empty 0) root
-  | otherwise = plain root
-  where
-    -- The limit of the visits of a traversal of the document. Aliases can add
-    -- as many visits as the document has nodes, or 'smallBudget' for a small
-    -- document. Without a limit, the visits of a small input can be
-    -- exponential in its size.
-    limit :: Int
-    limit = n + max smallBudget n
-      where
-        n :: Int
-        n = syntaxSize root
+-- | The value with the tag, in 'Tagged' if the tag is not the one of the core
+-- schema for the value.
+withTag :: T.Text -> Value -> Value
+withTag tag v
+  | tag == valueTag v = v
+  | otherwise = Tagged tag v
 
-        -- A traversal of 100000 nodes takes about 5 ms and 6 MB, measured
-        -- with a copy of the nodes. go-yaml allows about 400000 nodes from
-        -- aliases in a small document.
-        smallBudget :: Int
-        smallBudget = 100000
-
-        syntaxSize :: S.Node -> Int
-        syntaxSize sn = case sn.content of
-          S.Sequence _ xs -> 1 + sum (map syntaxSize xs)
-          S.Mapping _ kvs -> 1 + sum [syntaxSize k + syntaxSize v | (k, v) <- kvs]
-          _ -> 1
-
-    -- Without aliases the anchors do not matter, and without collection keys
-    -- only scalar keys compare.
-    plain :: S.Node -> Either Failure Node
-    plain sn =
-      let off = sn.offset; props = sn.props
-      in case sn.content of
-           S.Scalar style t -> scalar off props style t
-           S.Sequence _ xs -> do
-             tag <- collectionTag off props seqTag
-             ns <- mapM plain xs
-             Right $ Node off tag (Sequence ns)
-           S.Mapping _ kvs -> do
-             tag <- collectionTag off props mapTag
-             entries <- mapM (\(k, v) -> (,) <$> plain k <*> plain v) kvs
-             checkUniqueKeys entries
-             Right $ Node off tag (Mapping entries)
-           S.Alias _ -> Left $ failure off "unexpected alias"
-
-    -- Each node comes with its number.
-    go :: Numbering -> S.Node -> Either Failure ((Node, Int), Numbering)
-    go st sn =
-      let off = sn.offset; props = sn.props
-      in case sn.content of
-           S.Alias name -> case M.lookup name st.anchors of
-             Just (Just (n, i, visits))
-               | st.visits + visits > limit ->
-                   Left
-                     $ failure off
-                     $ "the aliases expand the document to more than " ++ show limit ++ " nodes"
-               | otherwise -> Right ((Node off n.tag n.value, i), st {visits = st.visits + visits})
-             Just Nothing ->
-               Left
-                 $ failure off
-                 $ "the alias *" ++ T.unpack name ++ " refers to a node that contains it"
-             Nothing ->
-               Left
-                 $ failure off
-                 $ "undefined alias *" ++ T.unpack name
-           S.Scalar style t -> do
-             n <- scalar off props style t
-             Right $ number props n (ScalarShape (Key n)) 1 st
-           S.Sequence _ xs -> do
-             tag <- collectionTag off props seqTag
-             (ns, st') <- goList (open props st) xs
-             let n = Node off tag (Sequence (map fst ns))
-             Right $ number props n (SequenceShape tag (map snd ns)) (st'.visits - st.visits + 1) st'
-           S.Mapping _ kvs -> do
-             tag <- collectionTag off props mapTag
-             (entries, st') <- goPairs (open props st) kvs
-             checkUniqueNumbers entries
-             let n = Node off tag (Mapping [(k, v) | ((k, _), (v, _)) <- entries])
-                 shape = MappingShape tag (L.sort [(i, j) | ((_, i), (_, j)) <- entries])
-             Right $ number props n shape (st'.visits - st.visits + 1) st'
-
-    goList :: Numbering -> [S.Node] -> Either Failure ([(Node, Int)], Numbering)
-    goList st = \case
-      [] -> Right ([], st)
-      x : xs -> do
-        (n, st') <- go st x
-        (ns, st'') <- goList st' xs
-        Right (n : ns, st'')
-
-    goPairs
-      :: Numbering
-      -> [(S.Node, S.Node)]
-      -> Either Failure ([((Node, Int), (Node, Int))], Numbering)
-    goPairs st = \case
-      [] -> Right ([], st)
-      (k, v) : kvs -> do
-        (kn, st') <- go st k
-        (vn, st'') <- go st' v
-        (ns, st''') <- goPairs st'' kvs
-        Right ((kn, vn) : ns, st''')
-
-    open :: S.Props -> Numbering -> Numbering
-    open props st = case props.anchor of
-      Just a -> st {anchors = M.insert a Nothing st.anchors}
-      Nothing -> st
-
-    -- Give the node the number of its shape, and define its anchor. The
-    -- visits are those of the node and of everything inside it.
-    number :: S.Props -> Node -> Shape -> Int -> Numbering -> ((Node, Int), Numbering)
-    number props n shape visits st = ((n, i), Numbering anchors' shapes' (st.visits + 1))
-      where
-        i :: Int
-        shapes' :: M.Map Shape Int
-        (i, shapes') = case M.lookup shape st.shapes of
-          Just j -> (j, st.shapes)
-          Nothing -> let j = M.size st.shapes in (j, M.insert shape j st.shapes)
-
-        anchors' :: M.Map T.Text (Maybe (Node, Int, Int))
-        anchors' = case props.anchor of
-          Just a -> M.insert a (Just (n, i, visits)) st.anchors
-          Nothing -> st.anchors
-
-    -- Unlike in 'duplicate', comparing all pairs is not faster for few keys.
-    checkUniqueNumbers :: [((Node, Int), (Node, Int))] -> Either Failure ()
-    checkUniqueNumbers = loop IS.empty
-      where
-        loop :: IS.IntSet -> [((Node, Int), (Node, Int))] -> Either Failure ()
-        loop seen = \case
-          [] -> Right ()
-          ((k, i), _) : rest
-            | i `IS.member` seen -> Left $ duplicateKey k
-            | otherwise -> loop (IS.insert i seen) rest
-
-scalar :: S.Offset -> S.Props -> S.ScalarStyle -> T.Text -> Either Failure Node
+scalar :: S.Offset -> S.Props -> S.ScalarStyle -> T.Text -> Either Failure Value
 scalar off props style t = case props.tag of
   S.NoTag
     | style == S.Plain -> case resolvePlainExact t of
-        Right v -> Right $ node' v
+        Right v -> Right v
         Left _ -> Left $ failure off exponentOutOfRange
-    | otherwise -> Right $ Node off strTag (String t)
-  S.NonSpecificTag -> Right $ Node off strTag (String t)
+    | otherwise -> Right (String t)
+  S.NonSpecificTag -> Right (String t)
   S.Tag tag
     | tag == seqTag || tag == mapTag ->
         Left
           $ failure off
           $ "the tag !!" ++ T.unpack (T.drop (T.length coreTagPrefix) tag) ++ " cannot be used on a scalar"
     | otherwise -> case resolveTaggedExact tag t of
-        Just (Right v) -> Right $ Node off tag v
+        Just (Right v) -> Right (withTag tag v)
         Just (Left _) -> Left $ failure off exponentOutOfRange
         Nothing ->
           Left
@@ -283,9 +282,6 @@ scalar off props style t = case props.tag of
               ++ if tag == boolTag && isYaml11Bool t
                 then ", " ++ show t ++ " is a boolean only in YAML 1.1"
                 else ""
-  where
-    node' :: Value -> Node
-    node' v = Node off (defaultTag v) v
 
 collectionTag :: S.Offset -> S.Props -> T.Text -> Either Failure T.Text
 collectionTag off props def = case props.tag of
@@ -304,35 +300,37 @@ collectionTag off props def = case props.tag of
 isCoreTag :: T.Text -> Bool
 isCoreTag tag = tag `elem` [nullTag, boolTag, intTag, floatTag, strTag, seqTag, mapTag]
 
-checkUniqueKeys :: [(Node, Node)] -> Either Failure ()
-checkUniqueKeys entries = case duplicate (map fst entries) of
+-- | The keys come with their offsets.
+checkUniqueKeys :: [(S.Offset, Value)] -> Either Failure ()
+checkUniqueKeys keys = case duplicate keys of
   Just k -> Left $ duplicateKey k
   Nothing -> Right ()
 
-duplicateKey :: Node -> Failure
-duplicateKey k = failure k.offset $ case k.value of
+duplicateKey :: (S.Offset, Value) -> Failure
+duplicateKey (off, k) = failure off $ case k of
   -- YAML 1.1 used "<<" to merge mappings, and some tools still do.
   String "<<" -> "duplicate key \"<<\", merge keys are not supported"
   String t -> "duplicate key " ++ show t
   _ -> "duplicate key"
 
 -- | The state of the composition of a document with aliases or collection
--- keys. Equal nodes get the same number, so that keys compare in constant
+-- keys. Equal values get the same number, so that keys compare in constant
 -- time, even if they are large collections or come from aliases that expand
--- to huge nodes.
+-- to huge values.
 data Numbering = Numbering
-  { anchors :: !(M.Map T.Text (Maybe (Node, Int, Int)))
-  -- ^ An anchor maps to its node, the number of the node and the visits of a
-  -- traversal of the node. It maps to Nothing while its node is composed.
+  { anchors :: !(M.Map T.Text (Maybe (Value, Int, Int)))
+  -- ^ An anchor maps to its value, the number of the value and the visits of
+  -- a traversal of the node. It maps to Nothing while its node is composed.
   , shapes :: !(M.Map Shape Int)
   , visits :: !Int
   -- ^ The visits of a traversal of the nodes so far.
   }
 
--- | A node with the numbers of its items or entries in place of them. The
--- entries of a mapping are sorted, so their order does not matter.
+-- | A value with the numbers of its items or entries in place of them. The
+-- entries of a mapping are sorted, so their order does not matter. A scalar
+-- is small, so it stays a value.
 data Shape
-  = ScalarShape !Key
+  = ScalarShape !Value
   | SequenceShape !T.Text [Int]
   | MappingShape !T.Text [(Int, Int)]
   deriving stock (Eq, Ord)
@@ -351,8 +349,9 @@ needsNumbering n = case n.content of
       S.Mapping {} -> True
       _ -> False
 
--- | The first key that is equal to an earlier one.
-duplicate :: [Node] -> Maybe Node
+-- | The first scalar key that is equal to an earlier one. A document with a
+-- collection key gets numbers for its keys instead.
+duplicate :: [(S.Offset, Value)] -> Maybe (S.Offset, Value)
 duplicate keys = case drop maxPairwise keys of
   _ : _ -> viaSet Set.empty keys
   [] -> pairwise [] keys
@@ -361,49 +360,16 @@ duplicate keys = case drop maxPairwise keys of
     maxPairwise :: Int
     maxPairwise = 16
 
-    viaSet :: Set.Set Key -> [Node] -> Maybe Node
+    viaSet :: Set.Set Value -> [(S.Offset, Value)] -> Maybe (S.Offset, Value)
     viaSet seen = \case
       [] -> Nothing
-      k : ks
-        | Key k `Set.member` seen -> Just k
-        | otherwise -> viaSet (Set.insert (Key k) seen) ks
+      k@(_, v) : ks
+        | v `Set.member` seen -> Just k
+        | otherwise -> viaSet (Set.insert v seen) ks
 
-    pairwise :: [Node] -> [Node] -> Maybe Node
+    pairwise :: [Value] -> [(S.Offset, Value)] -> Maybe (S.Offset, Value)
     pairwise seen = \case
       [] -> Nothing
-      k : ks
-        | any (\s -> Key k == Key s) seen -> Just k
-        | otherwise -> pairwise (k : seen) ks
-
--- | A scalar node that ignores its offset. The instances are for scalars only,
--- because a document with a collection key gets numbers for its keys.
-newtype Key = Key Node
-
--- | It is faster than the order for the few keys of most mappings.
-instance Eq Key where
-  Key (Node _ tagA valueA) == Key (Node _ tagB valueB) = tagA == tagB && valueA == valueB
-
-instance Ord Key where
-  -- A pattern binds the evaluated fields, a selector would give new thunks.
-  compare (Key (Node _ tagA valueA)) (Key (Node _ tagB valueB)) =
-    -- The values of keys differ more often than their tags.
-    compareValues valueA valueB <> compare tagA tagB
-    where
-      compareValues :: Value -> Value -> Ordering
-      compareValues x y = case (x, y) of
-        (Null, Null) -> EQ
-        (Bool p, Bool q) -> compare p q
-        (Int i, Int j) -> compare i j
-        (Float f, Float g) -> compare f g
-        (String s, String t) -> compare s t
-        _ -> compare (rank x) (rank y)
-
-      rank :: Value -> Int
-      rank = \case
-        Null -> 0
-        Bool _ -> 1
-        Int _ -> 2
-        Float _ -> 3
-        String _ -> 4
-        Sequence _ -> 5
-        Mapping _ -> 6
+      k@(_, v) : ks
+        | v `elem` seen -> Just k
+        | otherwise -> pairwise (v : seen) ks

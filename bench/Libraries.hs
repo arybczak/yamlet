@@ -32,7 +32,7 @@ parsing name bs =
     [ bgroup
         "yamlet"
         [ bench "syntax tree" $ nf S.parseDocuments bs
-        , bench "nodes" $ nf (decodeInput >=> decodeNodes) bs
+        , bench "values" $ nf (decodeInput >=> decodeAllText @Value) bs
         ]
     , bgroup
         "HsYAML"

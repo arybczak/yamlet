@@ -23,7 +23,7 @@ import Data.Text qualified as T
 
 import Yamlet.Internal.Emit
 import Yamlet.Internal.Utils
-import Yamlet.Node
+import Yamlet.Value
 
 -- | The value of a plain scalar without a tag, e.g. @null@, @true@, @12@,
 -- @0x1F@ and @1.5e3@ are not strings. Quoted and block scalars are always

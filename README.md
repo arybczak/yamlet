@@ -16,6 +16,8 @@ A YAML 1.2.2 library written in Haskell.
   map keep their type, e.g. `1: a`, while JSON writes every key as a string.
 - The syntax tree keeps the comments and the empty lines, so a program can
   read a file, change it and write it back with its comments.
+- A decoded type can keep a part of a document as a `Node`. The encoder
+  writes it back as it was written, with its comments and styles.
 - Floating-point numbers are exact, e.g. `0.1` is exactly one tenth. They
   convert to `Scientific` without loss and to `Double` on request.
 - If a string reads back the same as a plain scalar, the encoder does not
@@ -26,8 +28,9 @@ A YAML 1.2.2 library written in Haskell.
 ## Modules
 
 - `Yamlet`: decoding with the `FromYaml` class and encoding with the `ToYaml`
-  class.
-- `Yamlet.Node`: the representation graph, with resolved tags and aliases.
+  class. The instances read and write the nodes of the syntax tree.
+- `Yamlet.Value`: the values of documents, with resolved tags and aliases,
+  e.g. for a document whose structure a program does not know.
 - `Yamlet.Syntax`: the syntax tree, with styles, anchors and unresolved tags.
   It keeps the comments and the empty lines, each at a node that the rules in
   its documentation choose. The module has a parser and a renderer for it.

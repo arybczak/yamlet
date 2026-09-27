@@ -15,7 +15,6 @@ import Test.Tasty.HUnit
 
 import Obligations
 import Yamlet
-import Yamlet.Syntax qualified as S
 
 main :: IO ()
 main =
@@ -121,52 +120,52 @@ data Preset = Preset {paths :: [T.Text], jobs :: Int, verbose :: Maybe Bool}
 instance GenericYaml Preset where
   yamlDefault = Just (Preset ["."] 1 Nothing)
 
-encodeServer :: Server -> S.Node
+encodeServer :: Server -> Node
 encodeServer = toYaml
 
-decodeServer :: S.Node -> Either (Offset, String) Server
+decodeServer :: Node -> Either (Offset, String) Server
 decodeServer = runParser parseYaml
 
-encodeWide :: Wide -> S.Node
+encodeWide :: Wide -> Node
 encodeWide = toYaml
 
-decodeWide :: S.Node -> Either (Offset, String) Wide
+decodeWide :: Node -> Either (Offset, String) Wide
 decodeWide = runParser parseYaml
 
-encodeName :: Name -> S.Node
+encodeName :: Name -> Node
 encodeName = toYaml
 
-decodeName :: S.Node -> Either (Offset, String) Name
+decodeName :: Node -> Either (Offset, String) Name
 decodeName = runParser parseYaml
 
-encodeRow :: Row -> S.Node
+encodeRow :: Row -> Node
 encodeRow = toYaml
 
-decodeRow :: S.Node -> Either (Offset, String) Row
+decodeRow :: Node -> Either (Offset, String) Row
 decodeRow = runParser parseYaml
 
-encodeBox :: Box Int -> S.Node
+encodeBox :: Box Int -> Node
 encodeBox = toYaml
 
-decodeBox :: S.Node -> Either (Offset, String) (Box Int)
+decodeBox :: Node -> Either (Offset, String) (Box Int)
 decodeBox = runParser parseYaml
 
-encodeVelocity :: Velocity -> S.Node
+encodeVelocity :: Velocity -> Node
 encodeVelocity = toYaml
 
-decodeVelocity :: S.Node -> Either (Offset, String) Velocity
+decodeVelocity :: Node -> Either (Offset, String) Velocity
 decodeVelocity = runParser parseYaml
 
-encodeConfig :: Config -> S.Node
+encodeConfig :: Config -> Node
 encodeConfig = toYaml
 
-encodePreset :: Preset -> S.Node
+encodePreset :: Preset -> Node
 encodePreset = toYaml
 
-decodePreset :: S.Node -> Either (Offset, String) Preset
+decodePreset :: Node -> Either (Offset, String) Preset
 decodePreset = runParser parseYaml
 
-decodeConfig :: S.Node -> Either (Offset, String) Config
+decodeConfig :: Node -> Either (Offset, String) Config
 decodeConfig = runParser parseYaml
 
 ----------------------------------------
@@ -192,14 +191,14 @@ instance GenericYaml Step where
   type FlattenFields Step = True
   yamlOptions = defaultYamlOptions {tagKey = "step"}
 
-encodeTurn :: Turn -> S.Node
+encodeTurn :: Turn -> Node
 encodeTurn = toYaml
 
-decodeTurn :: S.Node -> Either (Offset, String) Turn
+decodeTurn :: Node -> Either (Offset, String) Turn
 decodeTurn = runParser parseYaml
 
-decodeShape :: S.Node -> Either (Offset, String) Shape
+decodeShape :: Node -> Either (Offset, String) Shape
 decodeShape = runParser parseYaml
 
-decodeStep :: S.Node -> Either (Offset, String) Step
+decodeStep :: Node -> Either (Offset, String) Step
 decodeStep = runParser parseYaml

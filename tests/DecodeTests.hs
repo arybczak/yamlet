@@ -41,7 +41,7 @@ decodeTests =
     , testCase "exact floats" test_exactFloats
     , testCase "plain scalars" test_plainSafe
     , testCase "record" test_record
-    , testCase "without offsets" test_withoutOffsets
+    , testCase "values" test_values
     , testCase "notFollowedBy" test_notFollowedBy
     , testCase "block scalars" test_blockScalars
     , testCase "containers" test_containers
@@ -69,7 +69,7 @@ decodeTests =
 
 test_coreSchema :: Assertion
 test_coreSchema = do
-  let values :: Either Error [Node]
+  let values :: Either Error [Value]
       values = decodeText "[null, ~, '', true, False, 12, -0, 0o17, 0x1f, 1.5, -.inf, .nan, 1e3, +12, .5, a, '1']"
   case values of
     Left err -> assertFailure (show err)
@@ -94,7 +94,7 @@ test_coreSchema = do
         , String "a"
         , String "1"
         ]
-        (map (.value) ns)
+        ns
 
 test_plainSafe :: Assertion
 test_plainSafe = do
@@ -178,7 +178,7 @@ test_exactFloats = do
   assertEqual
     "negative zero"
     (Right [Float NegativeZero, Float NegativeZero, Float (Finite 0), Int 0])
-    (map (.value) <$> decodeText @[Node] "[-0.0, !!float -0, 0.0, -0]")
+    (decodeText @[Value] "[-0.0, !!float -0, 0.0, -0]")
   assertEqual "integer with a float tag" (Right 12) (decodeText @Double "!!float 12")
   forM_ ["0x10", "0o10"] $ \t ->
     assertEqual
@@ -190,7 +190,7 @@ test_exactFloats = do
   assertEqual
     "negative and positive zero keys"
     (Right [Float (Finite 0), Float NegativeZero])
-    ((\n -> case n.value of Mapping kvs -> [k.value | (k, _) <- kvs]; v -> [v]) <$> decodeText @Node "{0.0: a, -0.0: b}")
+    ((\case Mapping kvs -> map fst kvs; v -> [v]) <$> decodeText @Value "{0.0: a, -0.0: b}")
   assertEqual
     "infinity as a scientific"
     (Just (1, 1, "expected a finite number"))
@@ -229,14 +229,16 @@ test_notFollowedBy = do
     Left (P.ParseError _ msg) -> assertEqual "message" "boom" msg
     Right _ -> assertFailure "expected an error"
 
-test_withoutOffsets :: Assertion
-test_withoutOffsets = do
-  let built = node (Mapping [(node (String "a"), node (Sequence [node (Int 1), node (Int 2)]))])
-  case decodeText @Node "a: [1, 2]" of
-    Right decoded -> do
-      assertBool "decoded nodes have offsets" (decoded /= built)
-      assertEqual "equal without offsets" (withoutOffsets built) (withoutOffsets decoded)
-    Left err -> assertFailure (show err)
+test_values :: Assertion
+test_values = do
+  assertEqual
+    "mapping"
+    (Right (Mapping [(String "a", Sequence [Int 1, Int 2])]))
+    (decodeText @Value "a: [1, 2]")
+  assertEqual
+    "tags"
+    (Right (Sequence [Tagged "!point" (Mapping [(String "x", Int 1)]), Tagged "!secret" (String "abc"), Int 1]))
+    (decodeText @Value "- !point {x: 1}\n- !secret abc\n- !!int 1\n")
 
 test_containers :: Assertion
 test_containers = do
@@ -347,11 +349,11 @@ test_time = do
     assertEqual
       ("duration with the exponent " ++ show ex)
       (Left "the exponent of the number is out of the range from -1000 to 1000")
-      (first snd (runParser (parseYaml @NominalDiffTime) (toSyntax (node (Float (Finite (Sci.scientific 1 ex)))))))
+      (first snd (runParser (parseYaml @NominalDiffTime) (toYaml (Float (Finite (Sci.scientific 1 ex))))))
   assertEqual
     "zero duration with a large exponent"
     (Right (0 :: DiffTime))
-    (runParser parseYaml (toSyntax (node (Float (Finite (Sci.scientific 0 maxBound))))))
+    (runParser parseYaml (toYaml (Float (Finite (Sci.scientific 0 maxBound)))))
 
 test_record :: Assertion
 test_record = do
@@ -438,14 +440,14 @@ test_nesting :: Assertion
 test_nesting = do
   let nested :: Int -> T.Text -> T.Text
       nested d t = T.replicate d "[" <> t <> T.replicate d "]"
-      depth :: Node -> Int
-      depth n = case n.value of
+      depth :: Value -> Int
+      depth = \case
         Sequence [x] -> 1 + depth x
         Mapping [(k, _)] -> depth k
         _ -> 0
   assertEqual "sequences" (Right 100000) (depth <$> decodeText (nested 100000 "x"))
   assertEqual "key" (Right 101) (depth <$> decodeText ("[" <> nested 100 "x" <> ": y]"))
-  assertBool "key on two lines" (isLeft (decodeText @Node "[[a,\n b]: c]"))
+  assertBool "key on two lines" (isLeft (decodeText @Value "[[a,\n b]: c]"))
   -- A flow sequence at the start of a line is first tried as a key.
   assertEqual "on two lines" (Right 40) (depth <$> decodeText (nested 40 "x\n"))
   assertEqual
@@ -485,11 +487,11 @@ test_syntaxTree = do
     r -> assertFailure (show r)
   let key = S.plainNode "a"
       built = S.document (S.mappingNode [(key, key), (key, key)])
-  assertEqual "built" (Just (0, 0, "duplicate key \"a\"")) (errorOf (resolveDocument "" built))
+  assertEqual "built" (Just (0, 0, "duplicate key \"a\"")) (errorOf (decodeDocument @Value "" built))
   assertEqual
     "built, rendered"
     (Left "built.yaml: duplicate key \"a\"")
-    (either (Left . prettyError "built.yaml") (const (Right ())) (resolveDocument "" built))
+    (either (Left . prettyError "built.yaml") (const (Right ())) (decodeDocument @Value "" built))
   assertEqual
     "decoder error in a built node"
     (Just (0, 0, "expected an integer, but got a string"))
@@ -522,7 +524,7 @@ test_encodings = do
   invalid "surrogate in UTF-8" "invalid UTF-8" ("a\nbc" <> "\xED\xA0\x80" <> "d")
   let column :: String -> Int -> BS.ByteString -> Assertion
       column preface expected bytes =
-        assertEqual preface (Just expected) ((\(_, c, _) -> c) <$> errorOf (decode @Node bytes))
+        assertEqual preface (Just expected) ((\(_, c, _) -> c) <$> errorOf (decode @Value bytes))
   column "error after a UTF-8 BOM" 1 "\xEF\xBB\xBF]"
   column "error after a UTF-16 BOM" 1 "\xFF\xFE]\0"
   column "invalid UTF-8 after a BOM" 2 "\xEF\xBB\xBF\&b\xFF"
@@ -530,18 +532,18 @@ test_encodings = do
   assertEqual
     "source line after a BOM"
     (Left "]")
-    (either (Left . (.sourceLine)) (const (Right ())) (decode @Node "\xEF\xBB\xBF]"))
+    (either (Left . (.sourceLine)) (const (Right ())) (decode @Value "\xEF\xBB\xBF]"))
   let documents :: String -> [T.Text] -> T.Text -> Assertion
       documents preface expected input = assertEqual preface (Right expected) (decodeAllText input)
   documents "BOM before a marker after a scalar" ["a", "b"] "a\n\xFEFF--- b\n"
   assertEqual
     "BOM before a marker after a mapping"
-    (Right [Mapping [(node (String "a"), node (Int 1))], String "b"])
-    (map (strip . (.value)) <$> decodeAllText @Node "a: 1\n\xFEFF--- b\n")
+    (Right [Mapping [(String "a", Int 1)], String "b"])
+    (decodeAllText @Value "a: 1\n\xFEFF--- b\n")
   documents "BOM after an end marker" ["a", "b"] "a\n...\n\xFEFF# c\n\xFEFF\&b\n"
   documents "BOM in a quoted scalar" ["a\xFEFF", "b\xFEFF"] "--- \"a\xFEFF\"\n--- 'b\xFEFF'\n"
   let bom :: String -> (Int, Int) -> T.Text -> Assertion
-      bom preface (l, c) input = assertEqual preface (Just (l, c, "unexpected byte order mark")) (errorOf (decodeNodes input))
+      bom preface (l, c) input = assertEqual preface (Just (l, c, "unexpected byte order mark")) (errorOf (decodeAllText @Value input))
   bom "BOM at the start of a key" (2, 1) "a: 1\n\xFEFF b: 2\n"
   bom "BOM in a plain scalar" (1, 5) "a: x\xFEFFy\n"
   bom "BOM in a block scalar" (2, 3) "a: |\n  \xFEFFx\n"
@@ -556,11 +558,6 @@ test_encodings = do
     stripBom :: T.Text -> Either Error T.Text
     stripBom = Right . T.dropWhile (== '\xFEFF')
 
-    strip :: Value -> Value
-    strip = \case
-      Mapping kvs -> Mapping [(Node noOffset k.tag k.value, Node noOffset v.tag v.value) | (k, v) <- kvs]
-      v -> v
-
 -- | The line, the column and the message of an error.
 errorOf :: Either Error a -> Maybe (Int, Int, String)
 errorOf = \case
@@ -570,7 +567,7 @@ errorOf = \case
 test_syntaxErrors :: Assertion
 test_syntaxErrors = do
   let check :: String -> (Int, Int, String) -> T.Text -> Assertion
-      check preface expected input = assertEqual preface (Just expected) (errorOf (decodeNodes input))
+      check preface expected input = assertEqual preface (Just expected) (errorOf (decodeAllText @Value input))
   check "bad indentation" (3, 2, "unexpected indentation") "a:\n  b: 1\n c: 2\n"
   check
     "mapping in a plain scalar"
@@ -760,7 +757,7 @@ test_syntaxErrors = do
   assertEqual
     "valid verbatim tags"
     (Right ["!bar", "tag:yaml.org,2002:str"])
-    (map (.tag) <$> decodeText @[Node] "[!<!bar> a, !<tag:yaml.org,2002:str> b]")
+    (map valueTag <$> decodeText @[Value] "[!<!bar> a, !<tag:yaml.org,2002:str> b]")
   check "noncharacter U+FFFE" (1, 4, "invalid character U+FFFE") "a: \xFFFE\n"
   check "noncharacter U+FFFF" (1, 5, "invalid character U+FFFF") "a: b\xFFFF\n"
 
@@ -809,7 +806,7 @@ test_typeErrors = do
   assertEqual
     "YAML 1.1 boolean with a tag"
     (Just (1, 11, "invalid value for the tag !!bool, \"off\" is a boolean only in YAML 1.1"))
-    (errorOf (decodeNodes "a: !!bool off\n"))
+    (errorOf (decodeAllText @Value "a: !!bool off\n"))
   assertEqual
     "list instead of string"
     (Just (1, 7, "expected a string, but got a list"))
@@ -885,11 +882,11 @@ test_typeErrors = do
   assertEqual
     "fixed with a huge exponent"
     (Left "the exponent of the number is out of the range from -1000 to 1000")
-    (first snd (runParser (parseYaml @Centi) (toSyntax (node (Float (Finite (Sci.scientific 1 maxBound)))))))
+    (first snd (runParser (parseYaml @Centi) (toYaml (Float (Finite (Sci.scientific 1 maxBound))))))
   assertEqual
     "zero fixed with a huge exponent"
     (Right (0 :: Centi))
-    (runParser parseYaml (toSyntax (node (Float (Finite (Sci.scientific 0 maxBound))))))
+    (runParser parseYaml (toYaml (Float (Finite (Sci.scientific 0 maxBound)))))
 
 newtype Vowel = Vowel Char
 
@@ -937,25 +934,25 @@ test_keyErrors = do
   assertEqual
     "duplicate among many scalar keys"
     (Just (21, 1, "duplicate key \"k1\""))
-    (errorOf (decodeNodes (T.unlines [T.pack ("k" ++ show i ++ ": 1") | i <- [1 .. 20 :: Int] ++ [1]])))
+    (errorOf (decodeAllText @Value (T.unlines [T.pack ("k" ++ show i ++ ": 1") | i <- [1 .. 20 :: Int] ++ [1]])))
   assertEqual
     "duplicate scalar key after a collection key"
     (Just (3, 1, "duplicate key \"a\""))
-    (errorOf (decodeNodes (withKeys ["a", "[b]", "a"])))
+    (errorOf (decodeAllText @Value (withKeys ["a", "[b]", "a"])))
   assertEqual
     "duplicate collection key"
     (Just (2, 1, "duplicate key"))
-    (errorOf (decodeNodes (withKeys ["{c: [d]}", "{c: [d]}"])))
+    (errorOf (decodeAllText @Value (withKeys ["{c: [d]}", "{c: [d]}"])))
   assertEqual
     "duplicate mapping key in another order"
     (Just (2, 1, "duplicate key"))
-    (errorOf (decodeNodes (withKeys ["{a: 1, b: 2}", "{b: 2, a: 1}"])))
+    (errorOf (decodeAllText @Value (withKeys ["{a: 1, b: 2}", "{b: 2, a: 1}"])))
 
 -- | The check for duplicate keys compares keys with aliases correctly.
 test_aliasKeys :: Assertion
 test_aliasKeys = do
   let check :: String -> Maybe (Int, Int, String) -> T.Text -> Assertion
-      check preface expected keys = assertEqual preface expected (errorOf (decodeNodes (laughs 3 <> keys)))
+      check preface expected keys = assertEqual preface expected (errorOf (decodeAllText @Value (laughs 3 <> keys)))
   check "different keys" Nothing "? *a3\n: 1\n? [*a2, 1]\n: 2\n? [*a2, 2]\n: 3\n"
   check "duplicate key" (Just (7, 3, "duplicate key")) "? [*a3, 1]\n: 1\n? [*a3, 1]\n: 2\n"
   -- Keys from two separate chains of anchors are equal only after an
@@ -969,26 +966,26 @@ test_aliasKeys = do
                , c <- "ab"
                ]
             ++ ["- ? *a12", "  : 1", "  ? *b12", "  : 2"]
-  assertEqual "equal chains" (Just (29, 5, "duplicate key")) (errorOf (decodeNodes (chains "x" "x")))
-  assertEqual "different chains" Nothing (errorOf (decodeNodes (chains "x" "y")))
+  assertEqual "equal chains" (Just (29, 5, "duplicate key")) (errorOf (decodeAllText @Value (chains "x" "x")))
+  assertEqual "different chains" Nothing (errorOf (decodeAllText @Value (chains "x" "y")))
 
 -- | Aliases can add 100000 visits to a traversal of a small document, and as
 -- many visits as the document has nodes to a large one.
 test_aliasLimit :: Assertion
 test_aliasLimit = do
-  assertEqual "small expansion" Nothing (errorOf (decodeNodes (laughs 3)))
+  assertEqual "small expansion" Nothing (errorOf (decodeAllText @Value (laughs 3)))
   assertEqual
     "exponential expansion"
     (Just (5, 45, "the aliases expand the document to more than 100121 nodes"))
-    (errorOf (decodeNodes (laughs 9)))
+    (errorOf (decodeAllText @Value (laughs 9)))
   let items = T.intercalate ", " (replicate 200000 "x")
       copies :: Int -> T.Text
       copies k = T.unlines ("- &a [" <> items <> "]" : replicate k "- *a")
-  assertEqual "large document with one copy" Nothing (errorOf (decodeNodes (copies 1)))
+  assertEqual "large document with one copy" Nothing (errorOf (decodeAllText @Value (copies 1)))
   assertEqual
     "large document with two copies"
     (Just (3, 3, "the aliases expand the document to more than 400008 nodes"))
-    (errorOf (decodeNodes (copies 2)))
+    (errorOf (decodeAllText @Value (copies 2)))
 
 -- | Anchors a0 to ak, where each anchor after a0 has ten aliases to the one
 -- before it. So the alias *ak expands to about 10^(k+1) nodes.
@@ -1011,16 +1008,16 @@ test_longNumbers = do
   assertEqual
     "float"
     (Right (Float (Finite (Sci.scientific (10 ^ (1000000 :: Int) - 1) (-999999)))))
-    ((.value) <$> decodeText @Node ("9." <> nines 999999))
+    (decodeText @Value ("9." <> nines 999999))
   assertEqual
     "exponent"
     (Just (1, 1, "the exponent of the number is out of the range from -1000 to 1000"))
-    (errorOf (decodeText @Node ("1e" <> nines 1000000)))
+    (errorOf (decodeText @Value ("1e" <> nines 1000000)))
   let zeros = T.replicate 300000 "0"
   assertEqual
     "trailing zeros"
     (Just (1, 600018, "duplicate key"))
-    (errorOf (decodeNodes ("{0.1" <> zeros <> ": a, 0.5" <> zeros <> ": b, 0.1" <> zeros <> "0: c}")))
+    (errorOf (decodeAllText @Value ("{0.1" <> zeros <> ": a, 0.5" <> zeros <> ": b, 0.1" <> zeros <> "0: c}")))
   -- The gcd of a reduction takes quadratic time for most types.
   let big = 3 ^ (2000000 :: Int) :: Integer
   assertEqual
@@ -1030,7 +1027,7 @@ test_longNumbers = do
   assertEqual
     "long integer as a float"
     (Right (Float (Finite (Sci.scientific (10 ^ (1000000 :: Int) - 1) (-1)))))
-    ((.value) <$> decodeText @Node (nines 999999 <> ".9"))
+    (decodeText @Value (nines 999999 <> ".9"))
   assertEqual
     "version with many parts"
     (Right 500000)
@@ -1043,7 +1040,7 @@ test_manyKeys = do
   let keys :: [T.Text]
       keys = [T.pack ("k" ++ show i) | i <- [1 .. 100000 :: Int]]
       count :: [T.Text] -> Either Error Int
-      count ks = length . entries <$> decodeText @Node (T.unlines (map (<> ": 1") ks))
+      count ks = length . entries <$> decodeText @Value (T.unlines (map (<> ": 1") ks))
   assertEqual "one collection key" (Right 100001) (count ("[c]" : keys))
   assertEqual "collection keys" (Right 100000) (count (map (\k -> "[" <> k <> "]") keys))
   assertEqual "mapping keys" (Right 100000) (count (map (\k -> "{a: " <> k <> "}") keys))
@@ -1051,12 +1048,12 @@ test_manyKeys = do
   assertEqual
     "large equal keys"
     (Just (3, 3, "duplicate key"))
-    (errorOf (decodeNodes ("? " <> large <> "\n: 1\n? " <> large <> "\n: 2\n")))
+    (errorOf (decodeAllText @Value ("? " <> large <> "\n: 1\n? " <> large <> "\n: 2\n")))
   let deep = nestedKey 14 "0"
   assertEqual
     "nested equal keys"
     (Just (3, 3, "duplicate key"))
-    (errorOf (decodeNodes ("? " <> deep <> "\n: 1\n? " <> deep <> "\n: 2\n")))
+    (errorOf (decodeAllText @Value ("? " <> deep <> "\n: 1\n? " <> deep <> "\n: 2\n")))
   where
     -- Two mappings as keys that differ only in their last value.
     nestedKey :: Int -> T.Text -> T.Text
@@ -1064,8 +1061,8 @@ test_manyKeys = do
       | d == 0 = v
       | otherwise = "{" <> nestedKey (d - 1) "0" <> ": 1, " <> nestedKey (d - 1) "1" <> ": " <> v <> "}"
 
-    entries :: Node -> [(Node, Node)]
-    entries n = case n.value of
+    entries :: Value -> [(Value, Value)]
+    entries = \case
       Mapping kvs -> kvs
       _ -> []
 
@@ -1074,7 +1071,7 @@ test_prettyError = do
   case decodeText @Config "name: x\npaths: 42\n" of
     Left err -> assertEqual "rendered" expected (prettyError "config.yaml" err)
     Right _ -> assertFailure "expected an error"
-  case decodeNodes ("a: " <> T.replicate 100 "x" <> ": " <> T.replicate 100 "y" <> "\n") of
+  case decodeAllText @Value ("a: " <> T.replicate 100 "x" <> ": " <> T.replicate 100 "y" <> "\n") of
     Left err -> assertEqual "long line" expectedLong (prettyError "long.yaml" err)
     Right _ -> assertFailure "expected an error"
   where

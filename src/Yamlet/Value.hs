@@ -1,22 +1,15 @@
--- | The representation graph of a YAML document: nodes with resolved tags and
--- values, and aliases replaced by the nodes that they refer to.
+-- | The values of YAML documents: the content with resolved tags, without the
+-- styles, comments and positions of the syntax tree.
 --
--- Most texts in the nodes share the memory of the input, so a node keeps the
--- whole input alive. To keep a text longer than the nodes, copy it with
--- 'Data.Text.copy'. The functions of "Yamlet.Decode" copy the texts that
--- they return.
---
--- An alias shares the memory of the node that it refers to, so a small input
--- with many aliases gives a small graph. But a function that visits every
--- node, e.g. 'Control.DeepSeq.force' or a 'Yamlet.FromYaml' instance for a
--- list, visits a node once for each alias path to it. So the decoder limits
--- these visits: the aliases of a document can add 100000 visits, or as many
--- visits as the document has nodes if that is more. A document beyond the
--- limit is an error.
-module Yamlet.Node
-  ( -- * Nodes
-    Node (..)
-  , Value (..)
+-- A 'Value' has 'Yamlet.FromYaml' and 'Yamlet.ToYaml' instances, e.g. to
+-- read a document whose structure a program does not know. An alias becomes
+-- a copy of the value that it refers to. So a small input with many aliases
+-- can give a large value, and the decoder limits the aliases: they can add
+-- 100000 nodes to a document, or as many nodes as the document has if that
+-- is more. A document beyond the limit is an error.
+module Yamlet.Value
+  ( -- * Values
+    Value (..)
   , FloatValue (..)
   , floatValueToDouble
   , doubleToFloatValue
@@ -24,13 +17,8 @@ module Yamlet.Node
   , floatToFloatValue
   , describe
 
-    -- * Construction
-  , node
-  , S.noOffset
-  , S.Offset (..)
-  , withoutOffsets
-
     -- * Tags
+  , valueTag
   , nullTag
   , boolTag
   , intTag
@@ -38,7 +26,6 @@ module Yamlet.Node
   , strTag
   , seqTag
   , mapTag
-  , defaultTag
   ) where
 
 import Control.DeepSeq
@@ -46,43 +33,30 @@ import Data.Scientific qualified as Sci
 import Data.Text qualified as T
 import GHC.Generics
 
-import Yamlet.Internal.Syntax qualified as S
 import Yamlet.Internal.Utils
 
--- | A node of a document.
---
--- The 'Eq' instance compares the offsets too, so a decoded node is not equal
--- to the same node that a program builds. To compare only the tags and the
--- values, compare the results of 'withoutOffsets'.
-data Node = Node
-  { offset :: !S.Offset
-  -- ^ The position of the node in the input, or 'S.noOffset' for a node that
-  -- a program created.
-  , tag :: !T.Text
-  -- ^ The resolved tag, e.g. @tag:yaml.org,2002:str@. The encoder writes a
-  -- tag that is not the default for the value. A value that does not fit its
-  -- tag of the core schema, e.g. a string with 'intTag', does not read back.
-  , value :: !Value
-  }
-  deriving stock (Eq, Show, Generic)
-  deriving anyclass (NFData)
-
 -- | The value of a node.
---
--- A scalar with a tag that the schema does not know is a 'String' with its
--- text, and the 'Yamlet.Node.tag' of its node tells what it is.
 data Value
   = Null
   | Bool !Bool
   | Int !Integer
   | Float !FloatValue
   | String !T.Text
-  | Sequence [Node]
+  | Sequence [Value]
   | -- | The entries of a mapping in the order of the input. The keys are
     -- unique. The encoder does not check this for a mapping that a program
     -- builds, and a mapping with two equal keys does not read back.
-    Mapping [(Node, Node)]
-  deriving stock (Eq, Show, Generic)
+    Mapping [(Value, Value)]
+  | -- | A value with a tag that is not the tag of the core schema for it,
+    -- e.g. @!point {x: 1}@. A scalar with a tag that the schema does not
+    -- know is a 'String' inside, e.g. @!secret abc@.
+    --
+    -- The encoder writes the tag. A value in 'Tagged' with its own tag of
+    -- the core schema reads back without 'Tagged'. A value that does not fit
+    -- a tag of the core schema, e.g. a 'String' with 'intTag', does not read
+    -- back.
+    Tagged !T.Text !Value
+  deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (NFData)
 
 -- | The value of a floating-point number. A finite value is exact, e.g. @0.1@
@@ -136,6 +110,7 @@ fromRealFloat d
   | otherwise = Finite (Sci.fromFloatDigits d)
 
 -- | The kind of a value in plain words, for error messages, e.g. "a list".
+-- The tag of 'Tagged' does not change it.
 describe :: Value -> String
 describe = \case
   Null -> "null"
@@ -145,24 +120,20 @@ describe = \case
   String _ -> "a string"
   Sequence _ -> "a list"
   Mapping _ -> "a mapping"
+  Tagged _ v -> describe v
 
--- | A node with the default tag for its value.
-node :: Value -> Node
-node v =
-  Node
-    { offset = S.noOffset
-    , tag = defaultTag v
-    , value = v
-    }
-
--- | The node with 'S.noOffset' as the offset of every node in it. Like every
--- function that visits all nodes, it visits a node once for each alias path
--- to it.
-withoutOffsets :: Node -> Node
-withoutOffsets n = Node S.noOffset n.tag $ case n.value of
-  Sequence xs -> Sequence (map withoutOffsets xs)
-  Mapping kvs -> Mapping [(withoutOffsets k, withoutOffsets v) | (k, v) <- kvs]
-  v -> v
+-- | The tag of a value: the tag of 'Tagged', or else the tag of the core
+-- schema, e.g. 'intTag' for an 'Int'.
+valueTag :: Value -> T.Text
+valueTag = \case
+  Null -> nullTag
+  Bool _ -> boolTag
+  Int _ -> intTag
+  Float _ -> floatTag
+  String _ -> strTag
+  Sequence _ -> seqTag
+  Mapping _ -> mapTag
+  Tagged tag _ -> tag
 
 -- | The tags of the core schema, e.g. @tag:yaml.org,2002:null@ for 'nullTag'.
 nullTag, boolTag, intTag, floatTag, strTag, seqTag, mapTag :: T.Text
@@ -173,14 +144,3 @@ floatTag = coreTagPrefix <> "float"
 strTag = coreTagPrefix <> "str"
 seqTag = coreTagPrefix <> "seq"
 mapTag = coreTagPrefix <> "map"
-
--- | The tag of a value in the core schema.
-defaultTag :: Value -> T.Text
-defaultTag = \case
-  Null -> nullTag
-  Bool _ -> boolTag
-  Int _ -> intTag
-  Float _ -> floatTag
-  String _ -> strTag
-  Sequence _ -> seqTag
-  Mapping _ -> mapTag

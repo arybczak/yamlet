@@ -83,7 +83,7 @@ import Yamlet.Internal.Schema
 import Yamlet.Internal.Syntax qualified as S
 import Yamlet.Internal.Utils
 import Yamlet.Internal.View
-import Yamlet.Node
+import Yamlet.Value
 
 -- | A parser of nodes. Its errors point to the node that the parser works on,
 -- unless 'failAt' names another one.
@@ -96,7 +96,7 @@ import Yamlet.Node
 -- port <- parseYaml n
 -- unless (port > 0 && port < 65536) $ fail "the port must be from 1 to 65535"
 -- @
-newtype Parser a = Parser (Offset -> Either (Offset, String) a)
+newtype Parser a = Parser (S.Offset -> Either (S.Offset, String) a)
 
 instance Functor Parser where
   fmap f (Parser g) = Parser $ fmap f . g
@@ -116,14 +116,14 @@ instance MonadFail Parser where
 -- | Run a parser on a node. Return the offset of the node that caused an
 -- error with the error message.
 --
--- The node first goes through the checks of 'Yamlet.resolveDocument', e.g.
+-- The node first goes through the checks of 'Yamlet.decodeDocument', e.g.
 -- for duplicate keys, and its aliases are replaced with the nodes that they
 -- refer to.
-runParser :: (S.Node -> Parser a) -> S.Node -> Either (Offset, String) a
+runParser :: (S.Node -> Parser a) -> S.Node -> Either (S.Offset, String) a
 runParser f n0 = prepare n0 >>= runChecked f
 
 -- | Run a parser on a node that passed 'prepare'.
-runChecked :: (S.Node -> Parser a) -> S.Node -> Either (Offset, String) a
+runChecked :: (S.Node -> Parser a) -> S.Node -> Either (S.Offset, String) a
 runChecked f n = let Parser g = parseNode f n in g n.offset
 
 -- | Run a parser on a node, so that 'fail' points to the node.
@@ -169,14 +169,14 @@ infixl 3 `orElse`
 -- | Run the parser if the node is null.
 withNull :: Parser a -> S.Node -> Parser a
 withNull p = parseNode $ \n -> case view n of
-  ScalarView Null -> p
+  NullView -> p
   _ -> typeMismatch "null" n
 
 -- | The value of a boolean.
 withBool :: (Bool -> Parser a) -> S.Node -> Parser a
 withBool f = parseNode $ \n -> case view n of
-  ScalarView (Bool b) -> f b
-  ScalarView (String t)
+  BoolView b -> f b
+  StringView t
     | isYaml11Bool t ->
         failAt n $
           "expected a boolean, but got the string "
@@ -187,14 +187,14 @@ withBool f = parseNode $ \n -> case view n of
 -- | The value of an integer.
 withInt :: (Integer -> Parser a) -> S.Node -> Parser a
 withInt f = parseNode $ \n -> case view n of
-  ScalarView (Int i) -> f i
+  IntView i -> f i
   _ -> typeMismatch "an integer" n
 
 -- | The nearest double. An integer counts as a floating-point number too.
 withFloat :: (Double -> Parser a) -> S.Node -> Parser a
 withFloat f = parseNode $ \n -> case view n of
-  ScalarView (Float v) -> f (floatValueToDouble v)
-  ScalarView (Int i) -> f (fromInteger i)
+  FloatView v -> f (floatValueToDouble v)
+  IntView i -> f (fromInteger i)
   _ -> typeMismatch "a number" n
 
 -- | The exact value of a finite number. An integer counts too, and negative
@@ -205,10 +205,10 @@ withFloat f = parseNode $ \n -> case view n of
 -- exponent.
 withScientific :: (Sci.Scientific -> Parser a) -> S.Node -> Parser a
 withScientific f = parseNode $ \n -> case view n of
-  ScalarView (Float (Finite s)) -> f s
-  ScalarView (Float NegativeZero) -> f 0
-  ScalarView (Int i) -> f (Sci.scientific i 0)
-  ScalarView (Float _) -> fail "expected a finite number"
+  FloatView (Finite s) -> f s
+  FloatView NegativeZero -> f 0
+  IntView i -> f (Sci.scientific i 0)
+  FloatView _ -> fail "expected a finite number"
   _ -> typeMismatch "a number" n
 
 -- | Like 'withScientific', but the exponent of the first digit must be in
@@ -229,7 +229,7 @@ withBoundedScientific f = withScientific $ \s ->
 -- | The text is a copy, so it does not keep the input alive.
 withText :: (T.Text -> Parser a) -> S.Node -> Parser a
 withText f = parseNode $ \n -> case view n of
-  ScalarView (String t) -> f (T.copy t)
+  StringView t -> f (T.copy t)
   _ -> typeMismatch "a string" n
 
 ----------------------------------------
@@ -268,7 +268,7 @@ mkObject n kvs = do
       { node = n
       , entries = kvs
       , index = index
-      , otherKeys = [(k, v) | (k, _) <- kvs, ScalarView v <- [view k], case v of String _ -> False; _ -> True]
+      , otherKeys = [(k, v) | (k@S.Node {S.content = S.Scalar style t}, _) <- kvs, let v = scalarValue k.props.tag style t, case v of String _ -> False; _ -> True]
       }
   where
     insert :: M.Map T.Text (S.Node, S.Node) -> (S.Node, S.Node) -> Parser (M.Map T.Text (S.Node, S.Node))
@@ -414,8 +414,8 @@ class FromYaml a where
 instance FromYaml S.Node where
   parseYaml = pure
 
--- | The node with its tag and value resolved.
-instance FromYaml Node where
+-- | The value of the node, with the tags resolved and the aliases replaced.
+instance FromYaml Value where
   parseYaml n = case represent n of
     Right r -> pure r
     Left err -> Parser $ \_ -> Left err
@@ -553,8 +553,8 @@ picoseconds s
 -- | The nearest float. A conversion by way of 'Double' could round twice.
 instance FromYaml Float where
   parseYaml = parseNode $ \n -> case view n of
-    ScalarView (Float v) -> pure (floatValueToFloat v)
-    ScalarView (Int i) -> pure (fromInteger i)
+    FloatView v -> pure (floatValueToFloat v)
+    IntView i -> pure (fromInteger i)
     _ -> typeMismatch "a number" n
 
 instance FromYaml T.Text where
@@ -580,7 +580,7 @@ instance FromYaml a => FromYaml (NE.NonEmpty a) where
 -- | Null is 'Nothing'.
 instance FromYaml a => FromYaml (Maybe a) where
   parseYaml n = case view n of
-    ScalarView Null -> pure Nothing
+    NullView -> pure Nothing
     _ -> Just <$> parseYaml n
 
 -- | Two keys that convert to the same key, e.g. @1@ and @1.0@ for 'Double',
@@ -660,13 +660,9 @@ instance FromYaml Ordering where
 -- as a number, so a number is an error.
 instance FromYaml Version where
   parseYaml = parseNode $ \n -> case view n of
-    ScalarView (String t) -> maybe (fail "expected a version such as 1.2.3") pure (version t)
-    ScalarView v
-      | Int _ <- v -> number
-      | Float _ <- v -> number
-      where
-        number :: Parser Version
-        number = fail $ "expected a version, but got " ++ describe v ++ ", quote the version, e.g. \"1.10\""
+    StringView t -> maybe (fail "expected a version such as 1.2.3") pure (version t)
+    IntView _ -> number n
+    FloatView _ -> number n
     _ -> typeMismatch "a version" n
     where
       -- The syntax that 'showVersion' writes. 'parseVersion' reads it too,
@@ -678,6 +674,10 @@ instance FromYaml Version where
           | all (\tag -> not (T.null tag) && T.all isAlphaNum tag) tags ->
               (\parts -> Version parts (map T.unpack tags)) <$> mapM readBoundedInt (T.splitOn "." branch)
         _ -> Nothing
+
+      number :: S.Node -> Parser Version
+      number n =
+        fail $ "expected a version, but got " ++ describeNode n ++ ", quote the version, e.g. \"1.10\""
 
 -- | Null.
 instance FromYaml (Proxy a) where

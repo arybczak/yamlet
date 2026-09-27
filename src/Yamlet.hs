@@ -26,13 +26,10 @@ module Yamlet
   , decodeAll
   , decodeText
   , decodeAllText
-  , decodeNodes
   , decodeInput
 
     -- * Syntax trees
   , decodeDocument
-  , resolveDocument
-  , toSyntax
 
     -- * Encoding
   , encode
@@ -41,7 +38,11 @@ module Yamlet
   , encodeAllText
 
     -- * Nodes
-  , module Yamlet.Node
+  , S.Node
+  , S.Offset (..)
+
+    -- * Values
+  , module Yamlet.Value
 
     -- * Conversion from nodes
   , module Yamlet.Decode
@@ -58,6 +59,7 @@ module Yamlet
   , module Yamlet.Error
   ) where
 
+import Data.Bifunctor
 import Data.ByteString qualified as BS
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
@@ -70,7 +72,7 @@ import Yamlet.Internal.Compose
 import Yamlet.Internal.Input
 import Yamlet.Internal.Parser
 import Yamlet.Internal.Syntax qualified as S
-import Yamlet.Node
+import Yamlet.Value
 
 -- | Decode a stream with one document. An empty stream is null.
 decode :: FromYaml a => BS.ByteString -> Either Error a
@@ -84,38 +86,29 @@ decodeAll bs = decodeInput bs >>= decodeAllText
 decodeText :: FromYaml a => T.Text -> Either Error a
 decodeText input =
   parseStream input >>= \case
-    [] -> convert input (S.Node (Offset 0) (Offset 0) S.noProps S.noComments (S.Scalar S.Plain ""))
+    [] -> convert input (S.Node (S.Offset 0) (S.Offset 0) S.noProps S.noComments (S.Scalar S.Plain ""))
     [doc] -> convert input doc.root
     docs@(_ : doc : _) -> do
-      mapM_ (compose input) docs
+      mapM_ (\d -> first (uncurry (errorAt input)) (prepare d.root)) docs
       Left $ errorAt input doc.root.offset "expected a single document, but got a second one"
 
 -- | Decode every document of a stream.
 decodeAllText :: FromYaml a => T.Text -> Either Error [a]
 decodeAllText input = parseStream input >>= mapM (convert input . (.root))
 
--- | Parse a stream into the root nodes of its documents.
-decodeNodes :: T.Text -> Either Error [Node]
-decodeNodes input = parseStream input >>= mapM (compose input)
-
 -- | Decode a document of a syntax tree, e.g. to read the values of a file and
 -- keep its comments from one parse.
+--
+-- As for a parsed input, the decoder checks the document first. The check
+-- fails for a duplicate key, an undefined alias, aliases beyond the limit in
+-- "Yamlet.Value", a value that is not valid for its tag or a float whose
+-- exponent and value are both beyond the range from -1000 to 1000 in
+-- scientific notation.
 --
 -- The text is the input of the document, for the line in an error. For a
 -- document that the program built, the text can be empty.
 decodeDocument :: FromYaml a => T.Text -> S.Document -> Either Error a
 decodeDocument input doc = convert input doc.root
-
--- | Resolve the tags and the aliases of a document of a syntax tree. The
--- resolution fails for a duplicate key, an undefined alias, aliases beyond
--- the limit in "Yamlet.Node", a value that is not valid for its tag or a
--- float whose exponent and value are both beyond the range from -1000 to
--- 1000 in scientific notation.
---
--- The text is the input of the document, for the line in an error. For a
--- document that the program built, the text can be empty.
-resolveDocument :: T.Text -> S.Document -> Either Error Node
-resolveDocument = compose
 
 convert :: FromYaml a => T.Text -> S.Node -> Either Error a
 convert input n = case runParser parseYaml n of

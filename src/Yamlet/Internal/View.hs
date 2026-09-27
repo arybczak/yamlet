@@ -7,6 +7,7 @@
 module Yamlet.Internal.View
   ( View (..)
   , view
+  , scalarValue
   , describeNode
   , isNullNode
   , stringValue
@@ -17,12 +18,17 @@ import Data.Text qualified as T
 
 import Yamlet.Internal.Schema
 import Yamlet.Internal.Syntax qualified as S
-import Yamlet.Node
+import Yamlet.Value
 
 -- | The value of a node with its tag resolved. The items and the entries of a
--- collection stay nodes of the syntax tree.
+-- collection stay nodes of the syntax tree. A tag that the schema does not
+-- know does not matter, e.g. @!secret abc@ is a string.
 data View
-  = ScalarView !Value
+  = NullView
+  | BoolView !Bool
+  | IntView !Integer
+  | FloatView !FloatValue
+  | StringView !T.Text
   | SequenceView [S.Node]
   | MappingView [(S.Node, S.Node)]
   | -- | 'Yamlet.Decode.runParser' replaces the aliases, so only a node that a
@@ -32,13 +38,18 @@ data View
 -- | The view of a node.
 view :: S.Node -> View
 view n = case n.content of
-  S.Scalar style t -> ScalarView (scalarValue n.props.tag style t)
+  S.Scalar style t -> case scalarValue n.props.tag style t of
+    Null -> NullView
+    Bool b -> BoolView b
+    Int i -> IntView i
+    Float f -> FloatView f
+    _ -> StringView t
   S.Sequence _ xs -> SequenceView xs
   S.Mapping _ kvs -> MappingView kvs
   S.Alias name -> AliasView name
 {-# INLINE view #-}
 
--- | The value of a scalar with the tag and the style.
+-- | The value of a scalar with the tag and the style, without the tag.
 scalarValue :: S.Tag -> S.ScalarStyle -> T.Text -> Value
 scalarValue tag style t = case tag of
   S.NoTag
@@ -51,20 +62,20 @@ scalarValue tag style t = case tag of
 
 -- | The kind of a node in plain words, e.g. "a list".
 describeNode :: S.Node -> String
-describeNode n = case view n of
-  ScalarView v -> describe v
-  SequenceView _ -> "a list"
-  MappingView _ -> "a mapping"
-  AliasView _ -> "an alias"
+describeNode n = case n.content of
+  S.Scalar style t -> describe (scalarValue n.props.tag style t)
+  S.Sequence _ _ -> "a list"
+  S.Mapping _ _ -> "a mapping"
+  S.Alias _ -> "an alias"
 
 -- | The node is null.
 isNullNode :: S.Node -> Bool
 isNullNode n = case view n of
-  ScalarView Null -> True
+  NullView -> True
   _ -> False
 
 -- | The text of a string node.
 stringValue :: S.Node -> Maybe T.Text
 stringValue n = case view n of
-  ScalarView (String t) -> Just t
+  StringView t -> Just t
   _ -> Nothing

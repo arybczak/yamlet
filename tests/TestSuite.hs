@@ -130,7 +130,7 @@ runTest path = do
                 (map withoutStyle (toEvents docs'))
               assertEqual (preface ++ "\nrendered again") out (renderSyntax defaultRenderOptions docs')
           hasJson <- doesFileExist (path </> "in.json")
-          case Y.decodeNodes input of
+          case Y.decodeAllText @Y.Value input of
             Left err
               | hasJson -> assertFailure $ preface ++ "\nunexpected error: " ++ prettyError "in.yaml" err
               -- The decoder rejects duplicate keys, which the syntax allows.
@@ -143,13 +143,13 @@ runTest path = do
                   Left err -> assertFailure $ "invalid in.json: " ++ err
                 assertEqual (preface ++ "\nvalues") expectedValues (map toJson nodes)
               let encoded = Y.encodeAllText nodes
-              case Y.decodeNodes encoded of
+              case Y.decodeAllText @Y.Value encoded of
                 Left err -> assertFailure $ preface ++ "\nencoded:\n" ++ T.unpack encoded ++ "\nerror: " ++ prettyError "out.yaml" err
                 Right nodes' ->
                   assertEqual
                     (preface ++ "\nencoded:\n" ++ T.unpack encoded)
-                    (map Y.withoutOffsets nodes)
-                    (map Y.withoutOffsets nodes')
+                    nodes
+                    nodes'
   where
     jsonValues :: A.Parser [J.Value]
     jsonValues = many (A.skipSpace *> J.json') <* A.skipSpace <* A.endOfInput
@@ -162,10 +162,10 @@ runTest path = do
       ScalarEvent props _ t -> ScalarEvent props Plain t
       e -> e
 
--- | The JSON value of a node. The keys of the mappings in the tests with JSON
+-- | The JSON form of a value. The keys of the mappings in the tests with JSON
 -- are strings.
-toJson :: Y.Node -> J.Value
-toJson n = case n.value of
+toJson :: Y.Value -> J.Value
+toJson = \case
   Y.Null -> J.Null
   Y.Bool b -> J.Bool b
   Y.Int i -> J.Number (fromInteger i)
@@ -174,11 +174,13 @@ toJson n = case n.value of
   Y.String t -> J.String t
   Y.Sequence xs -> J.Array . V.fromList $ map toJson xs
   Y.Mapping kvs -> J.Object $ KM.fromList [(key k, toJson v) | (k, v) <- kvs]
+  Y.Tagged _ v -> toJson v
   where
-    key :: Y.Node -> K.Key
-    key k = case k.value of
+    key :: Y.Value -> K.Key
+    key = \case
       Y.String t -> K.fromText t
       Y.Null -> K.fromText ""
+      Y.Tagged _ v -> key v
       v -> K.fromString (show v)
 
 -- | Render an event in the format of the test suite.

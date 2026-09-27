@@ -7,7 +7,6 @@ module Yamlet.Encode
 
     -- * Rendering
   , renderDocuments
-  , toSyntax
   ) where
 
 import Data.Containers.ListUtils
@@ -51,9 +50,9 @@ import Yamlet.Internal.Emit
 import Yamlet.Internal.Generic
 import Yamlet.Internal.Utils
 import Yamlet.Internal.View
-import Yamlet.Node
 import Yamlet.Schema
 import Yamlet.Syntax qualified as S
+import Yamlet.Value
 
 ----------------------------------------
 -- Class
@@ -91,7 +90,7 @@ mapping :: [(S.Node, S.Node)] -> S.Node
 mapping = S.mappingNode
 
 instance ToYaml S.Node where toYaml = id
-instance ToYaml Node where toYaml = toSyntax
+instance ToYaml Value where toYaml = toSyntax
 instance ToYaml () where toYaml _ = scalar Null
 instance ToYaml Bool where toYaml = scalar . Bool
 instance ToYaml Integer where toYaml = scalar . Int
@@ -585,7 +584,7 @@ renderDocuments docs
       S.Sequence _ (_ : _) -> tagLine n <> blockSequence 0 True n
       S.Mapping _ (_ : _) -> tagLine n <> blockMapping 0 True n
       S.Scalar S.Literal t | needsIndentIndicator t -> withTag n (doubleQuoted t) <> "\n"
-      _ -> scalarValue indentStep n <> "\n"
+      _ -> inlineValue indentStep n <> "\n"
 
     -- A tag of a block collection takes a line of its own.
     tagLine :: S.Node -> B.Builder
@@ -626,7 +625,7 @@ blockSequence indent atLineStart n = case n.content of
     item x = case x.content of
       S.Sequence _ (_ : _) -> collection x $ blockSequence (indent + indentStep) False x
       S.Mapping _ (_ : _) -> collection x $ blockMapping (indent + indentStep) False x
-      _ -> " " <> scalarValue (indent + indentStep) x <> "\n"
+      _ -> " " <> inlineValue (indent + indentStep) x <> "\n"
 
     collection :: S.Node -> B.Builder -> B.Builder
     collection x body = case tagPrefix x of
@@ -650,14 +649,14 @@ blockMapping indent atLineStart n = case n.content of
     value v = case v.content of
       S.Sequence _ (_ : _) -> tagged v <> "\n" <> blockSequence indent True v
       S.Mapping _ (_ : _) -> tagged v <> "\n" <> blockMapping (indent + indentStep) True v
-      _ -> " " <> scalarValue (indent + indentStep) v <> "\n"
+      _ -> " " <> inlineValue (indent + indentStep) v <> "\n"
 
     -- The key or the value of an explicit entry.
     explicit :: S.Node -> B.Builder
     explicit x = case x.content of
       S.Sequence _ (_ : _) -> tagged x <> "\n" <> blockSequence (indent + indentStep) True x
       S.Mapping _ (_ : _) -> tagged x <> "\n" <> blockMapping (indent + indentStep) True x
-      _ -> " " <> scalarValue (indent + indentStep) x <> "\n"
+      _ -> " " <> inlineValue (indent + indentStep) x <> "\n"
 
     tagged :: S.Node -> B.Builder
     tagged x = maybe mempty (" " <>) (tagPrefix x)
@@ -678,8 +677,8 @@ implicitKey k = case k.content of
   _ -> Nothing
 
 -- | A scalar, or an empty collection in the flow style.
-scalarValue :: Int -> S.Node -> B.Builder
-scalarValue indent n = withTag n $ case n.content of
+inlineValue :: Int -> S.Node -> B.Builder
+inlineValue indent n = withTag n $ case n.content of
   S.Sequence _ _ -> "[]"
   S.Mapping _ _ -> "{}"
   S.Scalar S.Literal t | Just (h, b) <- literalBlock True indent t -> h <> b
@@ -705,22 +704,13 @@ scalarText style t = case style of
     | otherwise -> doubleQuoted t
   _ -> doubleQuoted t
 
--- | Convert a node to a node of a syntax tree, e.g. to set the styles of its
--- scalars or to add comments before 'S.renderSyntax' writes it. The styles
--- are the ones that 'toYaml' uses.
-toSyntax :: Node -> S.Node
-toSyntax n = sn {S.props = S.Props Nothing tag}
-  where
-    tag :: S.Tag
-    tag
-      | n.tag == defaultTag n.value = S.NoTag
-      | otherwise = S.Tag n.tag
-
-    sn :: S.Node
-    sn = case n.value of
-      Sequence xs -> S.sequenceNode (map toSyntax xs)
-      Mapping kvs -> S.mappingNode [(toSyntax k, toSyntax v) | (k, v) <- kvs]
-      v -> scalar v
+-- | The node of a value.
+toSyntax :: Value -> S.Node
+toSyntax = \case
+  Sequence xs -> S.sequenceNode (map toSyntax xs)
+  Mapping kvs -> S.mappingNode [(toSyntax k, toSyntax v) | (k, v) <- kvs]
+  Tagged tag v -> (toSyntax v) {S.props = S.Props Nothing (S.Tag tag)}
+  v -> scalar v
 
 -- | A scalar in a style that reads back as the value. A collection is empty.
 scalar :: Value -> S.Node
@@ -753,6 +743,7 @@ plainText = \case
   String t -> t
   Sequence _ -> "[]"
   Mapping _ -> "{}"
+  Tagged _ v -> plainText v
   where
     -- The format of Sci.Generic: decimal notation for the exponents from
     -- 'minDecimal' to 'maxDecimal', and exponential notation for other

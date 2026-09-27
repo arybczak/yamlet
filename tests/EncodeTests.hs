@@ -260,12 +260,12 @@ test_literal = do
 
 test_tags :: Assertion
 test_tags = do
-  let local = Node noOffset "!point" (Mapping [(node (String "x"), node (Int 1))])
+  let local = Tagged "!point" (Mapping [(String "x", Int 1)])
   assertEqual "local tag" "!point\nx: 1\n" (encodeText local)
-  let str = Node noOffset "!name" (String "foo")
+  let str = Tagged "!name" (String "foo")
   assertEqual "tagged scalar" "- !name foo\n" (encodeText [str])
   let readBack :: T.Text -> Either Error T.Text
-      readBack t = (.tag) <$> decodeText @Node (encodeText (Node noOffset t (String "x")))
+      readBack t = valueTag <$> decodeText @Value (encodeText (Tagged t (String "x")))
       exact :: T.Text -> Assertion
       exact t = assertEqual (T.unpack t) (Right t) (readBack t)
   exact "!a b!c%"
@@ -277,7 +277,7 @@ test_tags = do
   assertEqual
     "directives after a document"
     (Right [strTag, "foo"])
-    (map (.tag) <$> decodeAllText @Node (encodeAllText [node (String "a"), Node noOffset "foo" (String "b")]))
+    (map valueTag <$> decodeAllText @Value (encodeAllText [String "a", Tagged "foo" (String "b")]))
 
 test_syntax :: Assertion
 test_syntax =
@@ -311,66 +311,65 @@ test_syntax =
     expected :: T.Text
     expected = T.unlines ["# The name.", "name: x", "paths: [a, b]"]
 
--- | Encoding a node and decoding the result gives the same node.
+-- | Encoding a value and decoding the result gives the same value.
 prop_roundTrip :: Doc -> Property
 prop_roundTrip (Doc n) = readsBack (encodeText n) n
 
--- | Rendering the syntax tree of a node and decoding the result gives the same
--- node.
+-- | Rendering the syntax tree of a value and decoding the result gives the
+-- same value.
 prop_syntaxRoundTrip :: Doc -> Property
 prop_syntaxRoundTrip (Doc n) = readsBack output n
   where
     output :: T.Text
-    output = S.renderSyntax S.defaultRenderOptions [S.document (toSyntax n)]
+    output = S.renderSyntax S.defaultRenderOptions [S.document (toYaml n)]
 
-readsBack :: T.Text -> Node -> Property
-readsBack output n = case decodeNodes output of
-  Right [n'] -> counterexample (T.unpack output) $ withoutOffsets n' === withoutOffsets n
+readsBack :: T.Text -> Value -> Property
+readsBack output n = case decodeAllText @Value output of
+  Right [n'] -> counterexample (T.unpack output) $ n' === n
   r -> counterexample (T.unpack output ++ "\n" ++ show r) False
 
-newtype Doc = Doc Node
+newtype Doc = Doc Value
   deriving stock (Show)
 
 instance Arbitrary Doc where
-  arbitrary = Doc <$> sized genNode
+  arbitrary = Doc <$> sized genValue
 
-genNode :: Int -> Gen Node
-genNode size
+genValue :: Int -> Gen Value
+genValue size
   | size <= 1 = genScalar
   | otherwise =
       frequency
         [ (3, genScalar)
-        , (1, node . Sequence <$> genList)
-        , (1, node . Mapping <$> genEntries)
+        , (1, Sequence <$> genList)
+        , (1, Mapping <$> genEntries)
         , (1, tagged <$> genScalar)
         ]
   where
-    genList :: Gen [Node]
+    genList :: Gen [Value]
     genList = do
       k <- choose (0, 4)
-      vectorOf k (genNode (size `div` 3))
+      vectorOf k (genValue (size `div` 3))
 
-    genEntries :: Gen [(Node, Node)]
+    genEntries :: Gen [(Value, Value)]
     genEntries = do
       k <- choose (0, 4)
-      keys <- L.nubBy (\a b -> a.value == b.value) <$> vectorOf k genScalar
-      mapM (\key -> (key,) <$> genNode (size `div` 3)) keys
+      keys <- L.nub <$> vectorOf k genScalar
+      mapM (\key -> (key,) <$> genValue (size `div` 3)) keys
 
-    tagged :: Node -> Node
-    tagged n = case n.value of
-      String _ -> n {tag = "!custom"}
-      _ -> n
+    tagged :: Value -> Value
+    tagged v = case v of
+      String _ -> Tagged "!custom" v
+      _ -> v
 
-genScalar :: Gen Node
+genScalar :: Gen Value
 genScalar =
-  node
-    <$> oneof
-      [ pure Null
-      , Bool <$> arbitrary
-      , Int <$> arbitrary
-      , Float <$> elements (map Finite [0, 1.5, -2.25e-10, 123456.789, 1e30, 12] ++ [Infinity, NegativeInfinity, NaN])
-      , String <$> genText
-      ]
+  oneof
+    [ pure Null
+    , Bool <$> arbitrary
+    , Int <$> arbitrary
+    , Float <$> elements (map Finite [0, 1.5, -2.25e-10, 123456.789, 1e30, 12] ++ [Infinity, NegativeInfinity, NaN])
+    , String <$> genText
+    ]
 
 genText :: Gen T.Text
 genText =
