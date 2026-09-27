@@ -127,9 +127,9 @@ decodeWithDocument input =
   single (parseStream input) >>= \case
     [] -> withDocument (S.document (S.Node (S.Offset 0) (S.Offset 0) S.noProps S.noComments (S.Scalar S.Plain "")))
     [doc] -> withDocument doc
-    docs@(_ : doc : _) -> single $ do
-      mapM_ (\d -> first (uncurry (decoderError input d.root)) (prepare d.root)) docs
-      Left $ errorAt input doc.root.offset "expected a single document, but got a second one"
+    docs@(_ : doc : _) -> do
+      mapM_ (\d -> first (fmap (uncurry (decoderError input d.root))) (prepare d.root)) docs
+      single . Left $ errorAt input doc.root.offset "expected a single document, but got a second one"
   where
     withDocument :: FromYaml a => S.Document -> Either (NE.NonEmpty Error) (a, S.Document)
     withDocument doc = (,doc) <$> convert input doc

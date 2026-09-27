@@ -252,15 +252,18 @@ test_containers = do
   assertEqual "set" (Right (Set.fromList [1, 2, 3])) (decodeText @(Set.Set Int) "[3, 1, 2]")
   assertEqual
     "set with a duplicate after conversion"
-    (Just (1, 5, "duplicate element after conversion"))
-    (errorOf (decodeText @(Set.Set Double) "[1, 1.0]"))
+    (Just ((1, 5, "duplicate element after conversion"), (1, 2, "the first element")))
+    (errorWithNote (decodeText @(Set.Set Double) "[1, 1.0]"))
   assertEqual "int map" (Right (IM.fromList [(1, "a"), (2, "b")])) (decodeText @(IM.IntMap T.Text) "{2: b, 1: a}")
   assertEqual
     "int map with a duplicate key"
-    (Just (1, 8, "duplicate key"))
-    (errorOf (decodeText @(IM.IntMap T.Text) "{1: a, 0x1: b}"))
+    (Just ((1, 8, "duplicate key 0x1, the same value as the first key"), (1, 2, "the first key 1")))
+    (errorWithNote (decodeText @(IM.IntMap T.Text) "{1: a, 0x1: b}"))
   assertEqual "int set" (Right (IS.fromList [1, 2, 3])) (decodeText @IS.IntSet "[3, 1, 2]")
-  assertEqual "int set with a duplicate" (Just (1, 5, "duplicate element")) (errorOf (decodeText @IS.IntSet "[1, 0x1]"))
+  assertEqual
+    "int set with a duplicate"
+    (Just ((1, 5, "duplicate element"), (1, 2, "the first element")))
+    (errorWithNote (decodeText @IS.IntSet "[1, 0x1]"))
   assertEqual "sequence" (Right (Seq.fromList [1, 2])) (decodeText @(Seq.Seq Int) "[1, 2]")
   assertEqual "left" (Right (Left 1)) (decodeText @(Either Int T.Text) "{Left: 1}")
   assertEqual "right" (Right (Right "a")) (decodeText @(Either Int T.Text) "{Right: a}")
@@ -374,12 +377,12 @@ test_record = do
     (decodeText "name: x\npaths:\n")
   assertEqual
     "keys of a map that convert to the same key"
-    (Just (2, 1, "duplicate key after conversion"))
-    (errorOf (decodeText @(M.Map Double Int) "1: 1\n1.0: 2\n"))
+    (Just ((2, 1, "duplicate key after conversion"), (1, 1, "the first key")))
+    (errorWithNote (decodeText @(M.Map Double Int) "1: 1\n1.0: 2\n"))
   assertEqual
     "string keys with the same text"
-    (Just (2, 6, "duplicate key \"name\""))
-    (errorOf (decodeText @Config "name: x\n!foo name: y\n"))
+    (Just ((2, 6, "duplicate key \"name\""), (1, 1, "the first key \"name\"")))
+    (errorWithNote (decodeText @Config "name: x\n!foo name: y\n"))
 
 -- | Decoded texts and error lines do not point into the input.
 test_copies :: Assertion
@@ -535,11 +538,14 @@ test_syntaxTree = do
     r -> assertFailure (show r)
   let key = S.plainNode "a"
       built = S.document (S.mappingNode [(key, key), (key, key)])
-  assertEqual "built" (Just (0, 0, "duplicate key \"a\"")) (errorOf (decodeDocument @Value "" built))
+  assertEqual
+    "built"
+    (Just ((0, 0, "duplicate key \"a\""), (0, 0, "the first key \"a\"")))
+    (errorWithNote (decodeDocument @Value "" built))
   assertEqual
     "built, rendered"
-    (Left "built.yaml: duplicate key \"a\"")
-    (either (Left . prettyError "built.yaml" . NE.head) (const (Right ())) (decodeDocument @Value "" built))
+    (Left ["built.yaml: duplicate key \"a\"", "built.yaml: the first key \"a\""])
+    (either (Left . map (prettyError "built.yaml") . NE.toList) (const (Right ())) (decodeDocument @Value "" built))
   assertEqual
     "decoder error in a built node"
     (Just (0, 0, "expected an integer, but got a string"))
@@ -612,6 +618,16 @@ errorOf = \case
   Left (err NE.:| []) -> Just (err.location.line, err.location.column, err.message)
   Left errs -> error $ "expected one error, but got " ++ show (map (.message) (NE.toList errs))
   Right _ -> Nothing
+
+-- | The line, the column and the message of the only error and of its note.
+errorWithNote :: Either (NE.NonEmpty Error) a -> Maybe ((Int, Int, String), (Int, Int, String))
+errorWithNote = \case
+  Left (err NE.:| [note]) -> Just (place err, place note)
+  Left errs -> error $ "expected an error and a note, but got " ++ show (map (.message) (NE.toList errs))
+  Right _ -> Nothing
+  where
+    place :: Error -> (Int, Int, String)
+    place e = (e.location.line, e.location.column, e.message)
 
 -- | The line, the column and the message of each error.
 errorsOf :: Either (NE.NonEmpty Error) a -> [(Int, Int, String)]
@@ -773,11 +789,18 @@ test_syntaxErrors = do
     (1, 10, "invalid escape sequence, write \\\\ for a backslash or use single quotes")
     "path: \"C:\\Users\\me\"\n"
   check "undefined alias" (2, 4, "undefined alias *x") "a: 1\nb: *x\n"
-  check "duplicate key" (3, 1, "duplicate key \"a\"") "a: 1\nb: 2\na: 3\n"
-  check
+  assertEqual
+    "duplicate key"
+    (Just ((3, 1, "duplicate key \"a\""), (1, 1, "the first key \"a\"")))
+    (errorWithNote (decodeAllText @Value "a: 1\nb: 2\na: 3\n"))
+  assertEqual
+    "duplicate key with another text"
+    (Just ((2, 1, "duplicate key ~, the same value as the first key"), (1, 1, "the first key null")))
+    (errorWithNote (decodeAllText @Value "null: 1\n~: 2\n"))
+  assertEqual
     "two merge keys"
-    (4, 3, "duplicate key \"<<\", merge keys are not supported")
-    "a: &a {x: 1}\nb:\n  <<: *a\n  <<: *a\n"
+    (Just ((4, 3, "duplicate key \"<<\", merge keys are not supported"), (3, 3, "the first key \"<<\"")))
+    (errorWithNote (decodeAllText @Value "a: &a {x: 1}\nb:\n  <<: *a\n  <<: *a\n"))
   check "undefined tag handle" (1, 1, "undefined tag handle !e!") "!e!foo bar\n"
   check "invalid character" (1, 4, "invalid character U+0001") "a: \x01\n"
   check "backslash at the end of the input" (1, 4, "unterminated double-quoted scalar") "a: \"b\\"
@@ -1010,11 +1033,19 @@ test_collectedErrors = do
     (errorsOf (decodeText @(M.Map T.Text Int) "{a: x, 1: 2, b: y}"))
   assertEqual
     "duplicate keys of a map"
-    [(1, 8, "duplicate key after conversion"), (1, 22, "duplicate key after conversion")]
+    [ (1, 8, "duplicate key after conversion")
+    , (1, 2, "the first key")
+    , (1, 22, "duplicate key after conversion")
+    , (1, 16, "the first key")
+    ]
     (errorsOf (decodeText @(M.Map Double T.Text) "{1: a, 1.0: b, 2: c, 2.0: d}"))
   assertEqual
     "duplicate elements of a set"
-    [(1, 5, "duplicate element after conversion"), (1, 13, "duplicate element after conversion")]
+    [ (1, 5, "duplicate element after conversion")
+    , (1, 2, "the first element")
+    , (1, 13, "duplicate element after conversion")
+    , (1, 10, "the first element")
+    ]
     (errorsOf (decodeText @(Set.Set Double) "[1, 1.0, 2, 2.0]"))
   assertEqual
     "elements of a set"
@@ -1022,11 +1053,11 @@ test_collectedErrors = do
     (errorsOf (decodeText @(Set.Set Double) "[x, y]"))
   assertEqual
     "duplicate and invalid elements of a set"
-    [(1, 5, "duplicate element after conversion"), (1, 10, "expected a number, but got a string")]
+    [(1, 5, "duplicate element after conversion"), (1, 2, "the first element"), (1, 10, "expected a number, but got a string")]
     (errorsOf (decodeText @(Set.Set Double) "[1, 1.0, x]"))
   assertEqual
     "duplicate elements of an int set"
-    [(1, 5, "duplicate element"), (1, 10, "duplicate element")]
+    [(1, 5, "duplicate element"), (1, 2, "the first element"), (1, 10, "duplicate element"), (1, 2, "the first element")]
     (errorsOf (decodeText @IS.IntSet "[1, 0x1, 1]"))
   let count :: (S.Node -> Parser ()) -> Int
       count p = either (error . show) (either length (const 0) . runParser p) (decodeText @Node "[x, y]")
@@ -1083,28 +1114,29 @@ test_keyErrors = do
       withKeys ks = T.unlines $ map (<> ": 1") ks
   assertEqual
     "duplicate among many scalar keys"
-    (Just (21, 1, "duplicate key \"k1\""))
-    (errorOf (decodeAllText @Value (T.unlines [T.pack ("k" ++ show i ++ ": 1") | i <- [1 .. 20 :: Int] ++ [1]])))
+    (Just ((21, 1, "duplicate key \"k1\""), (1, 1, "the first key \"k1\"")))
+    (errorWithNote (decodeAllText @Value (T.unlines [T.pack ("k" ++ show i ++ ": 1") | i <- [1 .. 20 :: Int] ++ [1]])))
   assertEqual
     "duplicate scalar key after a collection key"
-    (Just (3, 1, "duplicate key \"a\""))
-    (errorOf (decodeAllText @Value (withKeys ["a", "[b]", "a"])))
+    (Just ((3, 1, "duplicate key \"a\""), (1, 1, "the first key \"a\"")))
+    (errorWithNote (decodeAllText @Value (withKeys ["a", "[b]", "a"])))
   assertEqual
     "duplicate collection key"
-    (Just (2, 1, "duplicate key"))
-    (errorOf (decodeAllText @Value (withKeys ["{c: [d]}", "{c: [d]}"])))
+    (Just ((2, 1, "duplicate key"), (1, 1, "the first key")))
+    (errorWithNote (decodeAllText @Value (withKeys ["{c: [d]}", "{c: [d]}"])))
   assertEqual
     "duplicate mapping key in another order"
-    (Just (2, 1, "duplicate key"))
-    (errorOf (decodeAllText @Value (withKeys ["{a: 1, b: 2}", "{b: 2, a: 1}"])))
+    (Just ((2, 1, "duplicate key"), (1, 1, "the first key")))
+    (errorWithNote (decodeAllText @Value (withKeys ["{a: 1, b: 2}", "{b: 2, a: 1}"])))
 
 -- | The check for duplicate keys compares keys with aliases correctly.
 test_aliasKeys :: Assertion
 test_aliasKeys = do
-  let check :: String -> Maybe (Int, Int, String) -> T.Text -> Assertion
-      check preface expected keys = assertEqual preface expected (errorOf (decodeAllText @Value (laughs 3 <> keys)))
+  let check :: String -> Maybe ((Int, Int, String), (Int, Int, String)) -> T.Text -> Assertion
+      check preface expected keys = assertEqual preface expected (errorWithNote (decodeAllText @Value (laughs 3 <> keys)))
   check "different keys" Nothing "? *a3\n: 1\n? [*a2, 1]\n: 2\n? [*a2, 2]\n: 3\n"
-  check "duplicate key" (Just (7, 3, "duplicate key")) "? [*a3, 1]\n: 1\n? [*a3, 1]\n: 2\n"
+  check "duplicate key" (Just ((7, 3, "duplicate key"), (5, 3, "the first key"))) "? [*a3, 1]\n: 1\n? [*a3, 1]\n: 2\n"
+  check "duplicate alias key" (Just ((7, 3, "duplicate key *a3"), (5, 3, "the first key *a3"))) "? *a3\n: 1\n? *a3\n: 2\n"
   -- Keys from two separate chains of anchors are equal only after an
   -- expansion to 2^12 items.
   let chains :: T.Text -> T.Text -> T.Text
@@ -1116,8 +1148,11 @@ test_aliasKeys = do
                , c <- "ab"
                ]
             ++ ["- ? *a12", "  : 1", "  ? *b12", "  : 2"]
-  assertEqual "equal chains" (Just (29, 5, "duplicate key")) (errorOf (decodeAllText @Value (chains "x" "x")))
-  assertEqual "different chains" Nothing (errorOf (decodeAllText @Value (chains "x" "y")))
+  assertEqual
+    "equal chains"
+    (Just ((29, 5, "duplicate key *b12, the same value as the first key"), (27, 5, "the first key *a12")))
+    (errorWithNote (decodeAllText @Value (chains "x" "x")))
+  assertEqual "different chains" Nothing (errorWithNote (decodeAllText @Value (chains "x" "y")))
 
 -- | Aliases can add 100000 visits to a traversal of a small document, and as
 -- many visits as the document has nodes to a large one.
@@ -1166,8 +1201,12 @@ test_longNumbers = do
   let zeros = T.replicate 300000 "0"
   assertEqual
     "trailing zeros"
-    (Just (1, 600018, "duplicate key"))
-    (errorOf (decodeAllText @Value ("{0.1" <> zeros <> ": a, 0.5" <> zeros <> ": b, 0.1" <> zeros <> "0: c}")))
+    ( Just
+        ( (1, 600018, "duplicate key 0.1" ++ T.unpack zeros ++ "0, the same value as the first key")
+        , (1, 2, "the first key 0.1" ++ T.unpack zeros)
+        )
+    )
+    (errorWithNote (decodeAllText @Value ("{0.1" <> zeros <> ": a, 0.5" <> zeros <> ": b, 0.1" <> zeros <> "0: c}")))
   -- The gcd of a reduction takes quadratic time for most types.
   let big = 3 ^ (2000000 :: Int) :: Integer
   assertEqual
@@ -1193,13 +1232,13 @@ test_manyKeys = do
   let large = "{" <> T.intercalate ", " (map (<> ": 1") keys) <> "}"
   assertEqual
     "large equal keys"
-    (Just (3, 3, "duplicate key"))
-    (errorOf (decodeAllText @Value ("? " <> large <> "\n: 1\n? " <> large <> "\n: 2\n")))
+    (Just ((3, 3, "duplicate key"), (1, 3, "the first key")))
+    (errorWithNote (decodeAllText @Value ("? " <> large <> "\n: 1\n? " <> large <> "\n: 2\n")))
   let deep = nestedKey 14 "0"
   assertEqual
     "nested equal keys"
-    (Just (3, 3, "duplicate key"))
-    (errorOf (decodeAllText @Value ("? " <> deep <> "\n: 1\n? " <> deep <> "\n: 2\n")))
+    (Just ((3, 3, "duplicate key"), (1, 3, "the first key")))
+    (errorWithNote (decodeAllText @Value ("? " <> deep <> "\n: 1\n? " <> deep <> "\n: 2\n")))
   where
     -- Two mappings as keys that differ only in their last value.
     nestedKey :: Int -> T.Text -> T.Text

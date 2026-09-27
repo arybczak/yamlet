@@ -125,7 +125,9 @@ data Result a = Result !Errors a
 -- constant time.
 data Errors
   = NoErrors
-  | OneError !S.Offset String
+  | -- | An error with the notes that go right after it, e.g. the first key of
+    -- a duplicate key.
+    OneError !S.Offset String [(S.Offset, String)]
   | BothErrors Errors Errors
 
 bothErrors :: Errors -> Errors -> Errors
@@ -145,17 +147,17 @@ failed = errorWithoutStackTrace "Yamlet.Decode: the value of a failed parser"
 
 -- | A result with one error.
 failure :: S.Offset -> String -> Result a
-failure off msg = Result (OneError off msg) failed
+failure off msg = Result (OneError off msg []) failed
 
--- | The errors in the order of their offsets. Errors at the same offset keep
--- their order.
+-- | The errors in the order of their offsets, each with its notes after it.
+-- Errors at the same offset keep their order.
 sortedErrors :: Errors -> [(S.Offset, String)]
-sortedErrors = L.sortOn fst . flip go []
+sortedErrors = concatMap (\(off, msg, notes) -> (off, msg) : notes) . L.sortOn (\(off, _, _) -> off) . flip go []
   where
-    go :: Errors -> [(S.Offset, String)] -> [(S.Offset, String)]
+    go :: Errors -> [(S.Offset, String, [(S.Offset, String)])] -> [(S.Offset, String, [(S.Offset, String)])]
     go = \case
       NoErrors -> id
-      OneError off msg -> ((off, msg) :)
+      OneError off msg notes -> ((off, msg, notes) :)
       BothErrors e1 e2 -> go e1 . go e2
 
 instance Functor Parser where
@@ -182,14 +184,15 @@ instance MonadFail Parser where
   fail msg = Parser $ \off -> failure off msg
 
 -- | Run a parser on a node. Return each error as the offset of the node that
--- caused it with the error message, in the order of the offsets.
+-- caused it with the error message, in the order of the offsets. A note on
+-- an error comes right after it, e.g. the first key of a duplicate key.
 --
 -- The node first goes through the checks of 'Yamlet.decodeDocument', e.g.
 -- for duplicate keys, and its aliases are replaced with the nodes that they
--- refer to. A failed check is the only error.
+-- refer to. A failed check is the only error, with its notes.
 runParser :: (S.Node -> Parser a) -> S.Node -> Either (NE.NonEmpty (S.Offset, String)) a
 runParser f n0 = case prepare n0 of
-  Left err -> Left (err NE.:| [])
+  Left err -> Left err
   Right n -> case runChecked f n of
     Result NoErrors a -> Right a
     Result e _ -> Left (NE.fromList (sortedErrors e))
@@ -412,7 +415,8 @@ mkObject n kvs = do
     insert :: M.Map T.Text (S.Node, S.Node) -> (S.Node, S.Node) -> Parser (M.Map T.Text (S.Node, S.Node))
     insert m kv@(k, _) = case stringValue k of
       Just t -> case M.insertLookupWithKey (\_ _ old -> old) t kv m of
-        (Just _, _) -> failAt k $ "duplicate key " ++ show t
+        (Just (first, _), _) ->
+          Parser $ \_ -> Result (OneError k.offset ("duplicate key " ++ show t) [(first.offset, "the first key " ++ show t)]) failed
         (Nothing, m') -> pure m'
       _ -> pure m
 
@@ -638,7 +642,7 @@ entryComments k v = (S.Comments before inline v.comments.after, value)
 instance FromYaml Value where
   parseYaml n = case represent n of
     Right r -> pure r
-    Left (off, msg) -> Parser $ \_ -> failure off msg
+    Left ((off, msg) NE.:| notes) -> Parser $ \_ -> Result (OneError off msg notes) failed
 
 -- | An empty list, as a tuple without elements.
 instance FromYaml () where
@@ -821,14 +825,14 @@ instance (Ord k, FromYaml k, FromYaml v) => FromYaml (M.Map k v) where
   -- The index of 'withMapping' would be of no use here.
   parseYaml = parseNode $ \n -> case n.content of
     S.Mapping _ kvs ->
-      insertUnique fst mapEntry (\(k, v) -> M.alterF (\old -> (isJust old, old <|> Just v)) k) M.empty "duplicate key after conversion" (keyEntries n kvs)
+      insertUnique fst mapEntry fst (\(k, v) -> M.alterF (\old -> (isJust old, old <|> Just v)) k) M.empty "duplicate key after conversion" "the first key" (keyEntries n kvs)
     _ -> typeMismatch "a mapping" n
 
 -- | Two keys that convert to the same key are an error.
 instance FromYaml v => FromYaml (IM.IntMap v) where
   parseYaml = parseNode $ \n -> case n.content of
     S.Mapping _ kvs ->
-      insertUnique fst mapEntry (\(k, v) -> IM.alterF (\old -> (isJust old, old <|> Just v)) k) IM.empty "duplicate key after conversion" (keyEntries n kvs)
+      insertUnique fst mapEntry fst (\(k, v) -> IM.alterF (\old -> (isJust old, old <|> Just v)) k) IM.empty "duplicate key after conversion" "the first key" (keyEntries n kvs)
     _ -> typeMismatch "a mapping" n
 
 -- | A list. Two elements that convert to the same value, e.g. @1@ and @1.0@
@@ -836,36 +840,51 @@ instance FromYaml v => FromYaml (IM.IntMap v) where
 instance (Ord a, FromYaml a) => FromYaml (Set.Set a) where
   parseYaml =
     withSequence $
-      insertUnique id (parseNode parseYaml) (Set.alterF (,True)) Set.empty "duplicate element after conversion"
+      insertUnique id (parseNode parseYaml) id (Set.alterF (,True)) Set.empty "duplicate element after conversion" "the first element"
 
 -- | A list. Two equal elements are an error.
 instance FromYaml IS.IntSet where
   parseYaml =
     withSequence $
-      insertUnique id (parseNode parseYaml) (IS.alterF (,True)) IS.empty "duplicate element"
+      insertUnique id (parseNode parseYaml) id (IS.alterF (,True)) IS.empty "duplicate element" "the first element"
 
 -- | The key and the value of a map entry.
 mapEntry :: (FromYaml k, FromYaml v) => (S.Node, S.Node) -> Parser (k, v)
 mapEntry (k, v) = (,) <$> parseNode parseYaml k <*> parseEntry (k, v)
 
 -- | Decode the items and insert them in their order, with the errors of all
--- items. Each item that is already there is an error at its node. The insert
--- tells if the item was there.
-insertUnique :: forall a x s. (a -> S.Node) -> (a -> Parser x) -> (x -> s -> (Bool, s)) -> s -> String -> [a] -> Parser s
-insertUnique node item insert start msg xs = Parser $ \off -> go off start NoErrors xs
+-- items. Each item that is already there is an error at its node, with the
+-- note at the first equal item. The insert tells if the item was there, and
+-- the key tells which items are equal.
+insertUnique
+  :: forall a x s c
+   . Ord c
+  => (a -> S.Node) -> (a -> Parser x) -> (x -> c) -> (x -> s -> (Bool, s)) -> s -> String -> String -> [a] -> Parser s
+insertUnique node item key insert start msg note xs = Parser $ \off -> go off start NoErrors [] xs
   where
-    go :: S.Offset -> s -> Errors -> [a] -> Result s
-    go off !acc errs = \case
-      [] -> case errs of
-        NoErrors -> Result NoErrors acc
-        _ -> Result errs failed
+    -- The duplicates are in reverse.
+    go :: S.Offset -> s -> Errors -> [(c, S.Node)] -> [a] -> Result s
+    go off !acc errs dups = \case
+      [] -> case (errs, dups) of
+        (NoErrors, []) -> Result NoErrors acc
+        _ -> Result (foldl' bothErrors errs (map (duplicateError (firsts off)) dups)) failed
       a : rest ->
         let Parser p = item a
         in case p off of
              Result NoErrors x -> case insert x acc of
-               (False, acc') -> go off acc' errs rest
-               (True, acc') -> go off acc' (bothErrors errs (OneError (node a).offset msg)) rest
-             Result e _ -> go off acc (bothErrors errs e) rest
+               (False, acc') -> go off acc' errs dups rest
+               (True, acc') -> go off acc' errs ((key x, node a) : dups) rest
+             Result e _ -> go off acc (bothErrors errs e) dups rest
+
+    duplicateError :: M.Map c S.Node -> (c, S.Node) -> Errors
+    duplicateError fs (c, n) = OneError n.offset msg [(first.offset, note) | Just first <- [M.lookup c fs]]
+
+    -- A second pass finds the first items, only if there are duplicates.
+    firsts :: S.Offset -> M.Map c S.Node
+    firsts off =
+      M.fromListWith
+        (\_ old -> old)
+        [(key x, node a) | a <- xs, let Parser p = item a, Result NoErrors x <- [p off]]
 
 instance FromYaml a => FromYaml (Seq.Seq a) where
   parseYaml = fmap Seq.fromList . parseYaml
