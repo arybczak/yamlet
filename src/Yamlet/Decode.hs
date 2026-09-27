@@ -1158,7 +1158,7 @@ gParseYaml
   => YamlOptions -> Bool -> Maybe (D1 d f p) -> (D1 d f p -> a) -> S.Node -> Parser a
 gParseYaml opts flat def k n
   | isEnum @f opts =
-      withText (\t -> maybe (unknown "value" t) id (gFromTag opts (k . M1) t)) n
+      withText (\t -> maybe (unknown "value" t) id (gFromTag opts (k . M1) n t)) n
   | isTagged @f opts = withMapping tagged n
   | otherwise = gFromUntagged opts (unM1 <$> def) (k . M1) n
   where
@@ -1181,8 +1181,8 @@ gParseYaml opts flat def k n
 {-# INLINE gParseYaml #-}
 
 class GFromConstructor f where
-  -- | The constructor without fields with the tag.
-  gFromTag :: YamlOptions -> (f p -> a) -> T.Text -> Maybe (Parser a)
+  -- | The constructor without fields with the tag, from the node of the tag.
+  gFromTag :: YamlOptions -> (f p -> a) -> S.Node -> T.Text -> Maybe (Parser a)
 
   -- | The constructor with the tag, from the mapping that holds the tag, with
   -- the flag of 'FlattenFields'.
@@ -1192,12 +1192,12 @@ class GFromConstructor f where
   gFromUntagged :: YamlOptions -> Maybe (f p) -> (f p -> a) -> S.Node -> Parser a
 
 instance GFromConstructor V1 where
-  gFromTag _ _ _ = Nothing
+  gFromTag _ _ _ _ = Nothing
   gFromTagged _ _ _ _ _ _ = Nothing
   gFromUntagged _ _ _ _ = fail "expected a type with constructors"
 
 instance (GFromConstructor f, GFromConstructor g) => GFromConstructor (f :+: g) where
-  gFromTag opts k t = gFromTag opts (k . L1) t `mplus` gFromTag opts (k . R1) t
+  gFromTag opts k n t = gFromTag opts (k . L1) n t `mplus` gFromTag opts (k . R1) n t
   gFromTagged opts flat def k t o =
     gFromTagged opts flat (def >>= \case L1 x -> Just x; R1 _ -> Nothing) (k . L1) t o
       `mplus` gFromTagged opts flat (def >>= \case R1 x -> Just x; L1 _ -> Nothing) (k . R1) t o
@@ -1214,8 +1214,8 @@ instance
   )
   => GFromConstructor (C1 (MetaCons name fixity isRecord) f)
   where
-  gFromTag opts k t
-    | t == tag && gArity @f == 0 = Just (k . M1 . fst <$> gFromValues [])
+  gFromTag opts k n t
+    | t == tag && gArity @f == 0 = Just (k . M1 <$> gFromValue n)
     | otherwise = Nothing
     where
       tag :: T.Text
@@ -1227,8 +1227,7 @@ instance
 
   gFromUntagged opts def k n
     | gNamed @f || gArity @f == 0 = withMapping (fmap (k . M1) . fromObject opts False [] (unM1 <$> def)) n
-    -- The shape check allows only one field without a name.
-    | otherwise = k . M1 . fst <$> gFromValues [n]
+    | otherwise = k . M1 <$> gFromValue n
 
   {-# INLINE gFromTag #-}
   {-# INLINE gFromTagged #-}
@@ -1243,8 +1242,7 @@ fromObject
      )
   => YamlOptions -> Bool -> [T.Text] -> Maybe (f p) -> Object -> Parser (f p)
 fromObject opts flat keys def o
-  | gNamed @f = checked (gNames @f opts) (gFromObject opts def o)
-  | gArity @f == 0 = checked [] (fst <$> gFromValues [])
+  | gNamed @f || gArity @f == 0 = checked (gNames @f opts) (gFromObject opts def o)
   | flat && not (all (isKey opts.contentsKey . fst) others) = merged
   | otherwise = checked [opts.contentsKey] $ case M.lookup opts.contentsKey o.index of
       Just entry -> gFromEntry entry
@@ -1252,8 +1250,8 @@ fromObject opts flat keys def o
       -- field can also have only optional keys.
       Nothing
         | Just fields <- def -> pure fields
-        | flat -> maybe merged pure (succeeds fromContents nullNode)
-        | otherwise -> maybe (missingKey o opts.contentsKey) pure (succeeds fromContents nullNode)
+        | flat -> maybe merged pure (succeeds gFromValue nullNode)
+        | otherwise -> maybe (missingKey o opts.contentsKey) pure (succeeds gFromValue nullNode)
   where
     -- The fields, with the errors of the unknown keys if the options reject
     -- them.
@@ -1268,7 +1266,7 @@ fromObject opts flat keys def o
           style = case n.content of
             S.Mapping s _ -> s
             _ -> S.Block
-      in fromContents (S.Node n.offset n.endOffset n.props S.noComments (S.Mapping style others))
+      in gFromValue (S.Node n.offset n.endOffset n.props S.noComments (S.Mapping style others))
 
     others :: [(S.Node, S.Node)]
     others = foldr removeKey (objectEntries o) keys
@@ -1285,41 +1283,37 @@ fromObject opts flat keys def o
     isKey key k = case stringValue k of
       Just t -> t == key
       _ -> False
-
-    -- The shape check allows only one field without a name.
-    fromContents :: S.Node -> Parser (f p)
-    fromContents contents = fst <$> gFromValues [contents]
     {-# INLINE merged #-}
-    {-# INLINE fromContents #-}
 {-# INLINE fromObject #-}
 
+-- The shape check allows named fields, no fields, or one field without a
+-- name. The default methods are for the kind of fields that never calls
+-- them.
 class GFromFields f where
   -- | The fields from a mapping, with the given default for missing keys.
   gFromObject :: YamlOptions -> Maybe (f p) -> Object -> Parser (f p)
+  gFromObject _ _ o = fail $ "expected a field without a name in " ++ describeNode (objectNode o)
 
-  -- | The fields from the start of the list, and the rest of the list.
-  gFromValues :: [S.Node] -> Parser (f p, [S.Node])
+  -- | The only field without a name from its value.
+  gFromValue :: S.Node -> Parser (f p)
+  gFromValue n = fail $ "expected named fields in " ++ describeNode n
 
   -- | The only field from a mapping entry, with the key, e.g. for the
   -- comments of a 'Yamlet.Commented' field under the contents key.
   gFromEntry :: (S.Node, S.Node) -> Parser (f p)
-  gFromEntry (_, v) = fst <$> gFromValues [v]
+  gFromEntry (_, v) = gFromValue v
 
+-- The value of a constructor without fields is its tag.
 instance GFromFields U1 where
   gFromObject _ _ _ = pure U1
-  gFromValues ns = pure (U1, ns)
+  gFromValue _ = pure U1
 
 instance (GFromFields f, GFromFields g) => GFromFields (f :*: g) where
   gFromObject opts def o =
     (:*:)
       <$> gFromObject opts ((\(a :*: _) -> a) <$> def) o
       <*> gFromObject opts ((\(_ :*: b) -> b) <$> def) o
-  gFromValues ns = do
-    (a, rest) <- gFromValues ns
-    (b, rest') <- gFromValues rest
-    pure (a :*: b, rest')
   {-# INLINE gFromObject #-}
-  {-# INLINE gFromValues #-}
 
 instance
   ( KnownSymbol name
@@ -1337,18 +1331,9 @@ instance
     where
       key :: T.Text
       key = fieldKey @name opts
-  gFromValues = nextField
   {-# INLINE gFromObject #-}
-  {-# INLINE gFromValues #-}
 
 instance FromYaml a => GFromFields (S1 (MetaSel Nothing u s d) (Rec0 a)) where
-  gFromObject _ _ o = fail $ "expected a field without a name in " ++ describeNode (objectNode o)
+  gFromValue n = M1 . K1 <$> parseNode parseYaml n
   gFromEntry entry = M1 . K1 <$> parseEntry entry
-  gFromValues = nextField
-  {-# INLINE gFromValues #-}
-
--- | A field from the start of the list.
-nextField :: FromYaml a => [S.Node] -> Parser (S1 m (Rec0 a) p, [S.Node])
-nextField = \case
-  n : ns -> (\x -> (M1 (K1 x), ns)) <$> parseNode parseYaml n
-  [] -> fail "expected another field"
+  {-# INLINE gFromValue #-}

@@ -15,6 +15,7 @@ import Data.IntMap.Strict qualified as IM
 import Data.IntSet qualified as IS
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
+import Data.Maybe
 import Data.Monoid qualified as Mon
 import Data.Ord
 import Data.Proxy
@@ -504,17 +505,14 @@ instance
   gToConstructor opts tagging def c@(M1 x) = case tagging of
     Just flat
       | gNamed @f -> mapping (withTagEntry (gToEntries opts (unM1 <$> def) x))
-      -- The shape check allows only one field without a name.
-      | otherwise -> case gToValues x of
-          [] -> mapping (withTagEntry [])
-          v : _
+      | otherwise -> case gToValue x of
+          Nothing -> mapping (withTagEntry [])
+          Just v
             | flat, Just entries <- flatEntries opts v -> mapping (withTagEntry entries)
             | otherwise -> mapping (withTagEntry [gToEntry (string opts.contentsKey) x])
     Nothing
       | gNamed @f -> mapping (gToEntries opts (unM1 <$> def) x)
-      | otherwise -> case gToValues x of
-          [] -> mapping []
-          v : _ -> v
+      | otherwise -> fromMaybe (mapping []) (gToValue x)
     where
       withTagEntry :: [(S.Node, S.Node)] -> [(S.Node, S.Node)]
       withTagEntry entries = (opts.tagKey .= gTag opts c) : entries
@@ -542,27 +540,29 @@ flatEntries opts v = case v.content of
 -- The function does not depend on the type.
 {-# NOINLINE flatEntries #-}
 
+-- The shape check allows named fields, no fields, or one field without a
+-- name. The default methods are for the kind of fields that never calls
+-- them.
 class GToFields f where
-  -- | The entries of the fields, with the given default.
+  -- | The entries of the named fields, with the given default.
   gToEntries :: YamlOptions -> Maybe (f p) -> f p -> [(S.Node, S.Node)]
-
-  gToValues :: f p -> [S.Node]
-
-  -- | The mapping entry of the only field under the key, e.g. with the
-  -- comments of a 'Yamlet.Commented' field on the contents key.
-  gToEntry :: S.Node -> f p -> (S.Node, S.Node)
-  gToEntry k x = (k, S.sequenceNode (gToValues x))
-
-instance GToFields U1 where
   gToEntries _ _ _ = []
-  gToValues _ = []
+
+  -- | The value of the only field without a name.
+  gToValue :: f p -> Maybe S.Node
+  gToValue _ = Nothing
+
+  -- | The mapping entry of the only field without a name under the key, e.g.
+  -- with the comments of a 'Yamlet.Commented' field on the contents key.
+  gToEntry :: S.Node -> f p -> (S.Node, S.Node)
+  gToEntry k x = (k, fromMaybe (mapping []) (gToValue x))
+
+instance GToFields U1
 
 instance (GToFields f, GToFields g) => GToFields (f :*: g) where
   gToEntries opts def (a :*: b) =
     gToEntries opts ((\(d :*: _) -> d) <$> def) a ++ gToEntries opts ((\(_ :*: d) -> d) <$> def) b
-  gToValues (a :*: b) = gToValues a ++ gToValues b
   {-# INLINE gToEntries #-}
-  {-# INLINE gToValues #-}
 
 instance
   ( KnownSymbol name
@@ -582,16 +582,12 @@ instance
       nullDefault = case def of
         Just (M1 (K1 d)) -> isNullNode (toYaml d)
         Nothing -> True
-  gToValues (M1 (K1 x)) = [toYaml x]
   {-# INLINE gToEntries #-}
-  {-# INLINE gToValues #-}
 
 instance ToYaml a => GToFields (S1 (MetaSel Nothing u s d) (Rec0 a)) where
-  gToEntries _ _ _ = []
-  gToValues (M1 (K1 x)) = [toYaml x]
+  gToValue (M1 (K1 x)) = Just (toYaml x)
   gToEntry k (M1 (K1 x)) = toYamlField k x
-  {-# INLINE gToEntries #-}
-  {-# INLINE gToValues #-}
+  {-# INLINE gToValue #-}
 
 ----------------------------------------
 -- Nodes
