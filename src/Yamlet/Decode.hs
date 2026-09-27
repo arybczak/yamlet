@@ -82,6 +82,7 @@ import Yamlet.Internal.Generic
 import Yamlet.Internal.Schema
 import Yamlet.Internal.Syntax qualified as S
 import Yamlet.Internal.Utils
+import Yamlet.Internal.View
 import Yamlet.Node
 
 -- | A parser of nodes. Its errors point to the node that the parser works on,
@@ -144,56 +145,6 @@ typeMismatch expected n = failAt n (mismatchMessage expected n)
 mismatchMessage :: String -> S.Node -> String
 mismatchMessage expected n = "expected " ++ expected ++ ", but got " ++ describeNode n
 {-# NOINLINE mismatchMessage #-}
-
--- | The value of a node with its tag resolved. The items and the entries of a
--- collection stay nodes of the syntax tree.
-data View
-  = ScalarView !Value
-  | SequenceView [S.Node]
-  | MappingView [(S.Node, S.Node)]
-  | -- | 'runParser' replaces the aliases, so only a node that a parser builds
-    -- can have one.
-    AliasView !T.Text
-
--- | The view of a node.
-view :: S.Node -> View
-view n = case n.content of
-  S.Scalar style t -> ScalarView (scalarValue n.props.tag style t)
-  S.Sequence _ xs -> SequenceView xs
-  S.Mapping _ kvs -> MappingView kvs
-  S.Alias name -> AliasView name
-{-# INLINE view #-}
-
--- | The value of a scalar with the tag and the style.
-scalarValue :: S.Tag -> S.ScalarStyle -> T.Text -> Value
-scalarValue tag style t = case tag of
-  S.NoTag
-    | style == S.Plain -> resolvePlain t
-    | otherwise -> String t
-  S.NonSpecificTag -> String t
-  -- 'runParser' rejects a value that is not valid for its tag.
-  S.Tag tag' -> fromMaybe (String t) (resolveTagged tag' t)
-{-# NOINLINE scalarValue #-}
-
--- | The kind of a node in plain words, e.g. "a list".
-describeNode :: S.Node -> String
-describeNode n = case view n of
-  ScalarView v -> describe v
-  SequenceView _ -> "a list"
-  MappingView _ -> "a mapping"
-  AliasView _ -> "an alias"
-
--- | The node is null.
-isNullNode :: S.Node -> Bool
-isNullNode n = case view n of
-  ScalarView Null -> True
-  _ -> False
-
--- | The text of a string node.
-stringValue :: S.Node -> Maybe T.Text
-stringValue n = case view n of
-  ScalarView (String t) -> Just t
-  _ -> Nothing
 
 -- | The null node for a missing value.
 nullNode :: S.Node

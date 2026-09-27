@@ -231,7 +231,7 @@ test_notFollowedBy = do
 
 test_withoutOffsets :: Assertion
 test_withoutOffsets = do
-  let built = mapping ["a" .= [1 :: Int, 2]]
+  let built = node (Mapping [(node (String "a"), node (Sequence [node (Int 1), node (Int 2)]))])
   case decodeText @Node "a: [1, 2]" of
     Right decoded -> do
       assertBool "decoded nodes have offsets" (decoded /= built)

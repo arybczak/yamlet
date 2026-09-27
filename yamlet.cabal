@@ -85,6 +85,7 @@ library
                      Yamlet.Internal.Schema
                      Yamlet.Internal.Syntax
                      Yamlet.Internal.Utils
+                     Yamlet.Internal.View
                      Yamlet.Node
                      Yamlet.Schema
                      Yamlet.Syntax

@@ -42,7 +42,7 @@ defaultRenderOptions =
 -- | Render documents with their comments and empty lines.
 --
 -- A scalar keeps its style if the style can hold its text, otherwise it gets
--- quotes. An empty line from the comments after a block scalar with the @+@
+-- double quotes. An empty line from the comments after a block scalar with the @+@
 -- indicator goes away, because it would become part of the scalar. A flow
 -- collection with comments inside becomes a block collection, so that every
 -- comment has a line.
@@ -62,13 +62,16 @@ renderSyntax opts = emptyLines . B.runBuilder . go True
     -- the content of a block scalar with the keep indicator ends with an
     -- empty line.
     emptyLines :: T.Text -> T.Text
-    emptyLines t =
-      T.unlines
-        . map (\l -> if l == emptyLine then "" else l)
-        . dropEnd
-        . dropWhile (== emptyLine)
-        . collapse
-        $ T.lines t
+    emptyLines t
+      | T.any (== '\0') t =
+          T.unlines
+            . map (\l -> if l == emptyLine then "" else l)
+            . dropEnd
+            . dropWhile (== emptyLine)
+            . collapse
+            $ T.lines t
+      -- Every document ends with a line break, so the lines stay the same.
+      | otherwise = t
 
     collapse :: [T.Text] -> [T.Text]
     collapse = \case
@@ -422,7 +425,7 @@ scalar pos style t = case style of
   Plain
     | T.null t -> mempty
     | plainSyntax (pos == InFlow) t -> B.fromText t
-    | otherwise -> quoted
+    | otherwise -> doubleQuoted t
   SingleQuoted -> quoted
   _ -> doubleQuoted t
   where
@@ -435,11 +438,13 @@ implicitKey opts k
   | isBlock opts k = Nothing
   | isEmpty k = Nothing
   | hasEndLines k = Nothing
-  | T.length (B.runBuilder key) > maxImplicitKeyLength = Nothing
-  | otherwise = Just key
+  | T.length key > maxImplicitKeyLength = Nothing
+  | otherwise = Just (B.fromText key)
   where
-    key :: B.Builder
-    key = inline opts InKey 0 k Nothing <> if endsWithName k then " " else mempty
+    key :: T.Text
+    key = case (k.props, k.content) of
+      (Props Nothing NoTag, Scalar Plain t) | plainSyntax False t -> t
+      _ -> B.runBuilder $ inline opts InKey 0 k Nothing <> if endsWithName k then " " else mempty
 
 -- | The node is a collection that the renderer writes in the block style.
 isBlock :: RenderOptions -> Node -> Bool

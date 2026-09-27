@@ -14,6 +14,7 @@ import Data.Text qualified as T
 import GHC.Generics (Generic)
 
 import Yamlet
+import Yamlet.Syntax qualified as S
 
 data A = A
   { a01 :: T.Text
@@ -158,7 +159,7 @@ instance ToYaml X where
     X2 b -> tagged "X2" b
     X3 c -> tagged "X3" c
     where
-      tagged :: ToYaml a => T.Text -> a -> Node
+      tagged :: ToYaml a => T.Text -> a -> S.Node
       tagged t a = mapping ["tag" .= t, "contents" .= a]
 
 instance FromYaml X where
@@ -181,9 +182,9 @@ instance ToYaml F where
     F2 b -> tagged "F2" (toYaml b)
     F3 c -> tagged "F3" (toYaml c)
     where
-      tagged :: T.Text -> Node -> Node
-      tagged t n = case n.value of
-        Mapping kvs -> mapping (("tag" .= t) : kvs)
+      tagged :: T.Text -> S.Node -> S.Node
+      tagged t n = case view n of
+        MappingView kvs -> mapping (("tag" .= t) : kvs)
         _ -> mapping ["tag" .= t, "contents" .= n]
 
 instance FromYaml F where

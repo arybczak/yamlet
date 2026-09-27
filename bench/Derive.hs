@@ -75,7 +75,7 @@ format name mkG mkM =
 
     -- Both versions give the same YAML, see 'checkDerived'.
     yaml :: S.Node
-    yaml = toSyntax (toYaml gs)
+    yaml = toYaml gs
 
     bs :: BS.ByteString
     bs = encode gs

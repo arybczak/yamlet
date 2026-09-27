@@ -46,14 +46,23 @@ plainSyntax inFlow t = case T.uncons t of
   Nothing -> False
   Just (c, rest) ->
     firstOk c rest
-      && T.all isPlainChar t
-      && not (asciiChar isWhite (T.last t))
-      && T.last t /= ':'
-      && not (": " `T.isInfixOf` t)
-      && not (" #" `T.isInfixOf` t)
+      && isPlainChar c
+      && valid c rest
       && not (textIsPrefixOf "---" t)
       && not (textIsPrefixOf "..." t)
   where
+    -- The characters after the given one are valid in a plain scalar, and
+    -- the text has no ": " or " #" and does not end with white space or a
+    -- colon.
+    valid :: Char -> T.Text -> Bool
+    valid prev s = case T.uncons s of
+      Nothing -> not (asciiChar isWhite prev) && prev /= ':'
+      Just (c, s')
+        | not (isPlainChar c) -> False
+        | prev == ':' && c == ' ' -> False
+        | prev == ' ' && c == '#' -> False
+        | otherwise -> valid c s'
+
     firstOk :: Char -> T.Text -> Bool
     firstOk c rest
       | c `elem` ("-?:" :: String) = case T.uncons rest of

@@ -20,6 +20,7 @@ import Data.IntMap.Strict qualified as IM
 import Data.IntSet qualified as IS
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
+import Data.Maybe
 import Data.Monoid qualified as Mon
 import Data.Ord
 import Data.Proxy
@@ -49,6 +50,7 @@ import Numeric.Natural
 import Yamlet.Internal.Emit
 import Yamlet.Internal.Generic
 import Yamlet.Internal.Utils
+import Yamlet.Internal.View
 import Yamlet.Node
 import Yamlet.Schema
 import Yamlet.Syntax qualified as S
@@ -59,7 +61,7 @@ import Yamlet.Syntax qualified as S
 -- | Types that can be converted to a node. A type with a 'Generic' instance
 -- can derive the instance, see "Yamlet.Generic".
 class ToYaml a where
-  toYaml :: a -> Node
+  toYaml :: a -> S.Node
   default toYaml
     :: ( Generic a
        , GenericYaml a
@@ -68,42 +70,45 @@ class ToYaml a where
        , GFlatten (FlattenFields a) f
        , GToConstructor f
        )
-    => a -> Node
+    => a -> S.Node
   toYaml = genericToYaml
 
   -- | Convert a list. The instance for 'Char' creates a string instead.
-  toYamlList :: [a] -> Node
-  toYamlList = node . Sequence . map toYaml
+  toYamlList :: [a] -> S.Node
+  toYamlList = S.sequenceNode . map toYaml
 
 -- | An entry of a mapping with a string key.
-(.=) :: ToYaml a => T.Text -> a -> (Node, Node)
-key .= v = (node (String key), toYaml v)
+(.=) :: ToYaml a => T.Text -> a -> (S.Node, S.Node)
+key .= v = (string key, toYaml v)
+-- Inlined, the key node of a literal key is computed once.
+{-# INLINE (.=) #-}
 
 infixr 8 .=
 
--- | A mapping with the entries in the given order. The keys must be
--- different, as for 'Mapping'.
-mapping :: [(Node, Node)] -> Node
-mapping = node . Mapping
+-- | A mapping with the entries in the given order. A mapping with two equal
+-- keys does not read back.
+mapping :: [(S.Node, S.Node)] -> S.Node
+mapping = S.mappingNode
 
-instance ToYaml Node where toYaml = id
-instance ToYaml () where toYaml _ = node Null
-instance ToYaml Bool where toYaml = node . Bool
-instance ToYaml Integer where toYaml = node . Int
-instance ToYaml Natural where toYaml = node . Int . toInteger
-instance ToYaml Int where toYaml = node . Int . toInteger
-instance ToYaml Int8 where toYaml = node . Int . toInteger
-instance ToYaml Int16 where toYaml = node . Int . toInteger
-instance ToYaml Int32 where toYaml = node . Int . toInteger
-instance ToYaml Int64 where toYaml = node . Int . toInteger
-instance ToYaml Word where toYaml = node . Int . toInteger
-instance ToYaml Word8 where toYaml = node . Int . toInteger
-instance ToYaml Word16 where toYaml = node . Int . toInteger
-instance ToYaml Word32 where toYaml = node . Int . toInteger
-instance ToYaml Word64 where toYaml = node . Int . toInteger
-instance ToYaml Double where toYaml = node . Float . doubleToFloatValue
-instance ToYaml Float where toYaml = node . Float . floatToFloatValue
-instance ToYaml Sci.Scientific where toYaml = node . Float . Finite
+instance ToYaml S.Node where toYaml = id
+instance ToYaml Node where toYaml = toSyntax
+instance ToYaml () where toYaml _ = scalar Null
+instance ToYaml Bool where toYaml = scalar . Bool
+instance ToYaml Integer where toYaml = scalar . Int
+instance ToYaml Natural where toYaml = scalar . Int . toInteger
+instance ToYaml Int where toYaml = scalar . Int . toInteger
+instance ToYaml Int8 where toYaml = scalar . Int . toInteger
+instance ToYaml Int16 where toYaml = scalar . Int . toInteger
+instance ToYaml Int32 where toYaml = scalar . Int . toInteger
+instance ToYaml Int64 where toYaml = scalar . Int . toInteger
+instance ToYaml Word where toYaml = scalar . Int . toInteger
+instance ToYaml Word8 where toYaml = scalar . Int . toInteger
+instance ToYaml Word16 where toYaml = scalar . Int . toInteger
+instance ToYaml Word32 where toYaml = scalar . Int . toInteger
+instance ToYaml Word64 where toYaml = scalar . Int . toInteger
+instance ToYaml Double where toYaml = scalar . Float . doubleToFloatValue
+instance ToYaml Float where toYaml = scalar . Float . floatToFloatValue
+instance ToYaml Sci.Scientific where toYaml = scalar . Float . Finite
 instance ToYaml Day where toYaml = iso8601 buildDay
 instance ToYaml TimeOfDay where toYaml = iso8601 buildTimeOfDay
 instance ToYaml LocalTime where toYaml = iso8601 buildLocalTime
@@ -112,26 +117,26 @@ instance ToYaml UTCTime where toYaml = iso8601 buildUTCTime
 
 -- | A number of seconds.
 instance ToYaml NominalDiffTime where
-  toYaml d = let MkFixed ps = nominalDiffTimeToSeconds d in node (Float (Finite (Sci.scientific ps (negate picoDecimals))))
+  toYaml d = let MkFixed ps = nominalDiffTimeToSeconds d in scalar (Float (Finite (Sci.scientific ps (negate picoDecimals))))
 
 -- | A number of seconds.
 instance ToYaml DiffTime where
-  toYaml d = node (Float (Finite (Sci.scientific (diffTimeToPicoseconds d) (negate picoDecimals))))
+  toYaml d = scalar (Float (Finite (Sci.scientific (diffTimeToPicoseconds d) (negate picoDecimals))))
 
 -- | The text form with hyphens, e.g. @123e4567-e89b-12d3-a456-426614174000@.
-instance ToYaml UUID.UUID where toYaml = node . String . UUID.toText
+instance ToYaml UUID.UUID where toYaml = scalar . String . UUID.toText
 
 instance ToYaml Month where toYaml = iso8601 buildMonth
 instance ToYaml Quarter where toYaml = iso8601 buildQuarter
 instance ToYaml QuarterOfYear where toYaml = iso8601 buildQuarterOfYear
 
 -- | A string in an ISO 8601 format, the same as in aeson.
-iso8601 :: (a -> TLB.Builder) -> a -> Node
-iso8601 build = node . String . TL.toStrict . TLB.toLazyText . build
+iso8601 :: (a -> TLB.Builder) -> a -> S.Node
+iso8601 build = scalar . String . TL.toStrict . TLB.toLazyText . build
 
 -- | The English name in lowercase, e.g. @monday@.
 instance ToYaml DayOfWeek where
-  toYaml = node . String . T.toLower . T.pack . show
+  toYaml = scalar . String . T.toLower . T.pack . show
 
 -- | A mapping with the keys @months@ and @days@, e.g. @{months: 1, days: 2}@.
 instance ToYaml CalendarDiffDays where
@@ -142,12 +147,12 @@ instance ToYaml CalendarDiffDays where
 instance ToYaml CalendarDiffTime where
   toYaml d = mapping ["months" .= ctMonths d, "time" .= ctTime d]
 
-instance ToYaml T.Text where toYaml = node . String
-instance ToYaml TL.Text where toYaml = node . String . TL.toStrict
+instance ToYaml T.Text where toYaml = scalar . String
+instance ToYaml TL.Text where toYaml = scalar . String . TL.toStrict
 
 instance ToYaml Char where
-  toYaml = node . String . T.singleton
-  toYamlList = node . String . T.pack
+  toYaml = scalar . String . T.singleton
+  toYamlList = scalar . String . T.pack
 
 instance ToYaml a => ToYaml [a] where
   toYaml = toYamlList
@@ -157,7 +162,7 @@ instance ToYaml a => ToYaml (NE.NonEmpty a) where
 
 -- | 'Nothing' is null.
 instance ToYaml a => ToYaml (Maybe a) where
-  toYaml = maybe (node Null) toYaml
+  toYaml = maybe (scalar Null) toYaml
 
 -- | Two keys that give the same node, e.g. 'Nothing' and @'Just' ()@, or two
 -- NaN values, give a mapping that does not read back.
@@ -184,15 +189,15 @@ instance ToYaml a => ToYaml (Tree.Tree a) where
 
 -- | @LT@, @EQ@ or @GT@.
 instance ToYaml Ordering where
-  toYaml = node . String . T.pack . show
+  toYaml = scalar . String . T.pack . show
 
 -- | A string such as @1.2.3@.
 instance ToYaml Version where
-  toYaml = node . String . T.pack . showVersion
+  toYaml = scalar . String . T.pack . showVersion
 
 -- | Null.
 instance ToYaml (Proxy a) where
-  toYaml _ = node Null
+  toYaml _ = scalar Null
 
 instance ToYaml Void where
   toYaml = absurd
@@ -207,7 +212,7 @@ instance (Integral a, ToYaml a) => ToYaml (Ratio a) where
 -- many digits after the point as the resolution has, which does not read back.
 -- For such a resolution, use 'Rational' instead.
 instance HasResolution a => ToYaml (Fixed a) where
-  toYaml (MkFixed n) = node . Float . Finite $ case decimalPlaces res of
+  toYaml (MkFixed n) = scalar . Float . Finite $ case decimalPlaces res of
     Just places -> Sci.scientific (n * (10 ^ places `div` res)) (negate places)
     Nothing -> Sci.scientific (round (n * 10 ^ digits % res)) (negate digits)
     where
@@ -267,107 +272,99 @@ instance (ToYaml a, ToYaml b) => ToYaml (Either a b) where
 
 instance (ToYaml a1, ToYaml a2) => ToYaml (a1, a2) where
   toYaml (a1, a2) =
-    node $
-      Sequence
-        [ toYaml a1
-        , toYaml a2
-        ]
+    S.sequenceNode
+      [ toYaml a1
+      , toYaml a2
+      ]
 
 instance (ToYaml a1, ToYaml a2, ToYaml a3) => ToYaml (a1, a2, a3) where
   toYaml (a1, a2, a3) =
-    node $
-      Sequence
-        [ toYaml a1
-        , toYaml a2
-        , toYaml a3
-        ]
+    S.sequenceNode
+      [ toYaml a1
+      , toYaml a2
+      , toYaml a3
+      ]
 
 instance (ToYaml a1, ToYaml a2, ToYaml a3, ToYaml a4) => ToYaml (a1, a2, a3, a4) where
   toYaml (a1, a2, a3, a4) =
-    node $
-      Sequence
-        [ toYaml a1
-        , toYaml a2
-        , toYaml a3
-        , toYaml a4
-        ]
+    S.sequenceNode
+      [ toYaml a1
+      , toYaml a2
+      , toYaml a3
+      , toYaml a4
+      ]
 
 instance (ToYaml a1, ToYaml a2, ToYaml a3, ToYaml a4, ToYaml a5) => ToYaml (a1, a2, a3, a4, a5) where
   toYaml (a1, a2, a3, a4, a5) =
-    node $
-      Sequence
-        [ toYaml a1
-        , toYaml a2
-        , toYaml a3
-        , toYaml a4
-        , toYaml a5
-        ]
+    S.sequenceNode
+      [ toYaml a1
+      , toYaml a2
+      , toYaml a3
+      , toYaml a4
+      , toYaml a5
+      ]
 
 instance
   (ToYaml a1, ToYaml a2, ToYaml a3, ToYaml a4, ToYaml a5, ToYaml a6)
   => ToYaml (a1, a2, a3, a4, a5, a6)
   where
   toYaml (a1, a2, a3, a4, a5, a6) =
-    node $
-      Sequence
-        [ toYaml a1
-        , toYaml a2
-        , toYaml a3
-        , toYaml a4
-        , toYaml a5
-        , toYaml a6
-        ]
+    S.sequenceNode
+      [ toYaml a1
+      , toYaml a2
+      , toYaml a3
+      , toYaml a4
+      , toYaml a5
+      , toYaml a6
+      ]
 
 instance
   (ToYaml a1, ToYaml a2, ToYaml a3, ToYaml a4, ToYaml a5, ToYaml a6, ToYaml a7)
   => ToYaml (a1, a2, a3, a4, a5, a6, a7)
   where
   toYaml (a1, a2, a3, a4, a5, a6, a7) =
-    node $
-      Sequence
-        [ toYaml a1
-        , toYaml a2
-        , toYaml a3
-        , toYaml a4
-        , toYaml a5
-        , toYaml a6
-        , toYaml a7
-        ]
+    S.sequenceNode
+      [ toYaml a1
+      , toYaml a2
+      , toYaml a3
+      , toYaml a4
+      , toYaml a5
+      , toYaml a6
+      , toYaml a7
+      ]
 
 instance
   (ToYaml a1, ToYaml a2, ToYaml a3, ToYaml a4, ToYaml a5, ToYaml a6, ToYaml a7, ToYaml a8)
   => ToYaml (a1, a2, a3, a4, a5, a6, a7, a8)
   where
   toYaml (a1, a2, a3, a4, a5, a6, a7, a8) =
-    node $
-      Sequence
-        [ toYaml a1
-        , toYaml a2
-        , toYaml a3
-        , toYaml a4
-        , toYaml a5
-        , toYaml a6
-        , toYaml a7
-        , toYaml a8
-        ]
+    S.sequenceNode
+      [ toYaml a1
+      , toYaml a2
+      , toYaml a3
+      , toYaml a4
+      , toYaml a5
+      , toYaml a6
+      , toYaml a7
+      , toYaml a8
+      ]
 
 instance
   (ToYaml a1, ToYaml a2, ToYaml a3, ToYaml a4, ToYaml a5, ToYaml a6, ToYaml a7, ToYaml a8, ToYaml a9)
   => ToYaml (a1, a2, a3, a4, a5, a6, a7, a8, a9)
   where
   toYaml (a1, a2, a3, a4, a5, a6, a7, a8, a9) =
-    node $
-      Sequence
-        [ toYaml a1
-        , toYaml a2
-        , toYaml a3
-        , toYaml a4
-        , toYaml a5
-        , toYaml a6
-        , toYaml a7
-        , toYaml a8
-        , toYaml a9
-        ]
+    S.sequenceNode
+      [ toYaml a1
+      , toYaml a2
+      , toYaml a3
+      , toYaml a4
+      , toYaml a5
+      , toYaml a6
+      , toYaml a7
+      , toYaml a8
+      , toYaml a9
+      ]
 
 instance
   ( ToYaml a1
@@ -384,19 +381,18 @@ instance
   => ToYaml (a1, a2, a3, a4, a5, a6, a7, a8, a9, a10)
   where
   toYaml (a1, a2, a3, a4, a5, a6, a7, a8, a9, a10) =
-    node $
-      Sequence
-        [ toYaml a1
-        , toYaml a2
-        , toYaml a3
-        , toYaml a4
-        , toYaml a5
-        , toYaml a6
-        , toYaml a7
-        , toYaml a8
-        , toYaml a9
-        , toYaml a10
-        ]
+    S.sequenceNode
+      [ toYaml a1
+      , toYaml a2
+      , toYaml a3
+      , toYaml a4
+      , toYaml a5
+      , toYaml a6
+      , toYaml a7
+      , toYaml a8
+      , toYaml a9
+      , toYaml a10
+      ]
 
 ----------------------------------------
 -- Generic
@@ -421,7 +417,7 @@ genericToYaml
      , GFlatten (FlattenFields a) f
      , GToConstructor f
      )
-  => a -> Node
+  => a -> S.Node
 genericToYaml x = gToYaml (yamlOptions @a) (gFlatten @(FlattenFields a) @f) (from <$> yamlDefault @a) (from x)
 {-# INLINE genericToYaml #-}
 
@@ -434,16 +430,16 @@ gToYaml
    . ( GConstructors f
      , GToConstructor f
      )
-  => YamlOptions -> Bool -> Maybe (D1 d f p) -> D1 d f p -> Node
+  => YamlOptions -> Bool -> Maybe (D1 d f p) -> D1 d f p -> S.Node
 gToYaml opts flat def (M1 x)
-  | isEnum @f opts = node (String (gTag opts x))
+  | isEnum @f opts = scalar (String (gTag opts x))
   | otherwise = gToConstructor opts (if isTagged @f opts then Just flat else Nothing) (unM1 <$> def) x
 
 class GToConstructor f where
   gTag :: YamlOptions -> f p -> T.Text
 
   -- | The constructor, with the tag if the flag of 'FlattenFields' is given.
-  gToConstructor :: YamlOptions -> Maybe Bool -> Maybe (f p) -> f p -> Node
+  gToConstructor :: YamlOptions -> Maybe Bool -> Maybe (f p) -> f p -> S.Node
 
 instance TypeError NoConstructors => GToConstructor V1 where
   gTag _ = \case {}
@@ -475,15 +471,15 @@ instance
           [v]
             | flat, Just entries <- flatEntries opts v -> mapping (withTagEntry entries)
             | otherwise -> mapping (withTagEntry [opts.contentsKey .= v])
-          vs -> mapping (withTagEntry [opts.contentsKey .= node (Sequence vs)])
+          vs -> mapping (withTagEntry [opts.contentsKey .= S.sequenceNode vs])
     Nothing
       | gNamed @f -> mapping (gToEntries opts (unM1 <$> def) x)
       | otherwise -> case gToValues x of
           [] -> mapping []
           [v] -> v
-          vs -> node (Sequence vs)
+          vs -> S.sequenceNode vs
     where
-      withTagEntry :: [(Node, Node)] -> [(Node, Node)]
+      withTagEntry :: [(S.Node, S.Node)] -> [(S.Node, S.Node)]
       withTagEntry entries = (opts.tagKey .= gTag opts c) : entries
   {-# INLINE gTag #-}
   {-# INLINE gToConstructor #-}
@@ -492,9 +488,9 @@ instance
 -- back. The field must be a mapping with a key, and no key can be the tag
 -- key. The key cannot be the contents key alone, because the decoder reads
 -- such a mapping as the other form.
-flatEntries :: YamlOptions -> Node -> Maybe [(Node, Node)]
-flatEntries opts v = case v.value of
-  Mapping kvs -> case kvs of
+flatEntries :: YamlOptions -> S.Node -> Maybe [(S.Node, S.Node)]
+flatEntries opts v = case v.content of
+  S.Mapping _ kvs -> case kvs of
     [] -> Nothing
     [(k, _)] | isKey opts.contentsKey k -> Nothing
     _
@@ -502,18 +498,18 @@ flatEntries opts v = case v.value of
       | otherwise -> Just kvs
   _ -> Nothing
   where
-    isKey :: T.Text -> Node -> Bool
-    isKey key k = case k.value of
-      String t -> t == key
+    isKey :: T.Text -> S.Node -> Bool
+    isKey key k = case stringValue k of
+      Just t -> t == key
       _ -> False
 -- The function does not depend on the type.
 {-# NOINLINE flatEntries #-}
 
 class GToFields f where
   -- | The entries of the fields, with the given default.
-  gToEntries :: YamlOptions -> Maybe (f p) -> f p -> [(Node, Node)]
+  gToEntries :: YamlOptions -> Maybe (f p) -> f p -> [(S.Node, S.Node)]
 
-  gToValues :: f p -> [Node]
+  gToValues :: f p -> [S.Node]
 
 instance GToFields U1 where
   gToEntries _ _ _ = []
@@ -533,16 +529,16 @@ instance
   => GToFields (S1 (MetaSel (Just name) u s d) (Rec0 a))
   where
   gToEntries opts def (M1 (K1 x))
-    | opts.omitNullFields && v.value == Null && nullDefault = []
+    | opts.omitNullFields && isNullNode v && nullDefault = []
     | otherwise = [fieldKey @name opts .= v]
     where
-      v :: Node
+      v :: S.Node
       v = toYaml x
 
       -- The decoder fills a missing key from the default.
       nullDefault :: Bool
       nullDefault = case def of
-        Just (M1 (K1 d)) -> (toYaml d).value == Null
+        Just (M1 (K1 d)) -> isNullNode (toYaml d)
         Nothing -> True
   gToValues (M1 (K1 x)) = [toYaml x]
   {-# INLINE gToEntries #-}
@@ -557,12 +553,18 @@ instance ToYaml a => GToFields (S1 (MetaSel Nothing u s d) (Rec0 a)) where
 ----------------------------------------
 -- Rendering
 
--- | Render documents in the block style. Documents after the first one start
--- with a @---@ marker.
-renderDocuments :: [Node] -> T.Text
-renderDocuments docs = B.runBuilder . mconcat $ zipWith document [0 :: Int ..] docs
+-- | Render documents. Documents after the first one start with a @---@
+-- marker. The collections of 'toYaml' are in the block style.
+--
+-- A document with comments, anchors, aliases, flow collections or scalar
+-- styles that 'toYaml' does not create goes to 'S.renderSyntax'. Other
+-- documents go to a faster renderer, which gives the same output.
+renderDocuments :: [S.Node] -> T.Text
+renderDocuments docs
+  | all simple docs = B.runBuilder . mconcat $ zipWith document [0 :: Int ..] docs
+  | otherwise = S.renderSyntax S.defaultRenderOptions (map S.document docs)
   where
-    document :: Int -> Node -> B.Builder
+    document :: Int -> S.Node -> B.Builder
     document i n
       | null handles = (if i > 0 then "---\n" else mempty) <> topLevel n
       | otherwise = (if i > 0 then "...\n" else mempty) <> foldMap tagDirective handles <> "---\n" <> topLevel n
@@ -571,31 +573,141 @@ renderDocuments docs = B.runBuilder . mconcat $ zipWith document [0 :: Int ..] d
         handles :: [Char]
         handles = nubOrd $ tagHandles n []
 
-    -- Every node has a tag, so a list of the tags would have an entry for
-    -- each node. Few tags need a handle.
-    tagHandles :: Node -> [Char] -> [Char]
+    tagHandles :: S.Node -> [Char] -> [Char]
     tagHandles n acc =
-      maybe id (:) (tagHandle n.tag) $ case n.value of
-        Sequence xs -> foldr tagHandles acc xs
-        Mapping kvs -> foldr (\(k, v) -> tagHandles k . tagHandles v) acc kvs
+      (case n.props.tag of S.Tag t -> maybe id (:) (tagHandle t); _ -> id) $ case n.content of
+        S.Sequence _ xs -> foldr tagHandles acc xs
+        S.Mapping _ kvs -> foldr (\(k, v) -> tagHandles k . tagHandles v) acc kvs
         _ -> acc
 
-    topLevel :: Node -> B.Builder
-    topLevel n = case n.value of
-      Sequence (_ : _) -> tagLine n <> blockSequence 0 True n
-      Mapping (_ : _) -> tagLine n <> blockMapping 0 True n
-      String t | needsIndentIndicator t -> withTag n (scalarText n) <> "\n"
+    topLevel :: S.Node -> B.Builder
+    topLevel n = case n.content of
+      S.Sequence _ (_ : _) -> tagLine n <> blockSequence 0 True n
+      S.Mapping _ (_ : _) -> tagLine n <> blockMapping 0 True n
+      S.Scalar S.Literal t | needsIndentIndicator t -> withTag n (doubleQuoted t) <> "\n"
       _ -> scalarValue indentStep n <> "\n"
 
     -- A tag of a block collection takes a line of its own.
-    tagLine :: Node -> B.Builder
+    tagLine :: S.Node -> B.Builder
     tagLine n = case tagPrefix n of
       Just t -> t <> "\n"
       Nothing -> mempty
 
+-- | The node has no comments, anchors, aliases and flow collections, and its
+-- scalars have the styles that 'toYaml' creates.
+simple :: S.Node -> Bool
+simple n =
+  null n.comments.before
+    && isNothing n.comments.inline
+    && null n.comments.after
+    && isNothing n.props.anchor
+    && n.props.tag /= S.NonSpecificTag
+    && case n.content of
+      -- The renderer gives an empty plain scalar no text.
+      S.Scalar S.Plain t -> not (T.null t)
+      S.Scalar S.DoubleQuoted _ -> True
+      S.Scalar S.Literal _ -> True
+      S.Scalar _ _ -> False
+      S.Sequence style xs -> (style == S.Block || null xs) && all simple xs
+      S.Mapping style kvs -> (style == S.Block || null kvs) && all (\(k, v) -> simple k && simple v) kvs
+      S.Alias _ -> False
+
+-- | A block sequence of a 'simple' node. The first entry does not start with
+-- indentation if the sequence continues a line.
+blockSequence :: Int -> Bool -> S.Node -> B.Builder
+blockSequence indent atLineStart n = case n.content of
+  S.Sequence _ xs -> mconcat $ zipWith entry [0 :: Int ..] xs
+  _ -> mempty
+  where
+    entry :: Int -> S.Node -> B.Builder
+    entry i x = (if i > 0 || atLineStart then spaces indent else mempty) <> "-" <> item x
+
+    item :: S.Node -> B.Builder
+    item x = case x.content of
+      S.Sequence _ (_ : _) -> collection x $ blockSequence (indent + indentStep) False x
+      S.Mapping _ (_ : _) -> collection x $ blockMapping (indent + indentStep) False x
+      _ -> " " <> scalarValue (indent + indentStep) x <> "\n"
+
+    collection :: S.Node -> B.Builder -> B.Builder
+    collection x body = case tagPrefix x of
+      Just t -> " " <> t <> "\n" <> spaces (indent + indentStep) <> body
+      Nothing -> " " <> body
+
+-- | A block mapping of a 'simple' node. The first entry does not start with
+-- indentation if the mapping continues a line.
+blockMapping :: Int -> Bool -> S.Node -> B.Builder
+blockMapping indent atLineStart n = case n.content of
+  S.Mapping _ kvs -> mconcat $ zipWith entry [0 :: Int ..] kvs
+  _ -> mempty
+  where
+    entry :: Int -> (S.Node, S.Node) -> B.Builder
+    entry i (k, v) =
+      (if i > 0 || atLineStart then spaces indent else mempty) <> case implicitKey k of
+        Just key -> key <> ":" <> value v
+        Nothing -> "?" <> explicit k <> spaces indent <> ":" <> explicit v
+
+    value :: S.Node -> B.Builder
+    value v = case v.content of
+      S.Sequence _ (_ : _) -> tagged v <> "\n" <> blockSequence indent True v
+      S.Mapping _ (_ : _) -> tagged v <> "\n" <> blockMapping (indent + indentStep) True v
+      _ -> " " <> scalarValue (indent + indentStep) v <> "\n"
+
+    -- The key or the value of an explicit entry.
+    explicit :: S.Node -> B.Builder
+    explicit x = case x.content of
+      S.Sequence _ (_ : _) -> tagged x <> "\n" <> blockSequence (indent + indentStep) True x
+      S.Mapping _ (_ : _) -> tagged x <> "\n" <> blockMapping (indent + indentStep) True x
+      _ -> " " <> scalarValue (indent + indentStep) x <> "\n"
+
+    tagged :: S.Node -> B.Builder
+    tagged x = maybe mempty (" " <>) (tagPrefix x)
+
+-- | A key that fits on one line, or 'Nothing' if it needs an explicit entry.
+implicitKey :: S.Node -> Maybe B.Builder
+implicitKey k = case k.content of
+  S.Scalar style t
+    | S.NoTag <- k.props.tag
+    , style == S.Plain
+    , plainSyntax False t ->
+        if T.length t > maxImplicitKeyLength then Nothing else Just (B.fromText t)
+    | T.length (B.runBuilder key) > maxImplicitKeyLength -> Nothing
+    | otherwise -> Just key
+    where
+      key :: B.Builder
+      key = withTag k (scalarText style t)
+  _ -> Nothing
+
+-- | A scalar, or an empty collection in the flow style.
+scalarValue :: Int -> S.Node -> B.Builder
+scalarValue indent n = withTag n $ case n.content of
+  S.Sequence _ _ -> "[]"
+  S.Mapping _ _ -> "{}"
+  S.Scalar S.Literal t | Just (h, b) <- literalBlock True indent t -> h <> b
+  S.Scalar style t -> scalarText style t
+  S.Alias _ -> mempty
+
+-- | Prefix the tag if the node has one.
+withTag :: S.Node -> B.Builder -> B.Builder
+withTag n b = case tagPrefix n of
+  Just t -> t <> " " <> b
+  Nothing -> b
+
+tagPrefix :: S.Node -> Maybe B.Builder
+tagPrefix n = case n.props.tag of
+  S.Tag t -> Just (tagText t)
+  _ -> Nothing
+
+-- | A scalar of a 'simple' node on one line.
+scalarText :: S.ScalarStyle -> T.Text -> B.Builder
+scalarText style t = case style of
+  S.Plain
+    | plainSyntax False t -> B.fromText t
+    | otherwise -> doubleQuoted t
+  _ -> doubleQuoted t
+
 -- | Convert a node to a node of a syntax tree, e.g. to set the styles of its
 -- scalars or to add comments before 'S.renderSyntax' writes it. The styles
--- are the ones that 'renderDocuments' uses.
+-- are the ones that 'toYaml' uses.
 toSyntax :: Node -> S.Node
 toSyntax n = sn {S.props = S.Props Nothing tag}
   where
@@ -608,101 +720,23 @@ toSyntax n = sn {S.props = S.Props Nothing tag}
     sn = case n.value of
       Sequence xs -> S.sequenceNode (map toSyntax xs)
       Mapping kvs -> S.mappingNode [(toSyntax k, toSyntax v) | (k, v) <- kvs]
-      String t
-        | isPlainSafe t -> S.plainNode t
-        | T.any (== '\n') t -> S.scalarNode S.Literal t
-        | otherwise -> S.scalarNode S.DoubleQuoted t
-      v -> S.plainNode (plainText v)
+      v -> scalar v
 
--- | A block sequence. The first entry does not start with indentation if the
--- sequence continues a line.
-blockSequence :: Int -> Bool -> Node -> B.Builder
-blockSequence indent atLineStart n = case n.value of
-  Sequence xs -> mconcat $ zipWith entry [0 :: Int ..] xs
-  _ -> mempty
-  where
-    entry :: Int -> Node -> B.Builder
-    entry i x = (if i > 0 || atLineStart then spaces indent else mempty) <> "-" <> item x
+-- | A scalar in a style that reads back as the value. A collection is empty.
+scalar :: Value -> S.Node
+scalar = \case
+  String t -> string t
+  v -> S.plainNode (plainText v)
 
-    item :: Node -> B.Builder
-    item x = case x.value of
-      Sequence (_ : _) -> collection x $ blockSequence (indent + indentStep) False x
-      Mapping (_ : _) -> collection x $ blockMapping (indent + indentStep) False x
-      _ -> " " <> scalarValue (indent + indentStep) x <> "\n"
-
-    collection :: Node -> B.Builder -> B.Builder
-    collection x body = case tagPrefix x of
-      Just t -> " " <> t <> "\n" <> reindent body
-      Nothing -> " " <> body
-      where
-        reindent :: B.Builder -> B.Builder
-        reindent b = spaces (indent + indentStep) <> b
-
--- | A block mapping. The first entry does not start with indentation if the
--- mapping continues a line.
-blockMapping :: Int -> Bool -> Node -> B.Builder
-blockMapping indent atLineStart n = case n.value of
-  Mapping kvs -> mconcat $ zipWith entry [0 :: Int ..] kvs
-  _ -> mempty
-  where
-    entry :: Int -> (Node, Node) -> B.Builder
-    entry i (k, v) =
-      (if i > 0 || atLineStart then spaces indent else mempty) <> case implicitKey k of
-        Just key -> key <> ":" <> value v
-        Nothing -> "?" <> explicit k <> spaces indent <> ":" <> explicit v
-
-    value :: Node -> B.Builder
-    value v = case v.value of
-      Sequence (_ : _) -> tagged v <> "\n" <> blockSequence indent True v
-      Mapping (_ : _) -> tagged v <> "\n" <> blockMapping (indent + indentStep) True v
-      _ -> " " <> scalarValue (indent + indentStep) v <> "\n"
-
-    -- The key or the value of an explicit entry.
-    explicit :: Node -> B.Builder
-    explicit x = case x.value of
-      Sequence (_ : _) -> tagged x <> "\n" <> blockSequence (indent + indentStep) True x
-      Mapping (_ : _) -> tagged x <> "\n" <> blockMapping (indent + indentStep) True x
-      _ -> " " <> scalarValue (indent + indentStep) x <> "\n"
-
-    tagged :: Node -> B.Builder
-    tagged x = maybe mempty (" " <>) (tagPrefix x)
-
--- | A key that fits on one line, or 'Nothing' if it needs an explicit entry.
-implicitKey :: Node -> Maybe B.Builder
-implicitKey k = case k.value of
-  Sequence _ -> Nothing
-  Mapping _ -> Nothing
-  _
-    | T.length (B.runBuilder key) > maxImplicitKeyLength -> Nothing
-    | otherwise -> Just key
-  where
-    key :: B.Builder
-    key = withTag k (scalarText k)
-
--- | A scalar, or an empty collection in the flow style.
-scalarValue :: Int -> Node -> B.Builder
-scalarValue indent n = withTag n $ case n.value of
-  Sequence _ -> "[]"
-  Mapping _ -> "{}"
-  String t | Just b <- literal indent t -> b
-  _ -> scalarText n
-
--- | Prefix the tag if it is not the default for the value.
-withTag :: Node -> B.Builder -> B.Builder
-withTag n b = case tagPrefix n of
-  Just t -> t <> " " <> b
-  Nothing -> b
-
-tagPrefix :: Node -> Maybe B.Builder
-tagPrefix n
-  | n.tag == defaultTag n.value = Nothing
-  | otherwise = Just (tagText n.tag)
-
--- | A scalar on one line.
-scalarText :: Node -> B.Builder
-scalarText n = case n.value of
-  String t | not (isPlainSafe t) -> doubleQuoted t
-  v -> B.fromText (plainText v)
+-- | A string as a literal block scalar if it has a line break. Otherwise it
+-- is a plain scalar if the schema reads the text as a string, and in double
+-- quotes if not. The renderer puts a plain scalar in double quotes if its
+-- text cannot be plain, e.g. @a: b@.
+string :: T.Text -> S.Node
+string t
+  | T.any (== '\n') t = S.scalarNode S.Literal t
+  | isPlainString t = S.plainNode t
+  | otherwise = S.scalarNode S.DoubleQuoted t
 
 -- | The text of a value without quotes, or an empty collection in the flow
 -- style.
@@ -766,9 +800,3 @@ plainText = \case
         minDecimal, maxDecimal :: Integer
         minDecimal = -1
         maxDecimal = 6
-
--- | A literal block scalar for a string with line breaks.
-literal :: Int -> T.Text -> Maybe B.Builder
-literal indent t
-  | T.any (== '\n') t = uncurry (<>) <$> literalBlock True indent t
-  | otherwise = Nothing

@@ -11,6 +11,7 @@ module Yamlet.Internal.Compose
   , Failure
   ) where
 
+import Control.Monad
 import Data.Bifunctor
 import Data.Char
 import Data.Foldable
@@ -60,7 +61,7 @@ check sn =
          | S.NoTag <- props.tag
          , style /= S.Plain || not (maybeNumber t) ->
              Right ()
-         | otherwise -> () <$ scalar off props style t
+         | otherwise -> void (scalar off props style t)
        S.Sequence _ xs -> collectionTag off props seqTag *> traverse_ check xs
        S.Mapping _ kvs -> do
          _ <- collectionTag off props mapTag

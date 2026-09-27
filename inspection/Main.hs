@@ -121,46 +121,46 @@ data Preset = Preset {paths :: [T.Text], jobs :: Int, verbose :: Maybe Bool}
 instance GenericYaml Preset where
   yamlDefault = Just (Preset ["."] 1 Nothing)
 
-encodeServer :: Server -> Node
+encodeServer :: Server -> S.Node
 encodeServer = toYaml
 
 decodeServer :: S.Node -> Either (Offset, String) Server
 decodeServer = runParser parseYaml
 
-encodeWide :: Wide -> Node
+encodeWide :: Wide -> S.Node
 encodeWide = toYaml
 
 decodeWide :: S.Node -> Either (Offset, String) Wide
 decodeWide = runParser parseYaml
 
-encodeName :: Name -> Node
+encodeName :: Name -> S.Node
 encodeName = toYaml
 
 decodeName :: S.Node -> Either (Offset, String) Name
 decodeName = runParser parseYaml
 
-encodeRow :: Row -> Node
+encodeRow :: Row -> S.Node
 encodeRow = toYaml
 
 decodeRow :: S.Node -> Either (Offset, String) Row
 decodeRow = runParser parseYaml
 
-encodeBox :: Box Int -> Node
+encodeBox :: Box Int -> S.Node
 encodeBox = toYaml
 
 decodeBox :: S.Node -> Either (Offset, String) (Box Int)
 decodeBox = runParser parseYaml
 
-encodeVelocity :: Velocity -> Node
+encodeVelocity :: Velocity -> S.Node
 encodeVelocity = toYaml
 
 decodeVelocity :: S.Node -> Either (Offset, String) Velocity
 decodeVelocity = runParser parseYaml
 
-encodeConfig :: Config -> Node
+encodeConfig :: Config -> S.Node
 encodeConfig = toYaml
 
-encodePreset :: Preset -> Node
+encodePreset :: Preset -> S.Node
 encodePreset = toYaml
 
 decodePreset :: S.Node -> Either (Offset, String) Preset
@@ -192,7 +192,7 @@ instance GenericYaml Step where
   type FlattenFields Step = True
   yamlOptions = defaultYamlOptions {tagKey = "step"}
 
-encodeTurn :: Turn -> Node
+encodeTurn :: Turn -> S.Node
 encodeTurn = toYaml
 
 decodeTurn :: S.Node -> Either (Offset, String) Turn

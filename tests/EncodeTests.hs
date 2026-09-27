@@ -144,7 +144,7 @@ roundTrip preface x = assertEqual preface (Right x) (decodeText (encodeText x))
 test_blockStyle :: Assertion
 test_blockStyle = assertEqual "output" expected (encodeText value)
   where
-    value :: Node
+    value :: S.Node
     value =
       mapping
         [ "source_paths" .= ["." :: T.Text]
@@ -256,11 +256,11 @@ test_literal = do
   assertEqual
     "keep in a syntax tree"
     (encodeText keep)
-    (S.renderSyntax S.defaultRenderOptions [S.document (toSyntax keep)])
+    (S.renderSyntax S.defaultRenderOptions [S.document keep])
 
 test_tags :: Assertion
 test_tags = do
-  let local = Node noOffset "!point" (Mapping ["x" .= (1 :: Int)])
+  let local = Node noOffset "!point" (Mapping [(node (String "x"), node (Int 1))])
   assertEqual "local tag" "!point\nx: 1\n" (encodeText local)
   let str = Node noOffset "!name" (String "foo")
   assertEqual "tagged scalar" "- !name foo\n" (encodeText [str])
@@ -284,9 +284,9 @@ test_syntax =
   assertEqual "output" expected $
     S.renderSyntax
       S.defaultRenderOptions
-      [S.document (edit (toSyntax value))]
+      [S.document (edit value)]
   where
-    value :: Node
+    value :: S.Node
     value = mapping ["name" .= ("x" :: T.Text), "paths" .= ["a" :: T.Text, "b"]]
 
     -- Add a comment above the first key and use the flow style for the list.
