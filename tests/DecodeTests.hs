@@ -1223,6 +1223,8 @@ test_errorPaths = do
   check "unknown key" (Right "[0]") $ decodeText @[Config] "- name: x\n  bogus: 1\n"
   check "key in quotes" (Right "\"a.b\".c") $
     decodeText @(M.Map T.Text (M.Map T.Text Int)) "\"a.b\":\n  c: x\n"
+  check "key with escapes" (Right "\"a\\nb\\t\\\"\\x07\\u2028\\U000e0001\"") $
+    decodeText @(M.Map T.Text Int) "\"a\\nb\\t\\\"\\a\\L\\U000E0001\": x\n"
   check "duplicate key" (Right "a") $ decodeText @Value "a:\n  b: 1\n  b: 2\n"
   check "root" (Right "") $ decodeText @Int "x"
   let key = S.plainNode "a"

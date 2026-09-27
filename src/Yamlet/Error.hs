@@ -26,6 +26,7 @@ import Data.Text qualified as T
 import Data.Text.Array qualified as A
 import Data.Text.Internal qualified as T
 import GHC.Generics
+import Numeric
 
 import Yamlet.Internal.Parser.Chars
 import Yamlet.Internal.Syntax
@@ -144,7 +145,9 @@ prettyError file err
     caret = map (\c -> if c == '\t' then '\t' else ' ') (take before shown)
 
 -- | A path in the form @jobs[1].name@. A key with a character of this form,
--- white space or no characters is in double quotes, e.g. @\"a.b\"@.
+-- white space or no characters is in double quotes, e.g. @\"a.b\"@. In the
+-- quotes, a character that cannot be printed has an escape as in YAML, e.g.
+-- @\"a\\nb\"@.
 renderPath :: [PathElement] -> String
 renderPath = \case
   [] -> ""
@@ -165,10 +168,23 @@ renderPath = \case
         plain :: Char -> Bool
         plain c = c `notElem` (".[]\"\\" :: String) && isPrint c && not (isSpace c)
 
+        -- The escapes of a double-quoted scalar, so that the path stays on
+        -- the line of the error.
         escape :: Char -> String
         escape c
           | c == '"' || c == '\\' = ['\\', c]
-          | otherwise = [c]
+          | c == '\n' = "\\n"
+          | c == '\r' = "\\r"
+          | c == '\t' = "\\t"
+          | isPrint c = [c]
+          | ord c <= 0xFF = hex 'x' 2
+          | ord c <= 0xFFFF = hex 'u' 4
+          | otherwise = hex 'U' 8
+          where
+            hex :: Char -> Int -> String
+            hex p width =
+              let h = showHex (ord c) ""
+              in '\\' : p : replicate (width - length h) '0' ++ h
 
     index :: Int -> String
     index i = "[" ++ show i ++ "]"
