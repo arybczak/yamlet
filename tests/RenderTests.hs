@@ -319,6 +319,8 @@ test_attachment = do
   check "at the end of a value" [("/a", "inline", "c")] "a: 1 # c\n"
   check "at the end of a key" [("/a:key", "inline", "c")] "a: # c\n  b: 1\n"
   check "on a block scalar header" [("/a", "inline", "c")] "a: | # c\n  text\n"
+  check "after a block scalar in a key" [("/?:key/0", "inline", "c"), ("/?", "inline", "d")] "? - | # c\n    text\n: # d\n  - x\n"
+  check "after a kept block scalar in a key" [("/?", "inline", "c")] "? - |+\n    text\n\n: # c\n  k: v\n"
   check "above a sequence item" [("/a/1", "before", "c")] "a:\n- 1\n# c\n- 2\n"
   check "after a flow collection" [("/a", "inline", "c")] "a: [1, 2] # c\n"
   check "on an item line" [("/0", "inline", "c")] "- # c\n  a: 1\n"

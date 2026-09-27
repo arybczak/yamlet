@@ -160,14 +160,16 @@ attachNode e limit minColumn known n items0 =
           (t, is') = trailingComment is
       in (t, ls, is')
 
-    -- The comment at the end of the line of the node's end.
+    -- The comment at the end of the line of the node's end. A node that ends
+    -- at the start of a line, e.g. a block scalar, ends on the line before,
+    -- unless it is empty.
     trailingComment :: [Item] -> (Maybe T.Text, [Item])
     trailingComment = \case
       i : is
         | not i.own
         , i.at >= en
         , i.at < limit
-        , i.lineStart <= en
+        , i.lineStart < en || s == en
         , T.all (`elem` (" \t,:" :: String)) (between en i.at) ->
             (comment i, is)
       is -> (Nothing, is)
