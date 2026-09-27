@@ -146,7 +146,11 @@ instance ToYaml Word32 where toYaml = scalar . Int . toInteger
 instance ToYaml Word64 where toYaml = scalar . Int . toInteger
 instance ToYaml Double where toYaml = scalar . Float . doubleToFloatValue
 instance ToYaml Float where toYaml = scalar . Float . floatToFloatValue
+
+-- | A value whose exponent in scientific notation is beyond the range from
+-- -1000 to 1000, e.g. @1e1001@, does not read back, see 'Finite'.
 instance ToYaml Sci.Scientific where toYaml = scalar . Float . Finite
+
 instance ToYaml Day where toYaml = iso8601 buildDay
 instance ToYaml TimeOfDay where toYaml = iso8601 buildTimeOfDay
 instance ToYaml LocalTime where toYaml = iso8601 buildLocalTime

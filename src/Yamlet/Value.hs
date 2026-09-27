@@ -67,6 +67,11 @@ data Value
 -- 'floatValueToDouble' or with the bounded conversions of "Data.Scientific".
 data FloatValue
   = -- | A finite value other than negative zero.
+    --
+    -- The encoder writes a value whose exponent in scientific notation is
+    -- beyond the range from -1000 to 1000, e.g. @1.0e1001@, but the decoder
+    -- rejects it. The decoder never gives such a value, and a 'Double' is
+    -- always in the range.
     Finite !Sci.Scientific
   | -- | Negative zero, e.g. @-0.0@, which a 'Sci.Scientific' cannot hold.
     NegativeZero
