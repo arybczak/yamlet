@@ -15,6 +15,7 @@ module Yamlet.Internal.View
 
 import Data.Maybe
 import Data.Text qualified as T
+import GHC.Generics
 
 import Yamlet.Internal.Schema
 import Yamlet.Internal.Syntax qualified as S
@@ -34,6 +35,7 @@ data View
   | -- | 'Yamlet.Decode.runParser' replaces the aliases, so only a node that a
     -- program builds can have one.
     AliasView !T.Text
+  deriving stock (Generic)
 
 -- | The view of a node.
 view :: S.Node -> View

@@ -19,6 +19,7 @@ import Data.Maybe
 import Data.Set qualified as S
 import Data.Text qualified as T
 import Data.Text.Builder.Linear qualified as B
+import GHC.Generics
 
 import Yamlet.Internal.Emit
 import Yamlet.Internal.Parser.Chars hiding (isAnchorChar)
@@ -31,6 +32,7 @@ newtype RenderOptions = RenderOptions
   -- ^ Write every non-empty collection in the block style. A collection in a
   -- key then becomes an explicit key, e.g. @? - a@.
   }
+  deriving stock (Generic)
 
 -- | The collection styles of the tree.
 defaultRenderOptions :: RenderOptions

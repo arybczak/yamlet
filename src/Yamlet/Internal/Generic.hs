@@ -56,6 +56,7 @@ data YamlOptions = YamlOptions
   , rejectUnknownFields :: Bool
   -- ^ Reject a key that is no field of the constructor. Off by default.
   }
+  deriving stock (Generic)
 
 defaultYamlOptions :: YamlOptions
 defaultYamlOptions =

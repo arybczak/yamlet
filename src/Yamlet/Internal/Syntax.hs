@@ -236,6 +236,7 @@ data Line
 -- input in UTF-16 or UTF-32, the offset counts the bytes of the text after
 -- 'Yamlet.Syntax.decodeInput', not the bytes of the input.
 newtype Offset = Offset Int
+  deriving stock (Generic)
   deriving newtype (Eq, Ord, Show, NFData)
 
 -- | The offset of a node that does not come from an input.
