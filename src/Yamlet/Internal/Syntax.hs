@@ -144,13 +144,17 @@ data Comments = Comments
 noComments :: Comments
 noComments = Comments [] Nothing []
 
--- | A value with the comments of its key in a mapping, e.g. the comment above
--- @permissions:@ and the comment after it on its line. Comments that belong
--- to the value, e.g. the comment after @x@ in @name: x # c@, stay with the
--- value, so only a value such as a node keeps them.
+-- | A value with the comments of its mapping entry:
 --
--- The decoder takes the comments from the key, and the encoder puts them back
--- on the key. A value without a key, e.g. an item of a list, has no comments.
+-- * 'before': the lines above the entry,
+-- * 'inline': the comment at the end of the first line of the entry,
+-- * 'after': the lines after the last entry of the value, if the value is a
+--   collection.
+--
+-- The parser can give these comments to the key or to the value. The decoder
+-- takes them from both and decodes the value without them. The lines above
+-- the first entry of a block collection value stay inside the value. A value
+-- without a key, e.g. an item of a list, has no comments.
 data Commented a = Commented
   { comments :: !Comments
   , value :: a

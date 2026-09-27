@@ -98,11 +98,31 @@ mapping = S.mappingNode
 instance ToYaml S.Node where toYaml = id
 instance ToYaml Value where toYaml = toSyntax
 
--- | The value with the comments on its key. A value without a key loses the
--- comments.
+-- | The value with the comments of its entry. The lines above and the comment
+-- of the first line go on the key, where the renderer writes them at the same
+-- places as on a value. The lines after the value replace its own if the
+-- value is a collection. A value without a key loses the comments.
 instance ToYaml a => ToYaml (S.Commented a) where
   toYaml c = toYaml c.value
-  toYamlField k c = (S.Node k.offset k.endOffset k.props c.comments k.content, toYaml c.value)
+  toYamlField k c = (key, value)
+    where
+      key :: S.Node
+      key = S.Node k.offset k.endOffset k.props (S.Comments c.comments.before c.comments.inline k.comments.after) k.content
+
+      value :: S.Node
+      value
+        | collection && not (null c.comments.after) =
+            S.Node v.offset v.endOffset v.props (v.comments {S.after = c.comments.after}) v.content
+        | otherwise = v
+        where
+          v :: S.Node
+          v = toYaml c.value
+
+          collection :: Bool
+          collection = case v.content of
+            S.Sequence {} -> True
+            S.Mapping {} -> True
+            _ -> False
 
 instance ToYaml () where toYaml _ = scalar Null
 instance ToYaml Bool where toYaml = scalar . Bool

@@ -41,10 +41,10 @@ module Yamlet.Decode
   , rejectUnknownKeys
   ) where
 
+import Control.Applicative
 import Control.Monad
 import Data.Char
 import Data.Fixed
-import Data.Functor.Const
 import Data.Functor.Identity
 import Data.Int
 import Data.IntMap.Strict qualified as IM
@@ -444,11 +444,45 @@ class FromYaml a where
 instance FromYaml S.Node where
   parseYaml = pure . S.copyNode
 
--- | The value with the comments of its key, copied like every decoded text.
+-- | The value with the comments of its entry, copied like every decoded text.
 -- A value without a key has no comments.
 instance FromYaml a => FromYaml (S.Commented a) where
   parseYaml v = S.Commented S.noComments <$> parseYaml v
-  parseYamlField k v = S.Commented (S.copyComments k.comments) <$> parseYaml v
+  parseYamlField k v = S.Commented (S.copyComments c) <$> parseYaml v'
+    where
+      c :: S.Comments
+      v' :: S.Node
+      (c, v') = entryComments k v
+
+-- | The comments of a mapping entry, and the value without them. The lines
+-- above a value on the line of its key or in the flow style go above the
+-- entry, as the renderer writes them. The lines above the first entry of a
+-- block collection stay in the value, because the renderer writes them below
+-- the key.
+entryComments :: S.Node -> S.Node -> (S.Comments, S.Node)
+entryComments k v = (S.Comments before inline v.comments.after, value)
+  where
+    block :: Bool
+    block = case v.content of
+      S.Sequence S.Block (_ : _) -> True
+      S.Mapping S.Block (_ : _) -> True
+      _ -> False
+
+    above :: [S.Line]
+    above = k.comments.before ++ if block then [] else v.comments.before
+
+    -- A line has one comment at its end. With an explicit key, both nodes can
+    -- have one, and the renderer writes the comment of the key above.
+    before :: [S.Line]
+    inline :: Maybe T.Text
+    (before, inline) = case (k.comments.inline, v.comments.inline) of
+      (Just kc, Just vc) -> (above ++ [S.Comment kc], Just vc)
+      (kc, vc) -> (above, vc <|> kc)
+
+    value :: S.Node
+    value =
+      let rest = S.Comments (if block then v.comments.before else []) Nothing []
+      in S.Node v.offset v.endOffset v.props rest v.content
 
 -- | The value of the node, with the tags resolved and the aliases replaced.
 instance FromYaml Value where

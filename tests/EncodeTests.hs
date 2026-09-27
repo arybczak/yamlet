@@ -381,11 +381,15 @@ test_commentedKeys :: Assertion
 test_commentedKeys = do
   let job = T.unlines ["name: build", "# The test reporter writes check runs.", "permissions: # read-only", "  contents: read"]
   assertEqual "record" (Right job) (encodeText <$> decodeText @Job job)
-  -- The comment after 2 belongs to the value, which an integer cannot keep.
   assertEqual
     "map"
-    (Right "# one\na: 1\nb: 2\n")
+    (Right "# one\na: 1\nb: 2 # two\n")
     (encodeText <$> decodeText @(M.Map T.Text (Commented Int)) "# one\na: 1\nb: 2 # two\n")
+  let nodes = "os: [a, b] # two\nsteps:\n- x\n  # end\n"
+  assertEqual
+    "nodes keep their comments once"
+    (Right nodes)
+    (encodeText <$> decodeText @(M.Map T.Text (Commented Node)) nodes)
   assertEqual
     "list items have no key"
     (Right [S.noComments])

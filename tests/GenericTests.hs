@@ -24,6 +24,7 @@ genericTests =
     , testCase "default" test_default
     , testCase "modifiers" test_modifiers
     , testCase "commented fields" test_commentedFields
+    , testCase "commented values" test_commentedValues
     , testProperty "snakeCase is camelTo2 of aeson" $ forAll name $ \s -> snakeCase s === A.camelTo2 '_' s
     , testProperty "kebabCase is camelTo2 of aeson" $ forAll name $ \s -> kebabCase s === A.camelTo2 '-' s
     ]
@@ -186,6 +187,40 @@ test_commentedFields =
         , "  # The version of the linter."
         , "  version: '3.8'"
         , "  level: warning"
+        ]
+
+data Setup = Setup {hooks :: Commented Hooks, name :: Commented T.Text}
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+
+newtype Hooks = Hooks {afterSetup :: Commented [Script]}
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (FromYaml, ToYaml)
+
+instance GenericYaml Hooks where
+  yamlOptions = defaultYamlOptions {fieldLabelModifier = kebabCase}
+
+newtype Script = Script {run :: T.Text}
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+
+-- | The comments at the end of a collection and after a value.
+test_commentedValues :: Assertion
+test_commentedValues =
+  assertEqual "round trip" (Right input) (encodeText <$> decodeText @Setup input)
+  where
+    -- The comment "trailing" is at the end of the mapping of hooks.
+    input :: T.Text
+    input =
+      T.unlines
+        [ "# top"
+        , ""
+        , "hooks: # k"
+        , "  # above"
+        , "  after-setup:"
+        , "  - run: a"
+        , "  # trailing"
+        , "name: x # c"
         ]
 
 test_record :: Assertion
