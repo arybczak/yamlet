@@ -358,6 +358,10 @@ test_enumeration = do
     "unknown value"
     (Just (1, 1, "unknown value \"Up\", expected one of: TurnLeft, TurnRight"))
     (errorOf (decodeText @Turn "Up"))
+  assertEqual
+    "misspelled value"
+    (Just (1, 1, "unknown value \"TurnLetf\", did you mean \"TurnLeft\"?"))
+    (errorOf (decodeText @Turn "TurnLetf"))
 
 test_sum :: Assertion
 test_sum = do
@@ -367,6 +371,10 @@ test_sum = do
     "unknown tag"
     (Just (1, 6, "unknown tag \"Square\", expected one of: Circle, Rectangle, Dot"))
     (errorOf (decodeText @Shape "tag: Square\n"))
+  assertEqual
+    "misspelled tag"
+    (Just (1, 6, "unknown tag \"Rectangel\", did you mean \"Rectangle\"?"))
+    (errorOf (decodeText @Shape "tag: Rectangel\n"))
   assertEqual "missing tag" (Just (1, 1, "missing key \"tag\"")) (errorOf (decodeText @Shape "radius: 1\n"))
 
 test_options :: Assertion

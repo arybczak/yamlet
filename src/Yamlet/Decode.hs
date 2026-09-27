@@ -496,16 +496,19 @@ rejectUnknownKeys known o = traverse_ (check . fst) o.entries
     check k = case stringValue k of
       Just t
         | t `elem` known -> pure ()
-        | otherwise ->
-            failAt k $
-              "unknown key " ++ show t ++ case suggestion (T.unpack t) of
-                Just s -> ", did you mean " ++ show s ++ "?"
-                Nothing -> ", expected one of: " ++ L.intercalate ", " (map T.unpack known)
+        | otherwise -> failAt k $ "unknown key " ++ show t ++ alternatives known t
       _ -> typeMismatch "a string as the key" k
 
+-- | The end of the error for an unknown name: the known name that is close to
+-- it, e.g. "host" for "hots", or else all known names.
+alternatives :: [T.Text] -> T.Text -> String
+alternatives known t = case suggestion (T.unpack t) of
+  Just s -> ", did you mean " ++ show s ++ "?"
+  Nothing -> ", expected one of: " ++ L.intercalate ", " (map T.unpack known)
+  where
     suggestion :: String -> Maybe T.Text
-    suggestion t =
-      case L.sortOn fst [(d, s) | s <- known, let d = distance t (T.unpack s), d <= maxEdits, d < length t] of
+    suggestion u =
+      case L.sortOn fst [(d, s) | s <- known, let d = distance u (T.unpack s), d <= maxEdits, d < length u] of
         (_, s) : _ -> Just s
         [] -> Nothing
       where
@@ -1171,13 +1174,7 @@ gParseYaml opts flat def k n
 
     unknown :: String -> T.Text -> Parser a
     unknown what t =
-      fail $
-        "unknown "
-          ++ what
-          ++ " "
-          ++ show t
-          ++ ", expected one of: "
-          ++ T.unpack (T.intercalate ", " (map (constructorTag opts) (gConstructorNames @f)))
+      fail $ "unknown " ++ what ++ " " ++ show t ++ alternatives (map (constructorTag opts) (gConstructorNames @f)) t
 {-# INLINE gParseYaml #-}
 
 class GFromConstructor f where
