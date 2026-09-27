@@ -161,9 +161,11 @@ noComments = Comments [] Nothing []
 -- first item.
 --
 -- A comment survives only if its node decodes into a type with a place for
--- it, i.e. a node or a 'Commented' value. E.g. a comment at the end of a
--- nested mapping survives only if the field that holds the mapping is
--- 'Commented', because a record has no place for the end of its mapping.
+-- it, i.e. a node or a 'Commented' value. A key without a corresponding
+-- Haskell field, e.g. the tag of a constructor, has no such type, so its
+-- comments are lost. A comment at the end of a nested mapping survives only
+-- if the field that holds the mapping is 'Commented', because a record has
+-- no place for the end of its mapping.
 --
 -- A type that derives its instances through 'Generic' and has one
 -- constructor with one field without a name does not give the key of its
