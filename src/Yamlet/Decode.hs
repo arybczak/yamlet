@@ -244,7 +244,8 @@ withSequence f = parseNode $ \n -> case n.content of
 
 -- | The items of a sequence, with the lines above the sequence moved to its
 -- first item. Out of line, 'withSequence' is small enough to inline, and
--- the optimizer sees its failure, e.g. in a derived decoder.
+-- the optimizer sees its failure, e.g. in a derived decoder. Without the
+-- pragma, the inspection test of the derived decoder of a sum type fails.
 items :: S.Node -> [S.Node] -> [S.Node]
 items n = \case
   x : xs | not (null n.comments.before) -> withLinesAbove n.comments.before x : xs
@@ -662,11 +663,15 @@ instance FromYaml a => FromYaml (NE.NonEmpty a) where
     [] -> fail "expected a non-empty list"
     x : xs -> (NE.:|) <$> parseNode parseYaml x <*> mapM (parseNode parseYaml) xs
 
--- | Null is 'Nothing'.
+-- | Null is 'Nothing'. The key of an entry goes to the value inside, e.g. for
+-- a 'Yamlet.Commented' value.
 instance FromYaml a => FromYaml (Maybe a) where
   parseYaml n = case view n of
     NullView -> pure Nothing
     _ -> Just <$> parseYaml n
+  parseYamlField k n = case view n of
+    NullView -> pure Nothing
+    _ -> Just <$> parseYamlField k n
 
 -- | Two keys that convert to the same key, e.g. @1@ and @1.0@ for 'Double',
 -- are an error.

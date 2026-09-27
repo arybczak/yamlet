@@ -198,9 +198,11 @@ instance ToYaml a => ToYaml [a] where
 instance ToYaml a => ToYaml (NE.NonEmpty a) where
   toYaml = toYaml . NE.toList
 
--- | 'Nothing' is null.
+-- | 'Nothing' is null. The key of an entry goes to the value inside, e.g. for
+-- a 'Yamlet.Commented' value.
 instance ToYaml a => ToYaml (Maybe a) where
   toYaml = maybe (scalar Null) toYaml
+  toYamlField k = maybe (k, scalar Null) (toYamlField k)
 
 -- | Two keys that give the same node, e.g. 'Nothing' and @'Just' ()@, or two
 -- NaN values, give a mapping that does not read back.
