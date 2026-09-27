@@ -1,6 +1,3 @@
--- The '>>' of 'Parser' differs from '*>' on purpose.
-{-# OPTIONS_GHC -Wno-noncanonical-monad-instances #-}
-
 -- | Conversion of nodes to Haskell values, with errors that point to the
 -- node that caused them.
 module Yamlet.Decode
@@ -176,15 +173,13 @@ instance Applicative Parser where
     Result e1 h -> case g off of
       Result e2 a -> Result (bothErrors e1 e2) (h a)
 
+-- '>>' keeps its default, which uses '>>='. So a statement of a @do@ block
+-- does not run after a failed check, e.g. an index into a list after the
+-- check of its length.
 instance Monad Parser where
   Parser g >>= k = Parser $ \off -> case g off of
     Result NoErrors a -> let Parser h = k a in h off
     Result e _ -> Result e failed
-
-  -- A statement of a @do@ block must not run after a failed check, e.g. an
-  -- index into a list after the check of its length. The default is '*>',
-  -- which runs it.
-  m >> k = m >>= const k
 
 instance MonadFail Parser where
   fail msg = Parser $ \off -> failure off msg
