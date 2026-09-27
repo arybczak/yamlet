@@ -92,7 +92,10 @@ class GenericYaml a where
   -- The field must encode as a mapping with a key, and no key can be the tag
   -- key. Otherwise the constructor encodes as without the option. Thus the
   -- field of a type with the same tag key stays under the contents key. An
-  -- enumeration merges if 'Yamlet.Generic.allNullaryToStringTag' is off.
+  -- enumeration merges if 'Yamlet.Generic.allNullaryToStringTag' is off. A
+  -- type without a tag, e.g. a type with one constructor without
+  -- 'Yamlet.Generic.tagSingleConstructors', encodes as its field, so the
+  -- option has no effect.
   --
   -- The keys of the mapping belong to the field, so the options of its type
   -- apply to them, e.g. 'Yamlet.Generic.rejectUnknownFields'.
