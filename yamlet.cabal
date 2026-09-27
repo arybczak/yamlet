@@ -32,6 +32,7 @@ common language
     ghc-options:        -Wall
                         -Werror=missing-deriving-strategies
                         -Werror=prepositive-qualified-module
+                        -Wno-unticked-promoted-constructors
 
     default-language:   GHC2021
 
