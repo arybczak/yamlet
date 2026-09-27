@@ -82,6 +82,7 @@ module Yamlet
 
 import Data.Bifunctor
 import Data.ByteString qualified as BS
+import Data.Maybe
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
 
@@ -108,14 +109,14 @@ decodeText :: FromYaml a => T.Text -> Either Error a
 decodeText input =
   parseStream input >>= \case
     [] -> convert input (S.Node (S.Offset 0) (S.Offset 0) S.noProps S.noComments (S.Scalar S.Plain ""))
-    [doc] -> convert input doc.root
+    [doc] -> convert input (documentRoot doc)
     docs@(_ : doc : _) -> do
       mapM_ (\d -> first (uncurry (decoderError input d.root)) (prepare d.root)) docs
       Left $ errorAt input doc.root.offset "expected a single document, but got a second one"
 
 -- | Decode every document of a stream.
 decodeAllText :: FromYaml a => T.Text -> Either Error [a]
-decodeAllText input = parseStream input >>= mapM (convert input . (.root))
+decodeAllText input = parseStream input >>= mapM (convert input . documentRoot)
 
 -- | Decode a document of a syntax tree, e.g. to read the values of a file and
 -- keep its comments from one parse.
@@ -129,7 +130,30 @@ decodeAllText input = parseStream input >>= mapM (convert input . (.root))
 -- The text is the input of the document, for the line in an error. For a
 -- document that the program built, the text can be empty.
 decodeDocument :: FromYaml a => T.Text -> S.Document -> Either Error a
-decodeDocument input doc = convert input doc.root
+decodeDocument input doc = convert input (documentRoot doc)
+
+-- | The root of a document with the lines of the document, e.g. the lines
+-- before a @---@ marker and at the end of the document, so that a decoder
+-- can keep them. The renderer writes them at the same places. The comment on
+-- the line of the marker becomes a line above the root.
+documentRoot :: S.Document -> S.Node
+documentRoot doc
+  | null dc.before && isNothing dc.inline && null dc.after = r
+  | otherwise = S.Node r.offset r.endOffset r.props comments r.content
+  where
+    dc :: S.Comments
+    dc = doc.docComments
+
+    r :: S.Node
+    r = doc.root
+
+    comments :: S.Comments
+    comments =
+      S.Comments
+        { S.before = dc.before ++ [S.Comment c | Just c <- [dc.inline]] ++ r.comments.before
+        , S.inline = r.comments.inline
+        , S.after = r.comments.after ++ dc.after
+        }
 
 convert :: FromYaml a => T.Text -> S.Node -> Either Error a
 convert input n = case runParser parseYaml n of

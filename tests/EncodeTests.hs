@@ -385,6 +385,12 @@ test_commentedKeys = do
     "map"
     (Right "# one\na: 1\nb: 2 # two\n")
     (encodeText <$> decodeText @(M.Map T.Text (Commented Int)) "# one\na: 1\nb: 2 # two\n")
+  -- The parser gives the lines before the marker and at the end to the
+  -- document, and the decoder gives them to the root.
+  assertEqual
+    "comments of the document"
+    (Right "# top\na: 1\n# end\n")
+    (encodeText <$> decodeText @(Commented (M.Map T.Text Int)) "# top\n---\na: 1\n# end\n")
   let nodes = "os: [a, b] # two\nsteps:\n- x\n  # end\n"
   assertEqual
     "nodes keep their comments once"
