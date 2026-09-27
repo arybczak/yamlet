@@ -142,8 +142,27 @@ attachNode e limit minColumn known n items0 =
         let (kvs', is) = mappingEntries style kvs items2 in (Mapping style kvs', is)
       c -> (c, items2)
 
+    -- The lines before the closing bracket come before the comment after it.
+    (trailing, afterLines, items5) = case n.content of
+      Sequence Block (_ : _) -> blockEnd
+      Mapping Block (_ : _) -> blockEnd
+      Sequence Flow _ -> flowEnd
+      Mapping Flow _ -> flowEnd
+      _ -> let (t, is) = trailingComment items3 in (t, [], is)
+
+    blockEnd, flowEnd :: (Maybe T.Text, [Line], [Item])
+    blockEnd =
+      let (t, is) = trailingComment items3
+          (ls, is') = blockAfter is
+      in (t, ls, is')
+    flowEnd =
+      let (ls, is) = flowAfter items3
+          (t, is') = trailingComment is
+      in (t, ls, is')
+
     -- The comment at the end of the line of the node's end.
-    (trailing, items4) = case items3 of
+    trailingComment :: [Item] -> (Maybe T.Text, [Item])
+    trailingComment = \case
       i : is
         | not i.own
         , i.at >= en
@@ -151,28 +170,21 @@ attachNode e limit minColumn known n items0 =
         , i.lineStart <= en
         , T.all (`elem` (" \t,:" :: String)) (between en i.at) ->
             (comment i, is)
-      _ -> (Nothing, items3)
-
-    (afterLines, items5) = case n.content of
-      Sequence Block (_ : _) -> blockAfter
-      Mapping Block (_ : _) -> blockAfter
-      Sequence Flow _ -> flowAfter
-      Mapping Flow _ -> flowAfter
-      _ -> ([], items4)
+      is -> (Nothing, is)
 
     -- The lines after the last entry, indented deep enough, and the empty
     -- lines between them.
-    blockAfter :: ([Line], [Item])
-    blockAfter =
+    blockAfter :: [Item] -> ([Line], [Item])
+    blockAfter is =
       let ok i = i.at < limit && i.own && (isEmptyLine i || i.at - i.lineStart >= max column minColumn)
-          (taken, rest) = span ok items4
+          (taken, rest) = span ok is
           (empties, taken') = span isEmptyLine (reverse taken)
       in (map (.line) (reverse taken'), reverse empties ++ rest)
 
     -- The lines before the closing bracket.
-    flowAfter :: ([Line], [Item])
-    flowAfter =
-      let (taken, rest) = span (\i -> i.at < en) items4
+    flowAfter :: [Item] -> ([Line], [Item])
+    flowAfter is =
+      let (taken, rest) = span (\i -> i.at < en) is
       in (map (.line) taken, rest)
 
     sequenceItems :: CollectionStyle -> [Node] -> [Item] -> ([Node], [Item])
