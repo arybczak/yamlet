@@ -41,6 +41,8 @@ encodeTests =
     , testCase "literal block scalars" test_literal
     , testCase "tags" test_tags
     , testCase "syntax tree" test_syntax
+    , testCase "kept nodes" test_keptNodes
+    , testProperty "fast renderer" prop_fastRenderer
     , testCase "containers" test_containers
     , testCase "base" test_base
     , testCase "time" test_time
@@ -310,6 +312,63 @@ test_syntax =
 
     expected :: T.Text
     expected = T.unlines ["# The name.", "name: x", "paths: [a, b]"]
+
+-- | A record that keeps a part of its document as it was written.
+data Workflow = Workflow {name :: T.Text, jobs :: Int, matrix :: Node}
+
+instance FromYaml Workflow where
+  parseYaml = withMapping $ \o -> Workflow <$> o .: "name" <*> o .: "jobs" <*> o .: "matrix"
+
+instance ToYaml Workflow where
+  toYaml w = mapping ["name" .= w.name, "jobs" .= w.jobs, "matrix" .= w.matrix]
+
+test_keptNodes :: Assertion
+test_keptNodes = do
+  case decodeText @Workflow input of
+    Left err -> assertFailure (prettyError "input" err)
+    Right w -> do
+      assertEqual "decoded field" "demo" w.name
+      assertEqual "output" expected (encodeText (Workflow w.name 8 w.matrix))
+  assertEqual
+    "kept nodes in a list"
+    (Right "- ['9.10', \"9.12\"] # versions\n- {a: 1}\n")
+    (encodeText <$> decodeText @[Node] "- ['9.10', \"9.12\"] # versions\n- {a: 1}\n")
+  where
+    input :: T.Text
+    input =
+      T.unlines
+        [ "name: demo"
+        , "jobs: 4"
+        , "matrix:"
+        , "  # The operating systems."
+        , "  os: [ubuntu, macos] # two for now"
+        , "  ghc: ['9.10', \"9.12\"]"
+        , "  base: &b"
+        , "    x: 1"
+        , "  copy: *b"
+        ]
+
+    -- The alias becomes a copy of the node that it refers to.
+    expected :: T.Text
+    expected =
+      T.unlines
+        [ "name: demo"
+        , "jobs: 8"
+        , "matrix:"
+        , "  # The operating systems."
+        , "  os: [ubuntu, macos] # two for now"
+        , "  ghc: ['9.10', \"9.12\"]"
+        , "  base: &b"
+        , "    x: 1"
+        , "  copy:"
+        , "    x: 1"
+        ]
+
+-- | The faster renderer of the encoder gives the same output as the renderer
+-- of syntax trees.
+prop_fastRenderer :: Doc -> Property
+prop_fastRenderer (Doc n) =
+  encodeText n === S.renderSyntax S.defaultRenderOptions [S.document (toYaml n)]
 
 -- | Encoding a value and decoding the result gives the same value.
 prop_roundTrip :: Doc -> Property
