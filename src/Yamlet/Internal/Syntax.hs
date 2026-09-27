@@ -173,9 +173,12 @@ noComments = Comments [] Nothing []
 -- comments of the key are lost. Declare such a type as a newtype and derive
 -- its instances with @deriving newtype@, which gives the key to the value.
 --
--- In a map with a 'Commented' key and a 'Commented' value, both get the
--- comments of the key, and the encoder writes those of the value. The order
--- compares the values first and then the comments, e.g. in a set.
+-- In a map, use 'Commented' on the key or on the value, not on both. With
+-- both, the decoder gives the comments of the key to both, and the encoder
+-- writes only those of the value, so a change to the comments of the key is
+-- lost.
+--
+-- The order compares the values first and then the comments, e.g. in a set.
 data Commented a = Commented
   { value :: a
   , comments :: !Comments
