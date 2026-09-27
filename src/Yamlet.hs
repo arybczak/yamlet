@@ -60,6 +60,7 @@ module Yamlet
     -- * Comments of keys
   , S.Commented (..)
   , S.Comments (..)
+  , S.noComments
   , S.Line (..)
 
     -- * Values
