@@ -354,15 +354,15 @@ lYamlStream markers0 = do
       let explicitEnd = isMarker e p && byteAt e p == DOT
       when explicitEnd lDocumentSuffix
       q <- pos
-      when explicitEnd lDocumentPrefix
-      r <- pos
+      rest <- documents markers explicitEnd q
       let doc =
             attachComments
               e
               prefix
               marker
-              -- The lines after the last document belong to its end.
-              (if r >= e.end then r else q)
+              -- The lines after the last document belong to its end, also
+              -- after more end markers.
+              (if null rest then e.end else q)
               Document
                 { version = version
                 , explicitStart = isJust marker
@@ -370,7 +370,7 @@ lYamlStream markers0 = do
                 , docComments = noComments
                 , root = root
                 }
-      (doc :) <$> documents markers explicitEnd q
+      pure (doc : rest)
 
 -- | Stop with an error at the furthest failure.
 throwUnexpected :: Int -> P a

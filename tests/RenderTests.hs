@@ -318,6 +318,8 @@ test_attachment = do
   check "on the marker line" [("document", "inline", "c")] "--- # c\na: 1\n"
   check "after the end marker" [("document", "after", "c")] "a\n...\n# c\n"
   check "on the end marker line" [("document", "after", "c")] "a\n... # c\n"
+  check "after two end markers" [("document", "after", "c"), ("document", "after", "d")] "a\n...\n# c\n...\n# d\n"
+  check "on a second end marker line" [("document", "after", "c")] "a\n...\n... # c\n"
   check "inside a flow sequence" [("/0", "inline", "c"), ("/1", "before", "d")] "[a, # c\n # d\n b]\n"
   check "empty lines" [] "a: 1\n\n\nb: 2\n"
   assertEqual
