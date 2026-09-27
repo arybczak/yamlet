@@ -131,8 +131,6 @@ test-suite test
 test-suite inspection
     import:         language
 
-    ghc-options:    -O
-
     build-depends:    base
                     , inspection-testing
                     , tasty
