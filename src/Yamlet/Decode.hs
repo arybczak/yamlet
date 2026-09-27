@@ -769,16 +769,16 @@ instance FromYaml DayOfWeek where
 
 -- | A mapping with the keys @months@ and @days@, e.g. @{months: 1, days: 2}@.
 instance FromYaml CalendarDiffDays where
-  parseYaml = withMapping $ \o -> do
+  parseYaml = withMapping $ \o ->
     rejectUnknownKeys ["months", "days"] o
-    CalendarDiffDays <$> o .: "months" <*> o .: "days"
+      *> (CalendarDiffDays <$> o .: "months" <*> o .: "days")
 
 -- | A mapping with the keys @months@ and @time@, a number of seconds, e.g.
 -- @{months: 1, time: 1.5}@.
 instance FromYaml CalendarDiffTime where
-  parseYaml = withMapping $ \o -> do
+  parseYaml = withMapping $ \o ->
     rejectUnknownKeys ["months", "time"] o
-    CalendarDiffTime <$> o .: "months" <*> o .: "time"
+      *> (CalendarDiffTime <$> o .: "months" <*> o .: "time")
 
 zonedTimeMismatch :: String
 zonedTimeMismatch = "expected a date, a time and a time zone such as 2026-09-25T12:30:00Z"
@@ -934,9 +934,9 @@ instance FromYaml Void where
 -- @{numerator: 1, denominator: 3}@.
 instance (Integral a, FromYaml a) => FromYaml (Ratio a) where
   parseYaml = withMapping $ \o -> do
-    rejectUnknownKeys ["numerator", "denominator"] o
-    n <- (.:) @a o "numerator"
-    d <- (.:) @a o "denominator"
+    (n, d) <-
+      rejectUnknownKeys ["numerator", "denominator"] o
+        *> ((,) <$> (.:) @a o "numerator" <*> (.:) @a o "denominator")
     when (d == 0) $ fail "the denominator is 0"
     -- The reduction happens in Integer, where the gcd is fast. For another
     -- type, the gcd takes quadratic time in the number of digits, and in a

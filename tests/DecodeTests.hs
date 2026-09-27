@@ -1032,6 +1032,20 @@ test_collectedErrors = do
     ]
     (errorsOf (decodeText @(M.Map T.Text Int) "{a: x, 1: 2, b: y}"))
   assertEqual
+    "fields of a fraction"
+    [ (1, 12, "expected an integer, but got a string")
+    , (2, 14, "expected an integer, but got a string")
+    , (3, 1, "unknown key \"extra\", expected one of: numerator, denominator")
+    ]
+    (errorsOf (decodeText @Rational "numerator: x\ndenominator: y\nextra: 1\n"))
+  assertEqual
+    "fields of a calendar difference"
+    [ (1, 9, "expected an integer, but got a string")
+    , (2, 7, "expected an integer, but got a string")
+    , (3, 1, "unknown key \"weeks\", expected one of: months, days")
+    ]
+    (errorsOf (decodeText @CalendarDiffDays "months: x\ndays: y\nweeks: 1\n"))
+  assertEqual
     "duplicate keys of a map"
     [ (1, 8, "duplicate key after conversion")
     , (1, 2, "the first key")
