@@ -58,17 +58,21 @@ attachComments e start marker end doc
       Just m -> span (\i -> i.at < m - e.base) items
       Nothing -> ([], items)
 
+    rootStart, rootLine :: Int
+    rootStart = offsetOf doc.root.offset
+    rootLine = lineOf e rootStart
+
     -- The comment on the line of the marker, unless the root starts there.
     (markerComment, rest) = case (marker, afterMarker) of
       (Just m, i : is)
         | not i.own
         , i.lineStart == m - e.base
-        , lineOf e (offsetOf doc.root.offset) /= m - e.base
+        , rootLine /= m - e.base
         , Comment t <- i.line ->
             (Just t, is)
       _ -> (Nothing, afterMarker)
 
-    (root', leftover) = attachNode e (end - e.base) 0 doc.root rest
+    (root', leftover) = attachNode e (end - e.base) 0 (rootStart, rootLine) doc.root rest
 
 isEmptyLine :: Item -> Bool
 isEmptyLine i = case i.line of
@@ -80,9 +84,10 @@ offsetOf (Offset o) = o
 
 -- | Attach the comments to a node and the nodes inside it. The limit is the
 -- offset of the next node, and the column is the smallest one for the lines
--- after the last entry of a block collection.
-attachNode :: Env -> Int -> Int -> Node -> [Item] -> (Node, [Item])
-attachNode e limit minColumn n items0 =
+-- after the last entry of a block collection. The pair is an offset at or
+-- before the node and the start of its line.
+attachNode :: Env -> Int -> Int -> (Int, Int) -> Node -> [Item] -> (Node, [Item])
+attachNode e limit minColumn known n items0 =
   ( n
       { comments =
           Comments
@@ -98,6 +103,10 @@ attachNode e limit minColumn n items0 =
     s, en :: Int
     s = offsetOf n.offset
     en = offsetOf n.endOffset
+
+    lineStart, column :: Int
+    lineStart = lineFrom e known s
+    column = s - lineStart
 
     -- The lines above the node. A comment at the end of a line that no node
     -- took, e.g. in "- # comment" above a mapping, belongs to the node.
@@ -118,7 +127,7 @@ attachNode e limit minColumn n items0 =
       (Scalar style _, i : is)
         | style == Literal || style == Folded
         , not i.own
-        , i.lineStart == lineOf e s ->
+        , i.lineStart == lineStart ->
             (comment i, is)
       _ -> (Nothing, items1)
 
@@ -151,8 +160,7 @@ attachNode e limit minColumn n items0 =
     -- lines between them.
     blockAfter :: ([Line], [Item])
     blockAfter =
-      let column = max (columnOf e s) minColumn
-          ok i = i.at < limit && i.own && (isEmptyLine i || i.at - i.lineStart >= column)
+      let ok i = i.at < limit && i.own && (isEmptyLine i || i.at - i.lineStart >= max column minColumn)
           (taken, rest) = span ok items4
           (empties, taken') = span isEmptyLine (reverse taken)
       in (map (.line) (reverse taken'), reverse empties ++ rest)
@@ -169,7 +177,7 @@ attachNode e limit minColumn n items0 =
         go :: [Node] -> [Item] -> ([Node], [Item])
         go [] is = ([], is)
         go (x : rest) is =
-          let (x', is') = attachNode e (nextStart rest) itemColumn x is
+          let (x', is') = attachNode e (nextStart rest) itemColumn (s, lineStart) x is
               (rest', is'') = go rest is'
           in (x' : rest', is'')
 
@@ -179,7 +187,7 @@ attachNode e limit minColumn n items0 =
           [] -> if style == Flow then en else limit
 
         itemColumn :: Int
-        itemColumn = if style == Flow then 0 else columnOf e s + 1
+        itemColumn = if style == Flow then 0 else column + 1
 
     mappingEntries :: CollectionStyle -> [(Node, Node)] -> [Item] -> ([(Node, Node)], [Item])
     mappingEntries style = go
@@ -187,9 +195,8 @@ attachNode e limit minColumn n items0 =
         go :: [(Node, Node)] -> [Item] -> ([(Node, Node)], [Item])
         go [] is = ([], is)
         go ((k, v) : rest) is =
-          let column = if style == Flow then 0 else columnOf e s + 1
-              (k', is') = attachNode e (offsetOf v.offset) column k is
-              (v', is'') = attachNode e (nextStart rest) column v is'
+          let (k', is') = attachNode e (offsetOf v.offset) entryColumn (s, lineStart) k is
+              (v', is'') = attachNode e (nextStart rest) entryColumn (s, lineStart) v is'
               (rest', is''') = go rest is''
           in ((k', v') : rest', is''')
 
@@ -197,6 +204,9 @@ attachNode e limit minColumn n items0 =
         nextStart = \case
           (k, _) : _ -> offsetOf k.offset
           [] -> if style == Flow then en else limit
+
+        entryColumn :: Int
+        entryColumn = if style == Flow then 0 else column + 1
 
     between :: Int -> Int -> T.Text
     between i j = slice e (i + e.base) (j + e.base)
@@ -215,8 +225,18 @@ lineOf e o = go (o + e.base) - e.base
       | i > e.base && not (isBreak (A.unsafeIndex e.array (i - 1))) = go (i - 1)
       | otherwise = i
 
-columnOf :: Env -> Int -> Int
-columnOf e o = o - lineOf e o
+-- | The offset of the start of the line with the second offset. The walk stops
+-- at the first offset of the pair, and the pair gives the start of its line.
+-- Without it, each nested block collection of a long line would walk back to
+-- the start of the line, and the time would be quadratic.
+lineFrom :: Env -> (Int, Int) -> Int -> Int
+lineFrom e (p, ls) o = go (o + e.base)
+  where
+    go :: Int -> Int
+    go i
+      | i == p + e.base = ls
+      | i > e.base && not (isBreak (A.unsafeIndex e.array (i - 1))) = go (i - 1)
+      | otherwise = i - e.base
 
 -- | A quick check for a comment or an empty line between the indices.
 mayHaveItems :: Env -> Int -> Int -> Bool
