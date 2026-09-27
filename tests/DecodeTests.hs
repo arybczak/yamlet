@@ -64,6 +64,7 @@ decodeTests =
         , testCase "types" test_typeErrors
         , testCase "keys" test_keyErrors
         , testCase "pretty" test_prettyError
+        , testCase "paths" test_errorPaths
         ]
     ]
 
@@ -1069,6 +1070,25 @@ test_manyKeys = do
       Mapping kvs -> kvs
       _ -> []
 
+-- | A decoder error has the path to its node.
+test_errorPaths :: Assertion
+test_errorPaths = do
+  check "nested key" (Right "hlint.version") $
+    decodeText @(M.Map T.Text (M.Map T.Text T.Text)) "hlint:\n  version: 1\n"
+  check "indices" (Right "[1][1]") $ decodeText @[[Int]] "- [1]\n- [2, x]\n"
+  -- The mapping and its first key start at the same place.
+  check "missing key" (Right "[1]") $ decodeText @[Config] "- name: x\n- jobs: 2\n"
+  check "unknown key" (Right "[0]") $ decodeText @[Config] "- name: x\n  bogus: 1\n"
+  check "key in quotes" (Right "\"a.b\".c") $
+    decodeText @(M.Map T.Text (M.Map T.Text Int)) "\"a.b\":\n  c: x\n"
+  check "duplicate key" (Right "a") $ decodeText @Value "a:\n  b: 1\n  b: 2\n"
+  check "root" (Right "") $ decodeText @Int "x"
+  let key = S.plainNode "a"
+  check "built node" (Right "") $ decodeDocument @(M.Map T.Text Int) "" (S.document (S.mappingNode [(key, key)]))
+  where
+    check :: String -> Either String String -> Either Error a -> Assertion
+    check preface expected r = assertEqual preface expected (either (Right . renderPath . (.path)) (const (Left "no error")) r)
+
 test_prettyError :: Assertion
 test_prettyError = do
   case decodeText @Config "name: x\npaths: 42\n" of
@@ -1092,7 +1112,7 @@ test_prettyError = do
     expected =
       L.intercalate
         "\n"
-        [ "config.yaml:2:8: expected a list, but got an integer"
+        [ "config.yaml:2:8: paths: expected a list, but got an integer"
         , "  |"
         , "2 | paths: 42"
         , "  |        ^"

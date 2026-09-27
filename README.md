@@ -8,8 +8,9 @@ A YAML 1.2.2 library written in Haskell.
   all 402 cases of the [YAML test suite](https://github.com/yaml/yaml-test-suite)
   (release `data-2022-01-17`), for both the parse events and the JSON values.
 - Errors give the line and the column of the problem, both counted from 1, and
-  an excerpt of the input. Messages name the kinds of values in plain words,
-  e.g. `expected a list, but got an integer`.
+  an excerpt of the input. A decoder error also gives the keys and indices
+  that lead to the problem, e.g. `jobs[1].name`. Messages name the kinds of
+  values in plain words, e.g. `expected a list, but got an integer`.
 - Mappings keep the order of their keys, on input and on output.
 - Instances of `FromYaml` and `ToYaml` for the common types. They use the
   same formats as the instances of aeson, with one difference: the keys of a

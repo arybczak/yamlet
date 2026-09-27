@@ -105,7 +105,7 @@ decodeText input =
     [] -> convert input (S.Node (S.Offset 0) (S.Offset 0) S.noProps S.noComments (S.Scalar S.Plain ""))
     [doc] -> convert input doc.root
     docs@(_ : doc : _) -> do
-      mapM_ (\d -> first (uncurry (errorAt input)) (prepare d.root)) docs
+      mapM_ (\d -> first (uncurry (decoderError input d.root)) (prepare d.root)) docs
       Left $ errorAt input doc.root.offset "expected a single document, but got a second one"
 
 -- | Decode every document of a stream.
@@ -129,7 +129,12 @@ decodeDocument input doc = convert input doc.root
 convert :: FromYaml a => T.Text -> S.Node -> Either Error a
 convert input n = case runParser parseYaml n of
   Right a -> Right a
-  Left (off, msg) -> Left $ errorAt input off msg
+  Left (off, msg) -> Left $ decoderError input n off msg
+
+-- | An error of the decoder in the document with the root, with the path to
+-- the node at the offset.
+decoderError :: T.Text -> S.Node -> S.Offset -> String -> Error
+decoderError input root off msg = (errorAt input off msg) {path = nodePath off root}
 
 -- | Encode a value as a document.
 encode :: ToYaml a => a -> BS.ByteString

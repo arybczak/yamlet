@@ -3,14 +3,19 @@ module Yamlet.Error
   ( -- * Errors
     Error (..)
   , Location (..)
+  , PathElement (..)
   , prettyError
+  , renderPath
 
     -- * Construction
   , errorAt
   , locate
+  , nodePath
   ) where
 
 import Control.DeepSeq
+import Data.Char
+import Data.Maybe
 import Data.Text qualified as T
 import Data.Text.Array qualified as A
 import Data.Text.Internal qualified as T
@@ -25,7 +30,20 @@ data Error = Error
   , message :: !String
   , sourceLine :: !T.Text
   -- ^ The line of the input that contains the location.
+  , path :: [PathElement]
+  -- ^ The keys and the indices from the root of the document to the node of
+  -- a decoder error. An error at a key has the path of its mapping. The path
+  -- is empty for an error of the parser and for a node that a program built.
   }
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (NFData)
+
+-- | A step of a path into a document.
+data PathElement
+  = -- | The value of a key. A key that is a collection is @?@.
+    Key !T.Text
+  | -- | The item of a sequence, from 0.
+    Index !Int
   deriving stock (Eq, Show, Generic)
   deriving anyclass (NFData)
 
@@ -45,7 +63,7 @@ data Location = Location
 -- shows only the 80 characters around the column.
 --
 -- @
--- config.yaml:3:5: expected a list, but got an integer
+-- config.yaml:3:5: jobs[1]: expected a list, but got an integer
 --   |
 -- 3 |   - 42
 --   |     ^
@@ -55,7 +73,7 @@ data Location = Location
 -- @config.yaml: duplicate key \"a\"@.
 prettyError :: FilePath -> Error -> String
 prettyError file err
-  | err.location.line == 0 = file ++ ": " ++ err.message
+  | err.location.line == 0 = file ++ ": " ++ message
   | otherwise =
       concat
         [ file
@@ -64,7 +82,7 @@ prettyError file err
         , ":"
         , show err.location.column
         , ": "
-        , err.message
+        , message
         , "\n"
         , pad
         , " |\n"
@@ -78,6 +96,11 @@ prettyError file err
         , "^"
         ]
   where
+    message :: String
+    message
+      | null err.path = err.message
+      | otherwise = renderPath err.path ++ ": " ++ err.message
+
     lineNo :: String
     lineNo = show err.location.line
 
@@ -114,6 +137,67 @@ prettyError file err
     caret :: String
     caret = map (\c -> if c == '\t' then '\t' else ' ') (take before shown)
 
+-- | A path in the form @jobs[1].name@. A key with a character of this form,
+-- white space or no characters is in double quotes, e.g. @\"a.b\"@.
+renderPath :: [PathElement] -> String
+renderPath = \case
+  [] -> ""
+  Key k : rest -> key k ++ go rest
+  Index i : rest -> index i ++ go rest
+  where
+    go :: [PathElement] -> String
+    go = \case
+      [] -> ""
+      Key k : rest -> "." ++ key k ++ go rest
+      Index i : rest -> index i ++ go rest
+
+    key :: T.Text -> String
+    key k
+      | not (T.null k) && T.all plain k = T.unpack k
+      | otherwise = "\"" ++ concatMap escape (T.unpack k) ++ "\""
+      where
+        plain :: Char -> Bool
+        plain c = c `notElem` (".[]\"\\" :: String) && isPrint c && not (isSpace c)
+
+        escape :: Char -> String
+        escape c
+          | c == '"' || c == '\\' = ['\\', c]
+          | otherwise = [c]
+
+    index :: Int -> String
+    index i = "[" ++ show i ++ "]"
+
+-- | The path from the root to the node at the offset. If several nodes start
+-- there, e.g. a block mapping and its first key, the outermost one counts. A
+-- key does not add to the path.
+nodePath :: Offset -> Node -> [PathElement]
+nodePath off root
+  | off == noOffset = []
+  | otherwise = fromMaybe [] (go root)
+  where
+    go :: Node -> Maybe [PathElement]
+    go n
+      | n.offset == off = Just []
+      | not (inside n) = Nothing
+      | otherwise = case n.content of
+          Sequence _ xs -> listToMaybe [Index i : p | (i, x) <- zip [0 ..] xs, Just p <- [go x]]
+          Mapping _ kvs -> listToMaybe [p | (k, v) <- kvs, Just p <- [entry k v]]
+          _ -> Nothing
+
+    entry :: Node -> Node -> Maybe [PathElement]
+    entry k v = case go k of
+      Just _ -> Just []
+      Nothing -> (keyElement k :) <$> go v
+
+    inside :: Node -> Bool
+    inside n = n.offset <= off && off <= n.endOffset
+
+    keyElement :: Node -> PathElement
+    keyElement k = case k.content of
+      Scalar _ t -> Key t
+      Alias name -> Key ("*" <> name)
+      _ -> Key "?"
+
 -- | Create an error at the given offset of the input.
 errorAt :: T.Text -> Offset -> String -> Error
 errorAt input off msg =
@@ -121,6 +205,7 @@ errorAt input off msg =
     { location = loc
     , message = msg
     , sourceLine = if off == noOffset then T.empty else T.copy (lineAt input off)
+    , path = []
     }
   where
     loc :: Location
