@@ -1193,7 +1193,7 @@ genericParseYaml n =
   -- Forcing the encoding forces the check of the shape, e.g. with deferred
   -- type errors in a test of the errors.
   let enc = gEncoding @(SumEncoding a) @f
-  in enc `seq` gParseYaml (yamlOptions @a) (enc == TaggedFlat) (from <$> yamlDefault @a) to n
+  in enc `seq` gParseYaml (yamlOptions @a) enc (from <$> yamlDefault @a) to n
 {-# INLINE genericParseYaml #-}
 
 -- The decoders of the constructors take a continuation, which starts as
@@ -1217,10 +1217,11 @@ gParseYaml
    . ( GConstructors f
      , GFromConstructor f
      )
-  => YamlOptions -> Bool -> Maybe (D1 d f p) -> (D1 d f p -> a) -> S.Node -> Parser a
-gParseYaml opts flat def k n
+  => YamlOptions -> SumEncodingKind -> Maybe (D1 d f p) -> (D1 d f p -> a) -> S.Node -> Parser a
+gParseYaml opts enc def k n
   | isEnum @f opts =
-      withName tags (\t -> fromMaybe (unknown "value" t) (gFromTag opts (k . M1) n t)) n
+      withName tags (\t -> fromMaybe (unknown n "value" t) (gFromTag opts (k . M1) n t)) n
+  | isTagged @f opts, enc == SingleField = single
   | isTagged @f opts = withMapping tagged n
   | otherwise = gFromUntagged opts (unM1 <$> def) (k . M1) n
   where
@@ -1229,10 +1230,32 @@ gParseYaml opts flat def k n
       Nothing -> missingKey o opts.tagKey
       Just tn -> do
         t <- withName tags pure tn
-        fromMaybe (parseNode (\_ -> unknown "tag" t) tn) (gFromTagged opts flat (unM1 <$> def) (k . M1) t o)
+        fromMaybe (unknown tn "tag" t) (gFromTagged opts (enc == TaggedFlat) (unM1 <$> def) (k . M1) t o)
 
-    unknown :: String -> T.Text -> Parser a
-    unknown what t = fail $ "unknown " ++ what ++ " " ++ show t ++ alternatives tags t
+    -- A constructor without fields is its tag, and another constructor is a
+    -- mapping with its tag as the only key.
+    single :: Parser a
+    single = case view n of
+      StringView t -> fromMaybe (withoutValue t) (gFromTag opts (k . M1) n t)
+      _ | S.Mapping {} <- n.content -> withMapping singleEntry n
+      _ -> typeMismatch "a string or a mapping with one key" n
+
+    singleEntry :: Object -> Parser a
+    singleEntry o = case objectEntries o of
+      [(kn, v)] -> do
+        t <- withName tags pure kn
+        fromMaybe (unknown kn "constructor" t) (gFromSingle opts (unM1 <$> def) (k . M1) t (kn, v))
+      _ : (kn, _) : _ -> failAt kn "expected a mapping with one key, but got a second key"
+      [] -> failAt n "expected a mapping with one key, but got an empty mapping"
+
+    -- A string that is the tag of a constructor with fields.
+    withoutValue :: T.Text -> Parser a
+    withoutValue t
+      | t `elem` tags = failAt n $ "expected a mapping with the key " ++ show t ++ ", because the constructor has fields"
+      | otherwise = unknown n "constructor" t
+
+    unknown :: S.Node -> String -> T.Text -> Parser a
+    unknown node what t = failAt node $ "unknown " ++ what ++ " " ++ show t ++ alternatives tags t
 
     tags :: [T.Text]
     tags = map (constructorTag opts) (gConstructorNames @f)
@@ -1246,12 +1269,17 @@ class GFromConstructor f where
   -- the flag of 'TaggedFlat'.
   gFromTagged :: YamlOptions -> Bool -> Maybe (f p) -> (f p -> a) -> T.Text -> Object -> Maybe (Parser a)
 
+  -- | The constructor with the tag, from the only entry of a mapping, for
+  -- 'SingleField'.
+  gFromSingle :: YamlOptions -> Maybe (f p) -> (f p -> a) -> T.Text -> (S.Node, S.Node) -> Maybe (Parser a)
+
   -- | The only constructor, without a tag.
   gFromUntagged :: YamlOptions -> Maybe (f p) -> (f p -> a) -> S.Node -> Parser a
 
 instance GFromConstructor V1 where
   gFromTag _ _ _ _ = Nothing
   gFromTagged _ _ _ _ _ _ = Nothing
+  gFromSingle _ _ _ _ _ = Nothing
   gFromUntagged _ _ _ _ = fail "expected a type with constructors"
 
 instance (GFromConstructor f, GFromConstructor g) => GFromConstructor (f :+: g) where
@@ -1259,11 +1287,15 @@ instance (GFromConstructor f, GFromConstructor g) => GFromConstructor (f :+: g) 
   gFromTagged opts flat def k t o =
     gFromTagged opts flat (def >>= \case L1 x -> Just x; R1 _ -> Nothing) (k . L1) t o
       `mplus` gFromTagged opts flat (def >>= \case R1 x -> Just x; L1 _ -> Nothing) (k . R1) t o
+  gFromSingle opts def k t entry =
+    gFromSingle opts (def >>= \case L1 x -> Just x; R1 _ -> Nothing) (k . L1) t entry
+      `mplus` gFromSingle opts (def >>= \case R1 x -> Just x; L1 _ -> Nothing) (k . R1) t entry
 
   -- A type with several constructors always has a tag.
   gFromUntagged _ _ _ _ = fail "expected a tag"
   {-# INLINE gFromTag #-}
   {-# INLINE gFromTagged #-}
+  {-# INLINE gFromSingle #-}
 
 instance
   ( KnownSymbol name
@@ -1283,12 +1315,19 @@ instance
     | t == constructorTag opts (symbolVal (Proxy @name)) = Just (k . M1 <$> fromObject opts flat [opts.tagKey] (unM1 <$> def) o)
     | otherwise = Nothing
 
+  gFromSingle opts def k t entry@(kn, v)
+    | t /= constructorTag opts (symbolVal (Proxy @name)) = Nothing
+    | gNamed @f = Just (withMapping (fmap (k . M1) . fromObject opts False [] (unM1 <$> def)) v)
+    | gArity @f == 0 = Just (failAt kn $ "expected the string " ++ show t ++ ", because the constructor has no fields")
+    | otherwise = Just (k . M1 <$> gFromEntry entry)
+
   gFromUntagged opts def k n
     | gNamed @f || gArity @f == 0 = withMapping (fmap (k . M1) . fromObject opts False [] (unM1 <$> def)) n
     | otherwise = k . M1 <$> gFromValue n
 
   {-# INLINE gFromTag #-}
   {-# INLINE gFromTagged #-}
+  {-# INLINE gFromSingle #-}
   {-# INLINE gFromUntagged #-}
 
 -- | The fields of a constructor from a mapping. The given keys, e.g. the tag

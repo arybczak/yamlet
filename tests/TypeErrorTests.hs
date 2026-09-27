@@ -30,6 +30,8 @@ typeErrorTests =
         rejects
           "TaggedFlat needs constructors with one field without a name, but the constructor Jump has named fields."
           (encodeText (Jump 1))
+    , testCase "several fields without names in a single field" $
+        rejects "The constructor Coords has several fields without names." (encodeText (Coords 1 2))
     , testCase "no constructors" $
         rejects "A type without constructors cannot derive FromYaml or ToYaml" (decodeText @Empty "null")
     ]
@@ -52,6 +54,13 @@ data FlatNamed = Jump {height :: Int} | Halt
 
 instance GenericYaml FlatNamed where
   type SumEncoding FlatNamed = TaggedFlat
+
+data Place = Coords Double Double | Nowhere
+  deriving stock (Generic)
+  deriving anyclass (FromYaml, ToYaml)
+
+instance GenericYaml Place where
+  type SumEncoding Place = SingleField
 
 data Empty
   deriving stock (Generic)

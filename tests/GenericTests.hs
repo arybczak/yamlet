@@ -24,6 +24,7 @@ genericTests =
     , testCase "options" test_options
     , testCase "missing contents" test_missingContents
     , testCase "flat fields" test_flatten
+    , testCase "single field" test_singleField
     , testCase "default" test_default
     , testCase "modifiers" test_modifiers
     , testCase "commented fields" test_commentedFields
@@ -104,6 +105,51 @@ data Motion = Go Distance | Hurry Speed
 
 instance GenericYaml Motion where
   type SumEncoding Motion = TaggedFlat
+
+-- | The constructors of the single-field encoding can mix their fields.
+data Figure = Round {radius :: Double} | Named T.Text | Point
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (FromYaml, ToYaml)
+
+instance GenericYaml Figure where
+  type SumEncoding Figure = SingleField
+
+newtype Bare = Bare {size :: Int}
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (FromYaml, ToYaml)
+
+instance GenericYaml Bare where
+  type SumEncoding Bare = SingleField
+
+newtype Wrapped = Wrapped {size :: Int}
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (FromYaml, ToYaml)
+
+instance GenericYaml Wrapped where
+  type SumEncoding Wrapped = SingleField
+  yamlOptions = defaultYamlOptions {tagSingleConstructors = True}
+
+data Light = Red | Green
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (FromYaml, ToYaml)
+
+instance GenericYaml Light where
+  type SumEncoding Light = SingleField
+
+data Gauge = Gauge {level :: Int} | Off
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (FromYaml, ToYaml)
+
+instance GenericYaml Gauge where
+  type SumEncoding Gauge = SingleField
+  yamlOptions = defaultYamlOptions {rejectUnknownFields = True}
+
+data Memo = Memo (Commented T.Text) | NoMemo
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (FromYaml, ToYaml)
+
+instance GenericYaml Memo where
+  type SumEncoding Memo = SingleField
 
 data Strict = Strict {size :: Int, note :: Maybe T.Text}
   deriving stock (Eq, Show, Generic)
@@ -319,6 +365,12 @@ shapes =
     , shape "named fields in a sum, several fields" (Slow 1 2) "tag: Slow\nlevel: 1\ndelay: 2\n"
     , shape "named fields in a sum, with fields" (Rectangle 2 3) "tag: Rectangle\nwidth: 2.0\nheight: 3.0\n"
     , shape "named fields in a sum, without fields" Dot "tag: Dot\n"
+    , shape "single field, named fields" (Round 1) "Round:\n  radius: 1.0\n"
+    , shape "single field, a field without a name" (Named "x") "Named: x\n"
+    , shape "single field, without fields" Point "Point\n"
+    , shape "single field, one constructor" (Bare 1) "size: 1\n"
+    , shape "single field, one constructor with a tag" (Wrapped 1) "Wrapped:\n  size: 1\n"
+    , shape "single field, enumeration" Red "Red\n"
     ]
   where
     shape :: (Eq a, Show a, FromYaml a, ToYaml a) => String -> a -> T.Text -> TestTree
@@ -438,6 +490,40 @@ test_missingContents = do
     "field that does not accept null"
     (Just (1, 1, "missing key \"contents\""))
     (errorOf (decodeText @Token "tag: Label\n"))
+
+-- | The errors of the single-field encoding, and the comments of its key.
+test_singleField :: Assertion
+test_singleField = do
+  assertEqual
+    "second key"
+    (Just (1, 22, "expected a mapping with one key, but got a second key"))
+    (errorOf (decodeText @Figure "{Round: {radius: 1}, Point: x}"))
+  assertEqual
+    "unknown constructor"
+    (Just (1, 1, "unknown constructor \"Rund\", did you mean \"Round\"?"))
+    (errorOf (decodeText @Figure "Rund: {radius: 1}"))
+  assertEqual
+    "constructor with fields as a string"
+    (Just (1, 1, "expected a mapping with the key \"Round\", because the constructor has fields"))
+    (errorOf (decodeText @Figure "Round"))
+  assertEqual
+    "constructor without fields as a mapping"
+    (Just (1, 1, "expected the string \"Point\", because the constructor has no fields"))
+    (errorOf (decodeText @Figure "Point: x"))
+  assertEqual
+    "empty mapping"
+    (Just (1, 1, "expected a mapping with one key, but got an empty mapping"))
+    (errorOf (decodeText @Figure "{}"))
+  assertEqual
+    "neither a string nor a mapping"
+    (Just (1, 1, "expected a string or a mapping with one key, but got an integer"))
+    (errorOf (decodeText @Figure "1"))
+  assertEqual
+    "unknown field in the value"
+    (Just (2, 3, "unknown key \"lvl\", did you mean \"level\"?"))
+    (errorOf (decodeText @Gauge "Gauge:\n  lvl: 2\n  level: 1\n"))
+  let input = "# The memo.\nMemo: hello # inline\n"
+  assertEqual "comments of the key" (Right input) (encodeText <$> decodeText @Memo input)
 
 test_flatten :: Assertion
 test_flatten = do

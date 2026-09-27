@@ -46,6 +46,8 @@ main =
           , testCase "encode Shape" $ assertSuccess $(inspectTest $ hasNoGenericRep 'encodeShape)
           , testCase "decode Shape" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeShape)
           , testCase "decode Step" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeStep)
+          , testCase "encode Figure" $ assertSuccess $(inspectTest $ hasNoGenericRep 'encodeFigure)
+          , testCase "decode Figure" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeFigure)
           ]
       ]
 
@@ -270,6 +272,13 @@ instance GenericYaml Step where
   type SumEncoding Step = TaggedFlat
   yamlOptions = defaultYamlOptions {tagKey = "step"}
 
+data Figure = Round {radius :: Double} | Named T.Text | Point
+  deriving stock (Generic)
+  deriving anyclass (FromYaml, ToYaml)
+
+instance GenericYaml Figure where
+  type SumEncoding Figure = SingleField
+
 encodeTurn :: Turn -> Node
 encodeTurn = toYaml
 
@@ -284,3 +293,9 @@ decodeShape = runParser parseYaml
 
 decodeStep :: Node -> Either (NE.NonEmpty (Offset, String)) Step
 decodeStep = runParser parseYaml
+
+encodeFigure :: Figure -> Node
+encodeFigure = toYaml
+
+decodeFigure :: Node -> Either (NE.NonEmpty (Offset, String)) Figure
+decodeFigure = runParser parseYaml

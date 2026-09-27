@@ -104,6 +104,20 @@ data SumEncodingKind
     -- The keys of the mapping belong to the field, so the options of its
     -- type apply to them, e.g. 'Yamlet.Generic.rejectUnknownFields'.
     TaggedFlat
+  | -- | A mapping with one key, the tag, and the fields as its value, e.g.
+    -- @{Circle: {radius: 1}}@. A field without a name is the value, e.g.
+    -- @{Forward: 10}@, and a constructor without fields is its tag, e.g.
+    -- @Dot@. The tag key and the contents key play no part.
+    --
+    -- Each constructor has its own value, so the constructors of a type can
+    -- mix named fields with a field without a name. A second key in the
+    -- mapping is an error. 'Yamlet.Generic.rejectUnknownFields' applies to
+    -- the named fields in the value.
+    --
+    -- The key of a constructor with named fields is no field, so its
+    -- comments are lost. The key of a field without a name goes to the
+    -- field, e.g. for a 'Yamlet.Commented' value.
+    SingleField
   deriving stock (Eq, Show)
 
 -- | The configuration of the generic instances of t'Yamlet.Decode.FromYaml'
@@ -198,6 +212,9 @@ instance ValidShape (GShape f) => GEncoding TaggedObject f where
 instance ValidShape (FlatShape (GShape f)) => GEncoding TaggedFlat f where
   gEncoding = validShape @(FlatShape (GShape f)) `seq` TaggedFlat
 
+instance ValidShape (SingleShape f) => GEncoding SingleField f where
+  gEncoding = validShape @(SingleShape f) `seq` SingleField
+
 -- | The fields of the constructors of a type. A constructor without fields
 -- fits with both kinds of fields.
 data Shape
@@ -252,6 +269,21 @@ class ValidShape (s :: Shape) where
 instance ValidShape NoFields where validShape = ()
 instance ValidShape (UnnamedField name) where validShape = ()
 instance ValidShape (NamedFields name) where validShape = ()
+
+-- | A shape of 'SingleField', which checks each constructor as 'GShape' does,
+-- but lets the constructors mix their fields. The equations match both
+-- shapes, so that GHC reduces both and reports their type errors.
+type family SingleShape (f :: Type -> Type) :: Shape where
+  SingleShape (f :+: g) = EitherShape (SingleShape f) (SingleShape g)
+  SingleShape f = GShape f
+
+type family EitherShape (a :: Shape) (b :: Shape) :: Shape where
+  EitherShape NoFields b = b
+  EitherShape a NoFields = a
+  EitherShape (NamedFields a) (NamedFields _) = NamedFields a
+  EitherShape (NamedFields a) (UnnamedField _) = NamedFields a
+  EitherShape (UnnamedField a) (NamedFields _) = UnnamedField a
+  EitherShape (UnnamedField a) (UnnamedField _) = UnnamedField a
 
 -- | The shape, if 'TaggedFlat' has fields to flatten in it.
 type family FlatShape (s :: Shape) :: Shape where

@@ -458,7 +458,7 @@ genericToYaml x =
   -- Forcing the encoding forces the check of the shape, e.g. with deferred
   -- type errors in a test of the errors.
   let enc = gEncoding @(SumEncoding a) @f
-  in enc `seq` gToYaml (yamlOptions @a) (enc == TaggedFlat) (from <$> yamlDefault @a) (from x)
+  in enc `seq` gToYaml (yamlOptions @a) enc (from <$> yamlDefault @a) (from x)
 {-# INLINE genericToYaml #-}
 
 -- The encoder takes the default for 'omitNullFields': it leaves out a null
@@ -470,10 +470,10 @@ gToYaml
    . ( GConstructors f
      , GToConstructor f
      )
-  => YamlOptions -> Bool -> Maybe (D1 d f p) -> D1 d f p -> S.Node
-gToYaml opts flat def (M1 x)
+  => YamlOptions -> SumEncodingKind -> Maybe (D1 d f p) -> D1 d f p -> S.Node
+gToYaml opts enc def (M1 x)
   | isEnum @f opts = scalar (String (gTag opts x))
-  | otherwise = gToConstructor opts (if isTagged @f opts then Just flat else Nothing) (unM1 <$> def) x
+  | otherwise = gToConstructor opts (if isTagged @f opts then Just enc else Nothing) (unM1 <$> def) x
 -- Without the pragma, GHC 9.2 does not inline this function, and GHC 9.4 does
 -- not inline it for an enumeration. Then the inspection tests of these
 -- derived encoders fail. Later versions inline it anyway.
@@ -482,8 +482,8 @@ gToYaml opts flat def (M1 x)
 class GToConstructor f where
   gTag :: YamlOptions -> f p -> T.Text
 
-  -- | The constructor, with the tag if the flag of 'TaggedFlat' is given.
-  gToConstructor :: YamlOptions -> Maybe Bool -> Maybe (f p) -> f p -> S.Node
+  -- | The constructor, with the tag in the given encoding.
+  gToConstructor :: YamlOptions -> Maybe SumEncodingKind -> Maybe (f p) -> f p -> S.Node
 
 instance GToConstructor V1 where
   gTag _ = \case {}
@@ -508,12 +508,17 @@ instance
   where
   gTag opts _ = constructorTag opts (symbolVal (Proxy @name))
   gToConstructor opts tagging def c@(M1 x) = case tagging of
-    Just flat
+    Just SingleField
+      | gNamed @f -> mapping [(string (gTag opts c), mapping (gToEntries opts (unM1 <$> def) x))]
+      | otherwise -> case gToValue x of
+          Nothing -> string (gTag opts c)
+          Just _ -> mapping [gToEntry (string (gTag opts c)) x]
+    Just enc
       | gNamed @f -> mapping (withTagEntry (gToEntries opts (unM1 <$> def) x))
       | otherwise -> case gToValue x of
           Nothing -> mapping (withTagEntry [])
           Just v
-            | flat, Just entries <- flatEntries opts v -> mapping (withTagEntry entries)
+            | enc == TaggedFlat, Just entries <- flatEntries opts v -> mapping (withTagEntry entries)
             | otherwise -> mapping (withTagEntry [gToEntry (string opts.contentsKey) x])
     Nothing
       | gNamed @f -> mapping (gToEntries opts (unM1 <$> def) x)

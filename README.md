@@ -22,9 +22,10 @@ A YAML 1.2.2 library written in Haskell.
   converts, e.g. `1.0` for an `Int`, `null` for a `Double`, `0.5` for a
   `Rational` and a duplicate item of a `Set`.
 - Generic instances with the formats of aeson, for fewer shapes of types. A
-  constructor cannot have several fields without names, and a type cannot
-  mix named fields with a field without a name. Such a type is a compile
-  error.
+  constructor cannot have several fields without names. Such a type is a
+  compile error. A sum type is a mapping with a tag, e.g.
+  `{tag: Circle, radius: 1}`, or a mapping with the constructor as its only
+  key, e.g. `{Circle: {radius: 1}}`.
 - The syntax tree keeps the comments and the empty lines, so a program can
   read a file, change it and write it back with its comments.
 - A decoded type can keep a part of a document as a `Node`. The encoder

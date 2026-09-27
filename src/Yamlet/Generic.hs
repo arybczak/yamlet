@@ -34,11 +34,16 @@
 --   type SumEncoding Step = TaggedFlat
 -- @
 --
+-- * With the encoding 'SingleField', a constructor is a mapping with its
+--   name as the only key, e.g. @{Circle: {radius: 1}}@ or @{Forward: 10}@,
+--   and a constructor without fields is its name, e.g. @Dot@.
+--
 -- = Shapes
 --
 -- Every constructor has no fields, one field without a name, or named
 -- fields. A type with several constructors cannot mix named fields with a
 -- field without a name, but a constructor without fields fits with both.
+-- 'SingleField' allows the mix, because each constructor has its own value.
 -- 'TaggedFlat' needs constructors with a field without a name. Another
 -- type is a compile error that names the constructors, e.g. for a
 -- constructor with several fields without names. Give such fields names, or
