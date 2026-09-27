@@ -333,6 +333,15 @@ withText f = parseNode $ \n -> case view n of
   StringView t -> f (T.copy t)
   _ -> failAt n (stringMismatch n)
 
+-- | A string that is one of the names, e.g. the tags of the constructors. For
+-- another node, the error suggests quotes only if the quoted text is a name,
+-- e.g. not for @null@. Otherwise it lists the names.
+withName :: [T.Text] -> (T.Text -> Parser a) -> S.Node -> Parser a
+withName names f = parseNode $ \n -> case (view n, n.content) of
+  (StringView t, _) -> f t
+  (_, S.Scalar S.Plain t) | S.NoTag <- n.props.tag, t `elem` names -> failAt n (stringMismatch n)
+  _ -> typeMismatch ("one of: " ++ L.intercalate ", " (map T.unpack names)) n
+
 -- | The message for a node that is not a string, with the hint to quote a
 -- plain number, boolean or written null.
 stringMismatch :: S.Node -> String
@@ -1205,7 +1214,7 @@ gParseYaml
   => YamlOptions -> Bool -> Maybe (D1 d f p) -> (D1 d f p -> a) -> S.Node -> Parser a
 gParseYaml opts flat def k n
   | isEnum @f opts =
-      withText (\t -> fromMaybe (unknown "value" t) (gFromTag opts (k . M1) n t)) n
+      withName tags (\t -> fromMaybe (unknown "value" t) (gFromTag opts (k . M1) n t)) n
   | isTagged @f opts = withMapping tagged n
   | otherwise = gFromUntagged opts (unM1 <$> def) (k . M1) n
   where
@@ -1213,12 +1222,14 @@ gParseYaml opts flat def k n
     tagged o = case lookupKey opts.tagKey o of
       Nothing -> missingKey o opts.tagKey
       Just tn -> do
-        t <- parseNode (parseYaml @T.Text) tn
+        t <- withName tags pure tn
         fromMaybe (parseNode (\_ -> unknown "tag" t) tn) (gFromTagged opts flat (unM1 <$> def) (k . M1) t o)
 
     unknown :: String -> T.Text -> Parser a
-    unknown what t =
-      fail $ "unknown " ++ what ++ " " ++ show t ++ alternatives (map (constructorTag opts) (gConstructorNames @f)) t
+    unknown what t = fail $ "unknown " ++ what ++ " " ++ show t ++ alternatives tags t
+
+    tags :: [T.Text]
+    tags = map (constructorTag opts) (gConstructorNames @f)
 {-# INLINE gParseYaml #-}
 
 class GFromConstructor f where

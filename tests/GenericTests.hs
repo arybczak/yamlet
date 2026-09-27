@@ -44,6 +44,14 @@ data Turn = TurnLeft | TurnRight
   deriving stock (Eq, Show, Generic)
   deriving anyclass (GenericYaml, FromYaml, ToYaml)
 
+-- | The tags read as integers without quotes.
+data Level = One | Two
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (FromYaml)
+
+instance GenericYaml Level where
+  yamlOptions = defaultYamlOptions {constructorTagModifier = \case "One" -> "1"; _ -> "2"}
+
 data Shape
   = Circle {radius :: Double}
   | Rectangle {width :: Double, height :: Double}
@@ -379,6 +387,19 @@ test_enumeration = do
     "unknown value"
     (Just (1, 1, "unknown value \"Up\", expected one of: TurnLeft, TurnRight"))
     (errorOf (decodeText @Turn "Up"))
+  assertEqual
+    "null"
+    (Just (1, 1, "expected one of: TurnLeft, TurnRight, but got null"))
+    (errorOf (decodeText @Turn "null"))
+  assertEqual
+    "value that needs quotes"
+    (Just (1, 1, "expected a string, but got an integer, quote the value, e.g. '1'"))
+    (errorOf (decodeText @Level "1"))
+  assertEqual "quoted value" (Right One) (decodeText "'1'")
+  assertEqual
+    "tag of a sum"
+    (Just (1, 6, "expected one of: Circle, Rectangle, Dot, but got null"))
+    (errorOf (decodeText @Shape "tag: null\n"))
   assertEqual
     "misspelled value"
     (Just (1, 1, "unknown value \"TurnLetf\", did you mean \"TurnLeft\"?"))
