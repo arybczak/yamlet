@@ -243,12 +243,18 @@ data Optional = Optional {first :: T.Text, extra :: Maybe (Commented Node)}
   deriving stock (Eq, Show, Generic)
   deriving anyclass (GenericYaml, FromYaml, ToYaml)
 
+data Note = Note (Commented T.Text) | Blank
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+
 -- | The comments at the end of a collection and after a value.
 test_commentedValues :: Assertion
 test_commentedValues = do
   assertEqual "round trip" (Right input) (encodeText <$> decodeText @Setup input)
   let optional = T.unlines ["first: a", "# The extra part.", "extra: # optional", "  x: 1"]
   assertEqual "optional field" (Right optional) (encodeText <$> decodeText @Optional optional)
+  let note = T.unlines ["tag: Note", "# The text.", "contents: hello # c"]
+  assertEqual "contents key" (Right note) (encodeText <$> decodeText @Note note)
   where
     -- The comment "trailing" is at the end of the mapping of hooks.
     input :: T.Text

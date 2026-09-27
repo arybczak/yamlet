@@ -515,7 +515,7 @@ instance
           [] -> mapping (withTagEntry [])
           v : _
             | flat, Just entries <- flatEntries opts v -> mapping (withTagEntry entries)
-            | otherwise -> mapping (withTagEntry [opts.contentsKey .= v])
+            | otherwise -> mapping (withTagEntry [gToEntry (string opts.contentsKey) x])
     Nothing
       | gNamed @f -> mapping (gToEntries opts (unM1 <$> def) x)
       | otherwise -> case gToValues x of
@@ -554,6 +554,11 @@ class GToFields f where
 
   gToValues :: f p -> [S.Node]
 
+  -- | The mapping entry of the only field under the key, e.g. with the
+  -- comments of a 'Yamlet.Commented' field on the contents key.
+  gToEntry :: S.Node -> f p -> (S.Node, S.Node)
+  gToEntry k x = (k, S.sequenceNode (gToValues x))
+
 instance GToFields U1 where
   gToEntries _ _ _ = []
   gToValues _ = []
@@ -590,6 +595,7 @@ instance
 instance ToYaml a => GToFields (S1 (MetaSel Nothing u s d) (Rec0 a)) where
   gToEntries _ _ _ = []
   gToValues (M1 (K1 x)) = [toYaml x]
+  gToEntry k (M1 (K1 x)) = toYamlField k x
   {-# INLINE gToEntries #-}
   {-# INLINE gToValues #-}
 

@@ -1146,8 +1146,8 @@ fromObject opts flat keys def o
   | flat && not (all (isKey opts.contentsKey . fst) others) = merged
   | otherwise = do
       reject [opts.contentsKey]
-      case lookupKey opts.contentsKey o of
-        Just contents -> fromContents contents
+      case M.lookup opts.contentsKey o.index of
+        Just entry -> gFromEntry entry
         -- A missing contents key is null, if the fields accept null. A flat
         -- field can also have only optional keys.
         Nothing
@@ -1198,6 +1198,11 @@ class GFromFields f where
   -- | The fields from the start of the list, and the rest of the list.
   gFromValues :: [S.Node] -> Parser (f p, [S.Node])
 
+  -- | The only field from a mapping entry, with the key, e.g. for the
+  -- comments of a 'Yamlet.Commented' field under the contents key.
+  gFromEntry :: (S.Node, S.Node) -> Parser (f p)
+  gFromEntry (_, v) = fst <$> gFromValues [v]
+
 instance GFromFields U1 where
   gFromObject _ _ _ = pure U1
   gFromValues ns = pure (U1, ns)
@@ -1236,6 +1241,7 @@ instance
 
 instance FromYaml a => GFromFields (S1 (MetaSel Nothing u s d) (Rec0 a)) where
   gFromObject _ _ o = fail $ "expected a field without a name in " ++ describeNode (objectNode o)
+  gFromEntry entry = M1 . K1 <$> parseEntry entry
   gFromValues = nextField
   {-# INLINE gFromValues #-}
 
