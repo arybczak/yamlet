@@ -43,6 +43,7 @@ main =
           "sums"
           [ testCase "encode Turn" $ assertSuccess $(inspectTest $ hasNoGenericRep 'encodeTurn)
           , testCase "decode Turn" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeTurn)
+          , testCase "encode Shape" $ assertSuccess $(inspectTest $ hasNoGenericRep 'encodeShape)
           , testCase "decode Shape" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeShape)
           , testCase "decode Step" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeStep)
           ]
@@ -157,9 +158,10 @@ decodeConfig = runParser parseYaml
 ----------------------------------------
 -- Sums
 
--- The encoder of a sum type with fields keeps the representation. The
--- optimizer shares the code of the last constructors in one join point,
--- which takes their representation, even with three constructors.
+-- The encoder of Step keeps the representation. The optimizer moves the node
+-- of Halt, which has no fields, to the top level. Then the code of the last
+-- constructors is in a function with two callers, which takes their
+-- representation.
 
 data Turn = TurnLeft | TurnRight | TurnBack
   deriving stock (Generic)
@@ -182,6 +184,9 @@ encodeTurn = toYaml
 
 decodeTurn :: Node -> Either (NE.NonEmpty (Offset, String)) Turn
 decodeTurn = runParser parseYaml
+
+encodeShape :: Shape -> Node
+encodeShape = toYaml
 
 decodeShape :: Node -> Either (NE.NonEmpty (Offset, String)) Shape
 decodeShape = runParser parseYaml
