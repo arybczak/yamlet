@@ -96,7 +96,23 @@ import Yamlet.Value
 -- port <- parseYaml n
 -- unless (port > 0 && port < 65536) $ fail "the port must be from 1 to 65535"
 -- @
-newtype Parser a = Parser (S.Offset -> Either (S.Offset, String) a)
+newtype Parser a = Parser (S.Offset -> Either Errors a)
+
+-- | The errors of a parser in a tree, so that two sets of errors join in
+-- constant time.
+data Errors
+  = OneError !S.Offset String
+  | BothErrors Errors Errors
+
+-- | The errors in the order of their offsets. Errors at the same offset keep
+-- their order.
+sortedErrors :: Errors -> NE.NonEmpty (S.Offset, String)
+sortedErrors = NE.sortWith fst . NE.fromList . flip go []
+  where
+    go :: Errors -> [(S.Offset, String)] -> [(S.Offset, String)]
+    go = \case
+      OneError off msg -> ((off, msg) :)
+      BothErrors e1 e2 -> go e1 . go e2
 
 instance Functor Parser where
   fmap f (Parser g) = Parser $ fmap f . g
@@ -111,19 +127,21 @@ instance Monad Parser where
     Left err -> Left err
 
 instance MonadFail Parser where
-  fail msg = Parser $ \off -> Left (off, msg)
+  fail msg = Parser $ \off -> Left (OneError off msg)
 
--- | Run a parser on a node. Return the offset of the node that caused an
--- error with the error message.
+-- | Run a parser on a node. Return each error as the offset of the node that
+-- caused it with the error message, in the order of the offsets.
 --
 -- The node first goes through the checks of 'Yamlet.decodeDocument', e.g.
 -- for duplicate keys, and its aliases are replaced with the nodes that they
--- refer to.
-runParser :: (S.Node -> Parser a) -> S.Node -> Either (S.Offset, String) a
-runParser f n0 = prepare n0 >>= runChecked f
+-- refer to. A failed check is the only error.
+runParser :: (S.Node -> Parser a) -> S.Node -> Either (NE.NonEmpty (S.Offset, String)) a
+runParser f n0 = case prepare n0 of
+  Left err -> Left (err NE.:| [])
+  Right n -> either (Left . sortedErrors) Right (runChecked f n)
 
 -- | Run a parser on a node that passed 'prepare'.
-runChecked :: (S.Node -> Parser a) -> S.Node -> Either (S.Offset, String) a
+runChecked :: (S.Node -> Parser a) -> S.Node -> Either Errors a
 runChecked f n = let Parser g = parseNode f n in g n.offset
 
 -- | Run a parser on a node, so that 'fail' points to the node.
@@ -132,7 +150,7 @@ parseNode f n = let Parser g = f n in Parser $ \_ -> g n.offset
 
 -- | Fail with an error that points to the given node.
 failAt :: S.Node -> String -> Parser a
-failAt n msg = Parser $ \_ -> Left (n.offset, msg)
+failAt n msg = Parser $ \_ -> Left (OneError n.offset msg)
 
 -- | Fail with an error about the kind of the node, e.g. "expected a list, but
 -- got a string".
@@ -401,7 +419,7 @@ missingKey o key = Parser $ \off ->
   let Parser g = findKey o key
   in Left $ case g off of
        Left err -> err
-       Right _ -> (o.node.offset, "missing key " ++ show key)
+       Right _ -> OneError o.node.offset ("missing key " ++ show key)
 
 -- | A default for an optional value.
 (.!=) :: Parser (Maybe a) -> a -> Parser a
@@ -532,7 +550,7 @@ entryComments k v = (S.Comments before inline v.comments.after, value)
 instance FromYaml Value where
   parseYaml n = case represent n of
     Right r -> pure r
-    Left err -> Parser $ \_ -> Left err
+    Left (off, msg) -> Parser $ \_ -> Left (OneError off msg)
 
 instance FromYaml () where
   parseYaml = withNull (pure ())

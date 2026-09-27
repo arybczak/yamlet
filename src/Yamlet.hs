@@ -17,7 +17,7 @@
 -- main = do
 --   input <- BS.readFile "config.yaml"
 --   case decode input of
---     Left err -> putStrLn $ prettyError "config.yaml" err
+--     Left errs -> mapM_ (putStrLn . prettyError "config.yaml") errs
 --     Right config -> ...
 -- @
 --
@@ -81,6 +81,7 @@ module Yamlet
 
 import Data.Bifunctor
 import Data.ByteString qualified as BS
+import Data.List.NonEmpty qualified as NE
 import Data.Maybe
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
@@ -97,26 +98,35 @@ import Yamlet.Internal.Syntax qualified as S
 import Yamlet.Value
 
 -- | Decode a stream with one document. An empty stream is null.
-decode :: FromYaml a => BS.ByteString -> Either Error a
-decode bs = decodeInput bs >>= decodeText
+--
+-- A syntax error, or an error of the checks that 'decodeDocument' describes,
+-- is the only error. Otherwise the result has every error of the decoder that
+-- 'Parser' collects, in the order of their positions.
+decode :: FromYaml a => BS.ByteString -> Either (NE.NonEmpty Error) a
+decode bs = single (decodeInput bs) >>= decodeText
 
--- | Decode every document of a stream.
-decodeAll :: FromYaml a => BS.ByteString -> Either Error [a]
-decodeAll bs = decodeInput bs >>= decodeAllText
+-- | Decode every document of a stream. The errors are those of the first
+-- document that fails, as for 'decode'.
+decodeAll :: FromYaml a => BS.ByteString -> Either (NE.NonEmpty Error) [a]
+decodeAll bs = single (decodeInput bs) >>= decodeAllText
 
--- | Decode a stream with one document. An empty stream is null.
-decodeText :: FromYaml a => T.Text -> Either Error a
+-- | Decode a stream with one document. An empty stream is null. The errors
+-- are as for 'decode'.
+decodeText :: FromYaml a => T.Text -> Either (NE.NonEmpty Error) a
 decodeText input =
-  parseStream input >>= \case
+  single (parseStream input) >>= \case
     [] -> convert input (S.Node (S.Offset 0) (S.Offset 0) S.noProps S.noComments (S.Scalar S.Plain ""))
     [doc] -> convert input (documentRoot doc)
-    docs@(_ : doc : _) -> do
+    docs@(_ : doc : _) -> single $ do
       mapM_ (\d -> first (uncurry (decoderError input d.root)) (prepare d.root)) docs
       Left $ errorAt input doc.root.offset "expected a single document, but got a second one"
 
--- | Decode every document of a stream.
-decodeAllText :: FromYaml a => T.Text -> Either Error [a]
-decodeAllText input = parseStream input >>= mapM (convert input . documentRoot)
+-- | Decode every document of a stream. The errors are as for 'decodeAll'.
+decodeAllText :: FromYaml a => T.Text -> Either (NE.NonEmpty Error) [a]
+decodeAllText input = single (parseStream input) >>= mapM (convert input . documentRoot)
+
+single :: Either Error a -> Either (NE.NonEmpty Error) a
+single = first (NE.:| [])
 
 -- | Decode a document of a syntax tree, e.g. to read the values of a file and
 -- keep its comments from one parse.
@@ -128,8 +138,9 @@ decodeAllText input = parseStream input >>= mapM (convert input . documentRoot)
 -- scientific notation.
 --
 -- The text is the input of the document, for the line in an error. For a
--- document that the program built, the text can be empty.
-decodeDocument :: FromYaml a => T.Text -> S.Document -> Either Error a
+-- document that the program built, the text can be empty. The errors are as
+-- for 'decode'.
+decodeDocument :: FromYaml a => T.Text -> S.Document -> Either (NE.NonEmpty Error) a
 decodeDocument input doc = convert input (documentRoot doc)
 
 -- | The root of a document with the lines of the document, e.g. the lines
@@ -155,10 +166,8 @@ documentRoot doc
         , S.after = r.comments.after ++ dc.after
         }
 
-convert :: FromYaml a => T.Text -> S.Node -> Either Error a
-convert input n = case runParser parseYaml n of
-  Right a -> Right a
-  Left (off, msg) -> Left $ decoderError input n off msg
+convert :: FromYaml a => T.Text -> S.Node -> Either (NE.NonEmpty Error) a
+convert input n = first (fmap (uncurry (decoderError input n))) (runParser parseYaml n)
 
 -- | An error of the decoder in the document with the root, with the path to
 -- the node at the offset.

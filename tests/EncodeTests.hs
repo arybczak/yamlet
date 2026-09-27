@@ -6,6 +6,7 @@ import Data.Functor.Identity
 import Data.IntMap.Strict qualified as IM
 import Data.IntSet qualified as IS
 import Data.List qualified as L
+import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
 import Data.Monoid qualified as Mon
 import Data.Ord
@@ -270,7 +271,7 @@ test_tags = do
   assertEqual "local tag" "!point\nx: 1\n" (encodeText local)
   let str = Tagged "!name" (String "foo")
   assertEqual "tagged scalar" "- !name foo\n" (encodeText [str])
-  let readBack :: T.Text -> Either Error T.Text
+  let readBack :: T.Text -> Either (NE.NonEmpty Error) T.Text
       readBack t = valueTag <$> decodeText @Value (encodeText (Tagged t (String "x")))
       exact :: T.Text -> Assertion
       exact t = assertEqual (T.unpack t) (Right t) (readBack t)
@@ -329,7 +330,7 @@ instance ToYaml Workflow where
 test_keptNodes :: Assertion
 test_keptNodes = do
   case decodeText @Workflow input of
-    Left err -> assertFailure (prettyError "input" err)
+    Left errs -> assertFailure (unlines (map (prettyError "input") (NE.toList errs)))
     Right w -> do
       assertEqual "decoded field" "demo" w.name
       assertEqual "output" expected (encodeText (Workflow w.name 8 w.matrix))

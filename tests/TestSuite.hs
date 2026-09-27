@@ -10,6 +10,7 @@ import Data.Aeson.Parser qualified as J
 import Data.Attoparsec.ByteString.Char8 qualified as A
 import Data.ByteString qualified as BS
 import Data.List qualified as L
+import Data.List.NonEmpty qualified as NE
 import Data.Maybe
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
@@ -132,7 +133,7 @@ runTest path = do
           hasJson <- doesFileExist (path </> "in.json")
           case Y.decodeAllText @Y.Value input of
             Left err
-              | hasJson -> assertFailure $ preface ++ "\nunexpected error: " ++ prettyError "in.yaml" err
+              | hasJson -> assertFailure $ preface ++ "\nunexpected error: " ++ prettyError "in.yaml" (NE.head err)
               -- The decoder rejects duplicate keys, which the syntax allows.
               | otherwise -> pure ()
             Right nodes -> do
@@ -144,7 +145,7 @@ runTest path = do
                 assertEqual (preface ++ "\nvalues") expectedValues (map toJson nodes)
               let encoded = Y.encodeAllText nodes
               case Y.decodeAllText @Y.Value encoded of
-                Left err -> assertFailure $ preface ++ "\nencoded:\n" ++ T.unpack encoded ++ "\nerror: " ++ prettyError "out.yaml" err
+                Left err -> assertFailure $ preface ++ "\nencoded:\n" ++ T.unpack encoded ++ "\nerror: " ++ prettyError "out.yaml" (NE.head err)
                 Right nodes' ->
                   assertEqual
                     (preface ++ "\nencoded:\n" ++ T.unpack encoded)

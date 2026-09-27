@@ -11,7 +11,6 @@ module Libraries
   ) where
 
 import Control.DeepSeq
-import Control.Monad
 import Data.Aeson qualified as J
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as BL
@@ -32,7 +31,7 @@ parsing name bs =
     [ bgroup
         "yamlet"
         [ bench "syntax tree" $ nf S.parseDocuments bs
-        , bench "values" $ nf (decodeInput >=> decodeAllText @Value) bs
+        , bench "values" $ nf (decodeAll @Value) bs
         ]
     , bgroup
         "HsYAML"

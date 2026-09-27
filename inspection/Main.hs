@@ -7,6 +7,7 @@
 -- binding before the plugin checks it.
 module Main where
 
+import Data.List.NonEmpty qualified as NE
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import Test.Inspection
@@ -117,31 +118,31 @@ instance GenericYaml Preset where
 encodeServer :: Server -> Node
 encodeServer = toYaml
 
-decodeServer :: Node -> Either (Offset, String) Server
+decodeServer :: Node -> Either (NE.NonEmpty (Offset, String)) Server
 decodeServer = runParser parseYaml
 
 encodeWide :: Wide -> Node
 encodeWide = toYaml
 
-decodeWide :: Node -> Either (Offset, String) Wide
+decodeWide :: Node -> Either (NE.NonEmpty (Offset, String)) Wide
 decodeWide = runParser parseYaml
 
 encodeName :: Name -> Node
 encodeName = toYaml
 
-decodeName :: Node -> Either (Offset, String) Name
+decodeName :: Node -> Either (NE.NonEmpty (Offset, String)) Name
 decodeName = runParser parseYaml
 
 encodeBox :: Box Int -> Node
 encodeBox = toYaml
 
-decodeBox :: Node -> Either (Offset, String) (Box Int)
+decodeBox :: Node -> Either (NE.NonEmpty (Offset, String)) (Box Int)
 decodeBox = runParser parseYaml
 
 encodeVelocity :: Velocity -> Node
 encodeVelocity = toYaml
 
-decodeVelocity :: Node -> Either (Offset, String) Velocity
+decodeVelocity :: Node -> Either (NE.NonEmpty (Offset, String)) Velocity
 decodeVelocity = runParser parseYaml
 
 encodeConfig :: Config -> Node
@@ -150,10 +151,10 @@ encodeConfig = toYaml
 encodePreset :: Preset -> Node
 encodePreset = toYaml
 
-decodePreset :: Node -> Either (Offset, String) Preset
+decodePreset :: Node -> Either (NE.NonEmpty (Offset, String)) Preset
 decodePreset = runParser parseYaml
 
-decodeConfig :: Node -> Either (Offset, String) Config
+decodeConfig :: Node -> Either (NE.NonEmpty (Offset, String)) Config
 decodeConfig = runParser parseYaml
 
 ----------------------------------------
@@ -182,11 +183,11 @@ instance GenericYaml Step where
 encodeTurn :: Turn -> Node
 encodeTurn = toYaml
 
-decodeTurn :: Node -> Either (Offset, String) Turn
+decodeTurn :: Node -> Either (NE.NonEmpty (Offset, String)) Turn
 decodeTurn = runParser parseYaml
 
-decodeShape :: Node -> Either (Offset, String) Shape
+decodeShape :: Node -> Either (NE.NonEmpty (Offset, String)) Shape
 decodeShape = runParser parseYaml
 
-decodeStep :: Node -> Either (Offset, String) Step
+decodeStep :: Node -> Either (NE.NonEmpty (Offset, String)) Step
 decodeStep = runParser parseYaml

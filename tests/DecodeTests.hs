@@ -9,6 +9,7 @@ import Data.Int
 import Data.IntMap.Strict qualified as IM
 import Data.IntSet qualified as IS
 import Data.List qualified as L
+import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
 import Data.Ratio
 import Data.Scientific qualified as Sci
@@ -70,7 +71,7 @@ decodeTests =
 
 test_coreSchema :: Assertion
 test_coreSchema = do
-  let values :: Either Error [Value]
+  let values :: Either (NE.NonEmpty Error) [Value]
       values = decodeText "[null, ~, '', true, False, 12, -0, 0o17, 0x1f, 1.5, -.inf, .nan, 1e3, +12, .5, a, '1']"
   case values of
     Left err -> assertFailure (show err)
@@ -350,7 +351,7 @@ test_time = do
     assertEqual
       ("duration with the exponent " ++ show ex)
       (Left "the exponent of the number is out of the range from -1000 to 1000")
-      (first snd (runParser (parseYaml @NominalDiffTime) (toYaml (Float (Finite (Sci.scientific 1 ex))))))
+      (first (snd . NE.head) (runParser (parseYaml @NominalDiffTime) (toYaml (Float (Finite (Sci.scientific 1 ex))))))
   assertEqual
     "zero duration with a large exponent"
     (Right (0 :: DiffTime))
@@ -382,7 +383,7 @@ test_copies = do
     Left err -> assertFailure (show err)
     Right m -> assertBool "texts are copies" $ all isCopy (M.keys m ++ M.elems m)
   case decodeText @Int "a: 1\nb: [\n" of
-    Left err -> assertBool "the source line is a copy" $ isCopy err.sourceLine
+    Left errs -> assertBool "the source line is a copy" $ all (isCopy . (.sourceLine)) errs
     Right _ -> assertFailure "expected an error"
   case S.parseDocumentsText "key: &a value\nother: *a\n" of
     Left err -> assertFailure (show err)
@@ -468,10 +469,12 @@ test_optionalKeys = do
   check "missing" (Nothing, Nothing) "b: 1\n"
   check "null" (Nothing, Just Nothing) "a: null\n"
   check "value" (Just (Just 1), Just (Just 1)) "a: 1\n"
-  let keyError :: (Object -> T.Text -> Parser (Maybe Int)) -> Either (Offset, String) (Maybe Int)
+  let keyError :: (Object -> T.Text -> Parser (Maybe Int)) -> Either (NE.NonEmpty (Offset, String)) (Maybe Int)
       keyError op = either (error . show) (runParser (withMapping (`op` "404"))) (decodeText "200: 1\n404: 2\n")
-  assertEqual "optional integer key" (Left (Offset 7, "the key 404 is an integer, not a string")) (keyError (.:?))
-  assertEqual "optional integer key, null as a value" (Left (Offset 7, "the key 404 is an integer, not a string")) (keyError (.:!))
+      integerKey :: Either (NE.NonEmpty (Offset, String)) (Maybe Int)
+      integerKey = Left (pure (Offset 7, "the key 404 is an integer, not a string"))
+  assertEqual "optional integer key" integerKey (keyError (.:?))
+  assertEqual "optional integer key, null as a value" integerKey (keyError (.:!))
 
 test_syntaxTree :: Assertion
 test_syntaxTree = do
@@ -495,7 +498,7 @@ test_syntaxTree = do
   assertEqual
     "built, rendered"
     (Left "built.yaml: duplicate key \"a\"")
-    (either (Left . prettyError "built.yaml") (const (Right ())) (decodeDocument @Value "" built))
+    (either (Left . prettyError "built.yaml" . NE.head) (const (Right ())) (decodeDocument @Value "" built))
   assertEqual
     "decoder error in a built node"
     (Just (0, 0, "expected an integer, but got a string"))
@@ -519,7 +522,7 @@ test_encodings = do
     Right _ -> assertFailure "expected an error"
   let invalid :: String -> T.Text -> BS.ByteString -> Assertion
       invalid preface msg bytes =
-        assertEqual preface (Just (2, 3, T.unpack msg)) (errorOf (decodeInput bytes))
+        assertEqual preface (Just (2, 3, T.unpack msg)) (errorOf (first pure (decodeInput bytes)))
   invalid "lone surrogate in UTF-16LE" "invalid UTF-16" (T.encodeUtf16LE "a\nbc" <> "\x00\xD8" <> "d\0")
   invalid "odd length of UTF-16BE" "invalid UTF-16" (T.encodeUtf16BE "a\nbc" <> "\0")
   invalid "surrogate in UTF-32BE" "invalid UTF-32" (T.encodeUtf32BE "a\nbc" <> "\0\0\xDC\0")
@@ -536,7 +539,7 @@ test_encodings = do
   assertEqual
     "source line after a BOM"
     (Left "]")
-    (either (Left . (.sourceLine)) (const (Right ())) (decode @Value "\xEF\xBB\xBF]"))
+    (either (Left . (.sourceLine) . NE.head) (const (Right ())) (decode @Value "\xEF\xBB\xBF]"))
   let documents :: String -> [T.Text] -> T.Text -> Assertion
       documents preface expected input = assertEqual preface (Right expected) (decodeAllText input)
   documents "BOM before a marker after a scalar" ["a", "b"] "a\n\xFEFF--- b\n"
@@ -562,10 +565,11 @@ test_encodings = do
     stripBom :: T.Text -> Either Error T.Text
     stripBom = Right . T.dropWhile (== '\xFEFF')
 
--- | The line, the column and the message of an error.
-errorOf :: Either Error a -> Maybe (Int, Int, String)
+-- | The line, the column and the message of the only error.
+errorOf :: Either (NE.NonEmpty Error) a -> Maybe (Int, Int, String)
 errorOf = \case
-  Left err -> Just (err.location.line, err.location.column, err.message)
+  Left (err NE.:| []) -> Just (err.location.line, err.location.column, err.message)
+  Left errs -> error $ "expected one error, but got " ++ show (map (.message) (NE.toList errs))
   Right _ -> Nothing
 
 test_syntaxErrors :: Assertion
@@ -907,7 +911,7 @@ test_typeErrors = do
   assertEqual
     "fixed with a huge exponent"
     (Left "the exponent of the number is out of the range from -1000 to 1000")
-    (first snd (runParser (parseYaml @Centi) (toYaml (Float (Finite (Sci.scientific 1 maxBound))))))
+    (first (snd . NE.head) (runParser (parseYaml @Centi) (toYaml (Float (Finite (Sci.scientific 1 maxBound))))))
   assertEqual
     "zero fixed with a huge exponent"
     (Right (0 :: Centi))
@@ -940,7 +944,7 @@ test_keyErrors = do
     (errorOf (decodeText @Config "name: x\njob: 1\n"))
   let lookupError :: T.Text -> T.Text -> Maybe String
       lookupError key input = case runParser (withMapping $ \o -> (.:) @T.Text o key) <$> decodeText input of
-        Right (Left (_, msg)) -> Just msg
+        Right (Left ((_, msg) NE.:| [])) -> Just msg
         _ -> Nothing
   assertEqual
     "integer key"
@@ -1064,7 +1068,7 @@ test_manyKeys :: Assertion
 test_manyKeys = do
   let keys :: [T.Text]
       keys = [T.pack ("k" ++ show i) | i <- [1 .. 100000 :: Int]]
-      count :: [T.Text] -> Either Error Int
+      count :: [T.Text] -> Either (NE.NonEmpty Error) Int
       count ks = length . entries <$> decodeText @Value (T.unlines (map (<> ": 1") ks))
   assertEqual "one collection key" (Right 100001) (count ("[c]" : keys))
   assertEqual "collection keys" (Right 100000) (count (map (\k -> "[" <> k <> "]") keys))
@@ -1107,16 +1111,16 @@ test_errorPaths = do
   let key = S.plainNode "a"
   check "built node" (Right "") $ decodeDocument @(M.Map T.Text Int) "" (S.document (S.mappingNode [(key, key)]))
   where
-    check :: String -> Either String String -> Either Error a -> Assertion
-    check preface expected r = assertEqual preface expected (either (Right . renderPath . (.path)) (const (Left "no error")) r)
+    check :: String -> Either String String -> Either (NE.NonEmpty Error) a -> Assertion
+    check preface expected r = assertEqual preface expected (either (Right . renderPath . (.path) . NE.head) (const (Left "no error")) r)
 
 test_prettyError :: Assertion
 test_prettyError = do
   case decodeText @Config "name: x\npaths: 42\n" of
-    Left err -> assertEqual "rendered" expected (prettyError "config.yaml" err)
+    Left errs -> assertEqual "rendered" [expected] (map (prettyError "config.yaml") (NE.toList errs))
     Right _ -> assertFailure "expected an error"
   case decodeAllText @Value ("a: " <> T.replicate 100 "x" <> ": " <> T.replicate 100 "y" <> "\n") of
-    Left err -> assertEqual "long line" expectedLong (prettyError "long.yaml" err)
+    Left errs -> assertEqual "long line" [expectedLong] (map (prettyError "long.yaml") (NE.toList errs))
     Right _ -> assertFailure "expected an error"
   where
     expectedLong :: String

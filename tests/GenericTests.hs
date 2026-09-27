@@ -2,6 +2,7 @@ module GenericTests (genericTests) where
 
 import Data.Aeson qualified as A
 import Data.Char
+import Data.List.NonEmpty qualified as NE
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import Test.Tasty
@@ -406,7 +407,9 @@ test_modifiers = do
 roundTrip :: (Eq a, Show a, ToYaml a, FromYaml a) => String -> a -> Assertion
 roundTrip preface x = assertEqual preface (Right x) (decodeText (encodeText x))
 
-errorOf :: Either Error a -> Maybe (Int, Int, String)
+-- | The line, the column and the message of the only error.
+errorOf :: Either (NE.NonEmpty Error) a -> Maybe (Int, Int, String)
 errorOf = \case
-  Left err -> Just (err.location.line, err.location.column, err.message)
+  Left (err NE.:| []) -> Just (err.location.line, err.location.column, err.message)
+  Left errs -> error $ "expected one error, but got " ++ show (map (.message) (NE.toList errs))
   Right _ -> Nothing
