@@ -112,6 +112,12 @@ instance ToYaml a => ToYaml (S.Commented a) where
       key :: S.Node
       key = S.Node k.offset k.endOffset k.props (S.Comments c.comments.before c.comments.inline k.comments.after) k.content
 
+-- | The value alone. The key of an entry goes to the value inside, e.g. for a
+-- 'Yamlet.Commented' value.
+instance ToYaml a => ToYaml (S.Located a) where
+  toYaml l = toYaml l.value
+  toYamlField k l = toYamlField k l.value
+
 -- | The node with the given lines after its last entry in place of its own,
 -- if it is a collection and the lines are not empty.
 withLinesAfter :: [S.Line] -> S.Node -> S.Node

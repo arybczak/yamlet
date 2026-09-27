@@ -581,6 +581,12 @@ instance FromYaml a => FromYaml (S.Commented a) where
       v' :: S.Node
       (c, v') = entryComments k v
 
+-- | The value with the offset of its node. The key of an entry goes to the
+-- value inside, e.g. for a 'Yamlet.Commented' value.
+instance FromYaml a => FromYaml (S.Located a) where
+  parseYaml n = flip S.Located n.offset <$> parseYaml n
+  parseYamlField k n = flip S.Located n.offset <$> parseYamlField k n
+
 -- | The comments of a mapping entry, and the value without them. The lines
 -- above a value on the line of its key or in the flow style go above the
 -- entry, as the renderer writes them. The lines above the first entry of a

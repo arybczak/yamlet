@@ -10,6 +10,7 @@ module Yamlet.Error
     -- * Construction
   , errorAt
   , errorsAt
+  , documentErrors
   , locate
   , nodePath
   , nodePaths
@@ -221,6 +222,13 @@ errorAt input off msg =
   where
     loc :: Location
     loc = locate input off
+
+-- | Create errors at the given offsets of a document, with their paths, in the
+-- order of the list. The text is the input of the document, e.g. for the
+-- offsets of t'Located' values.
+documentErrors :: T.Text -> Document -> [(Offset, String)] -> [Error]
+documentErrors input doc errs =
+  zipWith (\err p -> err {path = p}) (errorsAt input errs) (nodePaths (map fst errs) doc.root)
 
 -- | Create errors at the given offsets of the input, in the order of the
 -- list. One scan of the input locates all of them, and the errors on one

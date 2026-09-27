@@ -27,6 +27,7 @@ module Yamlet.Internal.Syntax
     -- * Positions
   , Offset (..)
   , noOffset
+  , Located (..)
 
     -- * Copies
   , copyDocument
@@ -182,6 +183,42 @@ noComments = Comments [] Nothing []
 data Commented a = Commented
   { value :: a
   , comments :: !Comments
+  }
+  -- The derived order compares the fields in this order.
+  deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable, Generic)
+  deriving anyclass (NFData)
+
+-- | A value with the offset of its node, e.g. for the error of a check that
+-- runs after the decode. The encoder writes only the value.
+--
+-- 'Yamlet.documentErrors' turns the offsets into errors with lines, columns
+-- and paths. It needs the text and the document of the decode, so decode with
+-- 'Yamlet.Syntax.parseDocumentsText' and 'Yamlet.decodeDocument':
+--
+-- @
+-- case parseDocumentsText input of
+--   Right [doc] -> case decodeDocument input doc of
+--     Right config -> case check config of
+--       [] -> run config
+--       errs -> mapM_ (putStrLn . prettyError file) (documentErrors input doc errs)
+--     Left errs -> ...
+--   ...
+-- @
+--
+-- Here @check@ gives an offset and a message for each problem, e.g.
+-- @(path.offset, "the path is outside the repository")@.
+--
+-- A value that no node gives, e.g. a value of 'Yamlet.Generic.yamlDefault',
+-- has 'noOffset'. Its error has no position, and 'Yamlet.prettyError' prints
+-- only the file and the message. A value inside an alias has the offset of the
+-- node with the anchor, because each alias is a copy of that node.
+--
+-- The equality and the order compare the values first and then the offsets.
+-- So two equal values at different places differ, e.g. a set keeps both. To
+-- compare only the values, e.g. in a test, use the field @value@.
+data Located a = Located
+  { value :: a
+  , offset :: !Offset
   }
   -- The derived order compares the fields in this order.
   deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable, Generic)

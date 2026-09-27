@@ -57,6 +57,7 @@ decodeTests =
     , localOption (mkTimeout 10000000) $ testCase "alias limit" test_aliasLimit
     , localOption (mkTimeout 10000000) $ testCase "long numbers" test_longNumbers
     , testCase "optional keys" test_optionalKeys
+    , testCase "located values" test_located
     , testCase "syntax tree" test_syntaxTree
     , testCase "empty stream" test_emptyStream
     , testCase "encodings" test_encodings
@@ -480,6 +481,32 @@ test_optionalKeys = do
       integerKey = Left (pure (Offset 7, "the key 404 is an integer, not a string"))
   assertEqual "optional integer key" integerKey (keyError (.:?))
   assertEqual "optional integer key, null as a value" integerKey (keyError (.:!))
+
+-- | A located value keeps the offset of its node, and the errors at its offset
+-- have lines, columns and paths.
+test_located :: Assertion
+test_located = do
+  assertEqual "items" (Right [Located "a" (Offset 1), Located "b" (Offset 4)]) (decodeText @[Located T.Text] "[a, b]")
+  let input = "skip:\n  - x\n  - y\n"
+  case S.parseDocumentsText input of
+    Right [doc] -> case decodeDocument @(M.Map T.Text [Located T.Text]) input doc of
+      Right m -> do
+        let errs = [(item.offset, "unknown package " ++ show item.value) | item <- M.findWithDefault [] "skip" m, item.value == "y"]
+        assertEqual
+          "error at a located value"
+          [(3, 5, "skip[1]", "unknown package \"y\"")]
+          [(e.location.line, e.location.column, renderPath e.path, e.message) | e <- documentErrors input doc errs]
+        assertEqual
+          "error without an offset"
+          ["conf.yml: not from the input"]
+          (map (prettyError "conf.yml") (documentErrors input doc [(noOffset, "not from the input")]))
+      Left errs -> assertFailure (show errs)
+    r -> assertFailure (show r)
+  assertEqual
+    "comments of the key"
+    (Right (Just (Offset 3, Just "c")))
+    (fmap (\l -> (l.offset, l.value.comments.inline)) . M.lookup "a" <$> decodeText @(M.Map T.Text (Located (Commented T.Text))) "a: x # c\n")
+  assertEqual "encoded" "a: 1\n" (encodeText (M.fromList [("a" :: T.Text, Located (1 :: Int) (Offset 7))]))
 
 test_syntaxTree :: Assertion
 test_syntaxTree = do

@@ -56,6 +56,8 @@ module Yamlet
     -- * Nodes
   , S.Node
   , S.Offset (..)
+  , S.noOffset
+  , S.Located (..)
 
     -- * Comments of keys
   , S.Commented (..)
@@ -95,6 +97,7 @@ import Yamlet.Internal.Encoder
 import Yamlet.Internal.Input
 import Yamlet.Internal.Parser
 import Yamlet.Internal.Syntax qualified as S
+import Yamlet.Syntax qualified as S
 import Yamlet.Value
 
 -- | Decode a stream with one document. An empty stream is null.
@@ -115,15 +118,15 @@ decodeAll bs = single (decodeInput bs) >>= decodeAllText
 decodeText :: FromYaml a => T.Text -> Either (NE.NonEmpty Error) a
 decodeText input =
   single (parseStream input) >>= \case
-    [] -> convert input (S.Node (S.Offset 0) (S.Offset 0) S.noProps S.noComments (S.Scalar S.Plain ""))
-    [doc] -> convert input (documentRoot doc)
+    [] -> convert input (S.document (S.Node (S.Offset 0) (S.Offset 0) S.noProps S.noComments (S.Scalar S.Plain "")))
+    [doc] -> convert input doc
     docs@(_ : doc : _) -> single $ do
       mapM_ (\d -> first (uncurry (decoderError input d.root)) (prepare d.root)) docs
       Left $ errorAt input doc.root.offset "expected a single document, but got a second one"
 
 -- | Decode every document of a stream. The errors are as for 'decodeAll'.
 decodeAllText :: FromYaml a => T.Text -> Either (NE.NonEmpty Error) [a]
-decodeAllText input = single (parseStream input) >>= mapM (convert input . documentRoot)
+decodeAllText input = single (parseStream input) >>= mapM (convert input)
 
 single :: Either Error a -> Either (NE.NonEmpty Error) a
 single = first (NE.:| [])
@@ -141,7 +144,7 @@ single = first (NE.:| [])
 -- document that the program built, the text can be empty. The errors are as
 -- for 'decode'.
 decodeDocument :: FromYaml a => T.Text -> S.Document -> Either (NE.NonEmpty Error) a
-decodeDocument input doc = convert input (documentRoot doc)
+decodeDocument = convert
 
 -- | The root of a document with the lines of the document, e.g. the lines
 -- before a @---@ marker and at the end of the document, so that a decoder
@@ -166,16 +169,9 @@ documentRoot doc
         , S.after = r.comments.after ++ dc.after
         }
 
-convert :: FromYaml a => T.Text -> S.Node -> Either (NE.NonEmpty Error) a
-convert input n = first located (runParser parseYaml n)
-  where
-    located :: NE.NonEmpty (S.Offset, String) -> NE.NonEmpty Error
-    located errs =
-      NE.fromList $
-        zipWith
-          (\err p -> err {path = p})
-          (errorsAt input (NE.toList errs))
-          (nodePaths (map fst (NE.toList errs)) n)
+convert :: FromYaml a => T.Text -> S.Document -> Either (NE.NonEmpty Error) a
+convert input doc =
+  first (NE.fromList . documentErrors input doc . NE.toList) (runParser parseYaml (documentRoot doc))
 
 -- | An error of the decoder in the document with the root, with the path to
 -- the node at the offset.

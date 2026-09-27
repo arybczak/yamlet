@@ -27,7 +27,9 @@ A YAML 1.2.2 library written in Haskell.
 - A decoded type can keep a part of a document as a `Node`. The encoder
   writes it back as it was written, with its comments and styles. A field of
   type `Commented a` also keeps the comments of its entry, e.g. the comment
-  above `permissions:`.
+  above `permissions:`. A field of type `Located a` keeps the position of its
+  value. Thus a check after the decode can give an error with the line, the
+  column and the path.
 - Floating-point numbers are exact, e.g. `0.1` is exactly one tenth. They
   convert to `Scientific` without loss and to `Double` on request.
 - If a string reads back the same as a plain scalar, the encoder does not
