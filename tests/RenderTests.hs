@@ -54,32 +54,33 @@ test_workflow = do
         , explicitEnd = False
         , docComments = noComments
         , root =
-            withHeader $ mappingNode
-              [ (plainNode "name", plainNode "CI")
-              ,
-                ( withEmptyLine (plainNode "jobs")
-                , mappingNode
-                    [
-                      ( withEmptyLine (plainNode "build")
-                      , mappingNode
-                          [ (plainNode "runs-on", plainNode "ubuntu-latest")
-                          ,
-                            ( plainNode "steps"
-                            , sequenceNode
-                                [ mappingNode [(plainNode "uses", plainNode "actions/checkout@v4")]
-                                , withEmptyLine $
-                                    mappingNode
-                                      [ (plainNode "name", plainNode "Build")
-                                      , (plainNode "run", scalarNode Literal "cabal build\ncabal test\n")
-                                      ]
-                                ]
-                            )
-                          ]
-                      )
-                    , (withEmptyLine (plainNode "lint"), mappingNode [(plainNode "ghc", scalarNode SingleQuoted "9.10")])
-                    ]
-                )
-              ]
+            withHeader $
+              mappingNode
+                [ (plainNode "name", plainNode "CI")
+                ,
+                  ( withEmptyLine (plainNode "jobs")
+                  , mappingNode
+                      [
+                        ( withEmptyLine (plainNode "build")
+                        , mappingNode
+                            [ (plainNode "runs-on", plainNode "ubuntu-latest")
+                            ,
+                              ( plainNode "steps"
+                              , sequenceNode
+                                  [ mappingNode [(plainNode "uses", plainNode "actions/checkout@v4")]
+                                  , withEmptyLine $
+                                      mappingNode
+                                        [ (plainNode "name", plainNode "Build")
+                                        , (plainNode "run", scalarNode Literal "cabal build\ncabal test\n")
+                                        ]
+                                  ]
+                              )
+                            ]
+                        )
+                      , (withEmptyLine (plainNode "lint"), mappingNode [(plainNode "ghc", scalarNode SingleQuoted "9.10")])
+                      ]
+                  )
+                ]
         }
 
     withEmptyLine :: Node -> Node
