@@ -143,11 +143,17 @@ class GenericYaml a where
 -- | The words of a name in lower case, separated by underscores, e.g.
 -- @source_paths@ for @sourcePaths@ or @SourcePaths@, and @http_server@ for
 -- @HTTPServer@. The rules are the same as for @camelTo2 \'_\'@ of aeson.
+--
+-- >>> map snakeCase ["sourcePaths", "SourcePaths", "HTTPServer", "ghcVersion2"]
+-- ["source_paths","source_paths","http_server","ghc_version2"]
 snakeCase :: String -> String
 snakeCase = separateWords '_'
 
 -- | Like 'snakeCase', but with hyphens, e.g. @source-paths@ for
 -- @sourcePaths@.
+--
+-- >>> kebabCase "sourcePaths"
+-- "source-paths"
 kebabCase :: String -> String
 kebabCase = separateWords '-'
 

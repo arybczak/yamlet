@@ -57,6 +57,11 @@ defaultRenderOptions =
 --
 -- An anchor name with a character that YAML does not allow in it, e.g. a
 -- space, becomes a new name in the anchor and in its aliases.
+--
+-- >>> either print (T.putStr . renderSyntax defaultRenderOptions {forceBlock = True}) (parseDocumentsText "a: [1, {b: 2}]\n")
+-- a:
+-- - 1
+-- - b: 2
 renderSyntax :: RenderOptions -> [Document] -> T.Text
 renderSyntax opts = emptyLines . B.runBuilder . go True
   where
@@ -561,3 +566,7 @@ emptyLine = "\0"
 -- does not allow.
 printable :: T.Text -> T.Text
 printable = T.map $ \c -> if c == '\t' || c == '\n' || c == '\r' || isPrintable c then c else '\xFFFD'
+
+-- $setup
+-- >>> import Data.Text.IO qualified as T
+-- >>> import Yamlet.Syntax

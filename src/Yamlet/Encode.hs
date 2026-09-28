@@ -54,6 +54,24 @@ import Yamlet.Value
 
 -- | Types that can be converted to a node. A type with a 'Generic' instance
 -- can derive the instance, see "Yamlet.Generic".
+--
+-- An instance for a record writes a mapping with 'mapping' and '.=':
+--
+-- >>> :{
+-- data Server = Server {host :: T.Text, port :: Int, tags :: [T.Text]}
+-- instance ToYaml Server where
+--   toYaml s = mapping ["host" .= s.host, "port" .= s.port, "tags" .= s.tags]
+-- :}
+--
+-- >>> T.putStr (encodeText (Server "example.com" 80 ["web", "yes"]))
+-- host: example.com
+-- port: 80
+-- tags:
+-- - web
+-- - 'yes'
+--
+-- The string @yes@ gets quotes, because YAML 1.1 parsers read it as a
+-- boolean.
 class ToYaml a where
   toYaml :: a -> S.Node
   default toYaml
@@ -140,7 +158,18 @@ instance ToYaml Word8 where toYaml = scalar . Int . toInteger
 instance ToYaml Word16 where toYaml = scalar . Int . toInteger
 instance ToYaml Word32 where toYaml = scalar . Int . toInteger
 instance ToYaml Word64 where toYaml = scalar . Int . toInteger
+
+-- | Decimal notation from 10^-6 up to 10^21, as JavaScript writes numbers,
+-- and exponential notation otherwise. The text always has a dot, so that it
+-- reads back as a float.
+--
+-- >>> T.putStr (encodeText [12, 0.01, 1.5e-7, 2.0e21 :: Double])
+-- - 12.0
+-- - 0.01
+-- - 1.5e-7
+-- - 2.0e+21
 instance ToYaml Double where toYaml = scalar . Float . doubleToFloatValue
+
 instance ToYaml Float where toYaml = scalar . Float . floatToFloatValue
 
 -- | A value whose exponent in scientific notation is beyond the range from
@@ -703,3 +732,7 @@ plainText = \case
         minDecimal, maxDecimal :: Integer
         minDecimal = -6
         maxDecimal = 20
+
+-- $setup
+-- >>> import Data.Text.IO qualified as T
+-- >>> import Yamlet

@@ -68,6 +68,9 @@ scalarValue tag style t = case tag of
 {-# NOINLINE scalarValue #-}
 
 -- | The kind of a node in plain words, e.g. "a list".
+--
+-- >>> map describeNode <$> decodeText @[Node] "- [1, 2]\n- 3.5\n- ~\n- !!str 12\n"
+-- Right ["a list","a floating-point number","null","a string"]
 describeNode :: S.Node -> String
 describeNode n = case n.content of
   S.Scalar style t -> describe (scalarValue n.props.tag style t)
@@ -86,3 +89,6 @@ stringValue :: S.Node -> Maybe T.Text
 stringValue n = case view n of
   StringView t -> Just t
   _ -> Nothing
+
+-- $setup
+-- >>> import Yamlet

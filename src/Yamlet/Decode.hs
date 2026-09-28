@@ -250,9 +250,18 @@ nullNode = S.Node S.noOffset S.noOffset S.noProps S.noComments (S.Scalar S.Plain
 -- | Run the second parser if the first one fails. The error of the second one
 -- wins, e.g.
 --
--- @
--- (Left \<$> withInt pure n) \`orElse\` (Right \<$> withText pure n)
--- @
+-- >>> :{
+-- newtype Port = Port (Either Integer T.Text)
+--   deriving stock (Show)
+-- instance FromYaml Port where
+--   parseYaml n = Port <$> ((Left <$> withInt pure n) `orElse` (Right <$> withText pure n))
+-- :}
+--
+-- >>> decodeText @Port "8080"
+-- Right (Port (Left 8080))
+--
+-- >>> decodeText @Port "http"
+-- Right (Port (Right "http"))
 orElse :: Parser a -> Parser a -> Parser a
 orElse (Parser g) (Parser h) = Parser $ \off -> case g off of
   r@(Result NoErrors _) -> r
@@ -487,6 +496,19 @@ o .:? key =
 -- | The value of a key, or 'Nothing' if the key is missing. Unlike '.:?', a
 -- null value goes to the parser of the value, e.g. @'Maybe' a@ gives
 -- @'Just' 'Nothing'@ for a null value.
+--
+-- >>> :{
+-- newtype Limit = Limit (Maybe (Maybe Int))
+--   deriving stock (Show)
+-- instance FromYaml Limit where
+--   parseYaml = withMapping $ \o -> Limit <$> o .:! "limit"
+-- :}
+--
+-- >>> decodeText @Limit "limit: null\n"
+-- Right (Limit (Just Nothing))
+--
+-- >>> decodeText @Limit "{}"
+-- Right (Limit Nothing)
 (.:!) :: FromYaml a => Object -> T.Text -> Parser (Maybe a)
 o .:! key = findKey o key >>= traverse parseEntry
 
@@ -594,6 +616,36 @@ closeName known t = suggestion (T.unpack t)
 
 -- | Types that can be parsed from a node. A type with a 'Generic' instance
 -- can derive the instance, see "Yamlet.Generic".
+--
+-- An instance for a record reads a mapping with 'withMapping':
+--
+-- >>> :{
+-- data Server = Server {host :: T.Text, port :: Int, tags :: [T.Text]}
+--   deriving stock (Show)
+-- instance FromYaml Server where
+--   parseYaml = withMapping $ \o ->
+--     rejectUnknownKeys ["host", "port", "tags"] o
+--       *> (Server <$> o .: "host" <*> o .:? "port" .!= 80 <*> o .:? "tags" .!= [])
+-- :}
+--
+-- >>> decodeText @Server "host: example.com\ntags:\n- web\n"
+-- Right (Server {host = "example.com", port = 80, tags = ["web"]})
+--
+-- The decoder reports the errors of all fields together:
+--
+-- >>> either (mapM_ (putStrLn . prettyError "server.yaml")) print (decodeText @Server "hots: example.com\nport: http\n")
+-- server.yaml:1:1: unknown key "hots", did you mean "host"?
+--   |
+-- 1 | hots: example.com
+--   | ^
+-- server.yaml:1:1: missing key "host"
+--   |
+-- 1 | hots: example.com
+--   | ^
+-- server.yaml:2:7: port: expected an integer, but got a string
+--   |
+-- 2 | port: http
+--   |       ^
 class FromYaml a where
   parseYaml :: S.Node -> Parser a
   default parseYaml
@@ -843,6 +895,9 @@ instance FromYaml a => FromYaml (NE.NonEmpty a) where
 
 -- | Null is 'Nothing'. The key of an entry goes to the value inside, e.g. for
 -- a 'Yamlet.Commented' value.
+--
+-- >>> decodeText @[Maybe Int] "- 1\n- null\n- ~\n-\n"
+-- Right [Just 1,Nothing,Nothing,Nothing]
 instance FromYaml a => FromYaml (Maybe a) where
   parseYaml n = case view n of
     NullView -> pure Nothing
@@ -858,6 +913,15 @@ instance FromYaml a => FromYaml (Maybe a) where
 -- t'Data.Text.Text' keys rejects a key such as @404@ or @true@, because YAML
 -- reads it as an integer or a boolean. Quote such a key in the input, e.g.
 -- @\"404\": not found@, or use a key type that matches it, e.g. t'Int'.
+--
+-- >>> decodeText @(M.Map Int T.Text) "404: not found\n"
+-- Right (fromList [(404,"not found")])
+--
+-- >>> either (mapM_ (putStrLn . prettyError "input.yaml")) print (decodeText @(M.Map T.Text T.Text) "404: not found\n")
+-- input.yaml:1:1: expected a string, but got an integer, quote the value, e.g. '404'
+--   |
+-- 1 | 404: not found
+--   | ^
 instance (Ord k, FromYaml k, FromYaml v) => FromYaml (M.Map k v) where
   -- The index of 'withMapping' would be of no use here.
   parseYaml = parseNode $ \n -> case n.content of
@@ -1030,6 +1094,9 @@ deriving newtype instance FromYaml Sem.All
 deriving newtype instance FromYaml Sem.Any
 
 -- | A mapping with one key, @Left@ or @Right@, e.g. @{Left: 1}@.
+--
+-- >>> decodeText @(Either Int T.Text) "Left: 1\n"
+-- Right (Left 1)
 instance (FromYaml a, FromYaml b) => FromYaml (Either a b) where
   parseYaml = withMapping $ \o -> case objectEntries o of
     [(k, v)] -> case stringValue k of
@@ -1434,3 +1501,6 @@ instance FromYaml a => GFromFields (S1 (MetaSel Nothing u s d) (Rec0 a)) where
   gFromValue n = M1 . K1 <$> parseNode parseYaml n
   gFromEntry entry = M1 . K1 <$> parseEntry entry
   {-# INLINE gFromValue #-}
+
+-- $setup
+-- >>> import Yamlet

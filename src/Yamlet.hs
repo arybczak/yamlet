@@ -106,16 +106,38 @@ import Yamlet.Value
 -- A syntax error, or an error of the checks that 'decodeDocument' describes,
 -- is the only error. Otherwise the result has every error of the decoder that
 -- 'Parser' collects, in the order of their positions.
+--
+-- >>> decode @[Int] "- 1\n- 2\n"
+-- Right [1,2]
+--
+-- >>> decode @(Maybe Int) ""
+-- Right Nothing
+--
+-- >>> either (mapM_ (putStrLn . prettyError "input.yaml")) print (decode @[Int] "- 1\n- x\n- true\n")
+-- input.yaml:2:3: [1]: expected an integer, but got a string
+--   |
+-- 2 | - x
+--   |   ^
+-- input.yaml:3:3: [2]: expected an integer, but got a boolean
+--   |
+-- 3 | - true
+--   |   ^
 decode :: FromYaml a => BS.ByteString -> Either (NE.NonEmpty Error) a
 decode bs = single (decodeInput bs) >>= decodeText
 
 -- | Decode every document of a stream. The errors are those of the first
 -- document that fails, as for 'decode'.
+--
+-- >>> decodeAll @Int "1\n---\n2\n"
+-- Right [1,2]
 decodeAll :: FromYaml a => BS.ByteString -> Either (NE.NonEmpty Error) [a]
 decodeAll bs = single (decodeInput bs) >>= decodeAllText
 
 -- | Decode a stream with one document. An empty stream is null. The errors
 -- are as for 'decode'.
+--
+-- >>> decodeText @Value "name: app\nports: [80, 443]\nenabled: yes\n"
+-- Right (Mapping [(String "name",String "app"),(String "ports",Sequence [Int 80,Int 443]),(String "enabled",String "yes")])
 decodeText :: FromYaml a => T.Text -> Either (NE.NonEmpty Error) a
 decodeText = fmap fst . decodeWithDocument
 
@@ -189,6 +211,9 @@ decoderError :: T.Text -> S.Node -> S.Offset -> String -> Error
 decoderError input root off msg = (errorAt input off msg) {path = nodePath off root}
 
 -- | Encode a value as a document.
+--
+-- >>> encode [1, 2 :: Int]
+-- "- 1\n- 2\n"
 encode :: ToYaml a => a -> BS.ByteString
 encode = T.encodeUtf8 . encodeText
 
@@ -197,9 +222,23 @@ encodeAll :: ToYaml a => [a] -> BS.ByteString
 encodeAll = T.encodeUtf8 . encodeAllText
 
 -- | Encode a value as a document.
+--
+-- >>> T.putStr (encodeText (mapping ["name" .= ("app" :: T.Text), "ports" .= [80, 443 :: Int]]))
+-- name: app
+-- ports:
+-- - 80
+-- - 443
 encodeText :: ToYaml a => a -> T.Text
 encodeText a = renderDocuments [toYaml a]
 
 -- | Encode values as a stream of documents.
+--
+-- >>> T.putStr (encodeAllText [1, 2 :: Int])
+-- 1
+-- ---
+-- 2
 encodeAllText :: ToYaml a => [a] -> T.Text
 encodeAllText = renderDocuments . map toYaml
+
+-- $setup
+-- >>> import Data.Text.IO qualified as T

@@ -35,6 +35,9 @@ import Yamlet.Value
 -- 1000 in scientific notation, e.g. @1e1001@ or @1e-1001@, becomes infinity
 -- or zero, as a double does. The decoders reject such a number, because its
 -- value is not exact.
+--
+-- >>> map resolvePlain ["", "true", "0x1F", "1.5e3", ".inf", "yes", "9.10.3"]
+-- [Null,Bool True,Int 31,Float (Finite 1500.0),Float Infinity,String "yes",String "9.10.3"]
 resolvePlain :: T.Text -> Value
 resolvePlain = either id id . resolvePlainExact
 
@@ -43,6 +46,9 @@ resolvePlain = either id id . resolvePlainExact
 -- the core schema. A scalar with another tag is a string.
 --
 -- A float beyond the limit becomes infinity or zero, as in 'resolvePlain'.
+--
+-- >>> [resolveTagged floatTag "1", resolveTagged intTag "abc", resolveTagged "!point" "1"]
+-- [Just (Float (Finite 1.0)),Nothing,Just (String "1")]
 resolveTagged :: T.Text -> T.Text -> Maybe Value
 resolveTagged tag t = either id id <$> resolveTaggedExact tag t
 
@@ -71,6 +77,9 @@ resolveTaggedExact tag t
 -- | A plain scalar with the text is a string, e.g. @9.10.3@ is a string, but
 -- @9.10@ and @true@ are not. The check ignores the syntax, so e.g. @a: b@
 -- passes. For both checks, use 'isPlainSafe'.
+--
+-- >>> map isPlainString ["9.10.3", "9.10", "true", "a: b"]
+-- [True,False,False,True]
 isPlainString :: T.Text -> Bool
 isPlainString t = case resolvePlain t of
   String _ -> True
@@ -79,6 +88,9 @@ isPlainString t = case resolvePlain t of
 -- | The string reads back as the same string if it is a plain scalar in the
 -- block style, as a value or as a key. In a flow collection the characters
 -- @,[]{}@ need quotes too, so the check does not apply there.
+--
+-- >>> map isPlainSafe ["a:b", "a: b", "- a", "a #b", "9.10"]
+-- [True,False,False,False,False]
 isPlainSafe :: T.Text -> Bool
 isPlainSafe t = plainSyntax False t && isPlainString t
 

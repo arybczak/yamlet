@@ -1,5 +1,7 @@
 branches:
 - master
+doctest:
+  enabled: true
 fourmolu:
   enabled: true
   version: '0.20.1.0'

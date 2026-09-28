@@ -1,14 +1,35 @@
 -- | Instances of t'Yamlet.Decode.FromYaml' and t'Yamlet.Encode.ToYaml' from
 -- the t'GHC.Generics.Generic' representation of a type:
 --
--- @
--- data Server = Server {host :: Text, port :: Int}
---   deriving stock (Generic)
+-- >>> :{
+-- data Server = Server {host :: T.Text, port :: Int}
+--   deriving stock (Generic, Show)
 --   deriving anyclass (GenericYaml, FromYaml, ToYaml)
--- @
+-- :}
+--
+-- >>> decodeText @Server "host: localhost\nport: 80\n"
+-- Right (Server {host = "localhost", port = 80})
+--
+-- >>> T.putStr (encodeText (Server "localhost" 80))
+-- host: localhost
+-- port: 80
 --
 -- A type with other options defines 'yamlOptions' in its instance of
--- 'GenericYaml'.
+-- 'GenericYaml':
+--
+-- >>> :{
+-- data Build = Build {sourcePaths :: [T.Text], ghcOptions :: [T.Text]}
+--   deriving stock (Generic)
+--   deriving anyclass (ToYaml)
+-- instance GenericYaml Build where
+--   yamlOptions = defaultYamlOptions {fieldLabelModifier = snakeCase}
+-- :}
+--
+-- >>> T.putStr (encodeText (Build ["src"] ["-Wall"]))
+-- source_paths:
+-- - src
+-- ghc_options:
+-- - -Wall
 --
 -- = Encoding
 --
@@ -27,16 +48,61 @@
 --
 -- * With the encoding 'TaggedFlat', the entries of a field without a name go
 --   in the mapping of the constructor, e.g. @{tag: Ahead, distance: 10}@ for
---   @Ahead (Distance 10)@:
---
--- @
--- instance GenericYaml Step where
---   type SumEncoding Step = TaggedFlat
--- @
+--   @Ahead (Distance 10)@.
 --
 -- * With the encoding 'SingleField', a constructor is a mapping with its
 --   name as the only key, e.g. @{Circle: {radius: 1}}@ or @{Forward: 10}@,
 --   and a constructor without fields is its name, e.g. @Dot@.
+--
+-- The default encoding of a sum type is 'TaggedObject':
+--
+-- >>> :{
+-- data Shape = Circle {radius :: Double} | Dot
+--   deriving stock (Generic)
+--   deriving anyclass (GenericYaml, ToYaml)
+-- data Move = Forward Int | Stop
+--   deriving stock (Generic)
+--   deriving anyclass (GenericYaml, ToYaml)
+-- :}
+--
+-- >>> T.putStr (encodeText [Circle 1, Dot])
+-- - tag: Circle
+--   radius: 1.0
+-- - tag: Dot
+--
+-- >>> T.putStr (encodeText [Forward 10, Stop])
+-- - tag: Forward
+--   contents: 10
+-- - tag: Stop
+--
+-- The instance of 'GenericYaml' chooses another encoding:
+--
+-- >>> :{
+-- data Distance = Distance {distance :: Int}
+--   deriving stock (Generic)
+--   deriving anyclass (GenericYaml, ToYaml)
+-- data Step = Ahead Distance | Halt
+--   deriving stock (Generic)
+--   deriving anyclass (ToYaml)
+-- instance GenericYaml Step where
+--   type SumEncoding Step = TaggedFlat
+-- data Figure = Round {radius :: Double} | Named T.Text | Point
+--   deriving stock (Generic)
+--   deriving anyclass (ToYaml)
+-- instance GenericYaml Figure where
+--   type SumEncoding Figure = SingleField
+-- :}
+--
+-- >>> T.putStr (encodeText [Ahead (Distance 10), Halt])
+-- - tag: Ahead
+--   distance: 10
+-- - tag: Halt
+--
+-- >>> T.putStr (encodeText [Round 1, Named "x", Point])
+-- - Round:
+--     radius: 1.0
+-- - Named: x
+-- - Point
 --
 -- = Shapes
 --
@@ -59,10 +125,19 @@
 --
 -- A type with a default configuration derives the decoder like this:
 --
--- @
+-- >>> :{
+-- data Config = Config {name :: T.Text, retries :: Int, proxy :: Maybe T.Text}
+--   deriving stock (Generic, Show)
+--   deriving anyclass (FromYaml)
 -- instance GenericYaml Config where
---   yamlDefault = Just defaultConfig
--- @
+--   yamlDefault = Just (Config "app" 3 (Just "proxy.local"))
+-- :}
+--
+-- >>> decodeText @Config "retries: 5\n"
+-- Right (Config {name = "app", retries = 5, proxy = Just "proxy.local"})
+--
+-- >>> decodeText @Config "proxy: null\n"
+-- Right (Config {name = "app", retries = 3, proxy = Nothing})
 --
 -- A present key that holds a mapping takes the missing keys of that mapping
 -- from the default of its own type, not from the outer default. The same
@@ -87,3 +162,9 @@ module Yamlet.Generic
   ) where
 
 import Yamlet.Internal.Generic
+
+-- $setup
+-- >>> import Data.Text qualified as T
+-- >>> import Data.Text.IO qualified as T
+-- >>> import GHC.Generics
+-- >>> import Yamlet

@@ -109,6 +109,7 @@ jobs:
         jobs: 4
         tests: True
         benchmarks: True
+        write-ghc-environment-files: always
 
         package yamlet
           ghc-options: -Werror
@@ -154,6 +155,33 @@ jobs:
         path: ${{ steps.setup.outputs.cabal-store }}
         key: ${{ steps.cache.outputs.cache-primary-key }}
 
+    - name: Find the doctest version
+      id: doctest
+      run: |
+        version=$(cabal --store-dir="$RUNNER_TEMP"/doctest-store install doctest --ignore-project --dry-run | sed -n 's/^ - doctest-\([0-9.]*\) (exe:doctest).*/\1/p')
+        if [ -z "$version" ]; then
+          echo 'The dry run of cabal install shows no doctest version.' >&2
+          exit 1
+        fi
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+
+    - uses: actions/cache/restore@v6
+      id: doctest-cache
+      with:
+        path: ~/.local/bin/doctest
+        key: ${{ runner.os }}-${{ steps.versions.outputs.image }}-doctest-${{ steps.doctest.outputs.version }}-ghc-${{ steps.setup.outputs.ghc-version }}
+
+    - name: Install doctest
+      if: steps.doctest-cache.outputs.cache-hit != 'true'
+      run: |
+        cabal install doctest --ignore-project --install-method=copy --installdir="$HOME/.local/bin" --overwrite-policy=always --constraint='doctest ==${{ steps.doctest.outputs.version }}'
+
+    - uses: actions/cache/save@v6
+      if: steps.doctest-cache.outputs.cache-hit != 'true'
+      with:
+        path: ~/.local/bin/doctest
+        key: ${{ steps.doctest-cache.outputs.cache-primary-key }}
+
     - name: Build
       working-directory: ${{ runner.temp }}/haskell-gha
       run: |
@@ -163,6 +191,11 @@ jobs:
       working-directory: ${{ runner.temp }}/haskell-gha
       run: |
         cabal test all --test-show-details=direct
+
+    - name: Run doctest for yamlet
+      working-directory: ${{ runner.temp }}/haskell-gha
+      run: |
+        "$HOME"/.local/bin/doctest -XGHC2021 -XDataKinds -XDefaultSignatures -XDeriveAnyClass -XDerivingStrategies -XDuplicateRecordFields -XLambdaCase -XMultiWayIf -XNoFieldSelectors -XOverloadedRecordDot -XOverloadedStrings -XTypeFamilies -XUndecidableInstances src
 
     - name: Check the packages
       working-directory: ${{ runner.temp }}/haskell-gha

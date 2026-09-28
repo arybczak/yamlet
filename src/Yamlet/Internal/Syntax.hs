@@ -183,6 +183,13 @@ noComments = Comments [] Nothing []
 -- lost.
 --
 -- The order compares the values first and then the comments, e.g. in a set.
+-- A change of the value keeps the comments:
+--
+-- >>> input = "# The port.\nport: 80 # the default\n"
+--
+-- >>> either print (T.putStr . encodeText . M.map (fmap (+ 1))) (decodeText @(M.Map T.Text (Commented Int)) input)
+-- # The port.
+-- port: 81 # the default
 data Commented a = Commented
   { value :: a
   , comments :: !Comments
@@ -196,18 +203,26 @@ data Commented a = Commented
 --
 -- 'Yamlet.Error.documentErrors' turns the offsets into errors with lines,
 -- columns and paths. It needs the text and the document of the decode, so
--- decode with 'Yamlet.decodeWithDocument':
+-- decode with 'Yamlet.decodeWithDocument'. Here the check gives an offset and
+-- a message for each problem:
 --
--- @
--- case decodeWithDocument input of
---   Right (config, doc) -> case check config of
---     [] -> run config
---     errs -> mapM_ (putStrLn . prettyError file) (documentErrors input doc errs)
---   Left errs -> ...
--- @
+-- >>> input = "paths:\n- src\n- /etc\n"
 --
--- Here @check@ gives an offset and a message for each problem, e.g.
--- @(path.offset, "the path is outside the repository")@.
+-- >>> :{
+-- case decodeWithDocument @(M.Map T.Text [Located T.Text]) input of
+--   Right (config, doc) ->
+--     let errs =
+--           [ (p.offset, "the path is outside the repository")
+--           | p <- concat (M.elems config)
+--           , "/" `T.isPrefixOf` p.value
+--           ]
+--     in mapM_ (putStrLn . prettyError "config.yaml") (documentErrors input doc errs)
+--   Left errs -> mapM_ (putStrLn . prettyError "config.yaml") errs
+-- :}
+-- config.yaml:3:3: paths[1]: the path is outside the repository
+--   |
+-- 3 | - /etc
+--   |   ^
 --
 -- A value that no node gives, e.g. a value of 'Yamlet.Generic.yamlDefault',
 -- has 'noOffset'. Its error has no position, and 'Yamlet.Error.prettyError'
@@ -294,3 +309,8 @@ copyComments c = case c of
     copyLine = \case
       Comment t -> Comment (T.copy t)
       EmptyLine -> EmptyLine
+
+-- $setup
+-- >>> import Data.Map.Strict qualified as M
+-- >>> import Data.Text.IO qualified as T
+-- >>> import Yamlet

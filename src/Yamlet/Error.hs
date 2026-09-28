@@ -75,12 +75,11 @@ data Location = Location
 -- end with a line break. Of a line longer than 80 characters, the excerpt
 -- shows only the 80 characters around the column.
 --
--- @
+-- >>> either (mapM_ (putStrLn . prettyError "config.yaml")) print (decodeText @(M.Map T.Text [[Int]]) "jobs:\n  - [1]\n  - 42\n")
 -- config.yaml:3:5: jobs[1]: expected a list, but got an integer
 --   |
 -- 3 |   - 42
 --   |     ^
--- @
 --
 -- An error with no position gives only the file and the message, e.g.
 -- @config.yaml: duplicate key \"a\"@.
@@ -156,6 +155,12 @@ prettyError file err
 -- e.g. @\"a.b\"@. So is a key that starts with @?@ or @*@. In the quotes, a
 -- character that cannot be printed has an escape as in YAML, e.g.
 -- @\"a\\nb\"@.
+--
+-- >>> renderPath [Key "jobs", Index 1, Key "name"]
+-- "jobs[1].name"
+--
+-- >>> renderPath [Key "a.b", Key ""]
+-- "\"a.b\".\"\""
 renderPath :: [PathElement] -> String
 renderPath = \case
   [] -> ""
@@ -374,3 +379,6 @@ lineAt (T.Text arr base len) (Offset off0) = T.Text arr start (stop - start)
     findStop i
       | i < end && not (isBreak (A.unsafeIndex arr i)) = findStop (i + 1)
       | otherwise = i
+
+-- $setup
+-- >>> import Yamlet

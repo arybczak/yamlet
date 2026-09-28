@@ -4,3 +4,4 @@ TAGS
 TAGS.mtime
 cabal.project.local
 dist-newstyle/
+.ghc.environment.*

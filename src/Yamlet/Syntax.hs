@@ -9,6 +9,17 @@
 -- what the program keeps: a copy of a whole tree usually needs more memory
 -- than the input it frees.
 --
+-- A document that the renderer writes back keeps its comments, empty lines
+-- and styles:
+--
+-- >>> input = "# The server.\nhost: localhost # only local\n\nports: [80, 443]\n"
+--
+-- >>> either print (T.putStr . renderSyntax defaultRenderOptions) (parseDocumentsText input)
+-- # The server.
+-- host: localhost # only local
+-- <BLANKLINE>
+-- ports: [80, 443]
+--
 -- = Comments
 --
 -- The parser gives each comment to one node, and the renderer writes it back
@@ -102,6 +113,9 @@ parseDocuments :: BS.ByteString -> Either Error [Document]
 parseDocuments bs = decodeInput bs >>= parseStream
 
 -- | Parse the documents of a stream.
+--
+-- >>> length <$> parseDocumentsText "a\n---\nb\n"
+-- Right 2
 parseDocumentsText :: T.Text -> Either Error [Document]
 parseDocumentsText = parseStream
 
@@ -129,6 +143,9 @@ contentNode c =
 
 -- | A scalar in the given style. If the style cannot hold the text,
 -- 'renderSyntax' uses quotes.
+--
+-- >>> T.putStr (renderSyntax defaultRenderOptions [document (mappingNode [(plainNode "key", scalarNode Plain "a: b")])])
+-- key: 'a: b'
 scalarNode :: ScalarStyle -> T.Text -> Node
 scalarNode style = contentNode . Scalar style
 
@@ -143,3 +160,6 @@ sequenceNode = contentNode . Sequence Block
 -- | A block mapping.
 mappingNode :: [(Node, Node)] -> Node
 mappingNode = contentNode . Mapping Block
+
+-- $setup
+-- >>> import Data.Text.IO qualified as T

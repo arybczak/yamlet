@@ -7,6 +7,9 @@
 -- input with many aliases can give a large value, and the decoder limits the
 -- aliases: they can add 100000 nodes to a document, or as many nodes as the
 -- document has if that is more. A document beyond the limit is an error.
+--
+-- >>> decodeText @Value "base: &b [1, 2.5]\ncopy: *b\npoint: !point {x: 1}\n"
+-- Right (Mapping [(String "base",Sequence [Int 1,Float (Finite 2.5)]),(String "copy",Sequence [Int 1,Float (Finite 2.5)]),(String "point",Tagged "!point" (Mapping [(String "x",Int 1)]))])
 module Yamlet.Value
   ( -- * Values
     Value (..)
@@ -84,11 +87,17 @@ data FloatValue
   deriving anyclass (NFData)
 
 -- | The nearest double, infinite if the value is out of its range.
+--
+-- >>> map floatValueToDouble [Finite 0.1, Finite 1e400, NegativeZero]
+-- [0.1,Infinity,-0.0]
 floatValueToDouble :: FloatValue -> Double
 floatValueToDouble = toRealFloat
 
 -- | The value of a double. A finite double becomes the shortest decimal that
 -- reads back as the same double, e.g. @0.1@.
+--
+-- >>> map doubleToFloatValue [0.1, -0, 1 / 0]
+-- [Finite 0.1,NegativeZero,Infinity]
 doubleToFloatValue :: Double -> FloatValue
 doubleToFloatValue = fromRealFloat
 
@@ -118,6 +127,9 @@ fromRealFloat d
 
 -- | The kind of a value in plain words, for error messages, e.g. "a list".
 -- The tag of 'Tagged' does not change it.
+--
+-- >>> describe (Tagged "!point" (Mapping []))
+-- "a mapping"
 describe :: Value -> String
 describe = \case
   Null -> "null"
@@ -131,6 +143,9 @@ describe = \case
 
 -- | The tag of a value: the tag of 'Tagged', or else the tag of the core
 -- schema, e.g. 'intTag' for an 'Int'.
+--
+-- >>> map valueTag [Int 1, Tagged "!point" (Mapping [])]
+-- ["tag:yaml.org,2002:int","!point"]
 valueTag :: Value -> T.Text
 valueTag = \case
   Null -> nullTag
@@ -151,3 +166,6 @@ floatTag = coreTagPrefix <> "float"
 strTag = coreTagPrefix <> "str"
 seqTag = coreTagPrefix <> "seq"
 mapTag = coreTagPrefix <> "map"
+
+-- $setup
+-- >>> import Yamlet
