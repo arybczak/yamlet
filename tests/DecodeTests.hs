@@ -595,6 +595,10 @@ test_encodings = do
     "source line after a BOM"
     (Left "]")
     (either (Left . (.sourceLine) . NE.head) (const (Right ())) (decode @Value "\xEF\xBB\xBF]"))
+  assertEqual
+    "source line at the line feed of a CRLF"
+    "a: 1"
+    (errorAt "a: 1\r\nb: 2\n" (Offset 5) "message").sourceLine
   let documents :: String -> [T.Text] -> T.Text -> Assertion
       documents preface expected input = assertEqual preface (Right expected) (decodeAllText input)
   documents "BOM before a marker after a scalar" ["a", "b"] "a\n\xFEFF--- b\n"

@@ -293,7 +293,7 @@ documentErrors input doc errs =
 -- list. One scan of the input locates all of them, and the errors on one
 -- line share the copy of the line.
 errorsAt :: T.Text -> [(Offset, String)] -> [Error]
-errorsAt input@(T.Text arr base len) errs =
+errorsAt input errs =
   map snd . L.sortOn fst $ go (startScan input) Nothing (L.sortOn (fst . snd) (zip [0 :: Int ..] errs))
   where
     -- The line of the previous error, with the copy of its text.
@@ -305,15 +305,9 @@ errorsAt input@(T.Text arr base len) errs =
         | otherwise ->
             let (loc, s') = locateFrom input s off
                 sourceLine = case prev of
-                  Just (ln, t) | ln == loc.line, not (betweenCrLf off) -> t
+                  Just (ln, t) | ln == loc.line -> t
                   _ -> T.copy (lineAt input off)
             in (i, Error loc msg sourceLine []) : go s' (Just (loc.line, sourceLine)) rest
-
-    -- 'lineAt' gives no text for an offset between the characters of a CRLF
-    -- line break, but the line of the offset is the line before the break.
-    betweenCrLf :: Offset -> Bool
-    betweenCrLf (Offset o) =
-      o > 0 && o < len && A.unsafeIndex arr (base + o) == LF && A.unsafeIndex arr (base + o - 1) == CR
 
 -- | Compute the line and the column of an offset. A byte order mark at the
 -- start of a line is not a column, because it is not content. For
@@ -377,9 +371,15 @@ skipBom arr end i = if isBomIn arr end i then i + bomLength else i
 lineAt :: T.Text -> Offset -> T.Text
 lineAt (T.Text arr base len) (Offset off0) = T.Text arr start (stop - start)
   where
-    end, off, start, stop :: Int
+    end, i0, off, start, stop :: Int
     end = base + len
-    off = base + max 0 (min len off0)
+    i0 = base + max 0 (min len off0)
+
+    -- An offset between the characters of a CRLF line break is on the line
+    -- before the break.
+    off
+      | i0 > base && i0 < end && A.unsafeIndex arr i0 == LF && A.unsafeIndex arr (i0 - 1) == CR = i0 - 1
+      | otherwise = i0
     start = skipBom arr end (findStart off)
     stop = max start (findStop off)
 
