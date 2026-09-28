@@ -904,7 +904,7 @@ insertUnique node item key insert start msg note xs = Parser $ \off -> go off st
     go off !acc errs dups = \case
       [] -> case (errs, dups) of
         (NoErrors, []) -> Result NoErrors acc
-        _ -> Result (foldl' bothErrors errs (map (duplicateError (firsts off)) dups)) failed
+        _ -> Result (L.foldl' bothErrors errs (map (duplicateError (firsts off)) dups)) failed
       a : rest ->
         let Parser p = item a
         in case p off of
