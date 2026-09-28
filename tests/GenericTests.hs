@@ -74,19 +74,12 @@ data Unit = Unit
   deriving stock (Eq, Show, Generic)
   deriving anyclass (GenericYaml, FromYaml, ToYaml)
 
-data UnitMapping = UnitMapping
-  deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
-
-instance GenericYaml UnitMapping where
-  yamlOptions = defaultYamlOptions {allNullaryToStringTag = False}
-
 data UnitTagged = UnitTagged
   deriving stock (Eq, Show, Generic)
   deriving anyclass (FromYaml, ToYaml)
 
 instance GenericYaml UnitTagged where
-  yamlOptions = defaultYamlOptions {allNullaryToStringTag = False, tagSingleConstructors = True}
+  yamlOptions = defaultYamlOptions {tagSingleConstructors = True}
 
 newtype NameTagged = NameTagged T.Text
   deriving stock (Eq, Show, Generic)
@@ -224,10 +217,7 @@ newtype Box = Box {contents :: Int}
 
 data Direction = Clockwise | Anticlockwise
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
-
-instance GenericYaml Direction where
-  yamlOptions = defaultYamlOptions {tagKey = "direction", allNullaryToStringTag = False}
+  deriving anyclass (GenericYaml, FromYaml, ToYaml)
 
 data Settings = Settings {name :: T.Text, retries :: Int, proxy :: Maybe T.Text, limits :: Limits}
   deriving stock (Eq, Show, Generic)
@@ -346,15 +336,13 @@ shapes =
   testGroup
     "shapes"
     [ shape "one constructor without fields" Unit "Unit\n"
-    , shape "one constructor without fields as a mapping" UnitMapping "{}\n"
-    , shape "one constructor without fields with a tag" UnitTagged "tag: UnitTagged\n"
+    , shape "one constructor without fields, tagSingleConstructors" UnitTagged "UnitTagged\n"
     , shape "one field without a name" (Name "x") "x\n"
     , shape "one field without a name with a tag" (NameTagged "x") "tag: NameTagged\ncontents: x\n"
     , shape "one named field" (Speed 1) "speed: 1\n"
     , shape "named fields" (Server "a" 1 Nothing) "host: a\nport: 1\ntags: null\n"
     , shape "named fields with a tag" (Single 1) "tag: Single\nvalue: 1\n"
     , shape "enumeration" TurnLeft "TurnLeft\n"
-    , shape "enumeration as a mapping" Clockwise "direction: Clockwise\n"
     , shape "fields without names" (Whole 1) "tag: Whole\ncontents: 1\n"
     , shape "fields without names, with fields" (Label "x") "tag: Label\ncontents: x\n"
     , shape "fields without names, without fields" End "tag: End\n"
@@ -528,7 +516,7 @@ test_singleField = do
 test_flatten :: Assertion
 test_flatten = do
   assertEqual "record" "step: Ahead\ndistance: 10\n" (encodeText (Ahead (Distance (Just 10))))
-  assertEqual "enumeration" "step: Rotate\ndirection: Clockwise\n" (encodeText (Rotate Clockwise))
+  assertEqual "enumeration" "step: Rotate\ncontents: Clockwise\n" (encodeText (Rotate Clockwise))
   assertEqual "no fields" "step: Halt\n" (encodeText Halt)
   assertEqual "no mapping" "step: Wait\ncontents: 5\n" (encodeText (Wait 5))
   assertEqual "tag key" "step: Again\ncontents:\n  step: Halt\n" (encodeText (Again Halt))

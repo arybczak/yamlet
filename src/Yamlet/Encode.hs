@@ -472,7 +472,7 @@ gToYaml
      )
   => YamlOptions -> SumEncodingKind -> Maybe (D1 d f p) -> D1 d f p -> S.Node
 gToYaml opts enc def (M1 x)
-  | isEnum @f opts = scalar (String (gTag opts x))
+  | gNullary @f = scalar (String (gTag opts x))
   | otherwise = gToConstructor opts (if isTagged @f opts then Just enc else Nothing) (unM1 <$> def) x
 -- Without the pragma, GHC 9.2 does not inline this function, and GHC 9.4 does
 -- not inline it for an enumeration. Then the inspection tests of these

@@ -1219,7 +1219,7 @@ gParseYaml
      )
   => YamlOptions -> SumEncodingKind -> Maybe (D1 d f p) -> (D1 d f p -> a) -> S.Node -> Parser a
 gParseYaml opts enc def k n
-  | isEnum @f opts =
+  | gNullary @f =
       withName tags (\t -> fromMaybe (unknown n "value" t) (gFromTag opts (k . M1) n t)) n
   | isTagged @f opts, enc == SingleField = single
   | isTagged @f opts = withMapping tagged n

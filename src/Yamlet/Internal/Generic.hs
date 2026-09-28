@@ -14,7 +14,6 @@ module Yamlet.Internal.Generic
     -- * Constructors
   , GConstructors (..)
   , GEncoding (..)
-  , isEnum
   , isTagged
   , constructorTag
 
@@ -56,10 +55,8 @@ data YamlOptions = YamlOptions
   -- @contents@ by default. If it is the same as 'tagKey', such a constructor
   -- encodes as a mapping with two equal keys, which does not read back.
   , tagSingleConstructors :: Bool
-  -- ^ Give a type with one constructor a tag too. Off by default.
-  , allNullaryToStringTag :: Bool
-  -- ^ Encode a type whose constructors have no fields as a string. On by
-  -- default.
+  -- ^ Give a type with one constructor a tag too, unless the constructor has
+  -- no fields. Off by default.
   , omitNullFields :: Bool
   -- ^ Leave out a field whose value is null, e.g. 'Nothing'. Off by default.
   -- With 'yamlDefault', a null field stays if its default is not null,
@@ -77,7 +74,6 @@ defaultYamlOptions =
     , tagKey = "tag"
     , contentsKey = "contents"
     , tagSingleConstructors = False
-    , allNullaryToStringTag = True
     , omitNullFields = False
     , rejectUnknownFields = False
     }
@@ -89,6 +85,10 @@ data SumEncodingKind
   = -- | The fields go next to the tag, e.g. @{tag: Circle, radius: 1}@, and a
     -- field without a name goes under the contents key, e.g.
     -- @{tag: Forward, contents: 10}@.
+    --
+    -- An enumeration is a string, but a constructor without fields in a type
+    -- with fields is a mapping, e.g. @{tag: Stop}@. To keep the encoding of an
+    -- enumeration when you add a constructor with fields, use 'SingleField'.
     TaggedObject
   | -- | The entries of a field without a name go next to the tag, e.g.
     -- @{tag: Ahead, distance: 10}@ for @Ahead (Distance 10)@. The
@@ -98,8 +98,7 @@ data SumEncodingKind
     -- The field must encode as a mapping with a key, and no key can be the
     -- tag key. Otherwise the constructor encodes as with 'TaggedObject'.
     -- Thus the field of a type with the same tag key stays under the
-    -- contents key. An enumeration uses the form if
-    -- 'Yamlet.Generic.allNullaryToStringTag' is off.
+    -- contents key.
     --
     -- The keys of the mapping belong to the field, so the options of its
     -- type apply to them, e.g. 'Yamlet.Generic.rejectUnknownFields'.
@@ -194,11 +193,6 @@ instance (KnownSymbol name, GFields f) => GConstructors (C1 (MetaCons name fixit
   gConstructorNames = [symbolVal (Proxy @name)]
   gConstructorCount = 1
   gNullary = gArity @f == 0
-
--- | The type has only constructors without fields, and the options encode it
--- as a string.
-isEnum :: forall f. GConstructors f => YamlOptions -> Bool
-isEnum opts = opts.allNullaryToStringTag && gNullary @f
 
 -- | The value of 'SumEncoding', if the constructors allow it. The instances
 -- also check the shape of the constructors, because every derived instance
