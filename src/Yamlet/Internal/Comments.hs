@@ -200,10 +200,13 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
       let (t, is) = trailingComment items3
           (ls, is') = blockAfter is
       in (t, ls, is')
+    -- The empty lines before the bracket go to the node below, as after the
+    -- last entry of a block collection. They go back after the comment
+    -- after the bracket, which 'trailingComment' takes from the front.
     flowEnd =
-      let (ls, is) = flowAfter items3
+      let (ls, empties, is) = flowAfter items3
           (t, is') = trailingComment is
-      in (t, ls, is')
+      in (t, ls, empties ++ is')
 
     -- The comment at the end of the line of the node's end. A node that ends
     -- at the start of a line, e.g. a block scalar, ends on the line before,
@@ -229,10 +232,11 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
       in (map (.line) (reverse taken'), reverse empties ++ rest)
 
     -- The lines before the closing bracket.
-    flowAfter :: [Item] -> ([Line], [Item])
+    flowAfter :: [Item] -> ([Line], [Item], [Item])
     flowAfter is =
       let (taken, rest) = span (\i -> i.at < en) is
-      in (map (.line) taken, rest)
+          (empties, taken') = span isEmptyLine (reverse taken)
+      in (map (.line) (reverse taken'), reverse empties, rest)
 
     sequenceItems :: CollectionStyle -> [Node] -> [Item] -> ([Node], [Item])
     sequenceItems style = go []

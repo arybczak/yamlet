@@ -273,6 +273,22 @@ test_documents = do
   check "comment before the directives" "a\n...\n# b\n%YAML 1.2\n---\nc\n"
   check "comments at the end of a root collection and a document" "a: 1\n# b\n\n# c\n...\n"
   check "comments around an end marker between documents" "a\n# b\n...\n# c\n---\nd\n"
+  let emptyLineBefore :: String -> T.Text -> T.Text -> Assertion
+      emptyLineBefore preface expected input = do
+        assertEqual preface (Right expected) (renderSyntax defaultRenderOptions <$> parseDocumentsText input)
+        check (preface ++ ", rendered again") expected
+  emptyLineBefore
+    "empty line before the bracket of a flow root"
+    "key: value\n# zq\n...\n"
+    "{\n key: value\n # zq\n\n}\n...\n"
+  emptyLineBefore
+    "empty line before the bracket of a flow value"
+    "a:\n  key: value\n  # zq\n\nb: 1\n"
+    "a: {\n key: value\n # zq\n\n }\nb: 1\n"
+  emptyLineBefore
+    "empty line before the bracket and a comment after it"
+    "a: {key: value} # c\n\nb: 1\n"
+    "a: {\n key: value\n\n } # c\nb: 1\n"
   assertEqual
     "comment after a byte order mark between documents"
     (Right [[], [("document", "before", "c")]])

@@ -189,10 +189,16 @@ document opts afterEnd doc =
             <> foldMap tagDirective handles
         else mempty
     , body
-    , lines_ 0 ((if isBlock opts r && not (null doc.docComments.after) then (EmptyLine :) else id) doc.docComments.after)
+    , lines_ 0 ((if isBlock opts r && not (null docEnd) then (EmptyLine :) else id) docEnd)
     , if doc.explicitEnd then "...\n" else mempty
     ]
   where
+    -- The parser drops the empty lines at the start of the end of a document
+    -- with a block collection root, e.g. a flow root that is written in the
+    -- block style, so they would not read back.
+    docEnd :: [Line]
+    docEnd = if isBlock opts r then dropWhile (== EmptyLine) doc.docComments.after else doc.docComments.after
+
     r :: Node
     r = case doc.root.content of
       Scalar style t
