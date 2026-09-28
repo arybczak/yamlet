@@ -471,6 +471,10 @@ test_nesting = do
     "block sequences on a line with a comment below"
     (Right 200000)
     (depth <$> decodeText (T.replicate 200000 "- " <> "x\n\n# c\n"))
+  assertEqual
+    "block sequences on an indented line with a comment above"
+    (Right 400000)
+    (depth <$> decodeText ("# c\n" <> T.replicate 400000 " " <> T.replicate 400000 "- " <> "x\n"))
 
 test_optionalKeys :: Assertion
 test_optionalKeys = do

@@ -136,9 +136,18 @@ attachNode e limit minColumn known n items0 =
            _ -> (ls, rest)
 
     -- A collection after "- " on the same line keeps the lines above the
-    -- indicator, so that a comment above an item stays with the item.
+    -- indicator, so that a comment above an item stays with the item. The walk
+    -- goes back from the node, so that it stops at the indicator of an outer
+    -- collection. A walk from the start of the line would cross the whole
+    -- indentation for each nested collection, and the time would be quadratic.
     startsLine :: Bool
-    startsLine = T.all isWhiteChar (between lineStart s)
+    startsLine = go (s + e.base)
+      where
+        go :: Int -> Bool
+        go i
+          | i == lineStart + e.base = True
+          | isWhite (A.unsafeIndex e.array (i - 1)) = go (i - 1)
+          | otherwise = False
 
     -- The lines on their own after the last empty line go to the first entry.
     toFirstEntry :: [Item] -> [Item] -> ([Item], [Item])
@@ -146,9 +155,6 @@ attachNode e limit minColumn known n items0 =
       let (ownLines, others) = span (.own) (reverse ls)
           (entry, kept) = break isEmptyLine ownLines
       in (reverse (kept ++ others), reverse entry ++ rest)
-
-    isWhiteChar :: Char -> Bool
-    isWhiteChar ch = ch == ' ' || ch == '\t'
 
     fallbackItem :: Maybe Item
     fallbackItem = case reverse (filter (not . (.own)) pre) of
