@@ -295,7 +295,11 @@ copyNode n =
                 Tag t -> Tag (T.copy t)
                 t -> t
             }
-    , comments = copyComments n.comments
+    , comments = case n.comments of
+        -- Most nodes share one empty value. GHC returns the result of
+        -- 'copyComments' unboxed, so the caller would build a new one.
+        c@(Comments [] Nothing []) -> c
+        c -> copyComments c
     , content = case n.content of
         Scalar style t -> Scalar style (T.copy t)
         Sequence style xs -> Sequence style $! evaluated (map copyNode xs)
