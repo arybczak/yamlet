@@ -97,7 +97,7 @@ test_base = do
   roundTrip "fixed" (-123.456 :: Milli)
   roundTrip "nano" (0.000000001 :: Nano)
   roundTrip "resolution of a power of 2" (MkFixed 3 :: Fixed Quarters)
-  assertEqual "resolution of 2s and 5s" "2.5e-2\n" (encodeText (MkFixed 1 :: Fixed Fortieths))
+  assertEqual "resolution of 2s and 5s" "0.025\n" (encodeText (MkFixed 1 :: Fixed Fortieths))
   roundTrip "resolution of 2s and 5s" (MkFixed 7 :: Fixed Fortieths)
   assertEqual "resolution without a decimal form" "0.3\n" (encodeText (MkFixed 1 :: Fixed Thirds))
   roundTrip "newtypes" (Down 'a', Sem.Max (1 :: Int), Mon.First (Just True), Sem.Sum (2.5 :: Double), Sem.All False, Const @Int @Bool 3)
@@ -224,10 +224,15 @@ test_floats :: Assertion
 test_floats = do
   assertEqual "integral double" "12.0\n" (encodeText (12 :: Double))
   assertEqual "double" "0.1\n" (encodeText (0.1 :: Double))
+  assertEqual "small double" "0.01\n" (encodeText (0.01 :: Double))
+  assertEqual "smallest decimal notation" "0.000001\n" (encodeText (1e-6 :: Double))
+  assertEqual "below decimal notation" "1.0e-7\n" (encodeText (1e-7 :: Double))
+  assertEqual "largest decimal notation" "100000000000000000000.0\n" (encodeText (1e20 :: Double))
+  assertEqual "above decimal notation" "1.0e21\n" (encodeText (1e21 :: Double))
   assertEqual "large scientific" "1.0e30\n" (encodeText (Sci.scientific 1 30))
   assertEqual
     "exact scientific"
-    "1.2345678901234567890123e19\n"
+    "12345678901234567890.123\n"
     (encodeText (Sci.scientific 12345678901234567890123 (-3)))
   assertEqual "exponent beyond the limit" "1.0e10001\n" (encodeText (Sci.scientific 1 10001))
   assertEqual "exponent beyond Int" "1.0e9223372036854775808\n" (encodeText (Sci.scientific 10 maxBound))
@@ -241,11 +246,15 @@ test_floats = do
   assertEqual "negative zero" "-0.0\n" (encodeText @Double (-0))
   assertEqual "float negative zero" "-0.0\n" (encodeText @Float (-0))
 
--- | A float has the generic format of the scientific package.
+-- | A float has decimal notation from 10^-6 up to 10^21, as Number::toString
+-- of ECMAScript, and exponential notation otherwise.
 prop_floatFormat :: Integer -> Property
 prop_floatFormat c = forAll ((,) <$> chooseInt (0, 3) <*> chooseInt (-30, 30)) $ \(zeros, e) ->
   let s = Sci.scientific (c * 10 ^ zeros) e
-  in encodeText s === T.pack (Sci.formatScientific Sci.Generic Nothing s) <> "\n"
+      format
+        | s == 0 || (abs s >= Sci.scientific 1 (-6) && abs s < Sci.scientific 1 21) = Sci.Fixed
+        | otherwise = Sci.Exponent
+  in encodeText s === T.pack (Sci.formatScientific format Nothing s) <> "\n"
 
 -- | The time to write a float is not quadratic in the number of its digits.
 test_longFloats :: Assertion
@@ -536,7 +545,8 @@ genScalar =
     [ pure Null
     , Bool <$> arbitrary
     , Int <$> arbitrary
-    , Float <$> elements (map Finite [0, 1.5, -2.25e-10, 123456.789, 1e30, 12] ++ [Infinity, NegativeInfinity, NaN])
+    , Float . Finite <$> (Sci.scientific <$> arbitrary <*> chooseInt (-30, 30))
+    , Float <$> elements [NegativeZero, Infinity, NegativeInfinity, NaN]
     , String <$> genText
     ]
 

@@ -642,20 +642,20 @@ plainText = \case
   Mapping _ -> "{}"
   Tagged _ v -> plainText v
   where
-    -- The format of Sci.Generic: decimal notation for the exponents from
-    -- 'minDecimal' to 'maxDecimal', and exponential notation for other
-    -- numbers. The text always has a dot, so the number reads back as a
-    -- float, not as an integer. Sci.formatScientific takes quadratic time in
-    -- the number of digits, and its exponent overflows close to the upper
-    -- limit of Int.
+    -- Decimal notation for the exponents from 'minDecimal' to 'maxDecimal',
+    -- and exponential notation for other numbers. The text always has a dot,
+    -- so the number reads back as a float, not as an integer.
+    -- Sci.formatScientific takes quadratic time in the number of digits, and
+    -- its exponent overflows close to the upper limit of Int.
     finite :: Sci.Scientific -> T.Text
     finite s = case T.uncons digits of
       Nothing -> "0.0"
       Just (d, rest)
-        | ex >= minDecimal && ex <= maxDecimal ->
+        | ex >= minDecimal && ex < 0 ->
+            T.concat [sign, "0.", T.replicate (fromInteger (negate ex - 1)) "0", digits]
+        | ex >= 0 && ex <= maxDecimal ->
             let (int, frac) = T.splitAt integerDigits digits
-                intPart = if integerDigits == 0 then "0" else T.justifyLeft integerDigits '0' int
-            in T.concat [sign, intPart, ".", orZero frac]
+            in T.concat [sign, T.justifyLeft integerDigits '0' int, ".", orZero frac]
         | otherwise -> T.concat [sign, T.singleton d, ".", orZero rest, "e", decimal ex]
       where
         c :: Integer
@@ -683,8 +683,9 @@ plainText = \case
         decimal :: Integer -> T.Text
         decimal = B.runBuilder . B.fromUnboundedDec
 
-        -- The exponents of the first digit that Sci.Generic writes in
-        -- decimal notation, for the numbers from 0.1 up to 10^7.
+        -- The exponents of the first digit that Number::toString of
+        -- ECMAScript writes in decimal notation, for the numbers from 10^-6
+        -- up to 10^21. JSON.stringify uses the same notation.
         minDecimal, maxDecimal :: Integer
-        minDecimal = -1
-        maxDecimal = 6
+        minDecimal = -6
+        maxDecimal = 20
