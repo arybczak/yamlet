@@ -22,8 +22,8 @@ import Yamlet.Syntax qualified as S
 --
 -- A document with comments, anchors, aliases, flow collections or scalar
 -- styles that 'Yamlet.Encode.toYaml' does not create goes to
--- 'S.renderSyntax'. Other documents go to a faster renderer, which gives the
--- same output.
+-- 'Yamlet.Syntax.renderSyntax'. Other documents go to a faster renderer,
+-- which gives the same output.
 renderDocuments :: [S.Node] -> T.Text
 renderDocuments docs
   | all simple docs = B.runBuilder . mconcat $ zipWith document [0 :: Int ..] docs

@@ -34,9 +34,10 @@ import Math.NumberTheory.Logarithms
 import Data.Text.Internal qualified as T
 #endif
 
--- | 'T.stripPrefix'. Before text 2.1.4, 'T.stripPrefix' compares the texts as
--- streams of characters and allocates for each character. For these versions
--- this is the code of text 2.1.4, which compares the UTF-8 bytes.
+-- | 'Data.Text.stripPrefix'. Before text 2.1.4, 'Data.Text.stripPrefix'
+-- compares the texts as streams of characters and allocates for each
+-- character. For these versions this is the code of text 2.1.4, which
+-- compares the UTF-8 bytes.
 textStripPrefix :: T.Text -> T.Text -> Maybe T.Text
 #if MIN_VERSION_text(2,1,4)
 textStripPrefix = T.stripPrefix
@@ -46,7 +47,8 @@ textStripPrefix p@(T.Text _arr _off plen) t@(T.Text arr off len)
   | otherwise = Nothing
 #endif
 
--- | 'T.isPrefixOf', with the code of text 2.1.4 as in 'textStripPrefix'.
+-- | 'Data.Text.isPrefixOf', with the code of text 2.1.4 as in
+-- 'textStripPrefix'.
 textIsPrefixOf :: T.Text -> T.Text -> Bool
 #if MIN_VERSION_text(2,1,4)
 textIsPrefixOf = T.isPrefixOf

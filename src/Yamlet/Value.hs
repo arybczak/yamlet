@@ -1,12 +1,12 @@
 -- | The values of YAML documents: the content with resolved tags, without the
 -- styles, comments and positions of the syntax tree.
 --
--- A 'Value' has 'Yamlet.FromYaml' and 'Yamlet.ToYaml' instances, e.g. to
--- read a document whose structure a program does not know. An alias becomes
--- a copy of the value that it refers to. So a small input with many aliases
--- can give a large value, and the decoder limits the aliases: they can add
--- 100000 nodes to a document, or as many nodes as the document has if that
--- is more. A document beyond the limit is an error.
+-- A 'Value' has t'Yamlet.Decode.FromYaml' and t'Yamlet.Encode.ToYaml'
+-- instances, e.g. to read a document whose structure a program does not
+-- know. An alias becomes a copy of the value that it refers to. So a small
+-- input with many aliases can give a large value, and the decoder limits the
+-- aliases: they can add 100000 nodes to a document, or as many nodes as the
+-- document has if that is more. A document beyond the limit is an error.
 module Yamlet.Value
   ( -- * Values
     Value (..)
@@ -62,9 +62,10 @@ data Value
 -- | The value of a floating-point number. A finite value is exact, e.g. @0.1@
 -- is exactly one tenth.
 --
--- Arithmetic on a 'Sci.Scientific' with a huge exponent, e.g. @1e1000000000@,
--- can use all memory. Convert a value from an untrusted input with
--- 'floatValueToDouble' or with the bounded conversions of "Data.Scientific".
+-- Arithmetic on a t'Data.Scientific.Scientific' with a huge exponent, e.g.
+-- @1e1000000000@, can use all memory. Convert a value from an untrusted input
+-- with 'floatValueToDouble' or with the bounded conversions of
+-- "Data.Scientific".
 data FloatValue
   = -- | A finite value other than negative zero.
     --
@@ -73,7 +74,8 @@ data FloatValue
     -- rejects it. The decoder never gives such a value, and a 'Double' is
     -- always in the range.
     Finite !Sci.Scientific
-  | -- | Negative zero, e.g. @-0.0@, which a 'Sci.Scientific' cannot hold.
+  | -- | Negative zero, e.g. @-0.0@, which a t'Data.Scientific.Scientific'
+    -- cannot hold.
     NegativeZero
   | Infinity
   | NegativeInfinity

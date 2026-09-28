@@ -81,8 +81,8 @@ defaultYamlOptions =
     , rejectUnknownFields = False
     }
 
--- | The configuration of the generic instances of 'Yamlet.Decode.FromYaml'
--- and 'Yamlet.Encode.ToYaml' for a type: the options and the default value.
+-- | The configuration of the generic instances of t'Yamlet.Decode.FromYaml'
+-- and t'Yamlet.Encode.ToYaml' for a type: the options and the default value.
 class GenericYaml a where
   -- | Put the entries of the field of a tagged constructor without field
   -- names in the mapping of the constructor, next to the tag. 'False' by

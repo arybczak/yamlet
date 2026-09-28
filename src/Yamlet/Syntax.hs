@@ -1,7 +1,7 @@
 -- | The representation of a YAML stream that keeps every detail of the
 -- presentation: the styles of scalars and collections, anchors, aliases,
--- unresolved tags, comments and empty lines. The 'Yamlet.FromYaml' and
--- 'Yamlet.ToYaml' classes read and write the nodes of this tree.
+-- unresolved tags, comments and empty lines. The t'Yamlet.Decode.FromYaml'
+-- and t'Yamlet.Encode.ToYaml' classes read and write the nodes of this tree.
 --
 -- Most texts in the tree share the memory of the input, so a node keeps the
 -- whole input alive. To keep a text longer than the tree, copy it with

@@ -1,5 +1,5 @@
--- | Instances of 'Yamlet.Decode.FromYaml' and 'Yamlet.Encode.ToYaml' from the
--- 'GHC.Generics.Generic' representation of a type:
+-- | Instances of t'Yamlet.Decode.FromYaml' and t'Yamlet.Encode.ToYaml' from
+-- the t'GHC.Generics.Generic' representation of a type:
 --
 -- @
 -- data Server = Server {host :: Text, port :: Int}

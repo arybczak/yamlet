@@ -86,7 +86,7 @@ import Yamlet.Value
 -- | A parser of nodes. Its errors point to the node that the parser works on,
 -- unless 'failAt' names another one.
 --
--- The parser has no 'Control.Applicative.Alternative' instance. To try
+-- The parser has no t'Control.Applicative.Alternative' instance. To try
 -- another parser after a failure, use 'orElse'. To reject a value, fail with
 -- a message that says why:
 --
@@ -854,10 +854,10 @@ instance FromYaml a => FromYaml (Maybe a) where
 -- | Two keys that convert to the same key, e.g. @1@ and @1.0@ for 'Double',
 -- are an error.
 --
--- Each key decodes with the instance of its type, so a map with 'T.Text' keys
--- rejects a key such as @404@ or @true@, because YAML reads it as an integer
--- or a boolean. Quote such a key in the input, e.g. @\"404\": not found@, or
--- use a key type that matches it, e.g. 'Int'.
+-- Each key decodes with the instance of its type, so a map with
+-- t'Data.Text.Text' keys rejects a key such as @404@ or @true@, because YAML
+-- reads it as an integer or a boolean. Quote such a key in the input, e.g.
+-- @\"404\": not found@, or use a key type that matches it, e.g. t'Int'.
 instance (Ord k, FromYaml k, FromYaml v) => FromYaml (M.Map k v) where
   -- The index of 'withMapping' would be of no use here.
   parseYaml = parseNode $ \n -> case n.content of

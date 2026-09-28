@@ -3,7 +3,7 @@
 -- | The parser of YAML 1.2.2 streams.
 --
 -- The functions follow the productions of the specification and keep their
--- names, e.g. 'nsFlowNode' implements @ns-flow-node(n,c)@. A few productions
+-- names, e.g. @nsFlowNode@ implements @ns-flow-node(n,c)@. A few productions
 -- are fused into loops over the bytes of the input for speed.
 --
 -- This module is intended for internal use only, and may change without warning

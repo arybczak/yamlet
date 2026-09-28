@@ -137,8 +137,8 @@ digitsValue radix t0 = go (T.length t0) t0
 -- or zero, which are not exact.
 --
 -- The coefficient has no trailing zeros. The comparison of two
--- 'Sci.Scientific' values removes them one digit at a time, which takes
--- quadratic time in their number.
+-- t'Data.Scientific.Scientific' values removes them one digit at a time, which
+-- takes quadratic time in their number.
 decimal :: T.Text -> Integer -> Integer -> Either FloatValue FloatValue
 decimal ds0 e0 written
   | c == 0 = Right (Finite 0)
@@ -165,9 +165,10 @@ decimal ds0 e0 written
 -- the exponent in its text and the exponent of its first digit are both
 -- beyond it, because the digits of the text pay for the size of the value.
 --
--- A 'Sci.Scientific' keeps the exponent apart from the coefficient, but its
--- conversion to an 'Integer', e.g. with 'truncate', computes every digit.
--- With this limit, the integer has at most 1000 more digits than the text.
+-- A t'Data.Scientific.Scientific' keeps the exponent apart from the
+-- coefficient, but its conversion to an 'Integer', e.g. with 'truncate',
+-- computes every digit. With this limit, the integer has at most 1000 more
+-- digits than the text.
 -- Without a limit, a short input such as @1e999999999@ gives an integer of
 -- about 400 MiB. The limit covers the whole range of 'Double', from about
 -- 5e-324 to 1.8e308.

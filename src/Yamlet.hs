@@ -21,8 +21,8 @@
 --     Right config -> ...
 -- @
 --
--- A field of type 'S.Node' keeps a part of the document as it was written,
--- and the encoder writes it back with its comments and styles:
+-- A field of type t'Yamlet.Node' keeps a part of the document as it was
+-- written, and the encoder writes it back with its comments and styles:
 --
 -- @
 -- data Workflow = Workflow

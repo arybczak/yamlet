@@ -194,9 +194,9 @@ data Commented a = Commented
 -- | A value with the offset of its node, e.g. for the error of a check that
 -- runs after the decode. The encoder writes only the value.
 --
--- 'Yamlet.documentErrors' turns the offsets into errors with lines, columns
--- and paths. It needs the text and the document of the decode, so decode with
--- 'Yamlet.decodeWithDocument':
+-- 'Yamlet.Error.documentErrors' turns the offsets into errors with lines,
+-- columns and paths. It needs the text and the document of the decode, so
+-- decode with 'Yamlet.decodeWithDocument':
 --
 -- @
 -- case decodeWithDocument input of
@@ -210,9 +210,10 @@ data Commented a = Commented
 -- @(path.offset, "the path is outside the repository")@.
 --
 -- A value that no node gives, e.g. a value of 'Yamlet.Generic.yamlDefault',
--- has 'noOffset'. Its error has no position, and 'Yamlet.prettyError' prints
--- only the file and the message. A value inside an alias has the offset of the
--- node with the anchor, because each alias is a copy of that node.
+-- has 'noOffset'. Its error has no position, and 'Yamlet.Error.prettyError'
+-- prints only the file and the message. A value inside an alias has the
+-- offset of the node with the anchor, because each alias is a copy of that
+-- node.
 --
 -- The equality and the order compare the values first and then the offsets.
 -- So two equal values at different places differ, e.g. a set keeps both. To
