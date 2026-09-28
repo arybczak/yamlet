@@ -526,7 +526,7 @@ test_optionalKeys = do
                 (,,)
                   <$> explicitParseField small o "a"
                   <*> explicitParseFieldMaybe small o "b"
-                  <*> explicitParseFieldMaybe' (parseYaml @(Maybe Int)) o "b"
+                  <*> explicitParseFieldIfPresent (parseYaml @(Maybe Int)) o "b"
             )
             <$> decodeText input
       small :: Node -> Parser Int
@@ -543,7 +543,7 @@ test_optionalKeys = do
   assertEqual "optional integer key" integerKey (keyError (.:?))
   assertEqual "optional integer key, null as a value" integerKey (keyError (.:!))
   assertEqual "explicit optional integer key" integerKey (keyError (explicitParseFieldMaybe parseYaml))
-  assertEqual "explicit optional integer key, null as a value" integerKey (keyError (explicitParseFieldMaybe' parseYaml))
+  assertEqual "explicit optional integer key, null as a value" integerKey (keyError (explicitParseFieldIfPresent parseYaml))
 
 -- | A located value keeps the offset of its node, and the errors at its offset
 -- have lines, columns and paths.

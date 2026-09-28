@@ -40,7 +40,7 @@ module Yamlet.Decode
   , (.!=)
   , explicitParseField
   , explicitParseFieldMaybe
-  , explicitParseFieldMaybe'
+  , explicitParseFieldIfPresent
   , rejectUnknownKeys
   ) where
 
@@ -564,7 +564,31 @@ explicitParseField p o key = case M.lookup key o.index of
   Nothing -> missingKey o key
 
 -- | Like '.:?', with the given parser for the value, as in
--- 'explicitParseField'.
+-- 'explicitParseField'. The result is 'Nothing' if the key is missing or its
+-- value is null. The parser never gets a null value, so a missing key and a
+-- null value mean the same.
+--
+-- >>> :{
+-- newtype Job = Job (Maybe Int)
+--   deriving stock (Show)
+-- instance FromYaml Job where
+--   parseYaml = withMapping $ \o -> Job <$> explicitParseFieldMaybe positive o "retries"
+--     where
+--       positive :: Node -> Parser Int
+--       positive = withInt $ \i ->
+--         if i > 0 then pure (fromInteger i) else fail "expected a positive number"
+-- :}
+--
+-- >>> decodeText @Job "{}"
+-- Right (Job Nothing)
+--
+-- >>> decodeText @Job "retries: null\n"
+-- Right (Job Nothing)
+--
+-- >>> decodeText @Job "retries: 3\n"
+-- Right (Job (Just 3))
+--
+-- To give a null value to the parser, use 'explicitParseFieldIfPresent'.
 explicitParseFieldMaybe :: (S.Node -> Parser a) -> Object -> T.Text -> Parser (Maybe a)
 explicitParseFieldMaybe p o key =
   findKey o key >>= \case
@@ -572,9 +596,38 @@ explicitParseFieldMaybe p o key =
     entry -> traverse (parseNode p . snd) entry
 
 -- | Like '.:!', with the given parser for the value, as in
--- 'explicitParseField'.
-explicitParseFieldMaybe' :: (S.Node -> Parser a) -> Object -> T.Text -> Parser (Maybe a)
-explicitParseFieldMaybe' p o key = findKey o key >>= traverse (parseNode p . snd)
+-- 'explicitParseField'. The result is 'Nothing' only if the key is missing.
+-- A null value goes to the parser, so the parser can give it a meaning of
+-- its own. Here a missing key takes the default limit, and null means no
+-- limit:
+--
+-- >>> :{
+-- data Limit = Unlimited | Limit Int
+--   deriving stock (Show)
+-- newtype Job = Job (Maybe Limit)
+--   deriving stock (Show)
+-- instance FromYaml Job where
+--   parseYaml = withMapping $ \o -> Job <$> explicitParseFieldIfPresent limit o "limit"
+--     where
+--       limit :: Node -> Parser Limit
+--       limit n = case view n of
+--         NullView -> pure Unlimited
+--         _ -> withInt (pure . Limit . fromInteger) n
+-- :}
+--
+-- >>> decodeText @Job "{}"
+-- Right (Job Nothing)
+--
+-- >>> decodeText @Job "limit: null\n"
+-- Right (Job (Just Unlimited))
+--
+-- >>> decodeText @Job "limit: 3\n"
+-- Right (Job (Just (Limit 3)))
+--
+-- With 'explicitParseFieldMaybe', the null value would give 'Nothing', the
+-- same as the missing key.
+explicitParseFieldIfPresent :: (S.Node -> Parser a) -> Object -> T.Text -> Parser (Maybe a)
+explicitParseFieldIfPresent p o key = findKey o key >>= traverse (parseNode p . snd)
 
 -- | The value of an entry, with errors that point to the value.
 parseEntry :: FromYaml a => (S.Node, S.Node) -> Parser a
