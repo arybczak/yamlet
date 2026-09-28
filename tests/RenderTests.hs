@@ -270,6 +270,10 @@ test_documents = do
   check "comment before the directives" "a\n...\n# b\n%YAML 1.2\n---\nc\n"
   check "comments at the end of a root collection and a document" "a: 1\n# b\n\n# c\n...\n"
   check "comments around an end marker between documents" "a\n# b\n...\n# c\n---\nd\n"
+  assertEqual
+    "comment after a byte order mark between documents"
+    (Right [[], [("document", "before", "c")]])
+    (map commentsOf <$> parseDocumentsText "a: 1\n...\n\xFEFF# c\n---\nb: 2\n")
   let commented :: Document -> Document
       commented d = d {docComments = noComments {before = [Comment "c"]}}
   assertEqual

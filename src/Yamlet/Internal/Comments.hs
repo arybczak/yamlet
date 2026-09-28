@@ -355,6 +355,11 @@ scanItems e start stop = go start start False False
             -- A block scalar can end at the start of a line.
             then let ls' = lineBefore i re ls in go re ls' (ls' /= re) False rest
             else go i ls content prevEmpty rest
+      -- The parser allows byte order marks at the start of a line only
+      -- between documents, where a comment can follow them.
+      | i == ls
+      , isBom e i =
+          let j = skipBoms e i in go j j content prevEmpty ranges
       | otherwise = case A.unsafeIndex e.array i of
           w
             | isBreak w ->
