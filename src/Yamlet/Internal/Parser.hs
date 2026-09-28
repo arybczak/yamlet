@@ -1054,6 +1054,12 @@ closing c start w kind msg = do
       | c == FlowKey -> failure
       | atLineEnd e p -> case nextContent e p of
           Just (lineStart, q)
+            -- A byte order mark can start a line only before a document
+            -- marker or a directive.
+            | isBom e lineStart
+            , let r = skipBoms e lineStart
+            , not (isMarker e r || byteAt e r == PERCENT) ->
+                throwAt lineStart "unexpected byte order mark"
             | Just tab <- L.find (\j -> byteAt e j == TAB) [lineStart .. q - 1] ->
                 throwAt tab "tabs cannot be used for indentation"
             | byteAt e q == w ->

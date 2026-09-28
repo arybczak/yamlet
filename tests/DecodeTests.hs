@@ -646,6 +646,13 @@ test_encodings = do
   bom "BOM before a list item" (2, 1) "- a\n\xFEFF- b\n"
   bom "BOM before an indented value" (2, 1) "a:\n\xFEFF  b\n"
   bom "BOM before a comment in a mapping" (2, 1) "a: b\n\xFEFF#c\n"
+  bom "BOM in a flow sequence" (2, 1) "a: [x,\n\xFEFF y]\n"
+  bom "BOM in a flow mapping" (2, 1) "a: {x: 1,\n\xFEFF\&y: 2}\n"
+  bom "BOM before a closing bracket" (2, 1) "a: [x,\n\xFEFF]\n"
+  assertEqual
+    "BOM before a marker after an unterminated flow sequence"
+    (Just (1, 4, "unterminated flow sequence"))
+    (errorOf (decodeAllText @Value "a: [x,\n\xFEFF---\nb\n"))
   documents "two BOMs before a marker" ["a", "b"] "a\n\xFEFF\xFEFF--- b\n"
   documents "two BOMs before a marker after an end marker" ["a", "b"] "--- a\n...\n\xFEFF\xFEFF--- b\n"
   documents "two BOMs before a marker after a block scalar" ["x\n", "b"] "--- |\n x\n\xFEFF\xFEFF--- b\n"
