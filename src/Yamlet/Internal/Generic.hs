@@ -59,8 +59,11 @@ data YamlOptions = YamlOptions
   -- no fields. Off by default.
   , omitNullFields :: Bool
   -- ^ Leave out a field whose value is null, e.g. 'Nothing'. Off by default.
-  -- With 'yamlDefault', a null field stays if its default is not null,
-  -- because the decoder would fill the missing key from the default.
+  --
+  -- With 'yamlDefault', a null field stays if its default is not null.
+  -- Otherwise the value would not read back: the decoder fills a missing key
+  -- from the default, so e.g. a field 'Nothing' with the default @Just 1@
+  -- would read back as @Just 1@.
   , rejectUnknownFields :: Bool
   -- ^ Reject a key that is no field of the constructor. Off by default.
   }
