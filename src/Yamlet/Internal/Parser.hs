@@ -479,7 +479,24 @@ directives = go Nothing defaultHandles Set.empty
           skipWhile isDecDigit
           r <- pos
           when (r == q) $ throwAt v badVersion
-          maybe (throwAt p "unsupported YAML version") pure $ readBoundedInt (slice e q r)
+          maybe (throwAt p "unsupported YAML version") pure $ readVersion (slice e q r)
+          where
+            -- The value of the digits, or 'Nothing' beyond 'maxVersion'.
+            readVersion :: T.Text -> Maybe Int
+            readVersion = T.foldl' step (Just 0)
+
+            step :: Maybe Int -> Char -> Maybe Int
+            step acc c = do
+              n <- acc
+              let n' = n * 10 + digitToInt c
+              guard (n' <= maxVersion)
+              pure n'
+
+            -- Without a limit, the largest number depends on the size of Int,
+            -- which differs between architectures. The limit is far above any
+            -- version of YAML, and a number below it times 10 fits in 32 bits.
+            maxVersion :: Int
+            maxVersion = 1000000
 
     tagDirective :: P (T.Text, T.Text)
     tagDirective = do

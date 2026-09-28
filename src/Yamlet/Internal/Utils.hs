@@ -8,7 +8,6 @@
 module Yamlet.Internal.Utils
   ( textStripPrefix
   , textIsPrefixOf
-  , readBoundedInt
   , maxImplicitKeyLength
   , coreTagPrefix
   , picoDecimals
@@ -23,7 +22,6 @@ module Yamlet.Internal.Utils
   , percentDigits
   ) where
 
-import Control.Monad
 import Data.Char
 import Data.Fixed
 import Data.Proxy
@@ -64,21 +62,6 @@ textIsPrefixOf a@(T.Text _aArr _aOff aLen) b@(T.Text bArr bOff bLen) =
       | d == 0 = b
       | otherwise = T.Text bArr bOff aLen
 #endif
-
--- | The value of decimal digits, or 'Nothing' if the text is empty, has a
--- character that is not a digit or is beyond the range of 'Int'.
-readBoundedInt :: T.Text -> Maybe Int
-readBoundedInt t
-  | T.null t = Nothing
-  | otherwise = T.foldl' step (Just 0) t
-  where
-    step :: Maybe Int -> Char -> Maybe Int
-    step acc c = do
-      n <- acc
-      guard (isDigit c)
-      let d = digitToInt c
-      guard (n <= (maxBound - d) `quot` 10)
-      pure (n * 10 + d)
 
 -- | The largest number of characters of an implicit key, from the YAML 1.2.2
 -- specification.

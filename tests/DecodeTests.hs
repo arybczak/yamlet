@@ -813,8 +813,14 @@ test_syntaxErrors = do
     (1, 9, "expected a prefix after the tag handle, e.g. tag:example.com,2000:")
     "%TAG !e!\n--- a\n"
   check "invalid tag handle" (1, 6, "invalid tag handle") "%TAG e tag:x,2000:\n--- a\n"
+  check "version beyond the limit" (1, 1, "unsupported YAML version") "%YAML 1000001.2\n--- a\n"
+  check "minor version beyond the limit" (1, 1, "unsupported YAML version") "%YAML 1.1000001\n--- a\n"
   check "version beyond Int" (1, 1, "unsupported YAML version") "%YAML 18446744073709551617.2\n--- a\n"
   check "minor version beyond Int" (1, 1, "unsupported YAML version") ("%YAML 1." <> T.replicate 100000 "9" <> "\n--- a\n")
+  assertEqual
+    "minor version at the limit"
+    (Right [Just (S.Version 1 1000000)])
+    (map (.version) <$> S.parseDocumentsText "%YAML 1.1000000\n--- a\n")
   assertEqual
     "version with leading zeros"
     (Right [Just (S.Version 1 2)])
