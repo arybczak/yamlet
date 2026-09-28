@@ -184,13 +184,14 @@ blockParts allowKeep t
       _ -> "+"
 
 -- | A block scalar with the text needs an indentation indicator, because its
--- first line with content starts with a space. Parsers do not agree on the
--- meaning of the indicator at the top level, so a caller there writes such a
--- text with quotes.
+-- first line with content starts with a space or a tab. YAML 1.2 does not
+-- need the indicator for a tab, but libyaml rejects the block scalar without
+-- it. Parsers do not agree on the meaning of the indicator at the top level,
+-- so a caller there writes such a text with quotes.
 needsIndentIndicator :: T.Text -> Bool
 needsIndentIndicator t = case T.uncons (T.dropWhile (== '\n') t) of
-  Just (' ', _) -> True
-  _ -> False
+  Just (c, _) -> c == ' ' || c == '\t'
+  Nothing -> False
 
 -- | A line of a block scalar. An empty line gets no indentation.
 line :: Int -> T.Text -> B.Builder

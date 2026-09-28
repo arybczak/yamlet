@@ -139,6 +139,7 @@ test_fallbacks = do
   assertEqual "literal with an indicator at the top level" "\" a\\nb\"\n" (render (scalarNode Literal " a\nb"))
   assertEqual "folded with an indicator at the top level" "\" a\\nb\"\n" (render (scalarNode Folded " a\nb"))
   assertEqual "literal with an indicator in a list" "- |2-\n   a\n  b\n" (render (sequenceNode [scalarNode Literal " a\nb"]))
+  assertEqual "folded with a tab in a list" "- >2-\n  \ta\n  b\n" (render (sequenceNode [scalarNode Folded "\ta\nb"]))
   assertEqual
     "keep indicator"
     "- |+\n  a\n\n- b\n"
