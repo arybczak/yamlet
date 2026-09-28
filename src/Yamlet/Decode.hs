@@ -43,6 +43,7 @@ module Yamlet.Decode
 
 import Control.Applicative
 import Control.Monad
+import Data.Containers.ListUtils
 import Data.Fixed
 import Data.Functor.Identity
 import Data.Int
@@ -152,9 +153,11 @@ failure :: S.Offset -> String -> Result a
 failure off msg = Result (OneError off msg []) failed
 
 -- | The errors in the order of their offsets, each with its notes after it.
--- Errors at the same offset keep their order.
+-- Errors at the same offset keep their order. An error comes only once: the
+-- nodes of an alias are the nodes of its anchor, so an error in them repeats
+-- for each alias.
 sortedErrors :: Errors -> [(S.Offset, String)]
-sortedErrors = concatMap (\(off, msg, notes) -> (off, msg) : notes) . L.sortOn (\(off, _, _) -> off) . flip go []
+sortedErrors = concatMap (\(off, msg, notes) -> (off, msg) : notes) . nubOrd . L.sortOn (\(off, _, _) -> off) . flip go []
   where
     go :: Errors -> [(S.Offset, String, [(S.Offset, String)])] -> [(S.Offset, String, [(S.Offset, String)])]
     go = \case
@@ -186,8 +189,9 @@ instance MonadFail Parser where
   fail msg = Parser $ \off -> failure off msg
 
 -- | Run a parser on a node. Each error is the offset of the node that caused
--- it and the message. The errors are in the order of the offsets. A note on
--- an error comes right after it, e.g. the first key of a duplicate key.
+-- it and the message. The errors are in the order of the offsets, and equal
+-- errors come only once. A note on an error comes right after it, e.g. the
+-- first key of a duplicate key.
 --
 -- First, the function makes the checks of 'Yamlet.decodeDocument' on the
 -- node, e.g. for duplicate keys. It also replaces each alias with the node

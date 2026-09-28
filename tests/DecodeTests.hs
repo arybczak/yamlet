@@ -447,6 +447,10 @@ test_aliases = do
     "anchor before a string with a less-than sign"
     (Right (M.fromList [("a", "<x"), ("b", "<x")]))
     (decodeText @(M.Map T.Text T.Text) "a: &x \"<x\"\nb: *x\n")
+  assertEqual
+    "error inside an alias"
+    [(1, 11, "expected an integer, but got a string")]
+    (errorsOf (decodeText @(M.Map T.Text [Int]) "a: &x [1, x]\nb: *x\nc: *x\n"))
 
 -- | The time to parse nested flow sequences is linear in the depth.
 test_nesting :: Assertion
