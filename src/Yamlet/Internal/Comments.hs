@@ -13,6 +13,7 @@ module Yamlet.Internal.Comments
   ) where
 
 import Control.Applicative
+import Control.DeepSeq
 import Data.Maybe
 import Data.Text qualified as T
 import Data.Text.Array qualified as A
@@ -41,12 +42,7 @@ attachComments e start marker rootEnd end doc
   | null items = doc
   | otherwise =
       doc
-        { docComments =
-            Comments
-              { before = dropWhile (== EmptyLine) (map (.line) docItems)
-              , inline = markerComment
-              , after = docEnd
-              }
+        { docComments = strictComments (dropWhile (== EmptyLine) (map (.line) docItems)) markerComment docEnd
         , root = root''
         }
   where
@@ -87,9 +83,18 @@ attachComments e start marker rootEnd end doc
     splitEnd :: (Node, [Line])
     splitEnd =
       let (rootLines, below) = break (== EmptyLine) root'.comments.after
-      in ( Node root'.offset root'.endOffset root'.props root'.comments {after = rootLines} root'.content
+          c = root'.comments
+      in ( Node root'.offset root'.endOffset root'.props (strictComments c.before c.inline rootLines) root'.content
          , dropWhile (== EmptyLine) (below ++ map (.line) leftover)
          )
+
+-- | Comments with their lists evaluated. The parser returns a document
+-- without thunks, and a lazy list would keep the items of the input alive.
+strictComments :: [Line] -> Maybe T.Text -> [Line] -> Comments
+strictComments before inline after =
+  let !before' = force before
+      !after' = force after
+  in Comments before' inline after'
 
 isEmptyLine :: Item -> Bool
 isEmptyLine i = case i.line of
@@ -104,19 +109,15 @@ offsetOf (Offset o) = o
 -- after the last entry of a block collection. The pair is an offset at or
 -- before the node and the start of its line.
 attachNode :: Env -> Int -> Int -> (Int, Int) -> Node -> [Item] -> (Node, [Item])
-attachNode e limit minColumn known n items0 =
-  ( n
-      { comments =
-          Comments
-            { before = [i.line | i <- pre, isJust own || not (isFallback i)]
-            , inline = own <|> fallback
-            , after = afterLines
-            }
-      , content = content'
-      }
-  , items5
-  )
+attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, items5)
   where
+    node :: Node
+    node =
+      n
+        { comments = strictComments [i.line | i <- pre, isJust own || not (isFallback i)] (own <|> fallback) afterLines
+        , content = content'
+        }
+
     s, en :: Int
     s = offsetOf n.offset
     en = offsetOf n.endOffset
@@ -181,9 +182,9 @@ attachNode e limit minColumn known n items0 =
 
     (content', items3) = case n.content of
       Sequence style xs ->
-        let (xs', is) = sequenceItems style xs items2 in (Sequence style xs', is)
+        let !(xs', is) = sequenceItems style xs items2 in (Sequence style xs', is)
       Mapping style kvs ->
-        let (kvs', is) = mappingEntries style kvs items2 in (Mapping style kvs', is)
+        let !(kvs', is) = mappingEntries style kvs items2 in (Mapping style kvs', is)
       c -> (c, items2)
 
     -- The lines before the closing bracket come before the comment after it.
@@ -234,14 +235,15 @@ attachNode e limit minColumn known n items0 =
       in (map (.line) taken, rest)
 
     sequenceItems :: CollectionStyle -> [Node] -> [Item] -> ([Node], [Item])
-    sequenceItems style = go
+    sequenceItems style = go []
       where
-        go :: [Node] -> [Item] -> ([Node], [Item])
-        go [] is = ([], is)
-        go (x : rest) is =
-          let (x', is') = attachNode e (nextStart rest) itemColumn (s, lineStart) x is
-              (rest', is'') = go rest is'
-          in (x' : rest', is'')
+        -- The nodes are in reverse, so that the list is evaluated when the
+        -- result is.
+        go :: [Node] -> [Node] -> [Item] -> ([Node], [Item])
+        go acc [] is = let !xs = reverse acc in (xs, is)
+        go acc (x : rest) is =
+          let !(x', is') = attachNode e (nextStart rest) itemColumn (s, lineStart) x is
+          in go (x' : acc) rest is'
 
         nextStart :: [Node] -> Int
         nextStart = \case
@@ -252,15 +254,15 @@ attachNode e limit minColumn known n items0 =
         itemColumn = if style == Flow then 0 else column + 1
 
     mappingEntries :: CollectionStyle -> [(Node, Node)] -> [Item] -> ([(Node, Node)], [Item])
-    mappingEntries style = go
+    mappingEntries style = go []
       where
-        go :: [(Node, Node)] -> [Item] -> ([(Node, Node)], [Item])
-        go [] is = ([], is)
-        go ((k, v) : rest) is =
-          let (k', is') = attachNode e (offsetOf v.offset) entryColumn (s, lineStart) k is
-              (v', is'') = attachNode e (nextStart rest) entryColumn (s, lineStart) v is'
-              (rest', is''') = go rest is''
-          in ((k', v') : rest', is''')
+        -- The entries are in reverse, as in 'sequenceItems'.
+        go :: [(Node, Node)] -> [(Node, Node)] -> [Item] -> ([(Node, Node)], [Item])
+        go acc [] is = let !kvs = reverse acc in (kvs, is)
+        go acc ((k, v) : rest) is =
+          let !(k', is') = attachNode e (offsetOf v.offset) entryColumn (s, lineStart) k is
+              !(v', is'') = attachNode e (nextStart rest) entryColumn (s, lineStart) v is'
+          in go ((k', v') : acc) rest is''
 
         nextStart :: [(Node, Node)] -> Int
         nextStart = \case

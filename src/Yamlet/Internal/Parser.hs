@@ -355,7 +355,7 @@ lYamlStream markers0 = do
       when explicitEnd lDocumentSuffix
       q <- pos
       rest <- documents markers explicitEnd q
-      let doc =
+      let !doc =
             attachComments
               e
               prefix
