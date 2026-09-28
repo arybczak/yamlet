@@ -38,6 +38,9 @@ module Yamlet.Decode
   , (.:?)
   , (.:!)
   , (.!=)
+  , explicitParseField
+  , explicitParseFieldMaybe
+  , explicitParseFieldMaybe'
   , rejectUnknownKeys
   ) where
 
@@ -529,6 +532,49 @@ o .:? key =
 -- Right (Limit Nothing)
 (.:!) :: FromYaml a => Object -> T.Text -> Parser (Maybe a)
 o .:! key = findKey o key >>= traverse parseEntry
+
+-- | Like '.:', with the given parser for the value, e.g. to check a value
+-- without a new type for it. The errors of the parser point to the value. The parser gets only the value, so it cannot keep the comments of
+-- the key, as a 'Yamlet.Commented' field does with '.:'.
+--
+-- >>> :{
+-- newtype Port = Port Int
+--   deriving stock (Show)
+-- instance FromYaml Port where
+--   parseYaml = withMapping $ \o -> Port <$> explicitParseField number o "port"
+--     where
+--       number :: Node -> Parser Int
+--       number = withInt $ \i ->
+--         if i >= 1 && i <= 65535
+--           then pure (fromInteger i)
+--           else fail "expected a port from 1 to 65535"
+-- :}
+--
+-- >>> decodeText @Port "port: 80\n"
+-- Right (Port 80)
+--
+-- >>> either printErrors print (decodeText @Port "port: 70000\n")
+-- input.yaml:1:7: port: expected a port from 1 to 65535
+--   |
+-- 1 | port: 70000
+--   |       ^
+explicitParseField :: (S.Node -> Parser a) -> Object -> T.Text -> Parser a
+explicitParseField p o key = case M.lookup key o.index of
+  Just (_, v) -> parseNode p v
+  Nothing -> missingKey o key
+
+-- | Like '.:?', with the given parser for the value, as in
+-- 'explicitParseField'.
+explicitParseFieldMaybe :: (S.Node -> Parser a) -> Object -> T.Text -> Parser (Maybe a)
+explicitParseFieldMaybe p o key =
+  findKey o key >>= \case
+    Just (_, v) | isNullNode v -> pure Nothing
+    entry -> traverse (parseNode p . snd) entry
+
+-- | Like '.:!', with the given parser for the value, as in
+-- 'explicitParseField'.
+explicitParseFieldMaybe' :: (S.Node -> Parser a) -> Object -> T.Text -> Parser (Maybe a)
+explicitParseFieldMaybe' p o key = findKey o key >>= traverse (parseNode p . snd)
 
 -- | The value of an entry, with errors that point to the value.
 parseEntry :: FromYaml a => (S.Node, S.Node) -> Parser a

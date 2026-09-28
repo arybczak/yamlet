@@ -518,12 +518,32 @@ test_optionalKeys = do
   check "missing" (Nothing, Nothing) "b: 1\n"
   check "null" (Nothing, Just Nothing) "a: null\n"
   check "value" (Just (Just 1), Just (Just 1)) "a: 1\n"
+  let explicit :: String -> Either (NE.NonEmpty (Offset, String)) (Int, Maybe Int, Maybe (Maybe Int)) -> T.Text -> Assertion
+      explicit preface expected input =
+        assertEqual preface (Right expected) $
+          runParser
+            ( withMapping $ \o ->
+                (,,)
+                  <$> explicitParseField small o "a"
+                  <*> explicitParseFieldMaybe small o "b"
+                  <*> explicitParseFieldMaybe' (parseYaml @(Maybe Int)) o "b"
+            )
+            <$> decodeText input
+      small :: Node -> Parser Int
+      small = withInt $ \i -> if i < 10 then pure (fromInteger i) else fail "too large"
+  explicit "explicit, missing" (Right (1, Nothing, Nothing)) "a: 1\n"
+  explicit "explicit, null" (Right (1, Nothing, Just Nothing)) "a: 1\nb: null\n"
+  explicit "explicit, value" (Right (1, Just 2, Just (Just 2))) "a: 1\nb: 2\n"
+  explicit "explicit, missing key" (Left (pure (Offset 0, "missing key \"a\""))) "b: 1\n"
+  explicit "explicit, bad value" (Left (pure (Offset 3, "too large"))) "a: 20\n"
   let keyError :: (Object -> T.Text -> Parser (Maybe Int)) -> Either (NE.NonEmpty (Offset, String)) (Maybe Int)
       keyError op = either (error . show) (runParser (withMapping (`op` "404"))) (decodeText "200: 1\n404: 2\n")
       integerKey :: Either (NE.NonEmpty (Offset, String)) (Maybe Int)
       integerKey = Left (pure (Offset 7, "the key 404 is an integer, not a string"))
   assertEqual "optional integer key" integerKey (keyError (.:?))
   assertEqual "optional integer key, null as a value" integerKey (keyError (.:!))
+  assertEqual "explicit optional integer key" integerKey (keyError (explicitParseFieldMaybe parseYaml))
+  assertEqual "explicit optional integer key, null as a value" integerKey (keyError (explicitParseFieldMaybe' parseYaml))
 
 -- | A located value keeps the offset of its node, and the errors at its offset
 -- have lines, columns and paths.
