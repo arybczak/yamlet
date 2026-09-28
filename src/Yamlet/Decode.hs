@@ -1427,7 +1427,12 @@ fromObject
   => YamlOptions -> Bool -> [T.Text] -> Maybe (f p) -> Object -> Parser (f p)
 fromObject opts flat keys def o
   | gNamed @f || gArity @f == 0 = checked (gNames @f opts) (gFromObject opts def o)
-  | flat && not (all (isKey opts.contentsKey . fst) others) = merged
+  | flat
+  , not (null others)
+  , not (any (isKey opts.contentsKey . fst) others) =
+      if any (isJust . closeName [opts.contentsKey]) (mapMaybe (stringValue . fst) others)
+        then merged `orElse` checked [opts.contentsKey] (missingKey o opts.contentsKey)
+        else merged
   | otherwise = checked [opts.contentsKey] $ case M.lookup opts.contentsKey o.index of
       Just entry -> gFromEntry entry
       -- A missing contents key is null, if the fields accept null. A flat

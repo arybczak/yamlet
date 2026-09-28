@@ -196,12 +196,26 @@ data Step
     Wait Int
   | Again Step
   | Boxed Box
+  | Packed Crate
   deriving stock (Eq, Show, Generic)
   deriving anyclass (FromYaml, ToYaml)
 
 instance GenericYaml Step where
   type SumEncoding Step = TaggedFlat
   yamlOptions = defaultYamlOptions {tagKey = "step"}
+
+data Crate = Crate {contents :: Int, size :: Int}
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+
+-- | The flat encoding with unknown keys rejected.
+data Order = Hold Int | Hasten Speed
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (FromYaml, ToYaml)
+
+instance GenericYaml Order where
+  type SumEncoding Order = TaggedFlat
+  yamlOptions = defaultYamlOptions {rejectUnknownFields = True}
 
 newtype Distance = Distance {distance :: Maybe Int}
   deriving stock (Eq, Show, Generic)
@@ -521,6 +535,10 @@ test_flatten = do
   assertEqual "no mapping" "step: Wait\ncontents: 5\n" (encodeText (Wait 5))
   assertEqual "tag key" "step: Again\ncontents:\n  step: Halt\n" (encodeText (Again Halt))
   assertEqual "contents key" "step: Boxed\ncontents:\n  contents: 1\n" (encodeText (Boxed (Box 1)))
+  assertEqual
+    "contents key with other keys"
+    "step: Packed\ncontents:\n  contents: 1\n  size: 2\n"
+    (encodeText (Packed (Crate 1 2)))
   mapM_
     (\s -> roundTrip (show s) s)
     [ Ahead (Distance (Just 10))
@@ -531,12 +549,30 @@ test_flatten = do
     , Wait 5
     , Again (Again (Rotate Clockwise))
     , Boxed (Box 1)
+    , Packed (Crate 1 2)
     ]
   assertEqual "missing field" (Right (Ahead (Distance Nothing))) (decodeText "step: Ahead\n")
   assertEqual
     "error in a field"
     (Just (1, 1, "missing key \"speed\""))
     (errorOf (decodeText @Step "step: Accelerate\n"))
+  assertEqual
+    "misspelled field"
+    [(1, 1, "missing key \"speed\"")]
+    (errorsOf (decodeText @Step "step: Accelerate\nsped: 2\n"))
+  assertEqual
+    "misspelled contents key"
+    [(1, 1, "missing key \"contents\"")]
+    (errorsOf (decodeText @Step "step: Wait\ncontnets: 5\n"))
+  assertEqual "other key next to the contents key" (Right (Wait 5)) (decodeText "step: Wait\ncontents: 5\nextra: 1\n")
+  assertEqual
+    "misspelled contents key with unknown keys rejected"
+    [(1, 1, "missing key \"contents\""), (2, 1, "unknown key \"contnets\", did you mean \"contents\"?")]
+    (errorsOf (decodeText @Order "tag: Hold\ncontnets: 5\n"))
+  assertEqual
+    "other key next to the contents key with unknown keys rejected"
+    [(3, 1, "unknown key \"extra\", expected one of: tag, contents")]
+    (errorsOf (decodeText @Order "tag: Hold\ncontents: 5\nextra: 1\n"))
 
 test_default :: Assertion
 test_default = do

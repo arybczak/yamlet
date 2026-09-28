@@ -587,16 +587,14 @@ instance
 
 -- | The entries of a field next to the tag, if the decoder can read them
 -- back. The field must be a mapping with a key, and no key can be the tag
--- key. The key cannot be the contents key alone, because the decoder reads
--- such a mapping as the other form.
+-- key or the contents key. The decoder reads a mapping with the contents key
+-- as the other form.
 flatEntries :: YamlOptions -> S.Node -> Maybe [(S.Node, S.Node)]
 flatEntries opts v = case v.content of
-  S.Mapping _ kvs -> case kvs of
-    [] -> Nothing
-    [(k, _)] | isKey opts.contentsKey k -> Nothing
-    _
-      | any (isKey opts.tagKey . fst) kvs -> Nothing
-      | otherwise -> Just kvs
+  S.Mapping _ kvs
+    | null kvs -> Nothing
+    | any (\(k, _) -> isKey opts.tagKey k || isKey opts.contentsKey k) kvs -> Nothing
+    | otherwise -> Just kvs
   _ -> Nothing
   where
     isKey :: T.Text -> S.Node -> Bool

@@ -99,9 +99,14 @@ data SumEncodingKind
     -- otherwise the type is a type error.
     --
     -- The field must encode as a mapping with a key, and no key can be the
-    -- tag key. Otherwise the constructor encodes as with 'TaggedObject'.
-    -- Thus the field of a type with the same tag key stays under the
-    -- contents key.
+    -- tag key or the contents key. Otherwise the constructor encodes as with
+    -- 'TaggedObject'. Thus the field of a type with the same tag key stays
+    -- under the contents key.
+    --
+    -- The decoder reads a mapping with the contents key as with
+    -- 'TaggedObject', and the other keys are unknown keys. If the flat form
+    -- fails and a key is close to the contents key, e.g. @contnets@, the
+    -- errors are those of 'TaggedObject', e.g. the missing contents key.
     --
     -- The keys of the mapping belong to the field, so the options of its
     -- type apply to them, e.g. 'Yamlet.Generic.rejectUnknownFields'.
