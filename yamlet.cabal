@@ -142,6 +142,7 @@ test-suite test
                     GenericTests
                     RenderTests
                     TestSuite
+                    Thunks
                     TypeErrorTests
 
 test-suite inspection

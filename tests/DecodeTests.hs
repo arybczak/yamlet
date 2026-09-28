@@ -28,6 +28,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck hiding (Fixed)
 
+import Thunks
 import Yamlet
 import Yamlet.Internal.Parser.Monad qualified as P
 import Yamlet.Schema
@@ -60,6 +61,7 @@ decodeTests =
     , testCase "syntax tree" test_syntaxTree
     , testCase "empty stream" test_emptyStream
     , testCase "encodings" test_encodings
+    , testCase "no thunks" test_noThunks
     , testGroup
         "errors"
         [ testCase "syntax" test_syntaxErrors
@@ -73,6 +75,33 @@ decodeTests =
         , localOption (mkTimeout 10000000) $ testCase "many errors" test_manyErrors
         ]
     ]
+
+-- | The decoders of the types that the library defines return values without
+-- thunks.
+test_noThunks :: Assertion
+test_noThunks = do
+  check "value" (decodeText @Value input)
+  check "node" (decodeText @S.Node input)
+  check "commented values" (decodeText @(M.Map Value (Commented Value)) input)
+  check "located values" (decodeText @(M.Map Value (Located Value)) input)
+  check "value with its document" (decodeWithDocument @Value input)
+  where
+    input :: T.Text
+    input =
+      T.unlines
+        [ "# The anchor."
+        , "a: &x [1, 2.5, -.inf, \"s\"] # the list"
+        , "b: *x"
+        , "? [k, 1]"
+        , ": {n: null, t: true, !custom tag: !custom v}"
+        , "c: |"
+        , "  text"
+        ]
+
+    check :: String -> Either (NE.NonEmpty Error) a -> Assertion
+    check preface = \case
+      Right x -> thunks x >>= assertEqual preface []
+      Left errs -> assertFailure (preface ++ ": " ++ show errs)
 
 test_coreSchema :: Assertion
 test_coreSchema = do

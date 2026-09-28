@@ -42,6 +42,7 @@ module Yamlet.Decode
   ) where
 
 import Control.Applicative
+import Control.DeepSeq
 import Control.Monad
 import Data.Containers.ListUtils
 import Data.Fixed
@@ -694,15 +695,15 @@ class FromYaml a where
 -- not keep the whole input alive. For a whole document without a copy, use
 -- 'Yamlet.Syntax.parseDocuments'.
 instance FromYaml S.Node where
-  parseYaml = pure . S.copyNode
+  parseYaml n = pure $! S.copyNode n
 
 -- | The value with the comments of its entry, or of its node if it has no key,
 -- copied like every decoded text.
 instance FromYaml a => FromYaml (S.Commented a) where
   parseYaml v =
     flip S.Commented (S.copyComments v.comments)
-      <$> parseYaml (withoutComments v)
-  parseYamlField k v = flip S.Commented (S.copyComments c) <$> parseYaml v'
+      <$!> parseYaml (withoutComments v)
+  parseYamlField k v = flip S.Commented (S.copyComments c) <$!> parseYaml v'
     where
       c :: S.Comments
       v' :: S.Node
@@ -711,8 +712,8 @@ instance FromYaml a => FromYaml (S.Commented a) where
 -- | The value with the offset of its node. The key of an entry goes to the
 -- value inside, e.g. for a 'Yamlet.Commented' value.
 instance FromYaml a => FromYaml (S.Located a) where
-  parseYaml n = flip S.Located n.offset <$> parseYaml n
-  parseYamlField k n = flip S.Located n.offset <$> parseYamlField k n
+  parseYaml n = flip S.Located n.offset <$!> parseYaml n
+  parseYamlField k n = flip S.Located n.offset <$!> parseYamlField k n
 
 -- | The comments of a mapping entry, and the value without them. The lines
 -- above a value on the line of its key or in the flow style go above the
@@ -747,7 +748,9 @@ entryComments k v = (S.Comments before inline v.comments.after, value)
 -- | The value of the node, with the tags resolved and the aliases replaced.
 instance FromYaml Value where
   parseYaml n = case represent n of
-    Right r -> pure r
+    -- The value is built lazily. The walk of 'force' visits a node once per
+    -- alias of it, as the limit of 'represent' allows.
+    Right r -> pure $! force r
     Left ((off, msg) NE.:| notes) -> Parser $ \_ -> Result (OneError off msg notes) failed
 
 -- | An empty list, as a tuple without elements.

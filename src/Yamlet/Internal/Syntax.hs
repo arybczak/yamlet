@@ -290,7 +290,7 @@ copyNode n =
         Props Nothing _ -> n.props
         Props anchor tag ->
           Props
-            { anchor = T.copy <$> anchor
+            { anchor = copyMaybe anchor
             , tag = case tag of
                 Tag t -> Tag (T.copy t)
                 t -> t
@@ -298,25 +298,39 @@ copyNode n =
     , comments = copyComments n.comments
     , content = case n.content of
         Scalar style t -> Scalar style (T.copy t)
-        Sequence style xs -> Sequence style (map copyNode xs)
-        Mapping style kvs -> Mapping style [(copyNode k, copyNode v) | (k, v) <- kvs]
+        Sequence style xs -> Sequence style $! evaluated (map copyNode xs)
+        Mapping style kvs -> Mapping style $! evaluated (map copyEntry kvs)
         Alias name -> Alias (T.copy name)
     }
+  where
+    copyEntry :: (Node, Node) -> (Node, Node)
+    copyEntry (k, v) =
+      let !k' = copyNode k
+          !v' = copyNode v
+      in (k', v')
 
 copyComments :: Comments -> Comments
 copyComments c = case c of
   Comments [] Nothing [] -> c
   _ ->
-    Comments
-      { before = map copyLine c.before
-      , inline = T.copy <$> c.inline
-      , after = map copyLine c.after
-      }
+    let !before = evaluated (map copyLine c.before)
+        !after = evaluated (map copyLine c.after)
+    in Comments {before = before, inline = copyMaybe c.inline, after = after}
   where
     copyLine :: Line -> Line
     copyLine = \case
       Comment t -> Comment (T.copy t)
       EmptyLine -> EmptyLine
+
+-- | A copy without a thunk, which would keep the original text alive.
+copyMaybe :: Maybe T.Text -> Maybe T.Text
+copyMaybe = \case
+  Just t -> Just $! T.copy t
+  Nothing -> Nothing
+
+-- | The list with its spine and its elements evaluated.
+evaluated :: [a] -> [a]
+evaluated xs = foldr seq () xs `seq` xs
 
 -- $setup
 -- >>> import Data.Map.Strict qualified as M

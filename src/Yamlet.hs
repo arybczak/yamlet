@@ -139,7 +139,9 @@ decodeAll bs = single (decodeInput bs) >>= decodeAllText
 -- >>> decodeText @Value "ports: [80, 443]\nenabled: yes\n"
 -- Right (Mapping [(String "ports",Sequence [Int 80,Int 443]),(String "enabled",String "yes")])
 decodeText :: FromYaml a => T.Text -> Either (NE.NonEmpty Error) a
-decodeText = fmap fst . decodeWithDocument
+decodeText input = do
+  (a, _) <- decodeWithDocument input
+  pure a
 
 -- | Decode a stream with one document as 'decodeText' does, and give the
 -- document too, e.g. for 'documentErrors' or to write the file back with its
@@ -154,7 +156,9 @@ decodeWithDocument input =
       single . Left $ errorAt input doc.root.offset "expected a single document, but got a second one"
   where
     withDocument :: FromYaml a => S.Document -> Either (NE.NonEmpty Error) (a, S.Document)
-    withDocument doc = (,doc) <$> convert input doc
+    withDocument doc = do
+      a <- convert input doc
+      pure (a, doc)
 
 -- | Decode every document of a stream. The errors are as for 'decodeAll'.
 decodeAllText :: FromYaml a => T.Text -> Either (NE.NonEmpty Error) [a]

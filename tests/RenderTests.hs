@@ -3,12 +3,12 @@ module RenderTests (renderTests) where
 import Data.List qualified as L
 import Data.Maybe
 import Data.Text qualified as T
-import GHC.Exts.Heap
 import Test.QuickCheck
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 
+import Thunks
 import Yamlet.Syntax
 
 renderTests :: TestTree
@@ -428,28 +428,6 @@ prop_noThunks (Tree doc) =
   in counterexample (T.unpack out) $ case parseDocumentsText out of
        Right docs -> ioProperty ((=== []) <$> thunks docs)
        Left e -> counterexample (show e) False
-
--- | The thunks that a value refers to, each with the constructors on the way
--- to it.
-thunks :: a -> IO [String]
-thunks = go [] . asBox
-  where
-    go :: [String] -> Box -> IO [String]
-    go path b =
-      getBoxedClosureData b >>= \case
-        ConstrClosure {name, ptrArgs} -> concat <$> mapM (go (name : path)) ptrArgs
-        -- An evaluated thunk refers to its value until the next garbage
-        -- collection.
-        IndClosure {indirectee} -> go path indirectee
-        BlackholeClosure {indirectee} -> go path indirectee
-        ThunkClosure {} -> found "thunk"
-        SelectorClosure {} -> found "selector thunk"
-        APClosure {} -> found "application thunk"
-        APStackClosure {} -> found "stack thunk"
-        _ -> pure []
-      where
-        found :: String -> IO [String]
-        found kind = pure [unwords (reverse (kind : path))]
 
 -- | The configuration of the haskell-gha test with comments.
 test_configuration :: Assertion
