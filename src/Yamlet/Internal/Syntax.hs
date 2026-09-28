@@ -84,7 +84,16 @@ data Content
   | -- | An alias has no properties.
     Alias !T.Text
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (NFData)
+
+-- The instances of the sum types are written by hand, because GHC does not
+-- always remove the generic representation of a sum type. A strict field of
+-- a type without lazy parts, e.g. a text, is already in normal form.
+instance NFData Content where
+  rnf = \case
+    Scalar _ _ -> ()
+    Sequence _ xs -> rnf xs
+    Mapping _ kvs -> rnf kvs
+    Alias _ -> ()
 
 -- | The properties of a node.
 data Props = Props
@@ -107,7 +116,9 @@ data Tag
   | -- | A specific tag, e.g. @tag:yaml.org,2002:str@ for @!!str@.
     Tag !T.Text
   deriving stock (Eq, Ord, Show, Generic)
-  deriving anyclass (NFData)
+
+instance NFData Tag where
+  rnf = rwhnf
 
 -- | The style of a scalar: without quotes, in single or double quotes, or a
 -- literal (@|@) or folded (@>@) block scalar.
@@ -118,14 +129,18 @@ data ScalarStyle
   | Literal
   | Folded
   deriving stock (Eq, Ord, Show, Enum, Bounded, Generic)
-  deriving anyclass (NFData)
+
+instance NFData ScalarStyle where
+  rnf = rwhnf
 
 -- | The style of a collection: with indentation, or with brackets and commas.
 data CollectionStyle
   = Block
   | Flow
   deriving stock (Eq, Ord, Show, Enum, Bounded, Generic)
-  deriving anyclass (NFData)
+
+instance NFData CollectionStyle where
+  rnf = rwhnf
 
 -- | The comments and the empty lines that belong to a node.
 data Comments = Comments
@@ -257,7 +272,9 @@ data Line
     -- them as line breaks.
     Comment !T.Text
   deriving stock (Eq, Ord, Show, Generic)
-  deriving anyclass (NFData)
+
+instance NFData Line where
+  rnf = rwhnf
 
 -- | The offset of a byte in the input text, in its UTF-8 encoding. For an
 -- input in UTF-16 or UTF-32, the offset counts the bytes of the text after

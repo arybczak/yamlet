@@ -58,7 +58,11 @@ data PathElement
   | -- | The value of a key that is an alias, with the name of the anchor.
     AliasKey !T.Text
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (NFData)
+
+-- Written by hand, because GHC does not always remove the generic
+-- representation of a sum type. Every field is strict and has no lazy parts.
+instance NFData PathElement where
+  rnf = rwhnf
 
 -- | A position in the input. Lines and columns count from 1, and a column
 -- counts characters, not bytes. Line 0 and column 0 mean that the error has

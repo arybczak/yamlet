@@ -67,7 +67,20 @@ data Value
     -- e.g. a 'String' with 'intTag', does not read back.
     Tagged !T.Text !Value
   deriving stock (Eq, Ord, Show, Generic)
-  deriving anyclass (NFData)
+
+-- The instances of the sum types are written by hand, because GHC does not
+-- always remove the generic representation of a sum type. A strict field of
+-- a type without lazy parts, e.g. a text, is already in normal form.
+instance NFData Value where
+  rnf = \case
+    Null -> ()
+    Bool _ -> ()
+    Int _ -> ()
+    Float _ -> ()
+    String _ -> ()
+    Sequence xs -> rnf xs
+    Mapping kvs -> rnf kvs
+    Tagged _ v -> rnf v
 
 -- | The value of a floating-point number. A finite value is exact, e.g. @0.1@
 -- is exactly one tenth.
@@ -91,7 +104,9 @@ data FloatValue
   | NegativeInfinity
   | NaN
   deriving stock (Eq, Ord, Show, Generic)
-  deriving anyclass (NFData)
+
+instance NFData FloatValue where
+  rnf = rwhnf
 
 -- | The nearest double, infinite if the value is out of its range.
 --
