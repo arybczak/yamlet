@@ -70,10 +70,13 @@ library limits both:
   For a document with more than 100000 nodes, they can add as many nodes as
   the document has. A document beyond the limit is an error.
 - A program that converts `1e999999999` to an integer gets a billion digits.
-  To prevent this, the exponent of a float can make its value at most 1000
-  digits larger than its text. A float beyond the limit is an error. The
-  instances for `Fixed` and the durations apply the same limit with
-  `withBoundedScientific`. Use it in your own instances for exact types too.
+  To prevent this, the decoder looks at two exponents of a float: the
+  exponent in its text, and the exponent of its first digit that is not
+  zero. If both are outside the range from -1000 to 1000, the float is an
+  error. Thus the value of a float has at most 1000 digits more than its
+  text. The instances for `Fixed` and the
+  durations apply a similar limit with `withBoundedScientific`. Use it in
+  your own instances for exact types too.
 
 The library also applies these rules:
 
