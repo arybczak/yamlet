@@ -1553,9 +1553,14 @@ cLBlockMapExplicitEntry n = do
   w <- peek
   guardP . not $ isNsChar w
   k <- sLBlockIndented n BlockOut
-  v <- lBlockMapExplicitValue <|> eNode
+  v <- lBlockMapExplicitValue <|> pure (missingValue k)
   pure (k, v)
   where
+    -- The key took the comments and the empty lines below it, so the position
+    -- of the parser is after them. A value there would take them.
+    missingValue :: Node -> Node
+    missingValue k = Node k.endOffset k.endOffset noProps noComments (Scalar Plain T.empty)
+
     lBlockMapExplicitValue :: P Node
     lBlockMapExplicitValue = do
       sIndent n

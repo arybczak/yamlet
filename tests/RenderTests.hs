@@ -352,6 +352,9 @@ test_attachment = do
   check "after an empty flow sequence with lines inside" [("/0", "inline", "d"), ("/0", "after", "c")] "- [\n  # c\n  ] # d\n- 2\n"
   check "after a flow mapping with lines inside" [("/k", "inline", "d"), ("/k", "after", "c")] "k: {a: 1,\n  # c\n  } # d\n"
   check "inside a flow sequence" [("/0", "inline", "c"), ("/1", "before", "d")] "[a, # c\n # d\n b]\n"
+  check "below an explicit key without a value" [("/b:key", "before", "c")] "? a\n# c\n? b\n"
+  check "at the end of a list item with an explicit key" [("/0", "after", "c")] "- ? a\n  # c\n- b\n"
+  check "at the end of a mapping with an explicit key" [("/x", "after", "c")] "x:\n  ? a\n  # c\ny: 1\n"
   check "empty lines" [] "a: 1\n\n\nb: 2\n"
   assertEqual
     "empty line"
@@ -367,6 +370,10 @@ test_attachment = do
         )
         <$> parseDocumentsText "a:\n  b: 1\n  # c\n\nd: 2\n"
     )
+  assertEqual
+    "empty line below an explicit key without a value"
+    (Right "a:\n\n# c\nb:\n")
+    (renderSyntax defaultRenderOptions <$> parseDocumentsText "? a\n\n# c\n? b\n")
   assertEqual
     "empty line between the end of the root and the end of the document"
     (Right [([Comment "c"], [Comment "d"])])
