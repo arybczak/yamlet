@@ -22,34 +22,204 @@
 --
 -- = Comments
 --
--- The parser gives each comment to one node, and the renderer writes it back
--- at the place of that node:
+-- The parser gives each comment to one node or document, and the renderer
+-- writes it back at that place. A stream without documents, e.g. a stream of
+-- only comments, has no such place, so the parser drops its comments. In the examples below, @printComments@ parses a
+-- text and prints each node that has comments, with its path and the fields
+-- of 'Comments'. The key and the value of an entry have the same path, with
+-- @(key)@ or @(value)@ after it.
 --
--- * A comment on a line of its own belongs to the node below it. If several
---   nodes start on the line below, it belongs to the largest one, e.g. a
---   comment above the first entry of a mapping belongs to the mapping.
+-- The parser follows these rules:
+--
+-- * A comment on a line of its own belongs to the node below it, unless the
+--   rules below give it to a document or to the end of a collection. Above the
+--   first entry of a block collection, the lines up to the last empty line
+--   belong to the collection, e.g. a comment at the top of a file.
+--
+--     >>> input = "# The server.\n\n# The host.\nhost: localhost\n# The port.\nport: 80\n"
+--
+--     >>> T.putStr input
+--     # The server.
+--     <BLANKLINE>
+--     # The host.
+--     host: localhost
+--     # The port.
+--     port: 80
+--
+--     >>> printComments input
+--     root before: [Comment "The server.",EmptyLine]
+--     root.host (key) before: [Comment "The host."]
+--     root.port (key) before: [Comment "The port."]
+--
+--     A block collection after @- @ on the same line keeps all the lines
+--     above it, so that a comment above an item belongs to the item.
+--
+--     >>> input = "# The first server.\n- host: localhost\n# The second server.\n- host: example.com\n"
+--
+--     >>> T.putStr input
+--     # The first server.
+--     - host: localhost
+--     # The second server.
+--     - host: example.com
+--
+--     >>> printComments input
+--     root[0] before: [Comment "The first server."]
+--     root[1] before: [Comment "The second server."]
 --
 -- * A comment at the end of a line belongs to the node that ends last before
---   it on that line, e.g. to the value in @key: value # comment@ and to the
---   key in @key: # comment@. A comment on the line of a block scalar header
+--   it on that line, if only spaces, a colon or a comma come between them,
+--   e.g. to the value in @key: value # comment@ and to the key in
+--   @key: # comment@. A comment on the line of a block scalar header
 --   belongs to the block scalar.
 --
--- * A comment at the end of a line with no node before it, e.g. after @- @,
---   belongs to the node below it. If that node also has a comment at the end
---   of its line, the first comment becomes a line above the node.
+--     >>> input = "host: localhost # a\nports: # b\n- 80\ntext: | # c\n  Hello.\n"
+--
+--     >>> T.putStr input
+--     host: localhost # a
+--     ports: # b
+--     - 80
+--     text: | # c
+--       Hello.
+--
+--     >>> printComments input
+--     root.host (value) inline: "a"
+--     root.ports (key) inline: "b"
+--     root.text (value) inline: "c"
+--
+-- * A comment at the end of a line that the rule above does not give to a
+--   node, e.g. after @- @ or after the tag of a block collection, belongs to
+--   the node below it, except on the line of a document marker. If that node also has a comment at the end of its
+--   line, the first comment becomes a line above the node.
+--
+--     >>> input = "- # a\n  host: localhost # b\n- # c\n  'a string' # d\n"
+--
+--     >>> T.putStr input
+--     - # a
+--       host: localhost # b
+--     - # c
+--       'a string' # d
+--
+--     >>> printComments input
+--     root[0] inline: "a"
+--     root[0].host (value) inline: "b"
+--     root[1] before: [Comment "c"]
+--     root[1] inline: "d"
+--
+--     >>> input = "server: !!map # a\n  host: localhost\n"
+--
+--     >>> T.putStr input
+--     server: !!map # a
+--       host: localhost
+--
+--     >>> printComments input
+--     root.server (value) inline: "a"
 --
 -- * A comment after the last entry of a block collection belongs to the end
 --   of the collection if it is indented at least as deep as the entries, and
 --   deeper than the key of the collection. Otherwise it belongs to the node
---   below it.
+--   below it, or to the end of the document if no node is below it. At the
+--   end of a block collection root, an empty line ends the lines of the
+--   collection, and the lines below it belong to the end of the document. A
+--   comment before the closing bracket of a flow collection belongs to the
+--   end of the collection.
 --
--- * A comment before the directives or the @---@ marker of a document, or on
---   the line of the marker, belongs to the document. A comment with no node
---   below it, or on the line of a @...@ marker, belongs to the end of the
---   document.
+--     >>> input = "server:\n  ports:\n  - 80\n  # a\n  # b\n# c\nuser: admin\n"
 --
--- Empty lines go with the comments that follow them, or with the node below
--- them. Several empty lines in a row count as one.
+--     >>> T.putStr input
+--     server:
+--       ports:
+--       - 80
+--       # a
+--       # b
+--     # c
+--     user: admin
+--
+--     >>> printComments input
+--     root.server (value) after: [Comment "a",Comment "b"]
+--     root.user (key) before: [Comment "c"]
+--
+--     >>> input = "host: localhost\nport: 80\n# a\n\n# b\n"
+--
+--     >>> T.putStr input
+--     host: localhost
+--     port: 80
+--     # a
+--     <BLANKLINE>
+--     # b
+--
+--     >>> printComments input
+--     root after: [Comment "a"]
+--     document after: [Comment "b"]
+--
+--     >>> input = "ports: [80, 443,\n  # a\n  ]\n"
+--
+--     >>> T.putStr input
+--     ports: [80, 443,
+--       # a
+--       ]
+--
+--     >>> printComments input
+--     root.ports (value) after: [Comment "a"]
+--
+-- * The optional @---@ marker starts a document, and the optional @...@
+--   marker ends it. A comment on the line of the @---@ marker belongs to the
+--   document, unless the rule for comments at the end of a line gives it to a
+--   node. A comment before the directives or the @---@ marker belongs to the
+--   document if it is at the start of the stream or after a @...@ marker.
+--   Otherwise it belongs to the end of the document above it. A comment on
+--   the line of a @...@ marker or below it belongs to the end of the
+--   document, and so does a comment with no node below it that the rule
+--   above does not give to the end of a collection.
+--
+--     >>> input = "# a\n--- # b\nlocalhost\n# c\n... # d\n"
+--
+--     >>> T.putStr input
+--     # a
+--     --- # b
+--     localhost
+--     # c
+--     ... # d
+--
+--     >>> printComments input
+--     document before: [Comment "a"]
+--     document inline: "b"
+--     document after: [Comment "c",Comment "d"]
+--
+-- Empty lines go with the comments that follow them, with the node below
+-- them, or with the end of the document, so that the removal of an entry
+-- keeps the gap below it. Above the first entry of a block collection, the
+-- last empty line stays with the collection. At the end of a block
+-- collection root, an empty line separates the collection from the end of
+-- the document, and it belongs to neither. Several empty lines in a row
+-- count as one.
+--
+-- >>> input = "server:\n  host: localhost\n  # The end of the server.\n\nuser: admin\n"
+--
+-- >>> T.putStr input
+-- server:
+--   host: localhost
+--   # The end of the server.
+-- <BLANKLINE>
+-- user: admin
+--
+-- >>> printComments input
+-- root.server (value) after: [Comment "The end of the server."]
+-- root.user (key) before: [EmptyLine]
+--
+-- >>> input = "host: localhost\n\n\n# The port.\nport: 80\n\nuser: admin\n"
+--
+-- >>> T.putStr input
+-- host: localhost
+-- <BLANKLINE>
+-- <BLANKLINE>
+-- # The port.
+-- port: 80
+-- <BLANKLINE>
+-- user: admin
+--
+-- >>> printComments input
+-- root.port (key) before: [EmptyLine,Comment "The port."]
+-- root.user (key) before: [EmptyLine]
 module Yamlet.Syntax
   ( -- * Parsing
     parseDocuments
@@ -163,3 +333,33 @@ mappingNode = contentNode . Mapping Block
 
 -- $setup
 -- >>> import Data.Text.IO qualified as T
+--
+-- >>> :{
+-- printComments :: T.Text -> IO ()
+-- printComments input = either print (mapM_ doc) (parseDocumentsText input)
+--   where
+--     doc :: Document -> IO ()
+--     doc d = do
+--       report "document" d.docComments {after = []}
+--       node "root" "" d.root
+--       report "document" noComments {after = d.docComments.after}
+--     node :: String -> String -> Node -> IO ()
+--     node path role n = do
+--       report (path <> role) n.comments
+--       case n.content of
+--         Sequence _ items ->
+--           sequence_ [node (path <> "[" <> show i <> "]") "" item | (i, item) <- zip [0 :: Int ..] items]
+--         Mapping _ entries ->
+--           sequence_ [node (path <> "." <> name k) " (key)" k >> node (path <> "." <> name k) " (value)" v | (k, v) <- entries]
+--         _ -> pure ()
+--     name :: Node -> String
+--     name k = case k.content of
+--       Scalar _ t -> T.unpack t
+--       _ -> "?"
+--     report :: String -> Comments -> IO ()
+--     report path c =
+--       mapM_ putStrLn $
+--         [path <> " before: " <> show c.before | not (null c.before)]
+--           <> [path <> " inline: " <> show t | Just t <- [c.inline]]
+--           <> [path <> " after: " <> show c.after | not (null c.after)]
+-- :}

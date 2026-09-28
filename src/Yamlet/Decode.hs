@@ -417,10 +417,10 @@ withoutComments n = S.Node n.offset n.endOffset n.props S.noComments n.content
 -- and @!foo a@.
 --
 -- The lines above the mapping go to its first key, and so does the comment
--- on its first line as a line, e.g. after its tag. The parser gives the
--- lines above the first entry of a block mapping to the mapping, e.g. a
--- comment at the top of a file, but they read as the lines of the first key,
--- and 'Yamlet.Commented' keeps them there.
+-- on its first line as a line, e.g. after its tag. The parser gives a
+-- mapping the lines up to the last empty line above its first key, e.g. a
+-- comment at the top of a file, but a record has no place for them, and
+-- 'Yamlet.Commented' on the first field keeps them.
 withMapping :: (Object -> Parser a) -> S.Node -> Parser a
 withMapping f = parseNode $ \n -> case n.content of
   S.Mapping _ kvs -> mkObject n (keyEntries n kvs) >>= f

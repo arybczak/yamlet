@@ -181,7 +181,7 @@ document opts afterEnd doc =
             <> foldMap tagDirective handles
         else mempty
     , body
-    , lines_ 0 doc.docComments.after
+    , lines_ 0 ((if isBlock opts r && not (null doc.docComments.after) then (EmptyLine :) else id) doc.docComments.after)
     , if doc.explicitEnd then "...\n" else mempty
     ]
   where
@@ -293,7 +293,7 @@ block opts indent afterColumn atLineStart hoisted n = case n.content of
 
 -- | The lines above an indicator of a sequence item or an explicit entry. The
 -- lines above the first entry of a block collection after the indicator go
--- there too, where the parser gives them to the collection.
+-- there too, because no line can come between the indicator and the entry.
 aboveIndicator :: RenderOptions -> Node -> [Line]
 aboveIndicator opts x = x.comments.before ++ if isBlock opts x then firstLines opts x else []
 

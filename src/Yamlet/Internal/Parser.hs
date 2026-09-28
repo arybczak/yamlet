@@ -360,6 +360,7 @@ lYamlStream markers0 = do
               e
               prefix
               marker
+              p
               -- The lines after the last document belong to its end, also
               -- after more end markers.
               (if null rest then e.end else q)

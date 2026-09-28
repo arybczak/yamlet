@@ -267,6 +267,8 @@ test_documents = do
       ]
   check "comment after the end marker" "a: b\n...\n# c\nd: e\n"
   check "comment before the directives" "a\n...\n# b\n%YAML 1.2\n---\nc\n"
+  check "comments at the end of a root collection and a document" "a: 1\n# b\n\n# c\n...\n"
+  check "comments around an end marker between documents" "a\n# b\n...\n# c\n---\nd\n"
   let commented :: Document -> Document
       commented d = d {docComments = noComments {before = [Comment "c"]}}
   assertEqual
@@ -315,7 +317,11 @@ test_attachment = do
         Right [doc] -> assertEqual preface expected (commentsOf doc)
         r -> assertFailure (preface ++ ": " ++ show r)
   check "above a key" [("/b:key", "before", "c")] "a: 1\n# c\nb: 2\n"
-  check "above the first key" [("", "before", "c")] "# c\na: 1\n"
+  check "above the first key" [("/a:key", "before", "c")] "# c\na: 1\n"
+  check "above the first key of a value" [("/a/b:key", "before", "c")] "a:\n  # c\n  b: 1\n"
+  check "above an empty line above the first key" [("", "before", "c"), ("/a:key", "before", "d")] "# c\n\n# d\na: 1\n"
+  check "above the first key after an indicator" [("/0", "inline", "c"), ("/0/a:key", "before", "d")] "- # c\n  # d\n  a: 1\n"
+  check "above an item with a mapping" [("/0", "before", "c"), ("/1", "before", "d")] "# c\n- a: 1\n# d\n- b: 2\n"
   check "at the end of a value" [("/a", "inline", "c")] "a: 1 # c\n"
   check "at the end of a key" [("/a:key", "inline", "c")] "a: # c\n  b: 1\n"
   check "on a block scalar header" [("/a", "inline", "c")] "a: | # c\n  text\n"
@@ -331,10 +337,14 @@ test_attachment = do
   check "at the key column after a list" [("/b:key", "before", "c")] "a:\n- 1\n# c\nb: 2\n"
   check "at the end of a nested mapping" [("/a", "after", "c")] "a:\n  b: 1\n  # c\nd: 2\n"
   check "at the end of the root" [("", "after", "c")] "a: 1\n# c\n"
+  check "after an empty line at the end of the root" [("document", "after", "d"), ("", "after", "c")] "a: 1\n# c\n\n# d\n"
   check "at the end of the document" [("document", "after", "c")] "a\n# c\n"
   check "before the marker" [("document", "before", "c")] "# c\n---\na: 1\n"
   check "on the marker line" [("document", "inline", "c")] "--- # c\na: 1\n"
+  check "after a root on the marker line" [("", "inline", "c")] "--- a # c\n"
+  check "after a tag on the marker line" [("document", "inline", "c")] "--- !!map # c\na: 1\n"
   check "after the end marker" [("document", "after", "c")] "a\n...\n# c\n"
+  check "after the end marker of a mapping" [("document", "after", "c")] "a: 1\n...\n# c\n"
   check "on the end marker line" [("document", "after", "c")] "a\n... # c\n"
   check "after two end markers" [("document", "after", "c"), ("document", "after", "d")] "a\n...\n# c\n...\n# d\n"
   check "on a second end marker line" [("document", "after", "c")] "a\n...\n... # c\n"
@@ -346,6 +356,39 @@ test_attachment = do
     "empty line"
     (Right [EmptyLine])
     ((\case [d] | Mapping _ [_, (k, _)] <- d.root.content -> k.comments.before; _ -> []) <$> parseDocumentsText "a: 1\n\n\nb: 2\n")
+  assertEqual
+    "empty line below the end of a collection"
+    (Right [([Comment "c"], [EmptyLine])])
+    ( map
+        ( \d -> case d.root.content of
+            Mapping _ [(_, v), (k, _)] -> (v.comments.after, k.comments.before)
+            _ -> ([], [])
+        )
+        <$> parseDocumentsText "a:\n  b: 1\n  # c\n\nd: 2\n"
+    )
+  assertEqual
+    "empty line between the end of the root and the end of the document"
+    (Right [([Comment "c"], [Comment "d"])])
+    ( map
+        ( \d -> case d.root.content of
+            Mapping _ [(_, v)] -> (v.comments.after, d.docComments.after)
+            _ -> ([], [])
+        )
+        <$> parseDocumentsText "a:\n  b: 1\n  # c\n\n# d\n"
+    )
+  assertEqual
+    "above the marker of the next document"
+    (Right [[("document", "after", "c")], []])
+    (map commentsOf <$> parseDocumentsText "a\n# c\n---\nb\n")
+  assertEqual
+    "empty lines above the first key"
+    (Right [([Comment "a", EmptyLine, Comment "b", EmptyLine], [Comment "c"])])
+    (map (\d -> (d.root.comments.before, firstKey d.root)) <$> parseDocumentsText "# a\n\n# b\n\n\n# c\nk: v\n")
+  where
+    firstKey :: Node -> [Line]
+    firstKey n = case n.content of
+      Mapping _ ((k, _) : _) -> k.comments.before
+      _ -> []
 
 -- | The configuration of the haskell-gha test with comments.
 test_configuration :: Assertion
@@ -357,7 +400,7 @@ test_configuration = case parseDocumentsText configuration of
     expected =
       [ ("/matrix:key", "before", "The oldest and the newest supported Postgres.")
       , ("/services:key", "before", "The services of each build job.")
-      , ("/services", "before", "The database for the tests.")
+      , ("/services/postgres:key", "before", "The database for the tests.")
       , ("/services/postgres/env/POSTGRES_PASSWORD", "inline", "Only for CI.")
       , ("/permissions:key", "before", "The test reporter writes check runs.")
       , ("/permissions/checks:key", "before", "For the annotations of the test results.")

@@ -33,9 +33,10 @@ data Item = Item
   }
 
 -- | Attach the comments of a document. The indices are the start of the
--- lines that belong to the document, its @---@ marker and its end.
-attachComments :: Env -> Int -> Maybe Int -> Int -> Document -> Document
-attachComments e start marker end doc
+-- lines that belong to the document, its @---@ marker, the end of its root
+-- and its end.
+attachComments :: Env -> Int -> Maybe Int -> Int -> Int -> Document -> Document
+attachComments e start marker rootEnd end doc
   | not (mayHaveItems e start end) = doc
   | null items = doc
   | otherwise =
@@ -44,9 +45,9 @@ attachComments e start marker end doc
             Comments
               { before = dropWhile (== EmptyLine) (map (.line) docItems)
               , inline = markerComment
-              , after = map (.line) leftover
+              , after = docEnd
               }
-        , root = root'
+        , root = root''
         }
   where
     items :: [Item]
@@ -72,7 +73,23 @@ attachComments e start marker end doc
             (Just t, is)
       _ -> (Nothing, afterMarker)
 
-    (root', leftover) = attachNode e (end - e.base) 0 (rootStart, rootLine) doc.root rest
+    (root', leftover) = attachNode e (rootEnd - e.base) 0 (rootStart, rootLine) doc.root rest
+
+    -- An empty line ends the lines after the last entry of a block collection
+    -- root. The lines below it belong to the end of the document.
+    root'' :: Node
+    docEnd :: [Line]
+    (root'', docEnd) = case root'.content of
+      Sequence Block (_ : _) -> splitEnd
+      Mapping Block (_ : _) -> splitEnd
+      _ -> (root', map (.line) leftover)
+
+    splitEnd :: (Node, [Line])
+    splitEnd =
+      let (rootLines, below) = break (== EmptyLine) root'.comments.after
+      in ( Node root'.offset root'.endOffset root'.props root'.comments {after = rootLines} root'.content
+         , dropWhile (== EmptyLine) (below ++ map (.line) leftover)
+         )
 
 isEmptyLine :: Item -> Bool
 isEmptyLine i = case i.line of
@@ -111,7 +128,28 @@ attachNode e limit minColumn known n items0 =
     -- The lines above the node. A comment at the end of a line that no node
     -- took, e.g. in "- # comment" above a mapping, belongs to the node. It is
     -- a line above the node if the node has a comment on its own line.
-    (pre, items1) = span (\i -> i.at < s) items0
+    (pre, items1) =
+      let (ls, rest) = span (\i -> i.at < s) items0
+      in case n.content of
+           Sequence Block (_ : _) | startsLine -> toFirstEntry ls rest
+           Mapping Block (_ : _) | startsLine -> toFirstEntry ls rest
+           _ -> (ls, rest)
+
+    -- A collection after "- " on the same line keeps the lines above the
+    -- indicator, so that a comment above an item stays with the item.
+    startsLine :: Bool
+    startsLine = T.all isWhiteChar (between lineStart s)
+
+    -- The lines on their own after the last empty line go to the first entry.
+    toFirstEntry :: [Item] -> [Item] -> ([Item], [Item])
+    toFirstEntry ls rest =
+      let (ownLines, others) = span (.own) (reverse ls)
+          (entry, kept) = break isEmptyLine ownLines
+      in (reverse (kept ++ others), reverse entry ++ rest)
+
+    isWhiteChar :: Char -> Bool
+    isWhiteChar ch = ch == ' ' || ch == '\t'
+
     fallbackItem :: Maybe Item
     fallbackItem = case reverse (filter (not . (.own)) pre) of
       i : _ -> Just i
