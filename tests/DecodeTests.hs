@@ -1,5 +1,6 @@
 module DecodeTests (decodeTests) where
 
+import Control.Exception
 import Control.Monad
 import Data.Bifunctor
 import Data.ByteString qualified as BS
@@ -24,6 +25,8 @@ import Data.Time.Calendar.Month
 import Data.Time.Calendar.Quarter
 import Data.UUID.Types qualified as UUID
 import Data.Void
+import System.Directory
+import System.IO
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck hiding (Fixed)
@@ -61,6 +64,7 @@ decodeTests =
     , testCase "syntax tree" test_syntaxTree
     , testCase "empty stream" test_emptyStream
     , testCase "encodings" test_encodings
+    , testCase "files" test_files
     , testCase "no thunks" test_noThunks
     , testGroup
         "errors"
@@ -75,6 +79,23 @@ decodeTests =
         , localOption (mkTimeout 10000000) $ testCase "many errors" test_manyErrors
         ]
     ]
+
+-- | The file functions write UTF-8 and read back what they wrote.
+test_files :: Assertion
+test_files = do
+  dir <- getTemporaryDirectory
+  (path, h) <- openTempFile dir "yamlet.yaml"
+  hClose h
+  flip finally (removeFile path) $ do
+    let value = M.fromList [("name" :: T.Text, "zażółć" :: T.Text)]
+    encodeFile path value
+    bytes <- BS.readFile path
+    assertEqual "UTF-8" (T.encodeUtf8 "name: zażółć\n") bytes
+    decoded <- decodeFile path
+    assertEqual "document" (Right value) decoded
+    encodeAllFile path [1, 2 :: Int]
+    documents <- decodeAllFile path
+    assertEqual "documents" (Right [1, 2 :: Int]) documents
 
 -- | The decoders of the types that the library defines return values without
 -- thunks.

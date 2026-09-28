@@ -14,9 +14,8 @@
 --       *> (Config \<$> o .: "name" \<*> o .:? "paths" .!= [])
 --
 -- main :: IO ()
--- main = do
---   input <- BS.readFile "config.yaml"
---   case decode input of
+-- main =
+--   decodeFile "config.yaml" >>= \\case
 --     Left errs -> mapM_ (putStrLn . prettyError "config.yaml") errs
 --     Right config -> ...
 -- @
@@ -43,6 +42,8 @@ module Yamlet
   , decodeText
   , decodeAllText
   , decodeInput
+  , decodeFile
+  , decodeAllFile
 
     -- * Syntax trees
   , decodeWithDocument
@@ -53,6 +54,8 @@ module Yamlet
   , encodeAll
   , encodeText
   , encodeAllText
+  , encodeFile
+  , encodeAllFile
 
     -- * Nodes
   , S.Node
@@ -255,6 +258,35 @@ encodeText a = renderDocuments [toYaml a]
 -- 2
 encodeAllText :: ToYaml a => [a] -> T.Text
 encodeAllText = renderDocuments . map toYaml
+
+-- | Decode the file as 'decode' does. The file is read as bytes, so the
+-- encoding does not depend on the locale. It is UTF-8, unless a byte order
+-- mark shows UTF-16 or UTF-32.
+--
+-- For the errors, give the path to 'prettyError':
+--
+-- @
+-- decodeFile \@Config "config.yaml" >>= \\case
+--   Left errs -> mapM_ (putStrLn . prettyError "config.yaml") errs
+--   Right config -> ...
+-- @
+decodeFile :: FromYaml a => FilePath -> IO (Either (NE.NonEmpty Error) a)
+decodeFile path = decode <$> BS.readFile path
+
+-- | Decode every document of the file as 'decodeAll' does, with the encoding
+-- of 'decodeFile'.
+decodeAllFile :: FromYaml a => FilePath -> IO (Either (NE.NonEmpty Error) [a])
+decodeAllFile path = decodeAll <$> BS.readFile path
+
+-- | Encode a value as a document in the file, in UTF-8. The file is written
+-- as bytes, so the encoding does not depend on the locale.
+encodeFile :: ToYaml a => FilePath -> a -> IO ()
+encodeFile path = BS.writeFile path . encode
+
+-- | Encode values as a stream of documents in the file, as 'encodeFile'
+-- does.
+encodeAllFile :: ToYaml a => FilePath -> [a] -> IO ()
+encodeAllFile path = BS.writeFile path . encodeAll
 
 -- $setup
 -- >>> import Data.Text.IO qualified as T
