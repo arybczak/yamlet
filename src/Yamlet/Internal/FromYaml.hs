@@ -1,7 +1,8 @@
 {-# OPTIONS_HADDOCK not-home #-}
 
--- | The class t'FromYaml' and its instances. "Yamlet.Decode" exports the
--- public parts.
+-- | The class t'FromYaml', its instances and the parts of the decoder that
+-- the generic instances share with it. "Yamlet.Decode" exports the public
+-- parts.
 --
 -- This module is intended for internal use only, and may change without warning
 -- in subsequent releases.
@@ -17,11 +18,6 @@ module Yamlet.Internal.FromYaml
   , typeMismatch
   , orElse
 
-    -- * Views
-  , View (..)
-  , view
-  , describeNode
-
     -- * Scalars
   , withNull
   , withBool
@@ -30,11 +26,12 @@ module Yamlet.Internal.FromYaml
   , withScientific
   , withBoundedScientific
   , withText
+  , withName
 
     -- * Collections
   , withSequence
   , withMapping
-  , Object
+  , Object (..)
   , objectNode
   , objectEntries
   , objectKeys
@@ -48,6 +45,15 @@ module Yamlet.Internal.FromYaml
   , parseFieldIfPresentWith
   , parseFieldDefaultWith
   , rejectUnknownKeys
+
+    -- * Parts of the generic instances
+  , parseEntry
+  , findKey
+  , missingKey
+  , closeName
+  , alternatives
+  , succeeds
+  , nullNode
   ) where
 
 import Control.Applicative
@@ -80,14 +86,11 @@ import Data.Tree qualified as Tree
 import Data.UUID.Types qualified as UUID
 import Data.Void
 import Data.Word
-import GHC.Generics
 import GHC.Real
-import GHC.TypeLits hiding (Natural)
 import Math.NumberTheory.Logarithms
 import Numeric.Natural
 
 import Yamlet.Internal.Compose
-import Yamlet.Internal.Generic
 import Yamlet.Internal.Schema
 import Yamlet.Internal.Syntax qualified as S
 import Yamlet.Internal.Utils
@@ -785,8 +788,9 @@ closeName known t = suggestion (T.unpack t)
 ----------------------------------------
 -- Class
 
--- | Types that can be parsed from a node. A type with a 'Generic' instance
--- can derive the instance, see "Yamlet.Generic".
+-- | Types that can be parsed from a node. A type with a
+-- t'GHC.Generics.Generic' instance can derive the instance via
+-- t'Yamlet.Generic.GenericYaml'.
 --
 -- An instance for a record reads a mapping with 'withMapping':
 --
@@ -823,16 +827,6 @@ closeName known t = suggestion (T.unpack t)
 --   |       ^
 class FromYaml a where
   parseYaml :: S.Node -> Parser a
-  default parseYaml
-    :: ( Generic a
-       , GenericYaml a
-       , Rep a ~ D1 d f
-       , GConstructors f
-       , GEncoding (SumEncoding a) f
-       , GFromConstructor f
-       )
-    => S.Node -> Parser a
-  parseYaml = genericParseYaml
 
   -- | Parse a list. The instance for 'Char' parses a string instead.
   parseYamlList :: S.Node -> Parser [a]
@@ -978,7 +972,7 @@ instance FromYaml LocalTime where
 instance FromYaml ZonedTime where
   parseYaml = withIso8601 zonedTimeMismatch parseZonedTime
 
--- | Like 'ZonedTime', converted to UTC.
+-- | Like t'ZonedTime', converted to UTC.
 instance FromYaml UTCTime where
   parseYaml = withIso8601 zonedTimeMismatch parseUTCTime
 
@@ -1418,272 +1412,6 @@ element = parseNode parseYaml
 -- | The error for a list with the wrong number of elements for a tuple.
 tupleSize :: Int -> [S.Node] -> Parser a
 tupleSize n xs = fail $ "expected a list of " ++ show n ++ " elements, but got " ++ show (length xs)
-
-----------------------------------------
--- Generic
-
--- The default method calls this function for the reasons at
--- 'Yamlet.Encode.genericToYaml'.
-genericParseYaml
-  :: forall a d f
-   . ( Generic a
-     , GenericYaml a
-     , Rep a ~ D1 d f
-     , GConstructors f
-     , GEncoding (SumEncoding a) f
-     , GFromConstructor f
-     )
-  => S.Node -> Parser a
-genericParseYaml n =
-  -- Forcing the encoding forces the check of the shape, e.g. with deferred
-  -- type errors in a test of the errors.
-  let enc = gEncoding @(SumEncoding a) @f
-  in enc `seq` gParseYaml (yamlOptions @a) enc (from <$> yamlDefault @a) to n
-{-# INLINE genericParseYaml #-}
-
--- Each constructor applies 'to' to its own representation, e.g.
--- @to (M1 (L1 (M1 fields)))@, and the optimizer reduces this to the real
--- constructor in the same place. For this, the decoders of the constructors
--- take a continuation. It starts as 'to' and grows by 'M1', 'L1' or 'R1' at
--- each level of the sum.
---
--- In the direct style, each constructor returns its representation, the
--- branches meet in 'mplus', and 'to' comes after them. The optimizer then no
--- longer knows which branch produced the value, so the program builds 'L1',
--- 'R1' and ':*:' at run time and 'to' matches on them again.
---
--- The fields of one constructor need no continuation, because they build
--- their product in one place, and 'to' of the same branch consumes it.
---
--- The representation of the default goes down with the options, so that each
--- field finds its default value.
-gParseYaml
-  :: forall f d p a
-   . ( GConstructors f
-     , GFromConstructor f
-     )
-  => YamlOptions -> SumEncodingKind -> Maybe (D1 d f p) -> (D1 d f p -> a) -> S.Node -> Parser a
-gParseYaml opts enc def k n
-  | gNullary @f =
-      withName tags (\t -> fromMaybe (unknown n "value" t) (gFromTag opts (k . M1) n t)) n
-  | isTagged @f opts, enc == SingleField = single
-  | isTagged @f opts = withMapping tagged n
-  | otherwise = gFromUntagged opts (unM1 <$> def) (k . M1) n
-  where
-    tagged :: Object -> Parser a
-    tagged o = case lookupKey opts.tagKey o of
-      Nothing -> missingKey o opts.tagKey
-      Just tn -> do
-        t <- withName tags pure tn
-        fromMaybe (unknown tn "tag" t) (gFromTagged opts (enc == TaggedFlat) (unM1 <$> def) (k . M1) t o)
-
-    -- A constructor without fields is its tag, and another constructor is a
-    -- mapping with its tag as the only key.
-    single :: Parser a
-    single = case view n of
-      StringView t -> fromMaybe (withoutValue t) (gFromTag opts (k . M1) n t)
-      _ | S.Mapping {} <- n.content -> withMapping singleEntry n
-      _ -> typeMismatch "a string or a mapping with one key" n
-
-    singleEntry :: Object -> Parser a
-    singleEntry o = case objectEntries o of
-      [(kn, v)] -> do
-        t <- withName tags pure kn
-        fromMaybe (unknown kn "constructor" t) (gFromSingle opts (unM1 <$> def) (k . M1) t (kn, v))
-      _ : (kn, _) : _ -> failAt kn "expected a mapping with one key, but got a second key"
-      [] -> failAt n "expected a mapping with one key, but got an empty mapping"
-
-    -- A string that is the tag of a constructor with fields.
-    withoutValue :: T.Text -> Parser a
-    withoutValue t
-      | t `elem` tags = failAt n $ "expected a mapping with the key " ++ show t ++ ", because the constructor has fields"
-      | otherwise = unknown n "constructor" t
-
-    unknown :: S.Node -> String -> T.Text -> Parser a
-    unknown node what t = failAt node $ "unknown " ++ what ++ " " ++ show t ++ alternatives tags t
-
-    tags :: [T.Text]
-    tags = map (constructorTag opts) (gConstructorNames @f)
-{-# INLINE gParseYaml #-}
-
-class GFromConstructor f where
-  -- | The constructor without fields with the tag, from the node of the tag.
-  gFromTag :: YamlOptions -> (f p -> a) -> S.Node -> T.Text -> Maybe (Parser a)
-
-  -- | The constructor with the tag, from the mapping that holds the tag, with
-  -- the flag of 'TaggedFlat'.
-  gFromTagged :: YamlOptions -> Bool -> Maybe (f p) -> (f p -> a) -> T.Text -> Object -> Maybe (Parser a)
-
-  -- | The constructor with the tag, from the only entry of a mapping, for
-  -- 'SingleField'.
-  gFromSingle :: YamlOptions -> Maybe (f p) -> (f p -> a) -> T.Text -> (S.Node, S.Node) -> Maybe (Parser a)
-
-  -- | The only constructor, without a tag.
-  gFromUntagged :: YamlOptions -> Maybe (f p) -> (f p -> a) -> S.Node -> Parser a
-
-instance GFromConstructor V1 where
-  gFromTag _ _ _ _ = Nothing
-  gFromTagged _ _ _ _ _ _ = Nothing
-  gFromSingle _ _ _ _ _ = Nothing
-  gFromUntagged _ _ _ _ = fail "expected a type with constructors"
-
-instance (GFromConstructor f, GFromConstructor g) => GFromConstructor (f :+: g) where
-  gFromTag opts k n t = gFromTag opts (k . L1) n t `mplus` gFromTag opts (k . R1) n t
-  gFromTagged opts flat def k t o =
-    gFromTagged opts flat (def >>= \case L1 x -> Just x; R1 _ -> Nothing) (k . L1) t o
-      `mplus` gFromTagged opts flat (def >>= \case R1 x -> Just x; L1 _ -> Nothing) (k . R1) t o
-  gFromSingle opts def k t entry =
-    gFromSingle opts (def >>= \case L1 x -> Just x; R1 _ -> Nothing) (k . L1) t entry
-      `mplus` gFromSingle opts (def >>= \case R1 x -> Just x; L1 _ -> Nothing) (k . R1) t entry
-
-  -- A type with several constructors always has a tag.
-  gFromUntagged _ _ _ _ = fail "expected a tag"
-  {-# INLINE gFromTag #-}
-  {-# INLINE gFromTagged #-}
-  {-# INLINE gFromSingle #-}
-
-instance
-  ( KnownSymbol name
-  , GFields f
-  , GFromFields f
-  )
-  => GFromConstructor (C1 (MetaCons name fixity isRecord) f)
-  where
-  gFromTag opts k n t
-    | t == tag && gArity @f == 0 = Just (k . M1 <$> gFromValue n)
-    | otherwise = Nothing
-    where
-      tag :: T.Text
-      tag = constructorTag opts (symbolVal (Proxy @name))
-
-  gFromTagged opts flat def k t o
-    | t == constructorTag opts (symbolVal (Proxy @name)) = Just (k . M1 <$> fromObject opts flat [opts.tagKey] (unM1 <$> def) o)
-    | otherwise = Nothing
-
-  gFromSingle opts def k t entry@(kn, v)
-    | t /= constructorTag opts (symbolVal (Proxy @name)) = Nothing
-    | gNamed @f = Just (withMapping (fmap (k . M1) . fromObject opts False [] (unM1 <$> def)) v)
-    | gArity @f == 0 = Just (failAt kn $ "expected the string " ++ show t ++ ", because the constructor has no fields")
-    | otherwise = Just (k . M1 <$> gFromEntry entry)
-
-  gFromUntagged opts def k n
-    | gNamed @f || gArity @f == 0 = withMapping (fmap (k . M1) . fromObject opts False [] (unM1 <$> def)) n
-    | otherwise = k . M1 <$> gFromValue n
-
-  {-# INLINE gFromTag #-}
-  {-# INLINE gFromTagged #-}
-  {-# INLINE gFromSingle #-}
-  {-# INLINE gFromUntagged #-}
-
--- | The fields of a constructor from a mapping. The given keys, e.g. the tag
--- key, are no fields but valid keys.
-fromObject
-  :: forall f p
-   . ( GFields f
-     , GFromFields f
-     )
-  => YamlOptions -> Bool -> [T.Text] -> Maybe (f p) -> Object -> Parser (f p)
-fromObject opts flat keys def o
-  | gNamed @f || gArity @f == 0 = checked (gNames @f opts) (gFromObject opts def o)
-  | flat
-  , not (null others)
-  , not (any (isKey opts.contentsKey . fst) others) =
-      if any (isJust . closeName [opts.contentsKey]) (mapMaybe (stringValue . fst) others)
-        then merged `orElse` checked [opts.contentsKey] (missingKey o opts.contentsKey)
-        else merged
-  | otherwise = checked [opts.contentsKey] $ case M.lookup opts.contentsKey o.index of
-      Just entry -> gFromEntry entry
-      -- A missing contents key is null, if the fields accept null. A flat
-      -- field can also have only optional keys.
-      Nothing
-        | Just fields <- def -> pure fields
-        | flat -> maybe merged pure (succeeds gFromValue nullNode)
-        | otherwise -> maybe (missingKey o opts.contentsKey) pure (succeeds gFromValue nullNode)
-  where
-    -- The fields, with the errors of the unknown keys if the options reject
-    -- them.
-    checked :: [T.Text] -> Parser (f p) -> Parser (f p)
-    checked fields = (when opts.rejectUnknownFields (rejectUnknownKeys (keys ++ fields) o) *>)
-
-    -- The field decodes from the mapping without the given keys. The first
-    -- key already has the lines above the mapping.
-    merged :: Parser (f p)
-    merged =
-      let n = objectNode o
-          style = case n.content of
-            S.Mapping s _ -> s
-            _ -> S.Block
-      in gFromValue (S.Node n.offset n.endOffset n.props S.noComments (S.Mapping style others))
-
-    others :: [(S.Node, S.Node)]
-    others = foldr removeKey (objectEntries o) keys
-
-    -- The keys are unique, so the entries after the match stay shared.
-    removeKey :: T.Text -> [(S.Node, S.Node)] -> [(S.Node, S.Node)]
-    removeKey key = \case
-      kv@(k, _) : kvs
-        | isKey key k -> kvs
-        | otherwise -> kv : removeKey key kvs
-      [] -> []
-
-    isKey :: T.Text -> S.Node -> Bool
-    isKey key k = case stringValue k of
-      Just t -> t == key
-      _ -> False
-    {-# INLINE merged #-}
-{-# INLINE fromObject #-}
-
--- The shape check allows named fields, no fields, or one field without a
--- name. The default methods are for the kind of fields that never calls
--- them.
-class GFromFields f where
-  -- | The fields from a mapping, with the given default for missing keys.
-  gFromObject :: YamlOptions -> Maybe (f p) -> Object -> Parser (f p)
-  gFromObject _ _ o = fail $ "expected a field without a name in " ++ describeNode (objectNode o)
-
-  -- | The only field without a name from its value.
-  gFromValue :: S.Node -> Parser (f p)
-  gFromValue n = fail $ "expected named fields in " ++ describeNode n
-
-  -- | The only field from a mapping entry, with the key, e.g. for the
-  -- comments of a 'Yamlet.Commented' field under the contents key.
-  gFromEntry :: (S.Node, S.Node) -> Parser (f p)
-  gFromEntry (_, v) = gFromValue v
-
--- The value of a constructor without fields is its tag.
-instance GFromFields U1 where
-  gFromObject _ _ _ = pure U1
-  gFromValue _ = pure U1
-
-instance (GFromFields f, GFromFields g) => GFromFields (f :*: g) where
-  gFromObject opts def o =
-    (:*:)
-      <$> gFromObject opts ((\(a :*: _) -> a) <$> def) o
-      <*> gFromObject opts ((\(_ :*: b) -> b) <$> def) o
-  {-# INLINE gFromObject #-}
-
-instance
-  ( KnownSymbol name
-  , FromYaml a
-  )
-  => GFromFields (S1 (MetaSel (Just name) u s d) (Rec0 a))
-  where
-  gFromObject opts def o =
-    M1 . K1 <$> case M.lookup key o.index of
-      Just entry -> parseEntry entry
-      Nothing -> case def of
-        Just (M1 (K1 x)) -> x <$ findKey o key
-        -- A missing field is null, if its type accepts null.
-        Nothing -> maybe (missingKey o key) (<$ findKey o key) (succeeds parseYaml nullNode)
-    where
-      key :: T.Text
-      key = fieldKey @name opts
-  {-# INLINE gFromObject #-}
-
-instance FromYaml a => GFromFields (S1 (MetaSel Nothing u s d) (Rec0 a)) where
-  gFromValue n = M1 . K1 <$> parseNode parseYaml n
-  gFromEntry entry = M1 . K1 <$> parseEntry entry
-  {-# INLINE gFromValue #-}
 
 -- $setup
 -- >>> import Yamlet

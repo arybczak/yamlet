@@ -5,7 +5,6 @@ import Data.Bifunctor
 import Data.Char
 import Data.List.NonEmpty qualified as NE
 import Data.Text qualified as T
-import GHC.Generics (Generic)
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
@@ -39,18 +38,20 @@ genericTests =
 
 data Server = Server {host :: T.Text, port :: Int, tags :: Maybe [T.Text]}
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Server
 
 data Turn = TurnLeft | TurnRight
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Turn
 
 -- | The tags read as integers without quotes.
 data Level = One | Two
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml)
+  deriving (FromYaml) via GenericYaml Level
 
-instance GenericYaml Level where
+instance GenericYamlOptions Level where
   yamlOptions = defaultYamlOptions {constructorTagModifier = \case "One" -> "1"; _ -> "2"}
 
 data Shape
@@ -58,116 +59,122 @@ data Shape
   | Rectangle {width :: Double, height :: Double}
   | Dot
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Shape
 
 data Token = Label T.Text | Number Int | End
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Token
 
 newtype Name = Name T.Text
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Name
 
 -- The types of the table of shapes that no other test uses.
 
 data Unit = Unit
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Unit
 
 data UnitTagged = UnitTagged
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml UnitTagged
 
-instance GenericYaml UnitTagged where
+instance GenericYamlOptions UnitTagged where
   yamlOptions = defaultYamlOptions {tagSingleConstructors = True}
 
 newtype NameTagged = NameTagged T.Text
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml NameTagged
 
-instance GenericYaml NameTagged where
+instance GenericYamlOptions NameTagged where
   yamlOptions = defaultYamlOptions {tagSingleConstructors = True}
 
 data Literal = Whole Int | Words T.Text
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Literal
 
 data Motion = Go Distance | Hurry Speed
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Motion
 
-instance GenericYaml Motion where
+instance GenericYamlOptions Motion where
   type SumEncoding Motion = TaggedFlat
 
 -- | The constructors of the single-field encoding can mix their fields.
 data Figure = Round {radius :: Double} | Named T.Text | Point
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Figure
 
-instance GenericYaml Figure where
+instance GenericYamlOptions Figure where
   type SumEncoding Figure = SingleField
 
 newtype Bare = Bare {size :: Int}
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Bare
 
-instance GenericYaml Bare where
+instance GenericYamlOptions Bare where
   type SumEncoding Bare = SingleField
 
 newtype Wrapped = Wrapped {size :: Int}
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Wrapped
 
-instance GenericYaml Wrapped where
+instance GenericYamlOptions Wrapped where
   type SumEncoding Wrapped = SingleField
   yamlOptions = defaultYamlOptions {tagSingleConstructors = True}
 
 data Light = Red | Green
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Light
 
-instance GenericYaml Light where
+instance GenericYamlOptions Light where
   type SumEncoding Light = SingleField
 
 data Gauge = Gauge {level :: Int} | Off
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Gauge
 
-instance GenericYaml Gauge where
+instance GenericYamlOptions Gauge where
   type SumEncoding Gauge = SingleField
   yamlOptions = defaultYamlOptions {rejectUnknownFields = True}
 
 data Memo = Memo (Commented T.Text) | NoMemo
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Memo
 
-instance GenericYaml Memo where
+instance GenericYamlOptions Memo where
   type SumEncoding Memo = SingleField
 
 data Strict = Strict {size :: Int, note :: Maybe T.Text}
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Strict
 
-instance GenericYaml Strict where
+instance GenericYamlOptions Strict where
   yamlOptions = defaultYamlOptions {rejectUnknownFields = True, omitNullFields = True}
 
 -- | The name of the field reads as a boolean.
 newtype Switch = Switch {true :: Maybe Int}
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Switch
 
 newtype DefaultSwitch = DefaultSwitch {true :: Int}
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml DefaultSwitch
 
-instance GenericYaml DefaultSwitch where
+instance GenericYamlOptions DefaultSwitch where
   yamlDefault = Just (DefaultSwitch 0)
 
 data Command = Forward {stepCount :: Int} | Stop
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Command
 
-instance GenericYaml Command where
+instance GenericYamlOptions Command where
   yamlOptions =
     defaultYamlOptions
       { tagKey = "command"
@@ -177,14 +184,15 @@ instance GenericYaml Command where
 
 newtype Single = Single {value :: Int}
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Single
 
-instance GenericYaml Single where
+instance GenericYamlOptions Single where
   yamlOptions = defaultYamlOptions {tagSingleConstructors = True}
 
 data Reply = Answer (Maybe Int) | Silence
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Reply
 
 -- The types of the flat encoding follow the example of tagged-json.
 data Step
@@ -198,85 +206,92 @@ data Step
   | Boxed Box
   | Packed Crate
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Step
 
-instance GenericYaml Step where
+instance GenericYamlOptions Step where
   type SumEncoding Step = TaggedFlat
   yamlOptions = defaultYamlOptions {tagKey = "step"}
 
 data Crate = Crate {contents :: Int, size :: Int}
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Crate
 
 -- | The flat encoding with unknown keys rejected.
 data Order = Hold Int | Hasten Speed
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Order
 
-instance GenericYaml Order where
+instance GenericYamlOptions Order where
   type SumEncoding Order = TaggedFlat
   yamlOptions = defaultYamlOptions {rejectUnknownFields = True}
 
 newtype Distance = Distance {distance :: Maybe Int}
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Distance
 
 newtype Speed = Speed {speed :: Int}
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Speed
 
 newtype Box = Box {contents :: Int}
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Box
 
 data Direction = Clockwise | Anticlockwise
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Direction
 
 data Settings = Settings {name :: T.Text, retries :: Int, proxy :: Maybe T.Text, limits :: Limits}
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Settings
 
-instance GenericYaml Settings where
+instance GenericYamlOptions Settings where
   yamlDefault = Just (Settings "app" 3 (Just "proxy") (Limits 10 20))
 
 data Limits = Limits {soft :: Int, hard :: Int}
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Limits
 
-instance GenericYaml Limits where
+instance GenericYamlOptions Limits where
   yamlDefault = Just (Limits 1 2)
 
 data Mode = Fast {level :: Int} | Slow {level :: Int, delay :: Int}
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Mode
 
-instance GenericYaml Mode where
+instance GenericYamlOptions Mode where
   yamlDefault = Just (Slow 1 2)
 
 data Job = Run Int | Skip
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Job
 
-instance GenericYaml Job where
+instance GenericYamlOptions Job where
   yamlDefault = Just (Run 3)
 
 data Profile = Profile {user :: T.Text, proxy :: Maybe T.Text, note :: Maybe T.Text}
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Profile
 
-instance GenericYaml Profile where
+instance GenericYamlOptions Profile where
   yamlOptions = defaultYamlOptions {omitNullFields = True}
   yamlDefault = Just (Profile "app" (Just "proxy") Nothing)
 
 -- | Records that keep the comments of their keys.
 data Pipeline = Pipeline {name :: Commented T.Text, lint :: Commented Lint}
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Pipeline
 
 data Lint = Lint {version :: Commented T.Text, level :: T.Text}
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Lint
 
 -- | The comment at the top and the comment above a first key belong to the
 -- mapping in the syntax tree, but the decoder gives them to the first key.
@@ -299,26 +314,30 @@ test_commentedFields =
 
 data Setup = Setup {hooks :: Commented Hooks, name :: Commented T.Text}
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Setup
 
 newtype Hooks = Hooks {afterSetup :: Commented [Script]}
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Hooks
 
-instance GenericYaml Hooks where
+instance GenericYamlOptions Hooks where
   yamlOptions = defaultYamlOptions {fieldLabelModifier = kebabCase}
 
 newtype Script = Script {run :: T.Text}
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Script
 
 data Optional = Optional {first :: T.Text, extra :: Maybe (Commented Node)}
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Optional
 
 data Note = Note (Commented T.Text) | Blank
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Note
 
 -- | The comments at the end of a collection and after a value.
 test_commentedValues :: Assertion

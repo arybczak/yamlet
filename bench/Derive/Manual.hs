@@ -11,7 +11,6 @@ module Derive.Manual
 
 import Control.DeepSeq
 import Data.Text qualified as T
-import GHC.Generics (Generic)
 
 import Yamlet
 

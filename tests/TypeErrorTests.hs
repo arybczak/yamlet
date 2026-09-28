@@ -7,7 +7,6 @@ module TypeErrorTests (typeErrorTests) where
 import Control.Exception
 import Data.List qualified as L
 import Data.Text qualified as T
-import GHC.Generics (Generic)
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -38,33 +37,37 @@ typeErrorTests =
 
 data Pair = Pair Int T.Text
   deriving stock (Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Pair
 
-data Line = Line Double Double | Dot
+data Segment = Line Double Double | Dot
   deriving stock (Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Segment
 
 data Mixed = Circle {radius :: Double} | Label T.Text
   deriving stock (Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Mixed
 
 data FlatNamed = Jump {height :: Int} | Halt
   deriving stock (Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml FlatNamed
 
-instance GenericYaml FlatNamed where
+instance GenericYamlOptions FlatNamed where
   type SumEncoding FlatNamed = TaggedFlat
 
 data Place = Coords Double Double | Nowhere
   deriving stock (Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Place
 
-instance GenericYaml Place where
+instance GenericYamlOptions Place where
   type SumEncoding Place = SingleField
 
 data Empty
   deriving stock (Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Empty
 
 -- | Using the value throws a deferred type error with the message.
 rejects :: String -> a -> Assertion

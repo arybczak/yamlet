@@ -12,7 +12,6 @@ module Derive.Generic
 
 import Control.DeepSeq
 import Data.Text qualified as T
-import GHC.Generics (Generic)
 
 import Yamlet
 
@@ -29,7 +28,8 @@ data A = A
   , a10 :: T.Text
   }
   deriving stock (Generic)
-  deriving anyclass (NFData, GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (NFData, GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml A
 
 data B = B
   { b01 :: T.Text
@@ -44,7 +44,8 @@ data B = B
   , b10 :: T.Text
   }
   deriving stock (Generic)
-  deriving anyclass (NFData, GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (NFData, GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml B
 
 data C = C
   { c01 :: T.Text
@@ -59,19 +60,22 @@ data C = C
   , c10 :: T.Text
   }
   deriving stock (Generic)
-  deriving anyclass (NFData, GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (NFData, GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml C
 
 -- | A sum of records with the default encoding.
 data X = X1 A | X2 B | X3 C
   deriving stock (Generic)
-  deriving anyclass (NFData, GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (NFData, GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml X
 
 -- | The same sum with flat fields.
 data F = F1 A | F2 B | F3 C
   deriving stock (Generic)
-  deriving anyclass (NFData, FromYaml, ToYaml)
+  deriving anyclass (NFData)
+  deriving (FromYaml, ToYaml) via GenericYaml F
 
-instance GenericYaml F where
+instance GenericYamlOptions F where
   type SumEncoding F = TaggedFlat
 
 mkX :: Int -> X

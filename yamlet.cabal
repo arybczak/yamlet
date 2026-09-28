@@ -51,9 +51,9 @@ common language
     default-language:   GHC2021
 
     default-extensions: DataKinds
-                        DefaultSignatures
                         DeriveAnyClass
                         DerivingStrategies
+                        DerivingVia
                         DuplicateRecordFields
                         LambdaCase
                         MultiWayIf
@@ -92,7 +92,6 @@ library
                      Yamlet.Internal.Emit
                      Yamlet.Internal.Encoder
                      Yamlet.Internal.FromYaml
-                     Yamlet.Internal.Generic
                      Yamlet.Internal.Input
                      Yamlet.Internal.Parser
                      Yamlet.Internal.Parser.Chars

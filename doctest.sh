@@ -13,9 +13,9 @@ doctest \
   src \
   -XGHC2021 \
   -XDataKinds \
-  -XDefaultSignatures \
   -XDeriveAnyClass \
   -XDerivingStrategies \
+  -XDerivingVia \
   -XDuplicateRecordFields \
   -XLambdaCase \
   -XMultiWayIf \

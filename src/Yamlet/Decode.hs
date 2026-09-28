@@ -46,3 +46,4 @@ module Yamlet.Decode
   ) where
 
 import Yamlet.Internal.FromYaml
+import Yamlet.Internal.View

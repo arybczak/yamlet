@@ -1,10 +1,15 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+
 -- | Instances of t'Yamlet.Decode.FromYaml' and t'Yamlet.Encode.ToYaml' from
--- the t'GHC.Generics.Generic' representation of a type:
+-- the t'GHC.Generics.Generic' representation of a type. A type derives them
+-- via t'GenericYaml', and its instance of 'GenericYamlOptions' gives the
+-- options:
 --
 -- >>> :{
 -- data Server = Server {host :: T.Text, port :: Int}
 --   deriving stock (Generic, Show)
---   deriving anyclass (GenericYaml, FromYaml, ToYaml)
+--   deriving anyclass (GenericYamlOptions)
+--   deriving (FromYaml, ToYaml) via GenericYaml Server
 -- :}
 --
 -- >>> decodeText @Server "host: localhost\nport: 80\n"
@@ -15,13 +20,13 @@
 -- port: 80
 --
 -- A type with other options defines 'yamlOptions' in its instance of
--- 'GenericYaml':
+-- 'GenericYamlOptions':
 --
 -- >>> :{
 -- data Build = Build {sourcePaths :: [T.Text], ghcOptions :: [T.Text]}
 --   deriving stock (Generic)
---   deriving anyclass (ToYaml)
--- instance GenericYaml Build where
+--   deriving (ToYaml) via GenericYaml Build
+-- instance GenericYamlOptions Build where
 --   yamlOptions = defaultYamlOptions {fieldLabelModifier = snakeCase}
 -- :}
 --
@@ -61,10 +66,12 @@
 -- >>> :{
 -- data Shape = Circle {radius :: Double} | Dot
 --   deriving stock (Generic)
---   deriving anyclass (GenericYaml, ToYaml)
+--   deriving anyclass (GenericYamlOptions)
+--   deriving (ToYaml) via GenericYaml Shape
 -- data Move = Forward Int | Stop
 --   deriving stock (Generic)
---   deriving anyclass (GenericYaml, ToYaml)
+--   deriving anyclass (GenericYamlOptions)
+--   deriving (ToYaml) via GenericYaml Move
 -- :}
 --
 -- >>> T.putStr (encodeText [Circle 1, Dot])
@@ -77,21 +84,22 @@
 --   contents: 10
 -- - tag: Stop
 --
--- The instance of 'GenericYaml' chooses another encoding:
+-- The instance of 'GenericYamlOptions' chooses another encoding:
 --
 -- >>> :{
 -- data Distance = Distance {distance :: Int}
 --   deriving stock (Generic)
---   deriving anyclass (GenericYaml, ToYaml)
+--   deriving anyclass (GenericYamlOptions)
+--   deriving (ToYaml) via GenericYaml Distance
 -- data Step = Ahead Distance | Halt
 --   deriving stock (Generic)
---   deriving anyclass (ToYaml)
--- instance GenericYaml Step where
+--   deriving (ToYaml) via GenericYaml Step
+-- instance GenericYamlOptions Step where
 --   type SumEncoding Step = TaggedFlat
 -- data Figure = Round {radius :: Double} | Named T.Text | Point
 --   deriving stock (Generic)
---   deriving anyclass (ToYaml)
--- instance GenericYaml Figure where
+--   deriving (ToYaml) via GenericYaml Figure
+-- instance GenericYamlOptions Figure where
 --   type SumEncoding Figure = SingleField
 -- :}
 --
@@ -131,8 +139,8 @@
 -- >>> :{
 -- data Config = Config {name :: T.Text, retries :: Int, proxy :: Maybe T.Text}
 --   deriving stock (Generic, Show)
---   deriving anyclass (FromYaml)
--- instance GenericYaml Config where
+--   deriving (FromYaml) via GenericYaml Config
+-- instance GenericYamlOptions Config where
 --   yamlDefault = Just (Config "app" 3 (Just "proxy.local"))
 -- :}
 --
@@ -153,20 +161,885 @@
 -- @proxy:@ without a value gives 'Nothing' too. An empty document is also
 -- null, so a type with a default does not decode from it.
 module Yamlet.Generic
-  ( YamlOptions (..)
+  ( -- * Deriving
+    GenericYaml (..)
+  , GenericYamlOptions (..)
+  , YamlOptions (..)
   , defaultYamlOptions
-  , GenericYaml (..)
   , SumEncodingKind (..)
 
     -- * Modifiers
   , snakeCase
   , kebabCase
+
+    -- * Instances by hand
+  , genericToYaml
+  , genericParseYaml
+
+    -- * Classes of the representation
+  , GConstructors
+  , GEncoding
+  , GToConstructor
+  , GFromConstructor
+  , GFields
+  , GToFields
+  , GFromFields
+
+    -- * Re-exports
+  , Generic
   ) where
 
-import Yamlet.Internal.Generic
+import Control.Monad
+import Data.Char
+import Data.Coerce
+import Data.Kind
+import Data.Map.Strict qualified as M
+import Data.Maybe
+import Data.Proxy
+import Data.Text qualified as T
+import GHC.Generics
+import GHC.TypeLits
+
+import Yamlet.Internal.FromYaml
+import Yamlet.Internal.Syntax qualified as S
+import Yamlet.Internal.ToYaml
+import Yamlet.Internal.View
+import Yamlet.Value
+
+----------------------------------------
+-- Deriving
+
+-- | A type to derive t'Yamlet.Decode.FromYaml' and t'Yamlet.Encode.ToYaml'
+-- via, from the t'GHC.Generics.Generic' representation of the type and its
+-- instance of 'GenericYamlOptions'.
+newtype GenericYaml a = GenericYaml a
+
+instance
+  ( Generic a
+  , GenericYamlOptions a
+  , Rep a ~ D1 d f
+  , GConstructors f
+  , GEncoding (SumEncoding a) f
+  , GToConstructor f
+  )
+  => ToYaml (GenericYaml a)
+  where
+  toYaml = coerce (genericToYaml @a)
+
+instance
+  ( Generic a
+  , GenericYamlOptions a
+  , Rep a ~ D1 d f
+  , GConstructors f
+  , GEncoding (SumEncoding a) f
+  , GFromConstructor f
+  , FromYaml a
+  )
+  => FromYaml (GenericYaml a)
+  where
+  parseYaml = coerce (genericParseYaml @a)
+  -- Without the pragma, the derived decoders keep the generic representation:
+  -- 8 of the decoders of the inspection tests fail.
+  {-# INLINE parseYaml #-}
+
+  -- The list and the field call the decoder of the type itself, which
+  -- 'FromYaml a' gives: the derived instance is that constraint. The defaults
+  -- of the class would call the decoder of this instance for any type,
+  -- without its specialization, and the benchmark
+  -- derive.contents.parseYaml.generic takes about 45% longer.
+  parseYamlList = coerce (withSequence (mapM (parseNode (parseYaml @a))))
+  parseYamlField _ = coerce (parseYaml @a)
+
+----------------------------------------
+-- Options
+
+-- | How a type is encoded and decoded.
+--
+-- The instances do not check the options. Options that give two keys of a
+-- mapping or two constructors the same text encode values that do not read
+-- back, as the fields below describe.
+data YamlOptions = YamlOptions
+  { fieldLabelModifier :: String -> String
+  -- ^ The key of a field from the name of the field. If two fields of a
+  -- constructor get the same key, e.g. @fooBar@ and @foo_bar@ with
+  -- 'snakeCase', the constructor encodes as a mapping with two equal keys,
+  -- which does not read back.
+  , constructorTagModifier :: String -> String
+  -- ^ The tag of a constructor from the name of the constructor. If two
+  -- constructors get the same tag, e.g. @FooBar@ and @Foo_bar@ with
+  -- 'snakeCase', the decoder reads the tag as the first of them.
+  , tagKey :: T.Text
+  -- ^ The key of the tag, @tag@ by default. A record with a field of the same
+  -- key encodes as a mapping with two equal keys, which does not read back.
+  , contentsKey :: T.Text
+  -- ^ The key of the fields of a tagged constructor without field names,
+  -- @contents@ by default. If it is the same as 'tagKey', such a constructor
+  -- encodes as a mapping with two equal keys, which does not read back.
+  , tagSingleConstructors :: Bool
+  -- ^ Give a type with one constructor a tag too, unless the constructor has
+  -- no fields. Off by default.
+  , omitNullFields :: Bool
+  -- ^ Leave out a field whose value is null, e.g. 'Nothing'. Off by default.
+  --
+  -- With 'yamlDefault', a null field stays if its default is not null.
+  -- Otherwise the value would not read back: the decoder fills a missing key
+  -- from the default, so e.g. a field 'Nothing' with the default @Just 1@
+  -- would read back as @Just 1@.
+  , rejectUnknownFields :: Bool
+  -- ^ Reject a key that is not a field of the constructor. Off by default.
+  }
+  deriving stock (Generic)
+
+-- | The options with the defaults that the fields of t'YamlOptions' name.
+defaultYamlOptions :: YamlOptions
+defaultYamlOptions =
+  YamlOptions
+    { fieldLabelModifier = id
+    , constructorTagModifier = id
+    , tagKey = "tag"
+    , contentsKey = "contents"
+    , tagSingleConstructors = False
+    , omitNullFields = False
+    , rejectUnknownFields = False
+    }
+
+-- | How a tagged constructor goes in a mapping. The choice is a type, see
+-- 'SumEncoding', because it changes the shapes of the constructors that a
+-- type can have.
+data SumEncodingKind
+  = -- | The fields go next to the tag, e.g. @{tag: Circle, radius: 1}@, and a
+    -- field without a name goes under the contents key, e.g.
+    -- @{tag: Forward, contents: 10}@.
+    --
+    -- An enumeration is a string, but a constructor without fields in a type
+    -- with fields is a mapping, e.g. @{tag: Stop}@. To keep the encoding of an
+    -- enumeration when you add a constructor with fields, use 'SingleField'.
+    TaggedObject
+  | -- | The entries of a field without a name go next to the tag, e.g.
+    -- @{tag: Ahead, distance: 10}@ for @Ahead (Distance 10)@. The
+    -- constructors must have one field without a name or no fields,
+    -- otherwise the type is a type error.
+    --
+    -- The field must encode as a mapping with a key, and no key can be the
+    -- tag key or the contents key. Otherwise the constructor encodes as with
+    -- 'TaggedObject'. Thus the field of a type with the same tag key stays
+    -- under the contents key.
+    --
+    -- The decoder reads a mapping with the contents key as with
+    -- 'TaggedObject', and the other keys are unknown keys. If the flat form
+    -- fails and a key is close to the contents key, e.g. @contnets@, the
+    -- errors are those of 'TaggedObject', e.g. the missing contents key.
+    --
+    -- The keys of the mapping belong to the field, so the options of its
+    -- type apply to them, e.g. 'rejectUnknownFields'.
+    TaggedFlat
+  | -- | A mapping with one key, the tag, and the fields as its value, e.g.
+    -- @{Circle: {radius: 1}}@. A field without a name is the value, e.g.
+    -- @{Forward: 10}@, and a constructor without fields is its tag, e.g.
+    -- @Dot@. The tag key and the contents key play no part.
+    --
+    -- Each constructor has its own value, so the constructors of a type can
+    -- mix named fields with a field without a name. A second key in the
+    -- mapping is an error. 'rejectUnknownFields' applies to the named fields
+    -- in the value.
+    --
+    -- The key of a constructor with named fields is not a field, so its
+    -- comments are lost. The key of a field without a name goes to the
+    -- field, e.g. for a 'Yamlet.Commented' value.
+    SingleField
+  deriving stock (Eq, Show)
+
+-- | The configuration of the generic instances of t'Yamlet.Decode.FromYaml'
+-- and t'Yamlet.Encode.ToYaml' for a type: the options and the default value.
+class GenericYamlOptions a where
+  -- | How a tagged constructor goes in a mapping, 'TaggedObject' by default.
+  type SumEncoding a :: SumEncodingKind
+
+  type SumEncoding a = TaggedObject
+
+  yamlOptions :: YamlOptions
+  yamlOptions = defaultYamlOptions
+
+  -- | The value that gives the fields of missing keys, e.g. the default
+  -- configuration. Without it, a missing key decodes like null. A key with
+  -- the value null is not missing. For a sum type, the default applies only
+  -- to its own constructor.
+  yamlDefault :: Maybe a
+  yamlDefault = Nothing
+
+-- | The words of a name in lower case, separated by underscores, e.g.
+-- @source_paths@ for @sourcePaths@ or @SourcePaths@, and @http_server@ for
+-- @HTTPServer@. The rules are the same as for @camelTo2 \'_\'@ of aeson.
+--
+-- >>> map snakeCase ["sourcePaths", "SourcePaths", "HTTPServer", "ghcVersion2"]
+-- ["source_paths","source_paths","http_server","ghc_version2"]
+snakeCase :: String -> String
+snakeCase = separateWords '_'
+
+-- | Like 'snakeCase', but with hyphens, e.g. @source-paths@ for
+-- @sourcePaths@.
+--
+-- >>> kebabCase "sourcePaths"
+-- "source-paths"
+kebabCase :: String -> String
+kebabCase = separateWords '-'
+
+-- A word starts at an upper-case letter after a lower-case one, and at the
+-- last letter of an acronym before a lower-case one.
+separateWords :: Char -> String -> String
+separateWords sep = map toLower . afterLower . beforeLower
+  where
+    beforeLower :: String -> String
+    beforeLower = \case
+      x : u : l : rest | isUpper u && isLower l -> x : sep : u : l : beforeLower rest
+      x : rest -> x : beforeLower rest
+      [] -> []
+
+    afterLower :: String -> String
+    afterLower = \case
+      l : u : rest | isLower l && isUpper u -> l : sep : u : afterLower rest
+      x : rest -> x : afterLower rest
+      [] -> []
+
+----------------------------------------
+-- Constructors
+
+-- | The names and the number of the constructors of a representation. This
+-- class and the others of the representation appear in the constraints of
+-- 'genericToYaml' and 'genericParseYaml'. Their methods are internal.
+class GConstructors f where
+  gConstructorNames :: [String]
+
+  gConstructorCount :: Int
+
+  -- | No constructor has fields.
+  gNullary :: Bool
+
+instance (GConstructors f, GConstructors g) => GConstructors (f :+: g) where
+  gConstructorNames = gConstructorNames @f ++ gConstructorNames @g
+  gConstructorCount = gConstructorCount @f + gConstructorCount @g
+  gNullary = gNullary @f && gNullary @g
+
+instance GConstructors V1 where
+  gConstructorNames = []
+  gConstructorCount = 0
+  gNullary = True
+
+-- | The error for a type without constructors, whose representation is 'V1'.
+type NoConstructors = Text "A type without constructors cannot derive FromYaml or ToYaml"
+
+instance (KnownSymbol name, GFields f) => GConstructors (C1 (MetaCons name fixity isRecord) f) where
+  gConstructorNames = [symbolVal (Proxy @name)]
+  gConstructorCount = 1
+  gNullary = gArity @f == 0
+
+-- | The value of 'SumEncoding', if the constructors allow it. The instances
+-- also check the shape of the constructors, because every derived instance
+-- needs this class.
+class GEncoding (e :: SumEncodingKind) f where
+  gEncoding :: SumEncodingKind
+
+instance ValidShape (GShape f) => GEncoding TaggedObject f where
+  gEncoding = validShape @(GShape f) `seq` TaggedObject
+
+instance ValidShape (FlatShape (GShape f)) => GEncoding TaggedFlat f where
+  gEncoding = validShape @(FlatShape (GShape f)) `seq` TaggedFlat
+
+instance ValidShape (SingleShape f) => GEncoding SingleField f where
+  gEncoding = validShape @(SingleShape f) `seq` SingleField
+
+-- | The fields of the constructors of a type. A constructor without fields
+-- fits with both kinds of fields.
+data Shape
+  = NoFields
+  | -- | One field without a name, in the constructor with the name.
+    UnnamedField Symbol
+  | -- | Named fields, in the constructor with the name.
+    NamedFields Symbol
+
+-- | The shape of the constructors. A constructor with several fields without
+-- names, and a type that mixes named fields with a field without a name, are
+-- type errors.
+type family GShape (f :: Type -> Type) :: Shape where
+  GShape (f :+: g) = CombineShapes (GShape f) (GShape g)
+  GShape (C1 (MetaCons name fixity True) f) = NamedFields name
+  GShape (C1 (MetaCons name fixity False) U1) = NoFields
+  GShape (C1 (MetaCons name fixity False) (S1 m f)) = UnnamedField name
+  GShape (C1 (MetaCons name fixity False) (f :*: g)) =
+    TypeError
+      ( Text "The constructor "
+          :<>: Text name
+          :<>: Text " has several fields without names."
+          :$$: Text "Give the fields names, or use a tuple."
+      )
+  GShape V1 = TypeError NoConstructors
+
+type family CombineShapes (a :: Shape) (b :: Shape) :: Shape where
+  CombineShapes NoFields b = b
+  CombineShapes a NoFields = a
+  CombineShapes (NamedFields a) (NamedFields _) = NamedFields a
+  CombineShapes (UnnamedField a) (UnnamedField _) = UnnamedField a
+  CombineShapes (NamedFields a) (UnnamedField b) = MixedFields a b
+  CombineShapes (UnnamedField b) (NamedFields a) = MixedFields a b
+
+type family MixedFields (named :: Symbol) (unnamed :: Symbol) :: Shape where
+  MixedFields named unnamed =
+    TypeError
+      ( Text "The constructor "
+          :<>: Text named
+          :<>: Text " has named fields and the constructor "
+          :<>: Text unnamed
+          :<>: Text " has one field without a name."
+          :$$: Text "The constructors of a type must all have named fields or all have one field without a name."
+      )
+
+-- | The shape is valid. The instances match on the shape, so that GHC
+-- reduces it and reports its type errors. With deferred type errors, e.g. in
+-- a test of the errors, the method throws the error at run time.
+class ValidShape (s :: Shape) where
+  validShape :: ()
+
+instance ValidShape NoFields where validShape = ()
+instance ValidShape (UnnamedField name) where validShape = ()
+instance ValidShape (NamedFields name) where validShape = ()
+
+-- | A shape of 'SingleField', which checks each constructor as 'GShape' does,
+-- but lets the constructors mix their fields. The equations match both
+-- shapes, so that GHC reduces both and reports their type errors.
+type family SingleShape (f :: Type -> Type) :: Shape where
+  SingleShape (f :+: g) = EitherShape (SingleShape f) (SingleShape g)
+  SingleShape f = GShape f
+
+type family EitherShape (a :: Shape) (b :: Shape) :: Shape where
+  EitherShape NoFields b = b
+  EitherShape a NoFields = a
+  EitherShape (NamedFields a) (NamedFields _) = NamedFields a
+  EitherShape (NamedFields a) (UnnamedField _) = NamedFields a
+  EitherShape (UnnamedField a) (NamedFields _) = UnnamedField a
+  EitherShape (UnnamedField a) (UnnamedField _) = UnnamedField a
+
+-- | The shape, if 'TaggedFlat' has fields to flatten in it.
+type family FlatShape (s :: Shape) :: Shape where
+  FlatShape (NamedFields name) =
+    TypeError
+      ( Text "TaggedFlat needs constructors with one field without a name, but the constructor "
+          :<>: Text name
+          :<>: Text " has named fields."
+      )
+  FlatShape s = s
+
+isTagged :: forall f. GConstructors f => YamlOptions -> Bool
+isTagged opts = opts.tagSingleConstructors || gConstructorCount @f > 1
+
+constructorTag :: YamlOptions -> String -> T.Text
+constructorTag opts = T.pack . opts.constructorTagModifier
+
+----------------------------------------
+-- Fields
+
+-- | The names and the number of the fields of a constructor.
+class GFields f where
+  -- | The fields have names.
+  gNamed :: Bool
+
+  gArity :: Int
+
+  -- | The keys of the fields.
+  gNames :: YamlOptions -> [T.Text]
+
+instance GFields U1 where
+  gNamed = False
+  gArity = 0
+  gNames _ = []
+
+instance (GFields f, GFields g) => GFields (f :*: g) where
+  gNamed = gNamed @f
+  gArity = gArity @f + gArity @g
+  gNames opts = gNames @f opts ++ gNames @g opts
+
+instance KnownSymbol name => GFields (S1 (MetaSel (Just name) u s d) f) where
+  gNamed = True
+  gArity = 1
+  gNames opts = [fieldKey @name opts]
+
+instance GFields (S1 (MetaSel Nothing u s d) f) where
+  gNamed = False
+  gArity = 1
+  gNames _ = []
+
+fieldKey :: forall name. KnownSymbol name => YamlOptions -> T.Text
+fieldKey opts = T.pack (opts.fieldLabelModifier (symbolVal (Proxy @name)))
+
+----------------------------------------
+-- Encoding
+
+-- | The generic encoder, e.g. for an instance by hand that encodes some
+-- values in another way.
+--
+-- >>> :{
+-- data Size = Size {width :: Int, height :: Int}
+--   deriving stock (Generic)
+--   deriving anyclass (GenericYamlOptions)
+-- instance ToYaml Size where
+--   toYaml s
+--     | s.width == 0 && s.height == 0 = toYaml ("empty" :: T.Text)
+--     | otherwise = genericToYaml s
+-- :}
+--
+-- >>> T.putStr (encodeText [Size 0 0, Size 1 2])
+-- - empty
+-- - width: 1
+--   height: 2
+
+-- GHC must inline the generic code in the derived method before the
+-- specializer runs. Otherwise the specializer makes a copy of the code for
+-- each node of the representation, and a large type takes several times
+-- longer to compile. For the same reason, the top of the representation goes
+-- to a plain function, not to a class with one method. GHC represents the
+-- dictionary of such a class as a partial application of the method, and it
+-- does not inline that.
+genericToYaml
+  :: forall a d f
+   . ( Generic a
+     , GenericYamlOptions a
+     , Rep a ~ D1 d f
+     , GConstructors f
+     , GEncoding (SumEncoding a) f
+     , GToConstructor f
+     )
+  => a -> S.Node
+genericToYaml x =
+  -- Forcing the encoding forces the check of the shape, e.g. with deferred
+  -- type errors in a test of the errors.
+  let enc = gEncoding @(SumEncoding a) @f
+  in enc `seq` gToYaml (yamlOptions @a) enc (from <$> yamlDefault @a) (from x)
+{-# INLINE genericToYaml #-}
+
+-- The encoder takes the default for 'omitNullFields': it leaves out a null
+-- field only if the default of the field is null too. Otherwise the decoder
+-- would fill the missing key from the default, and the value would not read
+-- back.
+gToYaml
+  :: forall f d p
+   . ( GConstructors f
+     , GToConstructor f
+     )
+  => YamlOptions -> SumEncodingKind -> Maybe (D1 d f p) -> D1 d f p -> S.Node
+gToYaml opts enc def (M1 x)
+  | gNullary @f = scalar (String (gTag opts x))
+  | otherwise = gToConstructor opts (if isTagged @f opts then Just enc else Nothing) (unM1 <$> def) x
+-- Without the pragma, GHC 9.2 does not inline this function, and GHC 9.4 does
+-- not inline it for an enumeration. Then the inspection tests of these
+-- derived encoders fail. Later versions inline it anyway.
+{-# INLINE gToYaml #-}
+
+-- | The encoder of the constructors of a representation.
+class GToConstructor f where
+  gTag :: YamlOptions -> f p -> T.Text
+
+  -- | The constructor, with the tag in the given encoding.
+  gToConstructor :: YamlOptions -> Maybe SumEncodingKind -> Maybe (f p) -> f p -> S.Node
+
+instance GToConstructor V1 where
+  gTag _ = \case {}
+  gToConstructor _ _ _ = \case {}
+
+instance (GToConstructor f, GToConstructor g) => GToConstructor (f :+: g) where
+  gTag opts = \case
+    L1 x -> gTag opts x
+    R1 x -> gTag opts x
+  gToConstructor opts flat def = \case
+    L1 x -> gToConstructor opts flat (def >>= \case L1 d -> Just d; R1 _ -> Nothing) x
+    R1 x -> gToConstructor opts flat (def >>= \case R1 d -> Just d; L1 _ -> Nothing) x
+  {-# INLINE gTag #-}
+  {-# INLINE gToConstructor #-}
+
+instance
+  ( KnownSymbol name
+  , GFields f
+  , GToFields f
+  )
+  => GToConstructor (C1 (MetaCons name fixity isRecord) f)
+  where
+  gTag opts _ = constructorTag opts (symbolVal (Proxy @name))
+  gToConstructor opts tagging def c@(M1 x) = case tagging of
+    Just SingleField
+      | gNamed @f -> mapping [(string (gTag opts c), mapping (gToEntries opts (unM1 <$> def) x))]
+      | otherwise -> case gToValue x of
+          Nothing -> string (gTag opts c)
+          Just _ -> mapping [gToEntry (string (gTag opts c)) x]
+    Just enc
+      | gNamed @f -> mapping (withTagEntry (gToEntries opts (unM1 <$> def) x))
+      | otherwise -> case gToValue x of
+          Nothing -> mapping (withTagEntry [])
+          Just v
+            | enc == TaggedFlat, Just entries <- flatEntries opts v -> mapping (withTagEntry entries)
+            | otherwise -> mapping (withTagEntry [gToEntry (string opts.contentsKey) x])
+    Nothing
+      | gNamed @f -> mapping (gToEntries opts (unM1 <$> def) x)
+      | otherwise -> fromMaybe (mapping []) (gToValue x)
+    where
+      withTagEntry :: [(S.Node, S.Node)] -> [(S.Node, S.Node)]
+      withTagEntry entries = (opts.tagKey .= gTag opts c) : entries
+  {-# INLINE gTag #-}
+  {-# INLINE gToConstructor #-}
+
+-- | The entries of a field next to the tag, if the decoder can read them
+-- back. The field must be a mapping with a key, and no key can be the tag
+-- key or the contents key. The decoder reads a mapping with the contents key
+-- as the other form.
+flatEntries :: YamlOptions -> S.Node -> Maybe [(S.Node, S.Node)]
+flatEntries opts v = case v.content of
+  S.Mapping _ kvs
+    | null kvs -> Nothing
+    | any (\(k, _) -> isKey opts.tagKey k || isKey opts.contentsKey k) kvs -> Nothing
+    | otherwise -> Just kvs
+  _ -> Nothing
+
+-- | The encoder of the fields of a constructor.
+--
+-- The shape check allows named fields, no fields, or one field without a
+-- name. The default methods are for the kind of fields that never calls
+-- them.
+class GToFields f where
+  -- | The entries of the named fields, with the given default.
+  gToEntries :: YamlOptions -> Maybe (f p) -> f p -> [(S.Node, S.Node)]
+  gToEntries _ _ _ = []
+
+  -- | The value of the only field without a name.
+  gToValue :: f p -> Maybe S.Node
+  gToValue _ = Nothing
+
+  -- | The mapping entry of the only field without a name under the key, e.g.
+  -- with the comments of a 'Yamlet.Commented' field on the contents key.
+  gToEntry :: S.Node -> f p -> (S.Node, S.Node)
+  gToEntry k x = (k, fromMaybe (mapping []) (gToValue x))
+
+instance GToFields U1
+
+instance (GToFields f, GToFields g) => GToFields (f :*: g) where
+  gToEntries opts def (a :*: b) =
+    gToEntries opts ((\(d :*: _) -> d) <$> def) a ++ gToEntries opts ((\(_ :*: d) -> d) <$> def) b
+  {-# INLINE gToEntries #-}
+
+instance
+  ( KnownSymbol name
+  , ToYaml a
+  )
+  => GToFields (S1 (MetaSel (Just name) u s d) (Rec0 a))
+  where
+  gToEntries opts def (M1 (K1 x))
+    | opts.omitNullFields && isNullNode (snd entry) && nullDefault = []
+    | otherwise = [entry]
+    where
+      entry :: (S.Node, S.Node)
+      entry = fieldKey @name opts .= x
+
+      -- The decoder fills a missing key from the default.
+      nullDefault :: Bool
+      nullDefault = case def of
+        Just (M1 (K1 d)) -> isNullNode (toYaml d)
+        Nothing -> True
+  {-# INLINE gToEntries #-}
+
+instance ToYaml a => GToFields (S1 (MetaSel Nothing u s d) (Rec0 a)) where
+  gToValue (M1 (K1 x)) = Just (toYaml x)
+  gToEntry k (M1 (K1 x)) = toYamlField k x
+  {-# INLINE gToValue #-}
+
+----------------------------------------
+-- Decoding
+
+-- | The generic decoder, e.g. for an instance by hand with a check after the
+-- decode.
+--
+-- >>> :{
+-- data Range = Range {low :: Int, high :: Int}
+--   deriving stock (Generic, Show)
+--   deriving anyclass (GenericYamlOptions)
+-- instance FromYaml Range where
+--   parseYaml n = do
+--     r <- genericParseYaml n
+--     if r.low <= r.high then pure r else failAt n "expected low <= high"
+-- :}
+--
+-- >>> decodeText @Range "low: 1\nhigh: 2\n"
+-- Right (Range {low = 1, high = 2})
+--
+-- >>> either printErrors print (decodeText @Range "low: 3\nhigh: 2\n")
+-- input.yaml:1:1: expected low <= high
+--   |
+-- 1 | low: 3
+--   | ^
+
+-- The code inlines in the derived method, for the reasons at 'genericToYaml'.
+genericParseYaml
+  :: forall a d f
+   . ( Generic a
+     , GenericYamlOptions a
+     , Rep a ~ D1 d f
+     , GConstructors f
+     , GEncoding (SumEncoding a) f
+     , GFromConstructor f
+     )
+  => S.Node -> Parser a
+genericParseYaml n =
+  -- Forcing the encoding forces the check of the shape, e.g. with deferred
+  -- type errors in a test of the errors.
+  let enc = gEncoding @(SumEncoding a) @f
+  in enc `seq` gParseYaml (yamlOptions @a) enc (from <$> yamlDefault @a) to n
+{-# INLINE genericParseYaml #-}
+
+-- Each constructor applies 'to' to its own representation, e.g.
+-- @to (M1 (L1 (M1 fields)))@, and the optimizer reduces this to the real
+-- constructor in the same place. For this, the decoders of the constructors
+-- take a continuation. It starts as 'to' and grows by 'M1', 'L1' or 'R1' at
+-- each level of the sum.
+--
+-- In the direct style, each constructor returns its representation, the
+-- branches meet in 'mplus', and 'to' comes after them. The optimizer then no
+-- longer knows which branch produced the value, so the program builds 'L1',
+-- 'R1' and ':*:' at run time and 'to' matches on them again.
+--
+-- The fields of one constructor need no continuation, because they build
+-- their product in one place, and 'to' of the same branch consumes it.
+--
+-- The representation of the default goes down with the options, so that each
+-- field finds its default value.
+gParseYaml
+  :: forall f d p a
+   . ( GConstructors f
+     , GFromConstructor f
+     )
+  => YamlOptions -> SumEncodingKind -> Maybe (D1 d f p) -> (D1 d f p -> a) -> S.Node -> Parser a
+gParseYaml opts enc def k n
+  | gNullary @f =
+      withName tags (\t -> fromMaybe (unknown n "value" t) (gFromTag opts (k . M1) n t)) n
+  | isTagged @f opts, enc == SingleField = single
+  | isTagged @f opts = withMapping tagged n
+  | otherwise = gFromUntagged opts (unM1 <$> def) (k . M1) n
+  where
+    tagged :: Object -> Parser a
+    tagged o = case lookupKey opts.tagKey o of
+      Nothing -> missingKey o opts.tagKey
+      Just tn -> do
+        t <- withName tags pure tn
+        fromMaybe (unknown tn "tag" t) (gFromTagged opts (enc == TaggedFlat) (unM1 <$> def) (k . M1) t o)
+
+    -- A constructor without fields is its tag, and another constructor is a
+    -- mapping with its tag as the only key.
+    single :: Parser a
+    single = case view n of
+      StringView t -> fromMaybe (withoutValue t) (gFromTag opts (k . M1) n t)
+      _ | S.Mapping {} <- n.content -> withMapping singleEntry n
+      _ -> typeMismatch "a string or a mapping with one key" n
+
+    singleEntry :: Object -> Parser a
+    singleEntry o = case objectEntries o of
+      [(kn, v)] -> do
+        t <- withName tags pure kn
+        fromMaybe (unknown kn "constructor" t) (gFromSingle opts (unM1 <$> def) (k . M1) t (kn, v))
+      _ : (kn, _) : _ -> failAt kn "expected a mapping with one key, but got a second key"
+      [] -> failAt n "expected a mapping with one key, but got an empty mapping"
+
+    -- A string that is the tag of a constructor with fields.
+    withoutValue :: T.Text -> Parser a
+    withoutValue t
+      | t `elem` tags = failAt n $ "expected a mapping with the key " ++ show t ++ ", because the constructor has fields"
+      | otherwise = unknown n "constructor" t
+
+    unknown :: S.Node -> String -> T.Text -> Parser a
+    unknown node what t = failAt node $ "unknown " ++ what ++ " " ++ show t ++ alternatives tags t
+
+    tags :: [T.Text]
+    tags = map (constructorTag opts) (gConstructorNames @f)
+{-# INLINE gParseYaml #-}
+
+-- | The decoder of the constructors of a representation.
+class GFromConstructor f where
+  -- | The constructor without fields with the tag, from the node of the tag.
+  gFromTag :: YamlOptions -> (f p -> a) -> S.Node -> T.Text -> Maybe (Parser a)
+
+  -- | The constructor with the tag, from the mapping that holds the tag, with
+  -- the flag of 'TaggedFlat'.
+  gFromTagged :: YamlOptions -> Bool -> Maybe (f p) -> (f p -> a) -> T.Text -> Object -> Maybe (Parser a)
+
+  -- | The constructor with the tag, from the only entry of a mapping, for
+  -- 'SingleField'.
+  gFromSingle :: YamlOptions -> Maybe (f p) -> (f p -> a) -> T.Text -> (S.Node, S.Node) -> Maybe (Parser a)
+
+  -- | The only constructor, without a tag.
+  gFromUntagged :: YamlOptions -> Maybe (f p) -> (f p -> a) -> S.Node -> Parser a
+
+instance GFromConstructor V1 where
+  gFromTag _ _ _ _ = Nothing
+  gFromTagged _ _ _ _ _ _ = Nothing
+  gFromSingle _ _ _ _ _ = Nothing
+  gFromUntagged _ _ _ _ = fail "expected a type with constructors"
+
+instance (GFromConstructor f, GFromConstructor g) => GFromConstructor (f :+: g) where
+  gFromTag opts k n t = gFromTag opts (k . L1) n t `mplus` gFromTag opts (k . R1) n t
+  gFromTagged opts flat def k t o =
+    gFromTagged opts flat (def >>= \case L1 x -> Just x; R1 _ -> Nothing) (k . L1) t o
+      `mplus` gFromTagged opts flat (def >>= \case R1 x -> Just x; L1 _ -> Nothing) (k . R1) t o
+  gFromSingle opts def k t entry =
+    gFromSingle opts (def >>= \case L1 x -> Just x; R1 _ -> Nothing) (k . L1) t entry
+      `mplus` gFromSingle opts (def >>= \case R1 x -> Just x; L1 _ -> Nothing) (k . R1) t entry
+
+  -- A type with several constructors always has a tag.
+  gFromUntagged _ _ _ _ = fail "expected a tag"
+  {-# INLINE gFromTag #-}
+  {-# INLINE gFromTagged #-}
+  {-# INLINE gFromSingle #-}
+
+instance
+  ( KnownSymbol name
+  , GFields f
+  , GFromFields f
+  )
+  => GFromConstructor (C1 (MetaCons name fixity isRecord) f)
+  where
+  gFromTag opts k n t
+    | t == tag && gArity @f == 0 = Just (k . M1 <$> gFromValue n)
+    | otherwise = Nothing
+    where
+      tag :: T.Text
+      tag = constructorTag opts (symbolVal (Proxy @name))
+
+  gFromTagged opts flat def k t o
+    | t == constructorTag opts (symbolVal (Proxy @name)) = Just (k . M1 <$> fromObject opts flat [opts.tagKey] (unM1 <$> def) o)
+    | otherwise = Nothing
+
+  gFromSingle opts def k t entry@(kn, v)
+    | t /= constructorTag opts (symbolVal (Proxy @name)) = Nothing
+    | gNamed @f = Just (withMapping (fmap (k . M1) . fromObject opts False [] (unM1 <$> def)) v)
+    | gArity @f == 0 = Just (failAt kn $ "expected the string " ++ show t ++ ", because the constructor has no fields")
+    | otherwise = Just (k . M1 <$> gFromEntry entry)
+
+  gFromUntagged opts def k n
+    | gNamed @f || gArity @f == 0 = withMapping (fmap (k . M1) . fromObject opts False [] (unM1 <$> def)) n
+    | otherwise = k . M1 <$> gFromValue n
+
+  {-# INLINE gFromTag #-}
+  {-# INLINE gFromTagged #-}
+  {-# INLINE gFromSingle #-}
+  {-# INLINE gFromUntagged #-}
+
+-- | The fields of a constructor from a mapping. The given keys, e.g. the tag
+-- key, are no fields but valid keys.
+fromObject
+  :: forall f p
+   . ( GFields f
+     , GFromFields f
+     )
+  => YamlOptions -> Bool -> [T.Text] -> Maybe (f p) -> Object -> Parser (f p)
+fromObject opts flat keys def o
+  | gNamed @f || gArity @f == 0 = checked (gNames @f opts) (gFromObject opts def o)
+  | flat
+  , not (null others)
+  , not (any (isKey opts.contentsKey . fst) others) =
+      if any (isJust . closeName [opts.contentsKey]) (mapMaybe (stringValue . fst) others)
+        then merged `orElse` checked [opts.contentsKey] (missingKey o opts.contentsKey)
+        else merged
+  | otherwise = checked [opts.contentsKey] $ case M.lookup opts.contentsKey o.index of
+      Just entry -> gFromEntry entry
+      -- A missing contents key is null, if the fields accept null. A flat
+      -- field can also have only optional keys.
+      Nothing
+        | Just fields <- def -> pure fields
+        | flat -> maybe merged pure (succeeds gFromValue nullNode)
+        | otherwise -> maybe (missingKey o opts.contentsKey) pure (succeeds gFromValue nullNode)
+  where
+    -- The fields, with the errors of the unknown keys if the options reject
+    -- them.
+    checked :: [T.Text] -> Parser (f p) -> Parser (f p)
+    checked fields = (when opts.rejectUnknownFields (rejectUnknownKeys (keys ++ fields) o) *>)
+
+    -- The field decodes from the mapping without the given keys. The first
+    -- key already has the lines above the mapping.
+    merged :: Parser (f p)
+    merged =
+      let n = objectNode o
+          style = case n.content of
+            S.Mapping s _ -> s
+            _ -> S.Block
+      in gFromValue (S.Node n.offset n.endOffset n.props S.noComments (S.Mapping style others))
+
+    others :: [(S.Node, S.Node)]
+    others = foldr removeKey (objectEntries o) keys
+
+    -- The keys are unique, so the entries after the match stay shared.
+    removeKey :: T.Text -> [(S.Node, S.Node)] -> [(S.Node, S.Node)]
+    removeKey key = \case
+      kv@(k, _) : kvs
+        | isKey key k -> kvs
+        | otherwise -> kv : removeKey key kvs
+      [] -> []
+    {-# INLINE merged #-}
+{-# INLINE fromObject #-}
+
+-- | The decoder of the fields of a constructor.
+--
+-- The shape check allows named fields, no fields, or one field without a
+-- name. The default methods are for the kind of fields that never calls
+-- them.
+class GFromFields f where
+  -- | The fields from a mapping, with the given default for missing keys.
+  gFromObject :: YamlOptions -> Maybe (f p) -> Object -> Parser (f p)
+  gFromObject _ _ o = fail $ "expected a field without a name in " ++ describeNode (objectNode o)
+
+  -- | The only field without a name from its value.
+  gFromValue :: S.Node -> Parser (f p)
+  gFromValue n = fail $ "expected named fields in " ++ describeNode n
+
+  -- | The only field from a mapping entry, with the key, e.g. for the
+  -- comments of a 'Yamlet.Commented' field under the contents key.
+  gFromEntry :: (S.Node, S.Node) -> Parser (f p)
+  gFromEntry (_, v) = gFromValue v
+
+-- The value of a constructor without fields is its tag.
+instance GFromFields U1 where
+  gFromObject _ _ _ = pure U1
+  gFromValue _ = pure U1
+
+instance (GFromFields f, GFromFields g) => GFromFields (f :*: g) where
+  gFromObject opts def o =
+    (:*:)
+      <$> gFromObject opts ((\(a :*: _) -> a) <$> def) o
+      <*> gFromObject opts ((\(_ :*: b) -> b) <$> def) o
+  {-# INLINE gFromObject #-}
+
+instance
+  ( KnownSymbol name
+  , FromYaml a
+  )
+  => GFromFields (S1 (MetaSel (Just name) u s d) (Rec0 a))
+  where
+  gFromObject opts def o =
+    M1 . K1 <$> case M.lookup key o.index of
+      Just entry -> parseEntry entry
+      Nothing -> case def of
+        Just (M1 (K1 x)) -> x <$ findKey o key
+        -- A missing field is null, if its type accepts null.
+        Nothing -> maybe (missingKey o key) (<$ findKey o key) (succeeds parseYaml nullNode)
+    where
+      key :: T.Text
+      key = fieldKey @name opts
+  {-# INLINE gFromObject #-}
+
+instance FromYaml a => GFromFields (S1 (MetaSel Nothing u s d) (Rec0 a)) where
+  gFromValue n = M1 . K1 <$> parseNode parseYaml n
+  gFromEntry entry = M1 . K1 <$> parseEntry entry
+  {-# INLINE gFromValue #-}
+
+-- | The key is a string with the text.
+isKey :: T.Text -> S.Node -> Bool
+isKey key k = case stringValue k of
+  Just t -> t == key
+  _ -> False
 
 -- $setup
 -- >>> import Data.Text qualified as T
 -- >>> import Data.Text.IO qualified as T
--- >>> import GHC.Generics
 -- >>> import Yamlet
+-- >>> printErrors = mapM_ (putStrLn . prettyError "input.yaml")

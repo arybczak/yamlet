@@ -9,7 +9,6 @@ module Main where
 
 import Data.List.NonEmpty qualified as NE
 import Data.Text qualified as T
-import GHC.Generics (Generic)
 import Test.Inspection
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -56,7 +55,8 @@ main =
 
 data Server = Server {host :: T.Text, port :: Int, tags :: Maybe [T.Text]}
   deriving stock (Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Server
 
 data Wide = Wide
   { i00 :: Int
@@ -161,49 +161,54 @@ data Wide = Wide
   , m32 :: Maybe Int
   }
   deriving stock (Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Wide
 
 newtype Name = Name T.Text
   deriving stock (Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Name
 
 newtype Box a = Box {item :: a}
   deriving stock (Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml (Box a)
 
 newtype Velocity = Velocity Speed
   deriving stock (Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Velocity
 
-instance GenericYaml Velocity where
+instance GenericYamlOptions Velocity where
   type SumEncoding Velocity = TaggedFlat
   yamlOptions = defaultYamlOptions {tagSingleConstructors = True}
 
 newtype Distance = Distance {distance :: Maybe Int}
   deriving stock (Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Distance
 
 newtype Speed = Speed {speed :: Int}
   deriving stock (Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Speed
 
 data Config = Config {paths :: [T.Text], jobs :: Int, verbose :: Maybe Bool}
   deriving stock (Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Config
 
 -- The option is on, so that the check of the encoder covers the default too.
 -- The encoder uses the default only with 'omitNullFields', to decide if it
 -- can leave out a null field.
-instance GenericYaml Config where
+instance GenericYamlOptions Config where
   yamlOptions = defaultYamlOptions {omitNullFields = True}
   yamlDefault = Just (Config ["."] 1 Nothing)
 
 -- Without 'omitNullFields', the encoder does not use the default.
 data Preset = Preset {paths :: [T.Text], jobs :: Int, verbose :: Maybe Bool}
   deriving stock (Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Preset
 
-instance GenericYaml Preset where
+instance GenericYamlOptions Preset where
   yamlDefault = Just (Preset ["."] 1 Nothing)
 
 encodeServer :: Server -> Node
@@ -258,25 +263,27 @@ decodeConfig = runParser parseYaml
 
 data Turn = TurnLeft | TurnRight | TurnBack
   deriving stock (Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Turn
 
 data Shape = Circle {radius :: Double} | Dot | Square {side :: Double, angle :: Double}
   deriving stock (Generic)
-  deriving anyclass (GenericYaml, FromYaml, ToYaml)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Shape
 
 data Step = Ahead Distance | Accelerate Speed | Halt
   deriving stock (Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Step
 
-instance GenericYaml Step where
+instance GenericYamlOptions Step where
   type SumEncoding Step = TaggedFlat
   yamlOptions = defaultYamlOptions {tagKey = "step"}
 
 data Figure = Round {radius :: Double} | Named T.Text | Point
   deriving stock (Generic)
-  deriving anyclass (FromYaml, ToYaml)
+  deriving (FromYaml, ToYaml) via GenericYaml Figure
 
-instance GenericYaml Figure where
+instance GenericYamlOptions Figure where
   type SumEncoding Figure = SingleField
 
 encodeTurn :: Turn -> Node

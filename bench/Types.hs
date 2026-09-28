@@ -13,7 +13,6 @@ import Data.Map.Strict qualified as M
 import Data.Scientific qualified as Sci
 import Data.Text qualified as T
 import Data.YAML qualified as H
-import GHC.Generics
 
 import Yamlet
 
