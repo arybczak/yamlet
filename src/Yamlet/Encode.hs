@@ -42,10 +42,10 @@ import Math.NumberTheory.Logarithms
 import Numeric.Natural
 
 import Yamlet.Internal.Generic
+import Yamlet.Internal.Schema
 import Yamlet.Internal.Syntax qualified as S
 import Yamlet.Internal.Utils
 import Yamlet.Internal.View
-import Yamlet.Schema
 import Yamlet.Syntax qualified as S
 import Yamlet.Value
 
@@ -147,11 +147,11 @@ instance ToYaml Float where toYaml = scalar . Float . floatToFloatValue
 -- -1000 to 1000, e.g. @1e1001@, does not read back, see 'Finite'.
 instance ToYaml Sci.Scientific where toYaml = scalar . Float . Finite
 
-instance ToYaml Day where toYaml = iso8601 buildDay
+instance ToYaml Day where toYaml = timestamp buildDay
 instance ToYaml TimeOfDay where toYaml = iso8601 buildTimeOfDay
-instance ToYaml LocalTime where toYaml = iso8601 buildLocalTime
-instance ToYaml ZonedTime where toYaml = iso8601 buildZonedTime
-instance ToYaml UTCTime where toYaml = iso8601 buildUTCTime
+instance ToYaml LocalTime where toYaml = timestamp buildLocalTime
+instance ToYaml ZonedTime where toYaml = timestamp buildZonedTime
+instance ToYaml UTCTime where toYaml = timestamp buildUTCTime
 
 -- | A number of seconds.
 instance ToYaml NominalDiffTime where
@@ -171,6 +171,16 @@ instance ToYaml QuarterOfYear where toYaml = iso8601 buildQuarterOfYear
 -- | A string in an ISO 8601 format, the same as in aeson.
 iso8601 :: (a -> TLB.Builder) -> a -> S.Node
 iso8601 build = scalar . String . TL.toStrict . TLB.toLazyText . build
+
+-- | Like 'iso8601', but plain even though YAML 1.1 reads the text as a
+-- timestamp, because the value is one.
+timestamp :: (a -> TLB.Builder) -> a -> S.Node
+timestamp build x
+  | isPlainString t = S.plainNode t
+  | otherwise = string t
+  where
+    t :: T.Text
+    t = TL.toStrict (TLB.toLazyText (build x))
 
 -- | The English name in lowercase, e.g. @monday@.
 instance ToYaml DayOfWeek where
@@ -619,10 +629,13 @@ scalar = \case
 -- quotes if not. The renderer puts a plain scalar in quotes if its text
 -- cannot be plain, e.g. @a: b@. It uses double quotes for a text with a tab
 -- or a character that single quotes cannot hold.
+--
+-- A text that YAML 1.1 reads as another type, e.g. @yes@ or @12:30@, is in
+-- quotes too, because many parsers still follow YAML 1.1.
 string :: T.Text -> S.Node
 string t
   | T.any (== '\n') t = S.scalarNode S.Literal t
-  | isPlainString t = S.plainNode t
+  | isPlainString t && not (isYaml11NonString t) = S.plainNode t
   | otherwise = S.scalarNode S.SingleQuoted t
 
 -- | The text of a value without quotes, or an empty collection in the flow
@@ -656,7 +669,8 @@ plainText = \case
         | ex >= 0 && ex <= maxDecimal ->
             let (int, frac) = T.splitAt integerDigits digits
             in T.concat [sign, T.justifyLeft integerDigits '0' int, ".", orZero frac]
-        | otherwise -> T.concat [sign, T.singleton d, ".", orZero rest, "e", decimal ex]
+        -- YAML 1.1 reads an exponent without a sign as a string.
+        | otherwise -> T.concat [sign, T.singleton d, ".", orZero rest, if ex < 0 then "e" else "e+", decimal ex]
       where
         c :: Integer
         c = Sci.coefficient s

@@ -15,6 +15,10 @@ A YAML 1.2.2 library written in Haskell.
   bad field of a record, every bad item of a list and every unknown key. A
   syntax error stops the parser at the first one.
 - Mappings keep the order of their keys, on input and on output.
+- The encoder writes output that common YAML 1.1 parsers read the same way:
+  PyYAML, Ruby's Psych and go-yaml v2, which Kubernetes uses. It quotes the
+  strings that these parsers read as other types, e.g. `yes`, `22:22`,
+  `1,000` and `2024-01-01`. The decoder follows only the YAML 1.2 rules.
 - Instances of `FromYaml` and `ToYaml` for the common types. They use the
   same formats as the instances of aeson, with one difference: the keys of a
   map keep their type, e.g. `1: a`, while JSON writes every key as a string.

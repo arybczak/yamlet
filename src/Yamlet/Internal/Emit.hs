@@ -74,13 +74,13 @@ plainSyntax inFlow t = case T.uncons t of
 
     isPlainChar :: Char -> Bool
     isPlainChar c =
-      (c == ' ' || (isPrintable c && c /= '\t'))
+      (c == ' ' || (isScalarChar c && c /= '\t'))
         && not (inFlow && asciiChar isFlowIndicator c)
 
 -- | A single-quoted scalar on one line, if the text has no line breaks.
 singleQuoted :: T.Text -> Maybe B.Builder
 singleQuoted t
-  | T.all (\c -> c == '\t' || isPrintable c) t =
+  | T.all (\c -> c == '\t' || isScalarChar c) t =
       Just $ "'" <> B.fromText (T.replace "'" "''" t) <> "'"
   | otherwise = Nothing
 
@@ -105,7 +105,7 @@ doubleQuoted t = "\"" <> T.foldr (\c b -> escape c <> b) mempty t <> "\""
       '\r' -> "\\r"
       '\0' -> "\\0"
       c
-        | isPrintable c -> B.fromChar c
+        | isScalarChar c -> B.fromChar c
         | ord c < 16 ^ xEscapeDigits -> "\\x" <> hex xEscapeDigits (ord c)
         | ord c < 16 ^ uEscapeDigits -> "\\u" <> hex uEscapeDigits (ord c)
         | otherwise -> "\\U" <> hex bigUEscapeDigits (ord c)
@@ -164,7 +164,7 @@ foldedBlock indent t = do
 blockParts :: Bool -> T.Text -> Maybe (B.Builder, T.Text, Int)
 blockParts allowKeep t
   | T.null body = Nothing
-  | not (T.all (\c -> c == '\n' || c == '\t' || isPrintable c) t) = Nothing
+  | not (T.all (\c -> c == '\n' || c == '\t' || isScalarChar c) t) = Nothing
   | trailing > 1 && not allowKeep = Nothing
   | otherwise = Just (indicator <> chomping, body, trailing)
   where
@@ -277,6 +277,16 @@ isPrintable c
   | c >= '\xD800' && c <= '\xDFFF' = False
   | c == '\xFFFE' || c == '\xFFFF' = False
   | otherwise = True
+
+-- | A printable character that needs no escape in a scalar. YAML 1.1 reads
+-- U+2028 and U+2029 as line breaks, so they get escapes too.
+isScalarChar :: Char -> Bool
+-- The guards for ASCII come first. Without them, the encode benchmark of
+-- the long texts takes about 15% longer.
+isScalarChar c
+  | c < ' ' = False
+  | c <= '~' = True
+  | otherwise = isPrintable c && c /= '\x2028' && c /= '\x2029'
 
 spaces :: Int -> B.Builder
 spaces k = B.fromText (T.replicate k " ")

@@ -124,7 +124,7 @@ test_time :: Assertion
 test_time = do
   let noon = LocalTime (fromGregorian 2026 9 25) (TimeOfDay 12 30 5.25)
   assertEqual "day" "2026-09-25\n" (encodeText (fromGregorian 2026 9 25))
-  assertEqual "time" "12:30:00\n" (encodeText (TimeOfDay 12 30 0))
+  assertEqual "time, a base-60 number in YAML 1.1" "'12:30:00'\n" (encodeText (TimeOfDay 12 30 0))
   assertEqual "local time" "2026-09-25T12:30:05.250\n" (encodeText noon)
   assertEqual "UTC time" "2026-09-25T12:30:00Z\n" (encodeText (UTCTime (fromGregorian 2026 9 25) (12 * 3600 + 30 * 60)))
   assertEqual "zoned time" "2026-09-25T12:30:05.250-02:30\n" (encodeText (ZonedTime noon (minutesToTimeZone (-150))))
@@ -187,7 +187,7 @@ test_blockStyle = assertEqual "output" expected (encodeText value)
         , "    - false"
         , "records:"
         , "- x: 1.5"
-        , "  y: null"
+        , "  'y': null"
         , "empty_list: []"
         , "empty_map: {}"
         ]
@@ -218,6 +218,39 @@ test_quoting = do
   check "\"\\x01\"" "\x01"
   check "\"\\uFEFF\"" "\xFEFF"
   check "zażółć" "zażółć"
+  check "'yes'" "yes"
+  check "'Off'" "Off"
+  check "'y'" "y"
+  check "yesterday" "yesterday"
+  -- The texts that YAML 1.1 reads as other types.
+  check "'22:22'" "22:22"
+  check "'1:30.5'" "1:30.5"
+  check "'1:5'" "1:5"
+  check "'1:59'" "1:59"
+  check "1:60" "1:60"
+  check "'1_000'" "1_000"
+  check "'0b101'" "0b101"
+  check "'1.5_0'" "1.5_0"
+  check "'2024-01-01'" "2024-01-01"
+  check "'2024-1-1 10:00:00 +02:00'" "2024-1-1 10:00:00 +02:00"
+  check "'<<'" "<<"
+  check "'='" "="
+  check "'09:30'" "09:30"
+  check "'1,000'" "1,000"
+  check "'0,5'" "0,5"
+  check "'trUe'" "trUe"
+  check "'.e+9'" ".e+9"
+  check "'0X1F'" "0X1F"
+  check "'+_85'" "+_85"
+  check "'8_11E3'" "8_11E3"
+  check "'2024-1-1'" "2024-1-1"
+  check "':foo'" ":foo"
+  check "Truely" "Truely"
+  check "1.2.3" "1.2.3"
+  check "2024-01" "2024-01"
+  check "\"a\\u2028b\"" "a\x2028\&b"
+  check "\"a\\u2029b\"" "a\x2029\&b"
+  assertEqual "YAML 1.1 boolean as a key" "'NO': Norway\n" (encodeText (mapping ["NO" .= ("Norway" :: T.Text)]))
 
 -- | A float reads back as a float, not as an integer.
 test_floats :: Assertion
@@ -228,15 +261,15 @@ test_floats = do
   assertEqual "smallest decimal notation" "0.000001\n" (encodeText (1e-6 :: Double))
   assertEqual "below decimal notation" "1.0e-7\n" (encodeText (1e-7 :: Double))
   assertEqual "largest decimal notation" "100000000000000000000.0\n" (encodeText (1e20 :: Double))
-  assertEqual "above decimal notation" "1.0e21\n" (encodeText (1e21 :: Double))
-  assertEqual "large scientific" "1.0e30\n" (encodeText (Sci.scientific 1 30))
+  assertEqual "above decimal notation" "1.0e+21\n" (encodeText (1e21 :: Double))
+  assertEqual "large scientific" "1.0e+30\n" (encodeText (Sci.scientific 1 30))
   assertEqual
     "exact scientific"
     "12345678901234567890.123\n"
     (encodeText (Sci.scientific 12345678901234567890123 (-3)))
-  assertEqual "exponent beyond the limit" "1.0e10001\n" (encodeText (Sci.scientific 1 10001))
-  assertEqual "exponent beyond Int" "1.0e9223372036854775808\n" (encodeText (Sci.scientific 10 maxBound))
-  assertEqual "negative exponent beyond Int" "-1.23e9223372036854775810\n" (encodeText (Sci.scientific (-1230) maxBound))
+  assertEqual "exponent beyond the limit" "1.0e+10001\n" (encodeText (Sci.scientific 1 10001))
+  assertEqual "exponent beyond Int" "1.0e+9223372036854775808\n" (encodeText (Sci.scientific 10 maxBound))
+  assertEqual "negative exponent beyond Int" "-1.23e+9223372036854775810\n" (encodeText (Sci.scientific (-1230) maxBound))
   assertEqual "zero with a large exponent" "0.0\n" (encodeText (Sci.scientific 0 maxBound))
   assertEqual "infinity" "-.inf\n" (encodeText (-(1 / 0) :: Double))
   assertEqual "not a number" ".nan\n" (encodeText (0 / 0 :: Double))
@@ -247,14 +280,17 @@ test_floats = do
   assertEqual "float negative zero" "-0.0\n" (encodeText @Float (-0))
 
 -- | A float has decimal notation from 10^-6 up to 10^21, as Number::toString
--- of ECMAScript, and exponential notation otherwise.
+-- of ECMAScript, and exponential notation otherwise, with the sign of the
+-- exponent.
 prop_floatFormat :: Integer -> Property
 prop_floatFormat c = forAll ((,) <$> chooseInt (0, 3) <*> chooseInt (-30, 30)) $ \(zeros, e) ->
   let s = Sci.scientific (c * 10 ^ zeros) e
-      format
-        | s == 0 || (abs s >= Sci.scientific 1 (-6) && abs s < Sci.scientific 1 21) = Sci.Fixed
-        | otherwise = Sci.Exponent
-  in encodeText s === T.pack (Sci.formatScientific format Nothing s) <> "\n"
+      expected
+        | s == 0 || (abs s >= Sci.scientific 1 (-6) && abs s < Sci.scientific 1 21) = Sci.formatScientific Sci.Fixed Nothing s
+        | otherwise = case break (== 'e') (Sci.formatScientific Sci.Exponent Nothing s) of
+            (m, 'e' : ex@(d : _)) | d /= '-' -> m ++ "e+" ++ ex
+            _ -> Sci.formatScientific Sci.Exponent Nothing s
+  in encodeText s === T.pack expected <> "\n"
 
 -- | The time to write a float is not quadratic in the number of its digits.
 test_longFloats :: Assertion
@@ -266,7 +302,7 @@ test_longFloats = do
     (encodeText (Sci.scientific nines (-999999)))
   assertEqual
     "trailing zeros"
-    "1.5e1000000\n"
+    "1.5e+1000000\n"
     (encodeText (Sci.scientific (15 * 10 ^ (1000000 :: Int)) (-1)))
 
 test_literal :: Assertion

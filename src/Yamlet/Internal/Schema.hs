@@ -12,10 +12,12 @@ module Yamlet.Internal.Schema
   , isPlainString
   , isPlainSafe
   , isYaml11Bool
+  , isYaml11NonString
   , maxExponent
   , exponentOutOfRange
   ) where
 
+import Control.Monad
 import Data.Bifunctor
 import Data.Char
 import Data.Scientific qualified as Sci
@@ -98,6 +100,145 @@ readBool = \case
 isYaml11Bool :: T.Text -> Bool
 isYaml11Bool t =
   t `elem` ["y", "Y", "yes", "Yes", "YES", "n", "N", "no", "No", "NO", "on", "On", "ON", "off", "Off", "OFF"]
+
+-- | A common YAML 1.1 parser reads a plain scalar with the text as a value
+-- that is not a string, e.g. the boolean @yes@, the base-60 number @12:30@ or
+-- the date @2024-01-01@. The patterns cover what PyYAML, Ruby's Psych and
+-- go-yaml v2, which Kubernetes uses, accept. The YAML 1.1 types themselves
+-- are not enough: the parsers accept more, e.g. @1,000@ in Psych and @0X1F@ in
+-- go-yaml v2, and the type of floats accepts too much, e.g. @1.2.3@.
+isYaml11NonString :: T.Text -> Bool
+isYaml11NonString t = case T.uncons t of
+  Nothing -> True
+  Just (c, _)
+    -- A symbol in Psych, which its safe loader rejects.
+    | c == ':' -> T.compareLength t 1 == GT
+    | isDigit c || c == '-' || c == '+' || c == '.' ->
+        matches (alt [int, float, timestamp]) t || matches goNumber (T.filter (/= '_') t)
+    | otherwise ->
+        t `elem` ["y", "Y", "n", "N", "~", "<<", "="]
+          -- Psych ignores the case of these words.
+          || (T.compareLength t 5 /= GT && T.toLower t `elem` ["yes", "no", "true", "false", "on", "off", "null"])
+  where
+    matches :: (T.Text -> [T.Text]) -> T.Text -> Bool
+    matches m s = any T.null (m s)
+
+    int :: T.Text -> [T.Text]
+    int =
+      sign
+        >=> alt
+          [ str "0b" >=> some (separatorOr (`elem` ['0', '1']))
+          , one (== '0') >=> some (separatorOr isOctDigit)
+          , one (== '0')
+          , nonZero >=> many (separatorOr isDigit)
+          , str "0x" >=> some (separatorOr isHexDigit)
+          , digit >=> many (underscoreOr isDigit) >=> sexagesimal
+          ]
+
+    float :: T.Text -> [T.Text]
+    float =
+      sign
+        >=> alt
+          [ digit >=> many (separatorOr isDigit) >=> one (== '.') >=> many (underscoreOr isDigit) >=> opt exponentPart
+          , one (== '.') >=> some (underscoreOr isDigit) >=> opt exponentPart
+          , one (== '.') >=> exponentPart
+          , digit >=> many (underscoreOr isDigit) >=> sexagesimal >=> one (== '.') >=> many (underscoreOr isDigit)
+          , one (== '.') >=> caseless "inf"
+          , one (== '.') >=> caseless "nan"
+          ]
+
+    timestamp :: T.Text -> [T.Text]
+    timestamp =
+      alt
+        [ digits 4 >=> one (== '-') >=> oneOrTwoDigits >=> one (== '-') >=> oneOrTwoDigits
+        , opt (one (== '-'))
+            >=> digits 4
+            >=> one (== '-')
+            >=> oneOrTwoDigits
+            >=> one (== '-')
+            >=> oneOrTwoDigits
+            >=> alt [one (`elem` ['T', 't']), some blank]
+            >=> oneOrTwoDigits
+            >=> one (== ':')
+            >=> digits 2
+            >=> one (== ':')
+            >=> digits 2
+            >=> opt (one (== '.') >=> many digit)
+            >=> opt (many blank >=> alt [one (== 'Z'), one (`elem` ['+', '-']) >=> oneOrTwoDigits >=> opt (opt (one (== ':')) >=> digits 2)])
+        ]
+
+    -- The numbers of go-yaml v2, which removes the underscores first: the
+    -- integers of Go and a float whose dot and sign of the exponent are
+    -- optional.
+    goNumber :: T.Text -> [T.Text]
+    goNumber =
+      sign
+        >=> alt
+          [ one (== '0') >=> one (`elem` ['x', 'X']) >=> some (one isHexDigit)
+          , one (== '0') >=> one (`elem` ['o', 'O']) >=> some (one isOctDigit)
+          , one (== '0') >=> one (`elem` ['b', 'B']) >=> some (one (`elem` ['0', '1']))
+          , alt [one (== '.') >=> some digit, some digit >=> opt (one (== '.') >=> many digit)]
+              >=> opt (one (`elem` ['e', 'E']) >=> opt (one (`elem` ['+', '-'])) >=> some digit)
+          ]
+
+    -- Each matcher gives the rests of the text after all its possible
+    -- matches, so the patterns backtrack as the regular expressions of the
+    -- parsers do and each one matches its regular expression. A parser such as
+    -- attoparsec does not backtrack into an optional or repeated part, e.g.
+    -- [0-5]?[0-9] would take the 5 of 1:5 and then find no digit.
+    one :: (Char -> Bool) -> T.Text -> [T.Text]
+    one p s = case T.uncons s of
+      Just (x, rest) | p x -> [rest]
+      _ -> []
+
+    str :: T.Text -> T.Text -> [T.Text]
+    str prefix s = maybe [] pure (textStripPrefix prefix s)
+
+    alt :: [T.Text -> [T.Text]] -> T.Text -> [T.Text]
+    alt ms s = concatMap ($ s) ms
+
+    opt :: (T.Text -> [T.Text]) -> T.Text -> [T.Text]
+    opt m s = s : m s
+
+    many :: (T.Text -> [T.Text]) -> T.Text -> [T.Text]
+    many m s = s : (m s >>= many m)
+
+    some :: (T.Text -> [T.Text]) -> T.Text -> [T.Text]
+    some m = m >=> many m
+
+    sign :: T.Text -> [T.Text]
+    sign = opt (one (`elem` ['+', '-']))
+
+    digit :: T.Text -> [T.Text]
+    digit = one isDigit
+
+    digits :: Int -> T.Text -> [T.Text]
+    digits k = foldr (>=>) pure (replicate k digit)
+
+    oneOrTwoDigits :: T.Text -> [T.Text]
+    oneOrTwoDigits = digit >=> opt digit
+
+    nonZero :: T.Text -> [T.Text]
+    nonZero = one (\x -> isDigit x && x /= '0')
+
+    underscoreOr :: (Char -> Bool) -> T.Text -> [T.Text]
+    underscoreOr p = one (\x -> x == '_' || p x)
+
+    -- Psych also allows commas in numbers, e.g. 1,000.
+    separatorOr :: (Char -> Bool) -> T.Text -> [T.Text]
+    separatorOr p = one (\x -> x == '_' || x == ',' || p x)
+
+    caseless :: T.Text -> T.Text -> [T.Text]
+    caseless w s = [rest | let (prefix, rest) = T.splitAt (T.length w) s, T.toLower prefix == w]
+
+    sexagesimal :: T.Text -> [T.Text]
+    sexagesimal = some (one (== ':') >=> opt (one (`elem` ['0' .. '5'])) >=> digit)
+
+    exponentPart :: T.Text -> [T.Text]
+    exponentPart = one (`elem` ['e', 'E']) >=> one (`elem` ['+', '-']) >=> some digit
+
+    blank :: T.Text -> [T.Text]
+    blank = one (`elem` [' ', '\t'])
 
 -- | [-+]?[0-9]+, 0o[0-7]+ or 0x[0-9a-fA-F]+.
 readInt :: T.Text -> Maybe Integer
