@@ -543,7 +543,7 @@ props n = case n.content of
 comment :: Maybe T.Text -> B.Builder
 comment = \case
   Nothing -> mempty
-  Just t -> " #" <> text (T.stripEnd (T.map (\c -> if c == '\n' || c == '\r' then ' ' else c) (printable t)))
+  Just t -> " #" <> text (T.stripEnd (T.map (\c -> if isCommentBreak c then ' ' else c) (printable t)))
   where
     text :: T.Text -> B.Builder
     text t = if T.null t then mempty else " " <> B.fromText t
@@ -557,7 +557,7 @@ lines_ indent = mconcat . map line
       EmptyLine -> B.fromText emptyLine <> "\n"
       Comment t ->
         mconcat . map commentLine $
-          T.splitOn "\n" (T.replace "\r" "\n" (T.replace "\r\n" "\n" (printable t)))
+          T.split isCommentBreak (T.replace "\r\n" "\n" (printable t))
 
     -- The parser drops the white space at the end of a comment.
     commentLine :: T.Text -> B.Builder
@@ -573,7 +573,13 @@ emptyLine = "\0"
 -- | The text of a comment with a replacement for the characters that YAML
 -- does not allow.
 printable :: T.Text -> T.Text
-printable = T.map $ \c -> if c == '\t' || c == '\n' || c == '\r' || isPrintable c then c else '\xFFFD'
+printable = T.map $ \c -> if c == '\t' || isCommentBreak c || isPrintable c then c else '\xFFFD'
+
+-- | A line break in the text of a comment. YAML 1.1 reads U+0085, U+2028 and
+-- U+2029 as line breaks, so the rest of a comment after one of them would
+-- read as data.
+isCommentBreak :: Char -> Bool
+isCommentBreak c = c == '\n' || c == '\r' || c == '\x85' || c == '\x2028' || c == '\x2029'
 
 -- $setup
 -- >>> import Data.Text.IO qualified as T

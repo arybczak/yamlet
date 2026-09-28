@@ -513,6 +513,14 @@ test_movedComments = do
     "a:\n- 1 # c\n- 2\n"
     (render (mappingNode [(plainNode "a", contentNode (Sequence Flow [withInline "c" (plainNode "1"), plainNode "2"]))]))
   assertEqual
+    "YAML 1.1 line breaks in comments"
+    "# a\n# b\n# c\n# d\nk: v # e f g h\n"
+    ( render
+        ( mappingNode
+            [(withBefore "a\x85\&b\x2028\&c\x2029\&d" (plainNode "k"), withInline "e\x85\&f\x2028\&g\x2029\&h" (plainNode "v"))]
+        )
+    )
+  assertEqual
     "comment on a block root"
     "--- # c\na: 1\n"
     (render (withInline "c" (mappingNode [(plainNode "a", plainNode "1")])))

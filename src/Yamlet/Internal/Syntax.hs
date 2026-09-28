@@ -133,7 +133,8 @@ data Comments = Comments
   -- ^ The lines above the node.
   , inline :: !(Maybe T.Text)
   -- ^ The comment at the end of the first line of the node. The renderer
-  -- writes a line break in it as a space.
+  -- writes a line break in it as a space, the same line breaks as in a
+  -- 'Comment'.
   , after :: [Line]
   -- ^ The lines after the last entry of a collection, or between the brackets
   -- of an empty collection. The parser gives no such lines to a scalar or an
@@ -251,7 +252,9 @@ data Line
   = EmptyLine
   | -- | The text after the @#@ and one space, without the white space at its
     -- end. The renderer writes a text with line breaks as several comment
-    -- lines, and the parser reads them back as several comments.
+    -- lines, and the parser reads them back as several comments. U+0085,
+    -- U+2028 and U+2029 count as line breaks here, because YAML 1.1 reads
+    -- them as line breaks.
     Comment !T.Text
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (NFData)
