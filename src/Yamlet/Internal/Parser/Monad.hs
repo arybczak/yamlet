@@ -110,6 +110,15 @@ instance Applicative P where
     Fail# fu' -> Fail# fu'
     Err# err -> Err# err
 
+  -- The default builds the result with 'fmap' and '<*>'.
+  P g <* P h = P $ \e p fu -> case g e p fu of
+    OK# a p' fu' -> case h e p' fu' of
+      OK# _ p'' fu'' -> OK# a p'' fu''
+      Fail# fu'' -> Fail# fu''
+      Err# err -> Err# err
+    Fail# fu' -> Fail# fu'
+    Err# err -> Err# err
+
 instance Monad P where
   P g >>= k = P $ \e p fu -> case g e p fu of
     OK# a p' fu' -> runP (k a) e p' fu'
@@ -232,7 +241,7 @@ skipWhile f = P $ \e p fu ->
 -- | The result of a scanning loop.
 data Scanned a
   = -- | The value and the index after it.
-    Done !Int a
+    Done !Int !a
   | -- | The input does not match. The index is the location of the mismatch.
     NoMatch !Int
   | -- | An error at the index.

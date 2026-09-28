@@ -611,7 +611,7 @@ eScalar :: Props -> P Node
 eScalar props = do
   e <- env
   p <- pos
-  pure $ mkNode e p (toOffset e p) props (Scalar Plain T.empty)
+  pure $! mkNode e p (toOffset e p) props emptyContent
 
 -- | c-ns-properties(n,c)
 cNsProperties :: Int -> Ctx -> P Props
@@ -720,7 +720,7 @@ cNsAliasNode = do
   char STAR
   name <- nsAnchorName
   q <- pos
-  pure $ mkNode e p (toOffset e q) noProps (Alias name)
+  pure $! mkNode e p (toOffset e q) noProps (Alias name)
 
 ----------------------------------------
 -- Flow scalars
@@ -996,7 +996,7 @@ cFlowSequence n c props = do
   entries <- flowEntries n c' (nsFlowSeqEntry n c')
   closing c' p RBRACKET "flow sequence" "expected ',' or ']'"
   q <- pos
-  pure $ mkNode e p (toOffset e q) props (Sequence Flow entries)
+  pure $! mkNode e p (toOffset e q) props (Sequence Flow entries)
   where
     c' :: Ctx
     c' = inFlow c
@@ -1011,7 +1011,7 @@ cFlowMapping n c props = do
   entries <- flowEntries n c' (nsFlowMapEntry n c')
   closing c' p RBRACE "flow mapping" (expected entries)
   q <- pos
-  pure $ mkNode e p (toOffset e q) props (Mapping Flow entries)
+  pure $! mkNode e p (toOffset e q) props (Mapping Flow entries)
   where
     c' :: Ctx
     c' = inFlow c
@@ -1032,14 +1032,14 @@ flowEntries :: forall a. Int -> Ctx -> P a -> P [a]
 flowEntries n c entry = go []
   where
     go :: [a] -> P [a]
-    go acc = next <|> pure (reverse acc)
+    go acc = next <|> (pure $! reverse acc)
       where
         next :: P [a]
         next = do
           x <- entry
           optional_ $ sSeparate n c
           (char COMMA >> optional_ (sSeparate n c) >> go (x : acc))
-            <|> pure (reverse (x : acc))
+            <|> (pure $! reverse (x : acc))
 
 -- | The closing bracket of a flow collection that starts at the index. Its
 -- absence is an error unless the collection is an implicit key, which the
@@ -1108,7 +1108,7 @@ nsFlowSeqEntry :: Int -> Ctx -> P Node
 nsFlowSeqEntry n c = do
   e <- env
   p <- pos
-  (pair e p <$> nsFlowPair n c) <|> nodeEntry e p
+  (pair e p <$!> nsFlowPair n c) <|> nodeEntry e p
   where
     pair :: Env -> Int -> (Node, Node) -> Node
     pair e p (k, v) = mkNode e p v.endOffset noProps (Mapping Flow [(k, v)])
@@ -1144,7 +1144,10 @@ nsFlowMapEntry n c = explicit <|> nsFlowMapImplicitEntry n c
 -- | ns-flow-map-explicit-entry(n,c)
 nsFlowMapExplicitEntry :: Int -> Ctx -> P (Node, Node)
 nsFlowMapExplicitEntry n c =
-  nsFlowMapImplicitEntry n c <|> ((,) <$> eNode <*> eNode)
+  nsFlowMapImplicitEntry n c <|> do
+    k <- eNode
+    v <- eNode
+    pure (k, v)
 
 -- | ns-flow-map-implicit-entry(n,c)
 nsFlowMapImplicitEntry :: Int -> Ctx -> P (Node, Node)
@@ -1321,7 +1324,7 @@ cLBlockScalar n props = do
         (_, []) -> q
   setPos r
   lTrailComments indent
-  pure $ mkNode e p (toOffset e contentEnd) props (Scalar style value)
+  pure $! mkNode e p (toOffset e contentEnd) props (Scalar style value)
 
 -- | c-b-block-header(t). Return the chomping and the indentation indicator.
 cBBlockHeader :: Int -> P (Chomping, Maybe Int)
@@ -1481,7 +1484,7 @@ lBlockSequence n props = do
   p <- pos
   x <- cLBlockSeqEntry k
   xs <- many $ sIndent k >> cLBlockSeqEntry k
-  pure $ mkNode e p (last (x : xs)).endOffset props (Sequence Block (x : xs))
+  pure $! mkNode e p (last (x : xs)).endOffset props (Sequence Block (x : xs))
 
 -- | c-l-block-seq-entry(n)
 cLBlockSeqEntry :: Int -> P Node
@@ -1528,7 +1531,7 @@ nsLCompactSequence n = do
   p <- pos
   x <- cLBlockSeqEntry n
   xs <- many $ sIndent n >> cLBlockSeqEntry n
-  pure $ mkNode e p (last (x : xs)).endOffset noProps (Sequence Block (x : xs))
+  pure $! mkNode e p (last (x : xs)).endOffset noProps (Sequence Block (x : xs))
 
 -- | l+block-mapping(n)
 lBlockMapping :: Int -> Props -> P Node
@@ -1540,7 +1543,7 @@ lBlockMapping n props = do
   p <- pos
   x <- nsLBlockMapEntry k
   xs <- many $ sIndent k >> nsLBlockMapEntry k
-  pure $ mkNode e p (snd (last (x : xs))).endOffset props (Mapping Block (x : xs))
+  pure $! mkNode e p (snd (last (x : xs))).endOffset props (Mapping Block (x : xs))
 
 -- | ns-l-block-map-entry(n)
 nsLBlockMapEntry :: Int -> P (Node, Node)
@@ -1553,13 +1556,13 @@ cLBlockMapExplicitEntry n = do
   w <- peek
   guardP . not $ isNsChar w
   k <- sLBlockIndented n BlockOut
-  v <- lBlockMapExplicitValue <|> pure (missingValue k)
+  v <- lBlockMapExplicitValue <|> (pure $! missingValue k)
   pure (k, v)
   where
     -- The key took the comments and the empty lines below it, so the position
     -- of the parser is after them. A value there would take them.
     missingValue :: Node -> Node
-    missingValue k = Node k.endOffset k.endOffset noProps noComments (Scalar Plain T.empty)
+    missingValue k = Node k.endOffset k.endOffset noProps noComments emptyContent
 
     lBlockMapExplicitValue :: P Node
     lBlockMapExplicitValue = do
@@ -1594,7 +1597,7 @@ nsLCompactMapping n = do
   p <- pos
   x <- nsLBlockMapEntry n
   xs <- many $ sIndent n >> nsLBlockMapEntry n
-  pure $ mkNode e p (snd (last (x : xs))).endOffset noProps (Mapping Block (x : xs))
+  pure $! mkNode e p (snd (last (x : xs))).endOffset noProps (Mapping Block (x : xs))
 
 ----------------------------------------
 -- Block nodes
@@ -1660,6 +1663,16 @@ sLBlockCollection n c = do
     oneProperty =
       (Props Nothing <$> cNsTagProperty)
         <|> ((\a -> Props (Just a) NoTag) <$> cNsAnchorProperty)
+
+-- | The content of an empty node.
+emptyContent :: Content
+emptyContent = Scalar Plain T.empty
+-- Without the pragma, GHC sees a constructor, takes a node with this content
+-- for a value and drops the '$!' that builds it. The node must still wait for
+-- the evaluation of 'T.empty', so the parser returned it as a thunk, e.g. the
+-- value of "a:" above another key. The heap check of the render tests finds
+-- this thunk without the pragma.
+{-# NOINLINE emptyContent #-}
 
 -- | A node without comments from the given index to the given offset.
 mkNode :: Env -> Int -> Offset -> Props -> Content -> Node
