@@ -3,16 +3,20 @@
 --
 -- A 'Value' has t'Yamlet.Decode.FromYaml' and t'Yamlet.Encode.ToYaml'
 -- instances, e.g. to read a document whose structure a program does not
--- know.
+-- know:
 --
--- An alias becomes a copy of the value that it refers to. Thus a small input
--- with many aliases can give a large value. To prevent this, the decoder
--- limits the aliases. They can add 100000 nodes to a document, or as many
--- nodes as the document has if that is more. A document beyond the limit is
--- an error.
+-- >>> decodeText @Value "!point {x: 1, y: 2.5}\n"
+-- Right (Tagged "!point" (Mapping [(String "x",Int 1),(String "y",Float (Finite 2.5))]))
 --
--- >>> decodeText @Value "base: &b [1, 2.5]\ncopy: *b\npoint: !point {x: 1}\n"
--- Right (Mapping [(String "base",Sequence [Int 1,Float (Finite 2.5)]),(String "copy",Sequence [Int 1,Float (Finite 2.5)]),(String "point",Tagged "!point" (Mapping [(String "x",Int 1)]))])
+-- An alias becomes a copy of the value that it refers to:
+--
+-- >>> decodeText @Value "base: &b [1, 2]\ncopy: *b\n"
+-- Right (Mapping [(String "base",Sequence [Int 1,Int 2]),(String "copy",Sequence [Int 1,Int 2])])
+--
+-- A small input with many aliases can give a large value. To prevent this,
+-- the decoder limits the aliases. They can add 100000 nodes to a document, or
+-- as many nodes as the document has if that is more. A document beyond the
+-- limit is an error.
 module Yamlet.Value
   ( -- * Values
     Value (..)

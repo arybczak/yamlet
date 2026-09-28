@@ -113,7 +113,7 @@ import Yamlet.Value
 -- >>> decode @(Maybe Int) ""
 -- Right Nothing
 --
--- >>> either (mapM_ (putStrLn . prettyError "input.yaml")) print (decode @[Int] "- 1\n- x\n- true\n")
+-- >>> either printErrors print (decode @[Int] "- 1\n- x\n- true\n")
 -- input.yaml:2:3: [1]: expected an integer, but got a string
 --   |
 -- 2 | - x
@@ -136,8 +136,8 @@ decodeAll bs = single (decodeInput bs) >>= decodeAllText
 -- | Decode a stream with one document. An empty stream is null. The errors
 -- are as for 'decode'.
 --
--- >>> decodeText @Value "name: app\nports: [80, 443]\nenabled: yes\n"
--- Right (Mapping [(String "name",String "app"),(String "ports",Sequence [Int 80,Int 443]),(String "enabled",String "yes")])
+-- >>> decodeText @Value "ports: [80, 443]\nenabled: yes\n"
+-- Right (Mapping [(String "ports",Sequence [Int 80,Int 443]),(String "enabled",String "yes")])
 decodeText :: FromYaml a => T.Text -> Either (NE.NonEmpty Error) a
 decodeText = fmap fst . decodeWithDocument
 
@@ -254,3 +254,4 @@ encodeAllText = renderDocuments . map toYaml
 
 -- $setup
 -- >>> import Data.Text.IO qualified as T
+-- >>> printErrors = mapM_ (putStrLn . prettyError "input.yaml")

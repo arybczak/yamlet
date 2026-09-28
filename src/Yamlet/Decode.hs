@@ -250,14 +250,15 @@ mismatchMessage expected n = "expected " ++ expected ++ ", but got " ++ describe
 nullNode :: S.Node
 nullNode = S.Node S.noOffset S.noOffset S.noProps S.noComments (S.Scalar S.Plain "")
 
--- | Run the second parser if the first one fails. The error of the second one
--- wins, e.g.
+-- | Run the second parser if the first one fails. A port can be a number or
+-- a name:
 --
 -- >>> :{
 -- newtype Port = Port (Either Integer T.Text)
 --   deriving stock (Show)
 -- instance FromYaml Port where
---   parseYaml n = Port <$> ((Left <$> withInt pure n) `orElse` (Right <$> withText pure n))
+--   parseYaml n =
+--     Port <$> ((Left <$> withInt pure n) `orElse` (Right <$> withText pure n))
 -- :}
 --
 -- >>> decodeText @Port "8080"
@@ -265,6 +266,14 @@ nullNode = S.Node S.noOffset S.noOffset S.noProps S.noComments (S.Scalar S.Plain
 --
 -- >>> decodeText @Port "http"
 -- Right (Port (Right "http"))
+--
+-- If both parsers fail, the result has only the errors of the second one:
+--
+-- >>> either printErrors print (decodeText @Port "[80]")
+-- input.yaml:1:1: expected a string, but got a list
+--   |
+-- 1 | [80]
+--   | ^
 orElse :: Parser a -> Parser a -> Parser a
 orElse (Parser g) (Parser h) = Parser $ \off -> case g off of
   r@(Result NoErrors _) -> r
@@ -637,16 +646,16 @@ closeName known t = suggestion (T.unpack t)
 --
 -- The decoder reports the errors of all fields together:
 --
--- >>> either (mapM_ (putStrLn . prettyError "server.yaml")) print (decodeText @Server "hots: example.com\nport: http\n")
--- server.yaml:1:1: unknown key "hots", did you mean "host"?
+-- >>> either printErrors print (decodeText @Server "hots: example.com\nport: http\n")
+-- input.yaml:1:1: unknown key "hots", did you mean "host"?
 --   |
 -- 1 | hots: example.com
 --   | ^
--- server.yaml:1:1: missing key "host"
+-- input.yaml:1:1: missing key "host"
 --   |
 -- 1 | hots: example.com
 --   | ^
--- server.yaml:2:7: port: expected an integer, but got a string
+-- input.yaml:2:7: port: expected an integer, but got a string
 --   |
 -- 2 | port: http
 --   |       ^
@@ -921,7 +930,7 @@ instance FromYaml a => FromYaml (Maybe a) where
 -- >>> decodeText @(M.Map Int T.Text) "404: not found\n"
 -- Right (fromList [(404,"not found")])
 --
--- >>> either (mapM_ (putStrLn . prettyError "input.yaml")) print (decodeText @(M.Map T.Text T.Text) "404: not found\n")
+-- >>> either printErrors print (decodeText @(M.Map T.Text T.Text) "404: not found\n")
 -- input.yaml:1:1: expected a string, but got an integer, quote the value, e.g. '404'
 --   |
 -- 1 | 404: not found
@@ -1508,3 +1517,4 @@ instance FromYaml a => GFromFields (S1 (MetaSel Nothing u s d) (Rec0 a)) where
 
 -- $setup
 -- >>> import Yamlet
+-- >>> printErrors = mapM_ (putStrLn . prettyError "input.yaml")

@@ -14,7 +14,11 @@
 --
 -- >>> input = "# The server.\nhost: localhost # only local\n\nports: [80, 443]\n"
 --
--- >>> either print (T.putStr . renderSyntax defaultRenderOptions) (parseDocumentsText input)
+-- >>> :{
+-- case parseDocumentsText input of
+--   Left err -> putStrLn (prettyError "input.yaml" err)
+--   Right docs -> T.putStr (renderSyntax defaultRenderOptions docs)
+-- :}
 -- # The server.
 -- host: localhost # only local
 -- <BLANKLINE>

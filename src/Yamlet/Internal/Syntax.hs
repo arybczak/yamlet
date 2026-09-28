@@ -188,7 +188,10 @@ noComments = Comments [] Nothing []
 --
 -- >>> input = "# The port.\nport: 80 # the default\n"
 --
--- >>> either print (T.putStr . encodeText . M.map (fmap (+ 1))) (decodeText @(M.Map T.Text (Commented Int)) input)
+-- >>> :{
+-- either printErrors (T.putStr . encodeText . M.map (fmap (+ 1))) $
+--   decodeText @(M.Map T.Text (Commented Int)) input
+-- :}
 -- # The port.
 -- port: 81 # the default
 data Commented a = Commented
@@ -217,10 +220,10 @@ data Commented a = Commented
 --           | p <- concat (M.elems config)
 --           , "/" `T.isPrefixOf` p.value
 --           ]
---     in mapM_ (putStrLn . prettyError "config.yaml") (documentErrors input doc errs)
---   Left errs -> mapM_ (putStrLn . prettyError "config.yaml") errs
+--     in printErrors (documentErrors input doc errs)
+--   Left errs -> printErrors errs
 -- :}
--- config.yaml:3:3: paths[1]: the path is outside the repository
+-- input.yaml:3:3: paths[1]: the path is outside the repository
 --   |
 -- 3 | - /etc
 --   |   ^
@@ -316,3 +319,4 @@ copyComments c = case c of
 -- >>> import Data.Map.Strict qualified as M
 -- >>> import Data.Text.IO qualified as T
 -- >>> import Yamlet
+-- >>> printErrors = mapM_ (putStrLn . prettyError "input.yaml")

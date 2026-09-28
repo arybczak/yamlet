@@ -58,7 +58,14 @@ defaultRenderOptions =
 -- An anchor name with a character that YAML does not allow in it, e.g. a
 -- space, becomes a new name in the anchor and in its aliases.
 --
--- >>> either print (T.putStr . renderSyntax defaultRenderOptions {forceBlock = True}) (parseDocumentsText "a: [1, {b: 2}]\n")
+-- With 'forceBlock', the flow collections become block collections:
+--
+-- >>> :{
+-- case parseDocumentsText "a: [1, {b: 2}]\n" of
+--   Left err -> putStrLn (prettyError "input.yaml" err)
+--   Right docs ->
+--     T.putStr (renderSyntax defaultRenderOptions {forceBlock = True} docs)
+-- :}
 -- a:
 -- - 1
 -- - b: 2
@@ -570,4 +577,5 @@ printable = T.map $ \c -> if c == '\t' || c == '\n' || c == '\r' || isPrintable 
 
 -- $setup
 -- >>> import Data.Text.IO qualified as T
+-- >>> import Yamlet.Error
 -- >>> import Yamlet.Syntax

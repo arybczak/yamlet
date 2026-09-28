@@ -75,14 +75,14 @@ data Location = Location
 -- end with a line break. If the line is longer than 80 characters, the
 -- excerpt shows only the 80 characters around the column.
 --
--- >>> either (mapM_ (putStrLn . prettyError "config.yaml")) print (decodeText @(M.Map T.Text [[Int]]) "jobs:\n  - [1]\n  - 42\n")
--- config.yaml:3:5: jobs[1]: expected a list, but got an integer
+-- >>> either printErrors print (decodeText @(M.Map T.Text [[Int]]) "jobs:\n  - [1]\n  - 42\n")
+-- input.yaml:3:5: jobs[1]: expected a list, but got an integer
 --   |
 -- 3 |   - 42
 --   |     ^
 --
 -- An error with no position gives only the file and the message, e.g.
--- @config.yaml: duplicate key \"a\"@.
+-- @input.yaml: duplicate key \"a\"@.
 prettyError :: FilePath -> Error -> String
 prettyError file err
   | err.location.line == 0 = file ++ ": " ++ message
@@ -388,3 +388,4 @@ lineAt (T.Text arr base len) (Offset off0) = T.Text arr start (stop - start)
 
 -- $setup
 -- >>> import Yamlet
+-- >>> printErrors = mapM_ (putStrLn . prettyError "input.yaml")
