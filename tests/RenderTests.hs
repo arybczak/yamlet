@@ -571,6 +571,22 @@ test_movedComments = do
     "comment on a block root"
     "--- # c\na: 1\n"
     (render (withInline "c" (mappingNode [(plainNode "a", plainNode "1")])))
+  let rootWithLines = withBefore "r" (mappingNode [(plainNode "a", plainNode "1")])
+  assertEqual "lines of a block root without an empty line" "# r\n\na: 1\n" (render rootWithLines)
+  assertEqual
+    "lines of a block root read back"
+    (Right [[Comment "r", EmptyLine]])
+    (map (\d -> d.root.comments.before) <$> parseDocumentsText (render rootWithLines))
+  assertEqual
+    "comment on a block root below the comment of the marker"
+    "--- # d\n# c\n\na: 1\n"
+    ( renderSyntax
+        defaultRenderOptions
+        [ (document (withInline "c" (mappingNode [(plainNode "a", plainNode "1")])))
+            { docComments = noComments {inline = Just "d"}
+            }
+        ]
+    )
   let withAfter :: T.Text -> Node -> Node
       withAfter t n = n {comments = n.comments {after = [Comment t]}}
       list :: Node -> Node

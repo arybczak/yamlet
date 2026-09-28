@@ -469,11 +469,18 @@ test_commentedKeys = do
     (Right "# one\na: 1\nb: 2 # two\n")
     (encodeText <$> decodeText @(M.Map T.Text (Commented Int)) "# one\na: 1\nb: 2 # two\n")
   -- The parser gives the lines before the marker and at the end to the
-  -- document, and the decoder gives them to the root.
+  -- document, and the decoder gives them to the root. The renderer separates
+  -- the lines of a block root from its first entry, so that they read back
+  -- as the lines of the root.
+  let top = "# top\n\na: 1\n# end\n"
   assertEqual
     "comments of the document"
-    (Right "# top\na: 1\n# end\n")
+    (Right top)
     (encodeText <$> decodeText @(Commented (M.Map T.Text Int)) "# top\n---\na: 1\n# end\n")
+  assertEqual
+    "comments of the document read back"
+    (Right top)
+    (encodeText <$> decodeText @(Commented (M.Map T.Text Int)) top)
   let either_ = "# The name.\nLeft: foo # current\n"
   assertEqual
     "key of an either"

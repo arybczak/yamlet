@@ -204,7 +204,10 @@
 -- one.
 --
 -- Two places are exceptions. Above the first entry of a block collection,
--- the last empty line stays with the collection. At the end of a block
+-- the last empty line stays with the collection. If the lines of a block
+-- collection root do not end with an empty line, e.g. lines that a program
+-- added, the renderer writes one below them, so that they read back as the
+-- lines of the collection. At the end of a block
 -- collection root, an empty line separates the collection from the end of
 -- the document, and it belongs to neither.
 --

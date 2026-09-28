@@ -253,10 +253,19 @@ document opts afterEnd doc =
     body
       | isBlock opts r =
           (if marker then "---" <> comment markerComment <> "\n" else mempty)
-            <> lines_ 0 (rootLines ++ (if isJust (props r) then firstLines opts r else []))
+            <> lines_ 0 (separated rootLines ++ (if isJust (props r) then firstLines opts r else []))
             <> maybe mempty (<> "\n") (props r)
             <> block opts 0 0 True (isJust (props r)) r
       | otherwise = scalarBody <> linesBelow 0 r
+
+    -- The parser gives the lines directly above the first entry of a block
+    -- collection to the entry, so the lines of the collection end with an
+    -- empty line.
+    separated :: [Line] -> [Line]
+    separated ls = case reverse ls of
+      [] -> []
+      EmptyLine : _ -> ls
+      _ -> ls ++ [EmptyLine]
 
     scalarBody :: B.Builder
     scalarBody
