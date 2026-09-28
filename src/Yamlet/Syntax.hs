@@ -178,7 +178,9 @@
 --
 --     A comment before the directives or the @---@ marker belongs to the
 --     document if it is at the start of the stream or after a @...@ marker.
---     Otherwise it belongs to the end of the document above it.
+--     Otherwise it belongs to the end of the document above it. The renderer
+--     writes a @---@ marker below the comments of a document, so that they
+--     read back as the document's.
 --
 --     A comment on the line of a @...@ marker or below it belongs to the end
 --     of the document. A comment with no node below it also belongs there,

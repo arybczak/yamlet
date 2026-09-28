@@ -233,13 +233,15 @@ document opts afterEnd doc =
 
     -- A document needs a start marker after another document, after
     -- directives, for a comment on the marker line, and if it is empty. A
-    -- block collection has no line of its own for its comment.
+    -- block collection has no line of its own for its comment. Without the
+    -- marker, the lines above a document read back as the root's.
     marker :: Bool
     marker =
       doc.explicitStart
         || directives
         || not afterEnd
         || isEmpty r
+        || not (null doc.docComments.before)
         || isJust doc.docComments.inline
         || (isBlock opts r && isJust r.comments.inline)
 
