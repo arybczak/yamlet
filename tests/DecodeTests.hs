@@ -1311,6 +1311,9 @@ test_errorPaths = do
     "path elements"
     (Left [CollectionKey, Index 1])
     (first ((.path) . NE.head) (decodeText @(M.Map [Int] [Int]) "? [1, 2]\n: [3, y]\n"))
+  check "empty value at the end of its key" (Right "a") $ decodeText @(M.Map T.Text Int) "{a}"
+  check "empty value at the end of an explicit key" (Right "a") $ decodeText @(M.Map T.Text Int) "? a"
+  check "empty key" (Right "") $ decodeText @(M.Map Int Int) ": 1\n"
   check "duplicate key" (Right "a") $ decodeText @Value "a:\n  b: 1\n  b: 2\n"
   check "root" (Right "") $ decodeText @Int "x"
   let key = S.plainNode "a"

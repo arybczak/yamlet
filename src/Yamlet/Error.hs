@@ -248,10 +248,17 @@ nodePaths offs root = map (\off -> M.findWithDefault [] off found) offs
     -- Every node of a key has the path of the mapping. An index or a key
     -- inside the key would read as a step into the mapping.
     key :: Set.Set Offset -> [PathElement] -> Node -> M.Map Offset [PathElement] -> M.Map Offset [PathElement]
-    key wanted rpath k acc = Set.foldl' (\a off -> M.insertWith (\_ old -> old) off path a) acc (within k wanted)
+    key wanted rpath k acc = Set.foldl' (\a off -> M.insertWith (\_ old -> old) off path a) acc offsets
       where
         path :: [PathElement]
         path = reverse rpath
+
+        -- A value can start at the end of its key, e.g. the empty value in
+        -- "{a}", so the end is not a node of the key, unless the key is empty.
+        offsets :: Set.Set Offset
+        offsets =
+          Set.takeWhileAntitone (\o -> o < k.endOffset || o == k.offset) $
+            Set.dropWhileAntitone (< k.offset) wanted
 
     within :: Node -> Set.Set Offset -> Set.Set Offset
     within n = Set.takeWhileAntitone (<= n.endOffset) . Set.dropWhileAntitone (< n.offset)
