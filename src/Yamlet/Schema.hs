@@ -8,6 +8,7 @@ module Yamlet.Schema
   , resolveTagged
   , isPlainString
   , isPlainSafe
+  , isPlainPortable
   ) where
 
 import Yamlet.Internal.Schema

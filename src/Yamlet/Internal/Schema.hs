@@ -11,6 +11,7 @@ module Yamlet.Internal.Schema
   , resolveTaggedExact
   , isPlainString
   , isPlainSafe
+  , isPlainPortable
   , isYaml11Bool
   , isYaml11NonString
   , maxExponent
@@ -93,6 +94,15 @@ isPlainString t = case resolvePlain t of
 -- [True,False,False,False,False]
 isPlainSafe :: T.Text -> Bool
 isPlainSafe t = plainSyntax False t && isPlainString t
+
+-- | As 'isPlainSafe', and common YAML 1.1 parsers also read the plain scalar
+-- as a string, e.g. not @yes@ as a boolean or @12:30@ as a number. The
+-- encoder writes a string without quotes only if it passes this check.
+--
+-- >>> map isPlainPortable ["a:b", "yes", "12:30", "2024-01-01", "9.10.3"]
+-- [True,False,False,False,True]
+isPlainPortable :: T.Text -> Bool
+isPlainPortable t = isPlainSafe t && not (isYaml11NonString t)
 
 isNull :: T.Text -> Bool
 isNull t = T.null t || t == "~" || t == "null" || t == "Null" || t == "NULL"
