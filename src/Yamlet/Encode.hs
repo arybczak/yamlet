@@ -177,10 +177,27 @@ instance ToYaml Float where toYaml = scalar . Float . floatToFloatValue
 instance ToYaml Sci.Scientific where toYaml = scalar . Float . Finite
 
 instance ToYaml Day where toYaml = timestamp buildDay
-instance ToYaml TimeOfDay where toYaml = iso8601 buildTimeOfDay
-instance ToYaml LocalTime where toYaml = timestamp buildLocalTime
-instance ToYaml ZonedTime where toYaml = timestamp buildZonedTime
-instance ToYaml UTCTime where toYaml = timestamp buildUTCTime
+instance ToYaml TimeOfDay where toYaml = iso8601 timeOfDay
+instance ToYaml LocalTime where toYaml = timestamp localTime
+instance ToYaml ZonedTime where toYaml = timestamp (\(ZonedTime t z) -> localTime t <> buildTimeZone z)
+instance ToYaml UTCTime where toYaml = timestamp (\(UTCTime d s) -> localTime (LocalTime d (timeToTimeOfDay s)) <> "Z")
+
+-- | The time of day without the trailing zeros of the fraction, e.g.
+-- @12:30:15.5@, as in aeson. text-iso8601 writes the fraction in groups of
+-- three digits.
+timeOfDay :: TimeOfDay -> TLB.Builder
+timeOfDay (TimeOfDay h m (MkFixed ps)) = buildTimeOfDay (TimeOfDay h m (MkFixed (ps - frac))) <> fraction
+  where
+    frac :: Integer
+    frac = ps `rem` (10 ^ picoDecimals)
+
+    fraction :: TLB.Builder
+    fraction
+      | frac == 0 = mempty
+      | otherwise = "." <> TLB.fromText (T.dropWhileEnd (== '0') (T.justifyRight picoDecimals '0' (T.pack (show frac))))
+
+localTime :: LocalTime -> TLB.Builder
+localTime (LocalTime d t) = buildDay d <> "T" <> timeOfDay t
 
 -- | A number of seconds.
 instance ToYaml NominalDiffTime where
