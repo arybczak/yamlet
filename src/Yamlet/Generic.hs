@@ -106,22 +106,23 @@
 --
 -- = Shapes
 --
--- Every constructor has no fields, one field without a name, or named
+-- Every constructor must have no fields, one field without a name, or named
 -- fields. A type with several constructors cannot mix named fields with a
 -- field without a name, but a constructor without fields fits with both.
 -- 'SingleField' allows the mix, because each constructor has its own value.
--- 'TaggedFlat' needs constructors with a field without a name. Another
--- type is a compile error that names the constructors, e.g. for a
+-- 'TaggedFlat' needs constructors with a field without a name.
+--
+-- Another shape is a compile error that names the constructors, e.g. a
 -- constructor with several fields without names. Give such fields names, or
 -- put them in a tuple.
 --
 -- = Missing keys
 --
 -- A missing field takes its value from the 'yamlDefault' of the type that
--- has the field, if that type has a default. Otherwise it decodes like a
--- field with the value null, and so does a missing contents key. Thus a
--- field of type 'Maybe' is optional, and a missing field of another type is
--- an error, also if the type of the field has a default.
+-- has the field, if that type has a default. Otherwise the field decodes as
+-- if its value is null. A missing contents key does the same. Thus a field
+-- of type 'Maybe' is optional, and a missing field of another type is an
+-- error, also if the type of the field has a default.
 --
 -- A type with a default configuration derives the decoder like this:
 --
@@ -141,15 +142,14 @@
 --
 -- A present key that holds a mapping takes the missing keys of that mapping
 -- from the default of its own type, not from the outer default. The same
--- holds with 'TaggedFlat': the keys of a field without a name are next to
--- the tag, but they belong to the field. The outer default
--- applies to such a field only if the constructor has no keys besides the
--- tag.
+-- holds with 'TaggedFlat'. The keys of a field without a name are next to
+-- the tag, but they belong to the field. The outer default applies to such a
+-- field only if the constructor has no keys besides the tag.
 --
--- An explicit null is no missing key, so it goes to the decoder of the
--- field, e.g. @proxy: null@ gives 'Nothing' for a field of type 'Maybe'. So
--- does @proxy:@ without a value. An empty document is null too, so a type
--- with a default does not decode from it.
+-- An explicit null is not a missing key, so it goes to the decoder of the
+-- field. E.g. @proxy: null@ gives 'Nothing' for a field of type 'Maybe', and
+-- @proxy:@ without a value gives 'Nothing' too. An empty document is also
+-- null, so a type with a default does not decode from it.
 module Yamlet.Generic
   ( YamlOptions (..)
   , defaultYamlOptions

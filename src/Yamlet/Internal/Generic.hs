@@ -65,7 +65,7 @@ data YamlOptions = YamlOptions
   -- from the default, so e.g. a field 'Nothing' with the default @Just 1@
   -- would read back as @Just 1@.
   , rejectUnknownFields :: Bool
-  -- ^ Reject a key that is no field of the constructor. Off by default.
+  -- ^ Reject a key that is not a field of the constructor. Off by default.
   }
   deriving stock (Generic)
 
@@ -116,7 +116,7 @@ data SumEncodingKind
     -- mapping is an error. 'Yamlet.Generic.rejectUnknownFields' applies to
     -- the named fields in the value.
     --
-    -- The key of a constructor with named fields is no field, so its
+    -- The key of a constructor with named fields is not a field, so its
     -- comments are lost. The key of a field without a name goes to the
     -- field, e.g. for a 'Yamlet.Commented' value.
     SingleField

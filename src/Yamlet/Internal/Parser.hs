@@ -1064,8 +1064,8 @@ closing c start w kind msg = do
       | otherwise -> throwAt p (fromMaybe msg (mistake e True p))
   where
     -- The separation after an entry goes on to the next line if the
-    -- collection can continue there. So a stop at the end of a line means
-    -- that the document ends or that the next line is indented too little.
+    -- collection can continue there. If it stops at the end of a line, the
+    -- document ends or the next line is indented too little.
     atLineEnd :: Env -> Int -> Bool
     atLineEnd e i
       | i >= e.end = True
@@ -1099,11 +1099,11 @@ closing c start w kind msg = do
 
 -- | ns-flow-seq-entry(n,c)
 --
--- The grammar tries a JSON-like node as the key of a pair and then again as
--- a node, which takes exponential time for nested flow sequences. So the
--- parser reads the node once, and a JSON-like node becomes a key if it fits
--- one and a colon follows. The node is read once even if it fails, as it can
--- in a key.
+-- The grammar reads a JSON-like node first as the key of a pair and then
+-- again as a node. For nested flow sequences, this takes exponential time.
+-- The parser reads the node only once, as a node. The node becomes a key if
+-- it is on one line, it is not too long for an implicit key, and a colon
+-- follows. Otherwise it stays a node, and the parser does not read it again.
 nsFlowSeqEntry :: Int -> Ctx -> P Node
 nsFlowSeqEntry n c = do
   e <- env

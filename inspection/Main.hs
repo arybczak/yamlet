@@ -191,9 +191,9 @@ data Config = Config {paths :: [T.Text], jobs :: Int, verbose :: Maybe Bool}
   deriving stock (Generic)
   deriving anyclass (FromYaml, ToYaml)
 
+-- The option is on, so that the check of the encoder covers the default too.
 -- The encoder uses the default only with 'omitNullFields', to decide if it
--- can leave out a null field. So the option makes the check of the encoder
--- cover the default too.
+-- can leave out a null field.
 instance GenericYaml Config where
   yamlOptions = defaultYamlOptions {omitNullFields = True}
   yamlDefault = Just (Config ["."] 1 Nothing)

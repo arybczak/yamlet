@@ -61,19 +61,19 @@ The decoder is safe to use on untrusted input. The time to decode a
 document is close to linear in its size, and the memory is linear in its
 size.
 
-A decoded value is never much larger than its text. So the library limits
-the two parts of the syntax that let a short text stand for a large value,
-aliases and exponents:
+A decoded value is never much larger than its text. Two parts of the syntax
+can let a short text stand for a large value: aliases and exponents. The
+library limits both:
 
-- The aliases of a document can add at most 100000 nodes. For a document
-  with more than 100000 nodes, they can add as many nodes as the document
-  has. A document beyond the limit is an error. So a small document with
-  aliases to aliases cannot expand to billions of nodes.
-- The exponent of a float can make its value at most 1000 digits larger
-  than its text. So `1e999999999` is an error, and a program cannot convert
-  it to an integer with a billion digits. The instances for `Fixed` and the
-  durations apply the same limit with `withBoundedScientific`. Use it in your
-  own instances for exact types too.
+- A small document with aliases to aliases can expand to billions of nodes.
+  To prevent this, the aliases of a document can add at most 100000 nodes.
+  For a document with more than 100000 nodes, they can add as many nodes as
+  the document has. A document beyond the limit is an error.
+- A program that converts `1e999999999` to an integer gets a billion digits.
+  To prevent this, the exponent of a float can make its value at most 1000
+  digits larger than its text. A float beyond the limit is an error. The
+  instances for `Fixed` and the durations apply the same limit with
+  `withBoundedScientific`. Use it in your own instances for exact types too.
 
 The library also applies these rules:
 

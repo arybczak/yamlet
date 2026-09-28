@@ -97,28 +97,30 @@ import Yamlet.Value
 --
 -- The applicative operators collect the errors of both parts: '<*>', '*>',
 -- '<*', 'liftA2', and the functions that use them, e.g. 'traverse',
--- 'mapM' on a list and 'Data.Foldable.for_'. Thus all errors of
+-- 'mapM' on a list and 'Data.Foldable.for_'. This parser gives the errors of
+-- the unknown keys and of all fields together:
 --
 -- @
 -- rejectUnknownKeys [\"name\", \"paths\"] o
 --   *> (Config \<$> o .: \"name\" \<*> o .: \"paths\")
 -- @
 --
--- come back together. '>>=' and '>>' stop at the first error, and so does a
--- statement of a @do@ block, e.g. after the check above. The functions that
--- use '>>' also stop, e.g. 'Control.Monad.mapM_' and 'Control.Monad.forM_'.
+-- '>>=' and '>>' stop at the first error. A statement of a @do@ block also
+-- stops, e.g. the check of the port above. The functions that use '>>' also
+-- stop, e.g. 'Control.Monad.mapM_' and 'Control.Monad.forM_'.
 --
--- The choice changes only the errors, never the result. With
+-- The operator changes only the errors, never the result. With
 -- @ApplicativeDo@, GHC turns the independent statements of a @do@ block that
--- ends with 'pure' into '<*>', so they collect errors.
+-- ends with 'pure' into '<*>'. Then they collect errors.
 newtype Parser a = Parser (S.Offset -> Result a)
 
 -- | The errors of a parser and its value. The value of a parser with errors
 -- is 'failed'.
 --
--- '<*>' joins the errors of both parts and applies the values without a
--- branch on the errors. So the optimizer can combine the values of a derived
--- decoder as for a pure function, and the generic representation goes away.
+-- '<*>' applies the values without a branch on the errors, and it joins the
+-- errors apart from them. The optimizer can then combine the values of a
+-- derived decoder as for a pure function, and the generic representation
+-- goes away.
 data Result a = Result !Errors a
 
 -- | The errors of a parser in a tree, so that two sets of errors join in
@@ -172,9 +174,9 @@ instance Applicative Parser where
     Result e1 h -> case g off of
       Result e2 a -> Result (bothErrors e1 e2) (h a)
 
--- '>>' keeps its default, which uses '>>='. So a statement of a @do@ block
--- does not run after a failed check, e.g. an index into a list after the
--- check of its length.
+-- A statement of a @do@ block must not run after a failed check, e.g. an
+-- index into a list after the check of its length. The default of '>>' uses
+-- '>>=', which stops there.
 instance Monad Parser where
   Parser g >>= k = Parser $ \off -> case g off of
     Result NoErrors a -> let Parser h = k a in h off
@@ -183,13 +185,14 @@ instance Monad Parser where
 instance MonadFail Parser where
   fail msg = Parser $ \off -> failure off msg
 
--- | Run a parser on a node. Return each error as the offset of the node that
--- caused it with the error message, in the order of the offsets. A note on
+-- | Run a parser on a node. Each error is the offset of the node that caused
+-- it and the message. The errors are in the order of the offsets. A note on
 -- an error comes right after it, e.g. the first key of a duplicate key.
 --
--- The node first goes through the checks of 'Yamlet.decodeDocument', e.g.
--- for duplicate keys, and its aliases are replaced with the nodes that they
--- refer to. A failed check is the only error, with its notes.
+-- First, the function makes the checks of 'Yamlet.decodeDocument' on the
+-- node, e.g. for duplicate keys. It also replaces each alias with the node
+-- that the alias refers to. If a check fails, the result has only the error
+-- of that check, with its notes.
 runParser :: (S.Node -> Parser a) -> S.Node -> Either (NE.NonEmpty (S.Offset, String)) a
 runParser f n0 = case prepare n0 of
   Left err -> Left err
@@ -334,9 +337,9 @@ withBoundedScientific f = withScientific $ \s ->
            fail exponentOutOfRange
        | otherwise -> f s
 
--- | The text is a copy, so it does not keep the input alive. For a plain
--- scalar that YAML reads as a number or a boolean, e.g. @3.10@, the error
--- suggests quotes.
+-- | The text of a string. The text is a copy, so it does not keep the input
+-- alive. For a plain scalar that YAML reads as a number or a boolean, e.g.
+-- @3.10@, the error suggests quotes.
 withText :: (T.Text -> Parser a) -> S.Node -> Parser a
 withText f = parseNode $ \n -> case view n of
   StringView t -> f (T.copy t)
@@ -416,11 +419,12 @@ withoutComments n = S.Node n.offset n.endOffset n.props S.noComments n.content
 -- not matter, so two string keys with the same text are an error, e.g. @a@
 -- and @!foo a@.
 --
--- The lines above the mapping go to its first key, and so does the comment
--- on its first line as a line, e.g. after its tag. The parser gives a
--- mapping the lines up to the last empty line above its first key, e.g. a
--- comment at the top of a file, but a record has no place for them, and
--- 'Yamlet.Commented' on the first field keeps them.
+-- The lines above the mapping go to its first key. The comment on the first
+-- line of the mapping, e.g. after its tag, goes there too as a line.
+--
+-- The parser gives a mapping the lines up to the last empty line above its
+-- first key, e.g. a comment at the top of a file. A record has no place for
+-- these lines, but 'Yamlet.Commented' on its first field keeps them.
 withMapping :: (Object -> Parser a) -> S.Node -> Parser a
 withMapping f = parseNode $ \n -> case n.content of
   S.Mapping _ kvs -> mkObject n (keyEntries n kvs) >>= f
@@ -1263,11 +1267,11 @@ genericParseYaml n =
   in enc `seq` gParseYaml (yamlOptions @a) enc (from <$> yamlDefault @a) to n
 {-# INLINE genericParseYaml #-}
 
--- The decoders of the constructors take a continuation, which starts as
--- 'to' and grows by 'M1', 'L1' or 'R1' at each level of the sum. So each
--- constructor applies 'to' to its own representation, e.g.
+-- Each constructor applies 'to' to its own representation, e.g.
 -- @to (M1 (L1 (M1 fields)))@, and the optimizer reduces this to the real
--- constructor in the same place.
+-- constructor in the same place. For this, the decoders of the constructors
+-- take a continuation. It starts as 'to' and grows by 'M1', 'L1' or 'R1' at
+-- each level of the sum.
 --
 -- In the direct style, each constructor returns its representation, the
 -- branches meet in 'mplus', and 'to' comes after them. The optimizer then no

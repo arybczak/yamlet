@@ -1206,7 +1206,7 @@ test_aliasLimit = do
     (errorOf (decodeAllText @Value (copies 2)))
 
 -- | Anchors a0 to ak, where each anchor after a0 has ten aliases to the one
--- before it. So the alias *ak expands to about 10^(k+1) nodes.
+-- before it, and the alias *ak expands to about 10^(k+1) nodes.
 laughs :: Int -> T.Text
 laughs k =
   T.unlines $

@@ -34,7 +34,7 @@ newtype RenderOptions = RenderOptions
   }
   deriving stock (Generic)
 
--- | The collection styles of the tree.
+-- | Keep the collection styles of the tree.
 defaultRenderOptions :: RenderOptions
 defaultRenderOptions =
   RenderOptions
@@ -65,11 +65,12 @@ defaultRenderOptions =
 renderSyntax :: RenderOptions -> [Document] -> T.Text
 renderSyntax opts = emptyLines . B.runBuilder . go True
   where
-    -- The parser reads several empty lines in a row as one, and gives empty
-    -- lines at the start or the end of the output to no node. So they go
-    -- away, but not the empty lines in the content of a block scalar. Only
-    -- the content of a block scalar with the keep indicator ends with an
-    -- empty line.
+    -- Several empty lines in a row become one, and empty lines at the start
+    -- or the end of the output go away. The parser reads the output the
+    -- same way: it reads several empty lines as one, and it gives the lines
+    -- at the start or the end to no node. The empty lines in the content of
+    -- a block scalar stay. Only the content of a block scalar with the keep
+    -- indicator ends with an empty line.
     emptyLines :: T.Text -> T.Text
     emptyLines t
       | T.any (== '\0') t =

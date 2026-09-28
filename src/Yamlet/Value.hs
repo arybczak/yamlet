@@ -3,10 +3,13 @@
 --
 -- A 'Value' has t'Yamlet.Decode.FromYaml' and t'Yamlet.Encode.ToYaml'
 -- instances, e.g. to read a document whose structure a program does not
--- know. An alias becomes a copy of the value that it refers to. So a small
--- input with many aliases can give a large value, and the decoder limits the
--- aliases: they can add 100000 nodes to a document, or as many nodes as the
--- document has if that is more. A document beyond the limit is an error.
+-- know.
+--
+-- An alias becomes a copy of the value that it refers to. Thus a small input
+-- with many aliases can give a large value. To prevent this, the decoder
+-- limits the aliases. They can add 100000 nodes to a document, or as many
+-- nodes as the document has if that is more. A document beyond the limit is
+-- an error.
 --
 -- >>> decodeText @Value "base: &b [1, 2.5]\ncopy: *b\npoint: !point {x: 1}\n"
 -- Right (Mapping [(String "base",Sequence [Int 1,Float (Finite 2.5)]),(String "copy",Sequence [Int 1,Float (Finite 2.5)]),(String "point",Tagged "!point" (Mapping [(String "x",Int 1)]))])
@@ -54,10 +57,10 @@ data Value
     -- e.g. @!point {x: 1}@. A scalar with a tag that the schema does not
     -- know is a 'String' inside, e.g. @!secret abc@.
     --
-    -- The encoder writes the tag. A value in 'Tagged' with its own tag of
-    -- the core schema reads back without 'Tagged'. A value that does not fit
-    -- a tag of the core schema, e.g. a 'String' with 'intTag', does not read
-    -- back.
+    -- The encoder writes the tag. A value with its own tag of the core
+    -- schema reads back without 'Tagged', e.g. @Tagged intTag (Int 1)@ reads
+    -- back as @Int 1@. A value that does not fit a tag of the core schema,
+    -- e.g. a 'String' with 'intTag', does not read back.
     Tagged !T.Text !Value
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (NFData)

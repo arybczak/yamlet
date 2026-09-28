@@ -171,11 +171,12 @@ noComments = Comments [] Nothing []
 -- if the field that holds the mapping is 'Commented', because a record has
 -- no place for the end of its mapping.
 --
--- A type that derives its instances through 'Generic' and has one
--- constructor with one field without a name does not give the key of its
--- entry to the value inside. So in @data Name = Name (Commented Text)@, the
--- comments of the key are lost. Declare such a type as a newtype and derive
--- its instances with @deriving newtype@, which gives the key to the value.
+-- The comments of the key are lost for a type such as
+-- @data Name = Name (Commented Text)@ that derives its instances through
+-- 'Generic'. A derived instance for one constructor with one field without a
+-- name does not give the key of its entry to the value inside. Declare such
+-- a type as a newtype and derive its instances with @deriving newtype@,
+-- which gives the key to the value.
 --
 -- In a map, use 'Commented' on the key or on the value, not on both. With
 -- both, the decoder gives the comments of the key to both, and the encoder
@@ -230,9 +231,10 @@ data Commented a = Commented
 -- offset of the node with the anchor, because each alias is a copy of that
 -- node.
 --
--- The equality and the order compare the values first and then the offsets.
--- So two equal values at different places differ, e.g. a set keeps both. To
--- compare only the values, e.g. in a test, use the field @value@.
+-- Two equal values at different places are not equal as 'Located' values,
+-- e.g. a set keeps both. The equality and the order compare the values first
+-- and then the offsets. To compare only the values, e.g. in a test, use the
+-- field @value@.
 data Located a = Located
   { value :: a
   , offset :: !Offset

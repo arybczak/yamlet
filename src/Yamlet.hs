@@ -103,9 +103,9 @@ import Yamlet.Value
 
 -- | Decode a stream with one document. An empty stream is null.
 --
--- A syntax error, or an error of the checks that 'decodeDocument' describes,
--- is the only error. Otherwise the result has every error of the decoder that
--- 'Parser' collects, in the order of their positions.
+-- If the input has a syntax error or fails a check that 'decodeDocument'
+-- describes, the result has only that error. Otherwise the result has every
+-- error that the 'Parser' collects, in the order of their positions.
 --
 -- >>> decode @[Int] "- 1\n- 2\n"
 -- Right [1,2]
@@ -167,14 +167,18 @@ single = first (NE.:| [])
 -- keep its comments from one parse.
 --
 -- As for a parsed input, the decoder checks the document first. The check
--- fails for a duplicate key, an undefined alias, aliases beyond the limit in
--- "Yamlet.Value", a value that is not valid for its tag or a float whose
--- exponent and value are both beyond the range from -1000 to 1000 in
--- scientific notation.
+-- fails for:
 --
--- The text is the input of the document, for the line in an error. For a
--- document that the program built, the text can be empty. The errors are as
--- for 'decode'.
+-- * a duplicate key,
+-- * an undefined alias,
+-- * aliases beyond the limit in "Yamlet.Value",
+-- * a value that is not valid for its tag,
+-- * a float whose exponent and value are both beyond the range from -1000 to
+--   1000 in scientific notation.
+--
+-- The text is the input of the document. An error takes its line from the
+-- text. For a document that the program built, the text can be empty. The
+-- errors are as for 'decode'.
 decodeDocument :: FromYaml a => T.Text -> S.Document -> Either (NE.NonEmpty Error) a
 decodeDocument = convert
 

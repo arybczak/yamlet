@@ -24,10 +24,12 @@
 --
 -- The parser gives each comment to one node or document, and the renderer
 -- writes it back at that place. A stream without documents, e.g. a stream of
--- only comments, has no such place, so the parser drops its comments. In the examples below, @printComments@ parses a
--- text and prints each node that has comments, with its path and the fields
--- of 'Comments'. The key and the value of an entry have the same path, with
--- @(key)@ or @(value)@ after it.
+-- only comments, has no such place. The parser drops its comments.
+--
+-- In the examples below, @printComments@ parses a text and prints each node
+-- that has comments, with its path and the fields of 'Comments'. The key and
+-- the value of an entry have the same path, with @(key)@ or @(value)@ after
+-- it.
 --
 -- The parser follows these rules:
 --
@@ -88,8 +90,9 @@
 --
 -- * A comment at the end of a line that the rule above does not give to a
 --   node, e.g. after @- @ or after the tag of a block collection, belongs to
---   the node below it, except on the line of a document marker. If that node also has a comment at the end of its
---   line, the first comment becomes a line above the node.
+--   the node below it, except on the line of a document marker. If that node
+--   also has a comment at the end of its line, the first comment becomes a
+--   line above the node.
 --
 --     >>> input = "- # a\n  host: localhost # b\n- # c\n  'a string' # d\n"
 --
@@ -117,11 +120,13 @@
 -- * A comment after the last entry of a block collection belongs to the end
 --   of the collection if it is indented at least as deep as the entries, and
 --   deeper than the key of the collection. Otherwise it belongs to the node
---   below it, or to the end of the document if no node is below it. At the
---   end of a block collection root, an empty line ends the lines of the
---   collection, and the lines below it belong to the end of the document. A
---   comment before the closing bracket of a flow collection belongs to the
---   end of the collection.
+--   below it, or to the end of the document if no node is below it.
+--
+--     At the end of a block collection root, an empty line ends the lines of
+--     the collection. The lines below it belong to the end of the document.
+--
+--     A comment before the closing bracket of a flow collection belongs to
+--     the end of the collection.
 --
 --     >>> input = "server:\n  ports:\n  - 80\n  # a\n  # b\n# c\nuser: admin\n"
 --
@@ -162,14 +167,18 @@
 --     root.ports (value) after: [Comment "a"]
 --
 -- * The optional @---@ marker starts a document, and the optional @...@
---   marker ends it. A comment on the line of the @---@ marker belongs to the
---   document, unless the rule for comments at the end of a line gives it to a
---   node. A comment before the directives or the @---@ marker belongs to the
---   document if it is at the start of the stream or after a @...@ marker.
---   Otherwise it belongs to the end of the document above it. A comment on
---   the line of a @...@ marker or below it belongs to the end of the
---   document, and so does a comment with no node below it that the rule
---   above does not give to the end of a collection.
+--   marker ends it.
+--
+--     A comment on the line of the @---@ marker belongs to the document,
+--     unless the rule for comments at the end of a line gives it to a node.
+--
+--     A comment before the directives or the @---@ marker belongs to the
+--     document if it is at the start of the stream or after a @...@ marker.
+--     Otherwise it belongs to the end of the document above it.
+--
+--     A comment on the line of a @...@ marker or below it belongs to the end
+--     of the document. A comment with no node below it also belongs there,
+--     unless the rule above gives it to the end of a collection.
 --
 --     >>> input = "# a\n--- # b\nlocalhost\n# c\n... # d\n"
 --
@@ -186,12 +195,14 @@
 --     document after: [Comment "c",Comment "d"]
 --
 -- Empty lines go with the comments that follow them, with the node below
--- them, or with the end of the document, so that the removal of an entry
--- keeps the gap below it. Above the first entry of a block collection, the
--- last empty line stays with the collection. At the end of a block
+-- them, or with the end of the document. Thus, if a program removes an
+-- entry, the gap below the entry stays. Several empty lines in a row count as
+-- one.
+--
+-- Two places are exceptions. Above the first entry of a block collection,
+-- the last empty line stays with the collection. At the end of a block
 -- collection root, an empty line separates the collection from the end of
--- the document, and it belongs to neither. Several empty lines in a row
--- count as one.
+-- the document, and it belongs to neither.
 --
 -- >>> input = "server:\n  host: localhost\n  # The end of the server.\n\nuser: admin\n"
 --

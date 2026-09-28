@@ -28,9 +28,9 @@ import Yamlet.Internal.Emit
 import Yamlet.Internal.Utils
 import Yamlet.Value
 
--- | The value of a plain scalar without a tag, e.g. @null@, @true@, @12@,
--- @0x1F@ and @1.5e3@ are not strings. Quoted and block scalars are always
--- strings.
+-- | The value of a plain scalar without a tag. Not every such scalar is a
+-- string, e.g. @null@, @true@, @12@, @0x1F@ and @1.5e3@ are not. Quoted and
+-- block scalars are always strings.
 --
 -- A float whose exponent and value are both beyond the range from -1000 to
 -- 1000 in scientific notation, e.g. @1e1001@ or @1e-1001@, becomes infinity
@@ -43,8 +43,8 @@ resolvePlain :: T.Text -> Value
 resolvePlain = either id id . resolvePlainExact
 
 -- | The value of a scalar with the given resolved tag, e.g.
--- @tag:yaml.org,2002:int@. Return 'Nothing' if the text is not valid for a tag of
--- the core schema. A scalar with another tag is a string.
+-- @tag:yaml.org,2002:int@. Return 'Nothing' if the text is not valid for a
+-- tag of the core schema. A scalar with another tag is a string.
 --
 -- A float beyond the limit becomes infinity or zero, as in 'resolvePlain'.
 --
@@ -118,7 +118,7 @@ readBool = \case
   _ -> Nothing
 
 -- | A word that YAML 1.1 reads as a boolean, but YAML 1.2 as a string, e.g.
--- yes or off.
+-- @yes@ or @off@.
 isYaml11Bool :: T.Text -> Bool
 isYaml11Bool t =
   t `elem` ["y", "Y", "yes", "Yes", "YES", "n", "N", "no", "No", "NO", "on", "On", "ON", "off", "Off", "OFF"]

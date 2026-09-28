@@ -72,8 +72,8 @@ data Location = Location
   deriving anyclass (NFData)
 
 -- | Render an error in the format that editors recognize. The result does not
--- end with a line break. Of a line longer than 80 characters, the excerpt
--- shows only the 80 characters around the column.
+-- end with a line break. If the line is longer than 80 characters, the
+-- excerpt shows only the 80 characters around the column.
 --
 -- >>> either (mapM_ (putStrLn . prettyError "config.yaml")) print (decodeText @(M.Map T.Text [[Int]]) "jobs:\n  - [1]\n  - 42\n")
 -- config.yaml:3:5: jobs[1]: expected a list, but got an integer
@@ -150,11 +150,17 @@ prettyError file err
     caret = map (\c -> if c == '\t' then '\t' else ' ') (take before shown)
 
 -- | A path in the form @jobs[1].name@. A key that is a collection is @?@,
--- and a key that is an alias is its alias, e.g. @*base@. A key with a
--- character of this form, white space or no characters is in double quotes,
--- e.g. @\"a.b\"@. So is a key that starts with @?@ or @*@. In the quotes, a
--- character that cannot be printed has an escape as in YAML, e.g.
--- @\"a\\nb\"@.
+-- and a key that is an alias is its alias, e.g. @*base@.
+--
+-- A key is in double quotes, e.g. @\"a.b\"@, if it:
+--
+-- * is empty,
+-- * has white space, a character that cannot be printed, or one of the
+--   characters @.[]\"\\@,
+-- * starts with @?@ or @*@.
+--
+-- In the quotes, a character that cannot be printed has an escape as in
+-- YAML, e.g. @\"a\\nb\"@.
 --
 -- >>> renderPath [Key "jobs", Index 1, Key "name"]
 -- "jobs[1].name"
