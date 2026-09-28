@@ -29,7 +29,9 @@ A YAML 1.2.2 library written in Haskell.
   constructor cannot have several fields without names. Such a type is a
   compile error. A sum type is a mapping with a tag, e.g.
   `{tag: Circle, radius: 1}`, or a mapping with the constructor as its only
-  key, e.g. `{Circle: {radius: 1}}`.
+  key, e.g. `{Circle: {radius: 1}}`. A constructor without fields is its
+  name, e.g. `Dot`, also as the only constructor of a type and with the
+  second encoding. In these two cases aeson writes `[]` and `{Dot: []}`.
 - The syntax tree keeps the comments and the empty lines, so a program can
   read a file, change it and write it back with its comments.
 - A decoded type can keep a part of a document as a `Node`. The encoder

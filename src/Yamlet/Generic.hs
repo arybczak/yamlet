@@ -36,7 +36,8 @@
 -- * A record is a mapping of its fields, e.g. @{host: localhost, port: 80}@.
 --
 -- * A type whose constructors have no fields is a string with the name of
---   the constructor, e.g. @TurnLeft@.
+--   the constructor, e.g. @TurnLeft@. This includes a type with one such
+--   constructor, which aeson writes as an empty list.
 --
 -- * A type with several constructors is a mapping with the name of the
 --   constructor under the tag key, next to the fields of the constructor,
@@ -52,7 +53,8 @@
 --
 -- * With the encoding 'SingleField', a constructor is a mapping with its
 --   name as the only key, e.g. @{Circle: {radius: 1}}@ or @{Forward: 10}@,
---   and a constructor without fields is its name, e.g. @Dot@.
+--   and a constructor without fields is its name, e.g. @Dot@. aeson writes
+--   such a constructor as @{Dot: []}@.
 --
 -- The default encoding of a sum type is 'TaggedObject':
 --
