@@ -119,6 +119,7 @@ test-suite test
                     , containers
                     , directory
                     , filepath
+                    , ghc-heap
                     , yamlet
                     , scientific
                     , tasty

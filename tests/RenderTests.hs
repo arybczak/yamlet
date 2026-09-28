@@ -3,6 +3,7 @@ module RenderTests (renderTests) where
 import Data.List qualified as L
 import Data.Maybe
 import Data.Text qualified as T
+import GHC.Exts.Heap
 import Test.QuickCheck
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -27,6 +28,8 @@ renderTests =
         , testCase "round trip" test_commentRoundTrip
         , testCase "moved comments" test_movedComments
         , testCase "lines after a list" test_linesAfterList
+        , testCase "no thunks" test_noThunks
+        , testProperty "no thunks in generated documents" prop_noThunks
         ]
     , testProperty "round trip" prop_roundTrip
     ]
@@ -401,6 +404,52 @@ test_attachment = do
     firstKey n = case n.content of
       Mapping _ ((k, _) : _) -> k.comments.before
       _ -> []
+
+-- | The parser returns documents with comments without thunks, as it does for
+-- documents without comments.
+test_noThunks :: Assertion
+test_noThunks =
+  mapM_
+    check
+    [ ("configuration", configuration)
+    , ("flow collections", "a: [1, # b\n  2] # c\nd: {e: f, # g\n  h: i}\n")
+    , ("explicit keys", "? a\n# b\n? c\n: d\n\n# e\n")
+    , ("documents", "# a\n--- # b\nc\n...\n# d\n---\ne: 1\n")
+    ]
+  where
+    check :: (String, T.Text) -> Assertion
+    check (preface, input) = case parseDocumentsText input of
+      Right docs -> thunks docs >>= assertEqual preface []
+      Left e -> assertFailure (preface ++ ": " ++ show e)
+
+prop_noThunks :: Tree -> Property
+prop_noThunks (Tree doc) =
+  let out = renderSyntax defaultRenderOptions [doc]
+  in counterexample (T.unpack out) $ case parseDocumentsText out of
+       Right docs -> ioProperty ((=== []) <$> thunks docs)
+       Left e -> counterexample (show e) False
+
+-- | The thunks that a value refers to, each with the constructors on the way
+-- to it.
+thunks :: a -> IO [String]
+thunks = go [] . asBox
+  where
+    go :: [String] -> Box -> IO [String]
+    go path b =
+      getBoxedClosureData b >>= \case
+        ConstrClosure {name, ptrArgs} -> concat <$> mapM (go (name : path)) ptrArgs
+        -- An evaluated thunk refers to its value until the next garbage
+        -- collection.
+        IndClosure {indirectee} -> go path indirectee
+        BlackholeClosure {indirectee} -> go path indirectee
+        ThunkClosure {} -> found "thunk"
+        SelectorClosure {} -> found "selector thunk"
+        APClosure {} -> found "application thunk"
+        APStackClosure {} -> found "stack thunk"
+        _ -> pure []
+      where
+        found :: String -> IO [String]
+        found kind = pure [unwords (reverse (kind : path))]
 
 -- | The configuration of the haskell-gha test with comments.
 test_configuration :: Assertion
