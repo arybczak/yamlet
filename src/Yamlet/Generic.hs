@@ -281,6 +281,7 @@ instance
   -- without its specialization, and the benchmark
   -- derive.contents.parseYaml.generic takes about 45% longer.
   parseYamlList = coerce (withSequence (mapM (parseNode (parseYaml @a))))
+
   parseYamlField _ = coerce (parseYaml @a)
 
 ----------------------------------------
@@ -450,12 +451,16 @@ class GConstructors f where
 
 instance (GConstructors f, GConstructors g) => GConstructors (f :+: g) where
   gConstructorNames = gConstructorNames @f ++ gConstructorNames @g
+
   gConstructorCount = gConstructorCount @f + gConstructorCount @g
+
   gNullary = gNullary @f && gNullary @g
 
 instance GConstructors V1 where
   gConstructorNames = []
+
   gConstructorCount = 0
+
   gNullary = True
 
 -- | The error for a type without constructors, whose representation is 'V1'.
@@ -463,7 +468,9 @@ type NoConstructors = Text "A type without constructors cannot derive FromYaml o
 
 instance (KnownSymbol name, GFields f) => GConstructors (C1 (MetaCons name fixity isRecord) f) where
   gConstructorNames = [symbolVal (Proxy @name)]
+
   gConstructorCount = 1
+
   gNullary = gArity @f == 0
 
 -- | The value of 'SumEncoding', if the constructors allow it. The instances
@@ -582,22 +589,30 @@ class GFields f where
 
 instance GFields U1 where
   gNamed = False
+
   gArity = 0
+
   gNames _ = []
 
 instance (GFields f, GFields g) => GFields (f :*: g) where
   gNamed = gNamed @f
+
   gArity = gArity @f + gArity @g
+
   gNames opts = gNames @f opts ++ gNames @g opts
 
 instance KnownSymbol name => GFields (S1 (MetaSel (Just name) u s d) f) where
   gNamed = True
+
   gArity = 1
+
   gNames opts = [fieldKey @name opts]
 
 instance GFields (S1 (MetaSel Nothing u s d) f) where
   gNamed = False
+
   gArity = 1
+
   gNames _ = []
 
 fieldKey :: forall name. KnownSymbol name => YamlOptions -> T.Text
@@ -675,16 +690,18 @@ class GToConstructor f where
 
 instance GToConstructor V1 where
   gTag _ = \case {}
+
   gToConstructor _ _ _ = \case {}
 
 instance (GToConstructor f, GToConstructor g) => GToConstructor (f :+: g) where
   gTag opts = \case
     L1 x -> gTag opts x
     R1 x -> gTag opts x
+  {-# INLINE gTag #-}
+
   gToConstructor opts flat def = \case
     L1 x -> gToConstructor opts flat (def >>= \case L1 d -> Just d; R1 _ -> Nothing) x
     R1 x -> gToConstructor opts flat (def >>= \case R1 d -> Just d; L1 _ -> Nothing) x
-  {-# INLINE gTag #-}
   {-# INLINE gToConstructor #-}
 
 instance
@@ -695,6 +712,8 @@ instance
   => GToConstructor (C1 (MetaCons name fixity isRecord) f)
   where
   gTag opts _ = constructorTag opts (symbolVal (Proxy @name))
+  {-# INLINE gTag #-}
+
   gToConstructor opts tagging def c@(M1 x) = case tagging of
     Just SingleField
       | gNamed @f -> mapping [(string (gTag opts c), mapping (gToEntries opts (unM1 <$> def) x))]
@@ -714,7 +733,6 @@ instance
     where
       withTagEntry :: [(S.Node, S.Node)] -> [(S.Node, S.Node)]
       withTagEntry entries = (opts.tagKey .= gTag opts c) : entries
-  {-# INLINE gTag #-}
   {-# INLINE gToConstructor #-}
 
 -- | The entries of a field next to the tag, if the decoder can read them
@@ -777,8 +795,9 @@ instance
 
 instance ToYaml a => GToFields (S1 (MetaSel Nothing u s d) (Rec0 a)) where
   gToValue (M1 (K1 x)) = Just (toYaml x)
-  gToEntry k (M1 (K1 x)) = toYamlField k x
   {-# INLINE gToValue #-}
+
+  gToEntry k (M1 (K1 x)) = toYamlField k x
 
 ----------------------------------------
 -- Decoding
@@ -906,24 +925,29 @@ class GFromConstructor f where
 
 instance GFromConstructor V1 where
   gFromTag _ _ _ _ = Nothing
+
   gFromTagged _ _ _ _ _ _ = Nothing
+
   gFromSingle _ _ _ _ _ = Nothing
+
   gFromUntagged _ _ _ _ = fail "expected a type with constructors"
 
 instance (GFromConstructor f, GFromConstructor g) => GFromConstructor (f :+: g) where
   gFromTag opts k n t = gFromTag opts (k . L1) n t `mplus` gFromTag opts (k . R1) n t
+  {-# INLINE gFromTag #-}
+
   gFromTagged opts flat def k t o =
     gFromTagged opts flat (def >>= \case L1 x -> Just x; R1 _ -> Nothing) (k . L1) t o
       `mplus` gFromTagged opts flat (def >>= \case R1 x -> Just x; L1 _ -> Nothing) (k . R1) t o
+  {-# INLINE gFromTagged #-}
+
   gFromSingle opts def k t entry =
     gFromSingle opts (def >>= \case L1 x -> Just x; R1 _ -> Nothing) (k . L1) t entry
       `mplus` gFromSingle opts (def >>= \case R1 x -> Just x; L1 _ -> Nothing) (k . R1) t entry
+  {-# INLINE gFromSingle #-}
 
   -- A type with several constructors always has a tag.
   gFromUntagged _ _ _ _ = fail "expected a tag"
-  {-# INLINE gFromTag #-}
-  {-# INLINE gFromTagged #-}
-  {-# INLINE gFromSingle #-}
 
 instance
   ( KnownSymbol name
@@ -938,24 +962,23 @@ instance
     where
       tag :: T.Text
       tag = constructorTag opts (symbolVal (Proxy @name))
+  {-# INLINE gFromTag #-}
 
   gFromTagged opts flat def k t o
     | t == constructorTag opts (symbolVal (Proxy @name)) = Just (k . M1 <$> fromObject opts flat [opts.tagKey] (unM1 <$> def) o)
     | otherwise = Nothing
+  {-# INLINE gFromTagged #-}
 
   gFromSingle opts def k t entry@(kn, v)
     | t /= constructorTag opts (symbolVal (Proxy @name)) = Nothing
     | gNamed @f = Just (withMapping (fmap (k . M1) . fromObject opts False [] (unM1 <$> def)) v)
     | gArity @f == 0 = Just (failAt kn $ "expected the string " ++ show t ++ ", because the constructor has no fields")
     | otherwise = Just (k . M1 <$> gFromEntry entry)
+  {-# INLINE gFromSingle #-}
 
   gFromUntagged opts def k n
     | gNamed @f || gArity @f == 0 = withMapping (fmap (k . M1) . fromObject opts False [] (unM1 <$> def)) n
     | otherwise = k . M1 <$> gFromValue n
-
-  {-# INLINE gFromTag #-}
-  {-# INLINE gFromTagged #-}
-  {-# INLINE gFromSingle #-}
   {-# INLINE gFromUntagged #-}
 
 -- | The fields of a constructor from a mapping. The given keys, e.g. the tag
@@ -1008,7 +1031,6 @@ fromObject opts flat keys def o
         | isKey key k -> kvs
         | otherwise -> kv : removeKey key kvs
       [] -> []
-    {-# INLINE merged #-}
 {-# INLINE fromObject #-}
 
 -- | The decoder of the fields of a constructor.
@@ -1033,6 +1055,7 @@ class GFromFields f where
 -- The value of a constructor without fields is its tag.
 instance GFromFields U1 where
   gFromObject _ _ _ = pure U1
+
   gFromValue _ = pure U1
 
 instance (GFromFields f, GFromFields g) => GFromFields (f :*: g) where
@@ -1062,8 +1085,8 @@ instance
 
 instance FromYaml a => GFromFields (S1 (MetaSel Nothing u s d) (Rec0 a)) where
   gFromValue n = M1 . K1 <$> parseNode parseYaml n
+
   gFromEntry entry = M1 . K1 <$> parseEntry entry
-  {-# INLINE gFromValue #-}
 
 -- | The key is a string with the text.
 isKey :: T.Text -> S.Node -> Bool
