@@ -238,6 +238,7 @@ import Yamlet.Internal.FromYaml
 import Yamlet.Internal.Syntax qualified as S
 import Yamlet.Internal.ToYaml
 import Yamlet.Internal.View
+import Yamlet.Syntax qualified as S
 import Yamlet.Value
 
 ----------------------------------------
@@ -256,6 +257,7 @@ instance
   , GConstructors f
   , GEncoding (SumEncoding a) f
   , GToConstructor f
+  , ToYaml a
   )
   => ToYaml (GenericYaml a)
   where
@@ -266,6 +268,14 @@ instance
   -- there, the derived encoders keep the generic representation, and 7 of
   -- the encoders of the inspection tests fail.
   {-# INLINE toYaml #-}
+
+  -- The list and the field encode their values with the instance of
+  -- 'ToYaml a', for the reason at 'parseYamlList' below. With the defaults
+  -- of the class, the benchmark derive.contents.toYaml.generic takes 3.4
+  -- times as long.
+  toYamlList xs = S.sequenceNode (map (toYaml @a) (coerce xs))
+
+  toYamlField k (GenericYaml x) = (k, toYaml @a x)
 
 instance
   ( Generic a

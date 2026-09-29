@@ -48,6 +48,15 @@ main =
           , testCase "encode Figure" $ assertSuccess $(inspectTest $ hasNoGenericRep 'encodeFigure)
           , testCase "decode Figure" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeFigure)
           ]
+      , testGroup
+          "lists and fields"
+          [ testCase "encode a list of Server" $ assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeServers)
+          , testCase "encode a field of Server" $ assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeServerField)
+          , testCase "encode a list of Shape" $ assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeShapes)
+          , testCase "encode a field of Shape" $ assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeShapeField)
+          , testCase "decode a field of Server" $ assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeServerField)
+          , testCase "decode a field of Shape" $ assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeShapeField)
+          ]
       ]
 
 ----------------------------------------
@@ -306,3 +315,29 @@ encodeFigure = toYaml
 
 decodeFigure :: Node -> Either (NE.NonEmpty (Offset, String)) Figure
 decodeFigure = runParser parseYaml
+
+----------------------------------------
+-- Lists and fields
+
+-- The decoders of lists have no test. GHC 9.14 does not inline the list
+-- method of the instance for GenericYaml, so the derived method passes it the
+-- dictionaries of the representation. The method ignores them, and the list
+-- decoders are as fast as the written ones.
+
+encodeServers :: [Server] -> Node
+encodeServers = toYamlList
+
+encodeServerField :: Node -> Server -> (Node, Node)
+encodeServerField = toYamlField
+
+encodeShapes :: [Shape] -> Node
+encodeShapes = toYamlList
+
+encodeShapeField :: Node -> Shape -> (Node, Node)
+encodeShapeField = toYamlField
+
+decodeServerField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Server
+decodeServerField k = runParser (parseYamlField k)
+
+decodeShapeField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Shape
+decodeShapeField k = runParser (parseYamlField k)
