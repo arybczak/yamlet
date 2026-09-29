@@ -68,16 +68,19 @@
 --   deriving stock (Generic)
 --   deriving anyclass (GenericYamlOptions)
 --   deriving (ToYaml) via GenericYaml Shape
--- data Move = Forward Int | Stop
---   deriving stock (Generic)
---   deriving anyclass (GenericYamlOptions)
---   deriving (ToYaml) via GenericYaml Move
 -- :}
 --
 -- >>> T.putStr (encodeText [Circle 1, Dot])
 -- - tag: Circle
 --   radius: 1.0
 -- - tag: Dot
+--
+-- >>> :{
+-- data Move = Forward Int | Stop
+--   deriving stock (Generic)
+--   deriving anyclass (GenericYamlOptions)
+--   deriving (ToYaml) via GenericYaml Move
+-- :}
 --
 -- >>> T.putStr (encodeText [Forward 10, Stop])
 -- - tag: Forward
@@ -91,22 +94,28 @@
 --   deriving stock (Generic)
 --   deriving anyclass (GenericYamlOptions)
 --   deriving (ToYaml) via GenericYaml Distance
+-- :}
+--
+-- >>> :{
 -- data Step = Ahead Distance | Halt
 --   deriving stock (Generic)
 --   deriving (ToYaml) via GenericYaml Step
 -- instance GenericYamlOptions Step where
 --   type SumEncoding Step = TaggedFlat
--- data Figure = Round {radius :: Double} | Named T.Text | Point
---   deriving stock (Generic)
---   deriving (ToYaml) via GenericYaml Figure
--- instance GenericYamlOptions Figure where
---   type SumEncoding Figure = SingleField
 -- :}
 --
 -- >>> T.putStr (encodeText [Ahead (Distance 10), Halt])
 -- - tag: Ahead
 --   distance: 10
 -- - tag: Halt
+--
+-- >>> :{
+-- data Figure = Round {radius :: Double} | Named T.Text | Point
+--   deriving stock (Generic)
+--   deriving (ToYaml) via GenericYaml Figure
+-- instance GenericYamlOptions Figure where
+--   type SumEncoding Figure = SingleField
+-- :}
 --
 -- >>> T.putStr (encodeText [Round 1, Named "x", Point])
 -- - Round:
@@ -151,10 +160,34 @@
 -- Right (Config {name = "app", retries = 3, proxy = Nothing})
 --
 -- A present key that holds a mapping takes the missing keys of that mapping
--- from the default of its own type, not from the outer default. The same
--- holds with 'TaggedFlat'. The keys of a field without a name are next to
--- the tag, but they belong to the field. The outer default applies to such a
--- field only if the constructor has no keys besides the tag.
+-- from the default of its own type, not from the outer default:
+--
+-- >>> :{
+-- data Endpoint = Endpoint {host :: T.Text, port :: Int}
+--   deriving stock (Generic, Show)
+--   deriving (FromYaml) via GenericYaml Endpoint
+-- instance GenericYamlOptions Endpoint where
+--   yamlDefault = Just (Endpoint "localhost" 80)
+-- :}
+--
+-- >>> :{
+-- data Service = Service {name :: T.Text, endpoint :: Endpoint}
+--   deriving stock (Generic, Show)
+--   deriving (FromYaml) via GenericYaml Service
+-- instance GenericYamlOptions Service where
+--   yamlDefault = Just (Service "app" (Endpoint "example.com" 443))
+-- :}
+--
+-- >>> decodeText @Service "endpoint:\n  port: 8080\n"
+-- Right (Service {name = "app", endpoint = Endpoint {host = "localhost", port = 8080}})
+--
+-- >>> decodeText @Service "name: web\n"
+-- Right (Service {name = "web", endpoint = Endpoint {host = "example.com", port = 443}})
+--
+-- With 'TaggedFlat', the keys of a field without a name are next to the tag,
+-- but they belong to the field. The missing keys of the field also come
+-- from the default of its type. The outer default applies to such a field
+-- only if the constructor has no keys besides the tag.
 --
 -- An explicit null is not a missing key, so it goes to the decoder of the
 -- field. E.g. @proxy: null@ gives 'Nothing' for a field of type 'Maybe', and
