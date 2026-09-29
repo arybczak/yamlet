@@ -1029,9 +1029,13 @@ fromObject opts flat keys def o
   | flat
   , not (null others)
   , not (any (isKey opts.contentsKey . fst) others) =
-      if any (isJust . closeName [opts.contentsKey]) (mapMaybe (stringValue . fst) others)
-        then merged `orElse` checked [opts.contentsKey] (missingKey o opts.contentsKey)
-        else merged
+      -- After an error, a key close to the contents key, e.g. a misspelled
+      -- one, gives the error of the missing contents key instead. The check
+      -- is slow, so it runs only after an error.
+      merged
+        `orElse` if any (isJust . closeName [opts.contentsKey]) (mapMaybe (stringValue . fst) others)
+          then checked [opts.contentsKey] (missingKey o opts.contentsKey)
+          else merged
   | otherwise = checked [opts.contentsKey] $ case M.lookup opts.contentsKey o.index of
       Just entry -> gFromEntry entry
       -- A missing contents key is null, if the fields accept null. A flat
