@@ -271,15 +271,22 @@ instance
   => FromYaml (GenericYaml a)
   where
   parseYaml = coerce (genericParseYaml @a)
-  -- Without the pragma, the derived decoders keep the generic representation:
-  -- 8 of the decoders of the inspection tests fail.
+  -- The pragma keeps the source of the method as its unfolding, so that GHC
+  -- inlines 'genericParseYaml' at the type of the derived instance. Without
+  -- it, the optimized method is too large for an unfolding, the derived
+  -- decoders keep the generic representation, and 8 of the decoders of the
+  -- inspection tests fail. The optimized encoder is small enough, so 'toYaml'
+  -- needs no pragma.
   {-# INLINE parseYaml #-}
 
-  -- The list and the field call the decoder of the type itself, which
-  -- 'FromYaml a' gives: the derived instance is that constraint. The defaults
-  -- of the class would call the decoder of this instance for any type,
-  -- without its specialization, and the benchmark
-  -- derive.contents.parseYaml.generic takes about 45% longer.
+  -- The list and the field decode their values with the instance of
+  -- 'FromYaml a', i.e. the derived instance of the type, where GHC inlined
+  -- the generic decoder at that type. The defaults of the class would call
+  -- 'parseYaml' of this instance instead. GHC inlines the defaults here,
+  -- where the type is not known, and the derived instance only calls the
+  -- result. Each value would then go through the generic representation,
+  -- and the benchmark derive.contents.parseYaml.generic takes about 40%
+  -- longer.
   parseYamlList = coerce (withSequence (mapM (parseNode (parseYaml @a))))
 
   parseYamlField _ = coerce (parseYaml @a)
