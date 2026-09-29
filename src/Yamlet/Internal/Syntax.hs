@@ -1,3 +1,4 @@
+{-# LANGUAGE PatternSynonyms #-}
 {-# OPTIONS_HADDOCK not-home #-}
 
 -- | The types of the syntax tree.
@@ -11,7 +12,7 @@ module Yamlet.Internal.Syntax
 
     -- * Nodes
   , Node (..)
-  , Content (..)
+  , Content (.., Scalar)
   , Props (..)
   , noProps
   , Tag (..)
@@ -78,19 +79,35 @@ data Node = Node
 
 -- | The content of a node.
 data Content
-  = Scalar !ScalarStyle !T.Text
+  = -- | A scalar with the positions in its text where the source continues on
+    -- a new line. A position counts the characters from the start of the
+    -- text, and the positions are in ascending order. The parser gives them
+    -- for the plain, quoted and folded styles, which join the lines of the
+    -- source, so that the renderer can write the text on the same lines. The
+    -- renderer ignores a position where the style of the output cannot start
+    -- a new line and keep the text.
+    ScalarLines !ScalarStyle !T.Text ![Int]
   | Sequence !CollectionStyle [Node]
   | Mapping !CollectionStyle [(Node, Node)]
   | -- | An alias has no properties.
     Alias !T.Text
   deriving stock (Eq, Show, Generic)
 
+-- | A scalar without positions of new lines. As a pattern, it matches every
+-- scalar and ignores its positions.
+pattern Scalar :: ScalarStyle -> T.Text -> Content
+pattern Scalar style t <- ScalarLines style t _
+  where
+    Scalar style t = ScalarLines style t []
+
+{-# COMPLETE Scalar, Sequence, Mapping, Alias #-}
+
 -- The instances of the sum types are written by hand, because GHC does not
 -- always remove the generic representation of a sum type. A strict field of
 -- a type without lazy parts, e.g. a text, is already in normal form.
 instance NFData Content where
   rnf = \case
-    Scalar _ _ -> ()
+    ScalarLines _ _ ls -> rnf ls
     Sequence _ xs -> rnf xs
     Mapping _ kvs -> rnf kvs
     Alias _ -> ()
@@ -318,7 +335,7 @@ copyNode n =
         c@(Comments [] Nothing []) -> c
         c -> copyComments c
     , content = case n.content of
-        Scalar style t -> Scalar style (T.copy t)
+        ScalarLines style t ls -> ScalarLines style (T.copy t) ls
         Sequence style xs -> Sequence style $! evaluated (map copyNode xs)
         Mapping style kvs -> Mapping style $! evaluated (map copyEntry kvs)
         Alias name -> Alias (T.copy name)

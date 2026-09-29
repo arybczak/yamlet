@@ -20,8 +20,9 @@ import Yamlet.Syntax qualified as S
 -- | Render documents. Documents after the first one start with a @---@
 -- marker. The collections of 'Yamlet.Encode.toYaml' are in the block style.
 --
--- A document with comments, anchors, aliases, flow collections or scalar
--- styles that 'Yamlet.Encode.toYaml' does not create goes to
+-- A document with comments, anchors, aliases, flow collections, scalars on
+-- several lines or scalar styles that 'Yamlet.Encode.toYaml' does not create
+-- goes to
 -- 'Yamlet.Syntax.renderSyntax'. Other documents go to a faster renderer,
 -- which gives the same output.
 renderDocuments :: [S.Node] -> T.Text
@@ -59,7 +60,8 @@ renderDocuments docs
       Nothing -> mempty
 
 -- | The node has no comments, anchors, aliases and flow collections, and its
--- scalars have the styles that 'Yamlet.Encode.toYaml' creates.
+-- scalars are on one line and have the styles that 'Yamlet.Encode.toYaml'
+-- creates.
 simple :: S.Node -> Bool
 simple n =
   null n.comments.before
@@ -68,6 +70,7 @@ simple n =
     && isNothing n.props.anchor
     && n.props.tag /= S.NonSpecificTag
     && case n.content of
+      S.ScalarLines _ _ (_ : _) -> False
       -- The renderer gives an empty plain scalar no text.
       S.Scalar S.Plain t -> not (T.null t)
       S.Scalar S.SingleQuoted _ -> True

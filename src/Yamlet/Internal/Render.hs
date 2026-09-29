@@ -201,10 +201,10 @@ document opts afterEnd doc =
 
     r :: Node
     r = case doc.root.content of
-      Scalar style t
+      ScalarLines style t starts
         | style == Literal || style == Folded
         , needsIndentIndicator t ->
-            doc.root {content = Scalar DoubleQuoted t}
+            doc.root {content = ScalarLines DoubleQuoted t starts}
       _ -> doc.root
 
     -- The handles for the tags that are not valid URIs.
@@ -371,7 +371,7 @@ value opts indent v lineComment extra
     endsWithBlock :: [Node] -> Bool
     endsWithBlock xs = case reverse xs of
       Node {content = Scalar Literal t} : _ -> isJust (literalBlock True 0 t)
-      Node {content = Scalar Folded t} : _ -> isJust (foldedBlock 0 t)
+      Node {content = Scalar Folded t} : _ -> isJust (foldedBlock 0 [] t)
       x : _ -> isBlock opts x
       [] -> False
 
@@ -390,17 +390,17 @@ after opts indent n
   | isEmpty n = comment n.comments.inline <> "\n" <> linesBelow indent n
   | otherwise = " " <> inline opts InValue (indent + indentStep) n n.comments.inline <> "\n" <> linesBelow indent n
 
--- | Where an inline node is.
-data Position = InValue | InKey | InFlow
+-- | Where an inline node is. A scalar in a key is on one line.
+data Position = InValue | InKey | InFlow | InFlowKey
   deriving stock (Eq)
 
--- | A node on one line with the given comment at its end, except a block
--- scalar, whose content lines are at the given indentation.
+-- | A node with the given comment at the end of its last line. The lines of
+-- a scalar after the first one are at the given indentation.
 inline :: RenderOptions -> Position -> Int -> Node -> Maybe T.Text -> B.Builder
 inline opts pos indent n lineComment = case n.content of
   Alias name -> "*" <> B.fromText name <> comment lineComment
-  Scalar style t
-    | isBlockScalar style && pos == InValue -> withProps (blockScalar style t)
+  ScalarLines style t starts
+    | isBlockScalar style && pos == InValue -> withProps (blockScalar style t starts)
   _ -> withProps content_ <> comment lineComment
   where
     withProps :: B.Builder -> B.Builder
@@ -416,20 +416,27 @@ inline opts pos indent n lineComment = case n.content of
       _ -> False
 
     -- The comment goes on the line of the header.
-    blockScalar :: ScalarStyle -> T.Text -> B.Builder
-    blockScalar style t = case style of
+    blockScalar :: ScalarStyle -> T.Text -> [Int] -> B.Builder
+    blockScalar style t starts = case style of
       Literal | Just (h, b) <- literalBlock True indent t -> h <> comment lineComment <> b
-      Folded | Just (h, b) <- foldedBlock indent t -> h <> comment lineComment <> b
-      _ -> doubleQuoted t <> comment lineComment
+      Folded | Just (h, b) <- foldedBlock indent starts t -> h <> comment lineComment <> b
+      _ -> doubleQuotedLines indent starts t <> comment lineComment
 
     content_ :: B.Builder
     content_ = case n.content of
-      Scalar style t -> scalar pos style t
+      ScalarLines style t starts -> scalar pos indent (if inKey then [] else starts) style t
       Sequence _ [] | hasEndLines n -> "[\n" <> lines_ indent n.comments.after <> spaces indent <> "]"
       Mapping _ [] | hasEndLines n -> "{\n" <> lines_ indent n.comments.after <> spaces indent <> "}"
-      Sequence _ xs -> "[" <> commas (map (\x -> inline opts InFlow indent (flowItem x) Nothing) xs) <> "]"
+      Sequence _ xs -> "[" <> commas (map (\x -> inline opts itemPos indent (flowItem x) Nothing) xs) <> "]"
       Mapping _ kvs -> "{" <> commas (map flowEntry kvs) <> "}"
       Alias {} -> mempty
+
+    inKey :: Bool
+    inKey = pos == InKey || pos == InFlowKey
+
+    -- The items of a flow collection in a key are in the key too.
+    itemPos :: Position
+    itemPos = if inKey then InFlowKey else InFlow
 
     -- An empty scalar cannot be an item of a flow sequence.
     flowItem :: Node -> Node
@@ -442,9 +449,9 @@ inline opts pos indent n lineComment = case n.content of
     flowEntry :: (Node, Node) -> B.Builder
     flowEntry (k, v) =
       mconcat
-        [ inline opts InFlow indent k Nothing
+        [ inline opts InFlowKey indent k Nothing
         , if endsWithName k then " :" else ":"
-        , if isEmpty v then mempty else " " <> inline opts InFlow indent v Nothing
+        , if isEmpty v then mempty else " " <> inline opts itemPos indent v Nothing
         ]
 
     commas :: [B.Builder] -> B.Builder
@@ -455,18 +462,21 @@ inline opts pos indent n lineComment = case n.content of
 isBlockScalar :: ScalarStyle -> Bool
 isBlockScalar s = s == Literal || s == Folded
 
--- | A scalar on one line in its style, or in a style that can hold its text.
-scalar :: Position -> ScalarStyle -> T.Text -> B.Builder
-scalar pos style t = case style of
+-- | A scalar in its style, or in a style that can hold its text, on the lines
+-- that start at the positions. The lines after the first one are at the
+-- given indentation.
+scalar :: Position -> Int -> [Int] -> ScalarStyle -> T.Text -> B.Builder
+scalar pos indent starts style t = case style of
   Plain
     | T.null t -> mempty
-    | plainSyntax (pos == InFlow) t -> B.fromText t
-    | otherwise -> quotedPlain t
-  SingleQuoted -> quoted
-  _ -> doubleQuoted t
+    | null starts -> if plainSyntax inFlow t then B.fromText t else quotedPlain t
+    | Just b <- plainLines inFlow indent starts t -> b
+    | otherwise -> quotedPlainLines indent starts t
+  SingleQuoted -> fromMaybe (doubleQuotedLines indent starts t) (singleQuotedLines indent starts t)
+  _ -> doubleQuotedLines indent starts t
   where
-    quoted :: B.Builder
-    quoted = fromMaybe (doubleQuoted t) (singleQuoted t)
+    inFlow :: Bool
+    inFlow = pos == InFlow || pos == InFlowKey
 
 -- | A key on one line, or 'Nothing' if it needs an explicit entry.
 implicitKey :: RenderOptions -> Node -> Maybe B.Builder

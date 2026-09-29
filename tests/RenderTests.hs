@@ -20,6 +20,7 @@ renderTests =
     , testCase "fallbacks" test_fallbacks
     , testCase "force block" test_forceBlock
     , testCase "documents" test_documents
+    , testCase "lines of scalars" test_scalarLines
     , localOption (mkTimeout 10000000) $ testCase "many invalid anchor names" test_manyAnchors
     , testGroup
         "comments"
@@ -265,6 +266,37 @@ test_forceBlock = do
         , "key:"
         , "- - f"
         ]
+
+-- | A scalar that the source writes on several lines keeps its lines, also
+-- where the text has a space in place of a line break.
+test_scalarLines :: Assertion
+test_scalarLines = do
+  let check :: String -> T.Text -> Assertion
+      check preface input = assertEqual preface (Right input) (renderSyntax defaultRenderOptions <$> parseDocumentsText input)
+      changes :: String -> T.Text -> T.Text -> Assertion
+      changes preface expected input = do
+        assertEqual preface (Right expected) (renderSyntax defaultRenderOptions <$> parseDocumentsText input)
+        check (preface ++ ", rendered again") expected
+  check "folded" "options: >-\n  --health-cmd pg_isready\n  --health-interval 5s\n  --health-retries 10\n"
+  check "folded with paragraphs" "a: >\n  one\n  two\n\n  three\n  four\n"
+  check "folded with more indented lines" "a: >\n  one\n    two\n  three\n  four\n"
+  check "folded with a space at the end of a line" "a: >-\n  one \n  two\n"
+  check "plain" "a: one\n  two\n  three\n"
+  check "plain with an empty line" "a: one\n\n  two\n"
+  check "plain in a sequence" "- one\n  two\n"
+  check "plain root" "one\n  two\n"
+  check "plain in a flow sequence" "a: [one\n  two, three]\n"
+  check "single-quoted" "a: 'one\n  two'\n"
+  check "double-quoted" "a: \"one\n  two\"\n"
+  check "double-quoted with an escaped line break" "a: \"one\\\n  two\"\n"
+  check "double-quoted with an empty line" "a: \"one\n\n  two\"\n"
+  check "comment after the last line" "a: one\n  two # c\n"
+  changes "key" "one two: a\n" "? one\n  two\n: a\n"
+  changes "indentation" "a: one\n  two\n" "a:   one\n      two\n"
+  assertEqual
+    "positions"
+    (Right [ScalarLines Plain "one two\nthree" [4, 8]])
+    (map (\d -> d.root.content) <$> parseDocumentsText "one\n two\n\n three\n")
 
 test_documents :: Assertion
 test_documents = do
@@ -632,12 +664,13 @@ prop_roundTrip (Tree doc) =
   let out = renderSyntax defaultRenderOptions [doc]
   in counterexample (T.unpack out) $ case parseDocumentsText out of
        Right [doc'] ->
-         conjoin
-           [ counterexample "tree" $ strip doc'.root === strip (flowItems False doc.root)
-           , counterexample "comments" $ L.sort (allComments doc') === L.sort (allComments doc)
-           , let out' = renderSyntax defaultRenderOptions [doc']
-             in counterexample ("text: " ++ firstDifference out out') (out' == out)
-           ]
+         checkCoverage . cover 10 (hasLines doc'.root) "scalars on several lines" $
+           conjoin
+             [ counterexample "tree" $ strip doc'.root === strip (flowItems False doc.root)
+             , counterexample "comments" $ L.sort (allComments doc') === L.sort (allComments doc)
+             , let out' = renderSyntax defaultRenderOptions [doc']
+               in counterexample ("text: " ++ firstDifference out out') (out' == out)
+             ]
        r -> counterexample (show r) False
   where
     strip :: Node -> Node
@@ -653,6 +686,13 @@ prop_roundTrip (Tree doc) =
 
     allComments :: Document -> [T.Text]
     allComments d = [t | (_, _, t) <- commentsOf d]
+
+    hasLines :: Node -> Bool
+    hasLines n = case n.content of
+      ScalarLines _ _ starts -> not (null starts)
+      Sequence _ xs -> any hasLines xs
+      Mapping _ kvs -> any (\(k, v) -> hasLines k || hasLines v) kvs
+      Alias _ -> False
 
     -- The renderer gives an empty item of a flow sequence a tag.
     flowItems :: Bool -> Node -> Node
@@ -754,8 +794,14 @@ genComments collection =
 genCommentText :: Gen T.Text
 genCommentText = elements ["a comment", "", "x", "# hash", "key: value", "- item", "'quoted'"]
 
+-- | A scalar, often with positions of new lines. Some positions are not
+-- valid, e.g. outside the text or twice the same.
 genScalar :: Gen Node
-genScalar = scalarNode <$> elements [minBound .. maxBound] <*> genText
+genScalar = do
+  style <- elements [minBound .. maxBound]
+  t <- genText
+  starts <- frequency [(1, pure []), (2, L.sort <$> listOf (choose (0, T.length t + 1)))]
+  pure (contentNode (ScalarLines style t starts))
 
 genProps :: Gen Props
 genProps =

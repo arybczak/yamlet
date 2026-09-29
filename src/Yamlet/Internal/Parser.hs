@@ -745,42 +745,44 @@ cQuoted style n c props = withScan $ \e p ->
       name :: String
       name = if double then "double-quoted" else "single-quoted"
 
-      go :: Int -> Int -> [T.Text] -> Scanned T.Text
-      go seg i acc = case byteAt e i of
+      go :: Int -> Int -> [T.Text] -> Lines -> Scanned Content
+      go seg i acc ls = case byteAt e i of
         w
           | w == quote ->
               if not double && byteAt e (i + 1) == SQUOTE
-                then go (i + 2) (i + 2) ("'" : slice e seg i : acc)
-                else Done (i + 1) (finish (slice e seg i : acc))
-          | w == BACKSLASH && double -> backslash seg i acc
+                then go (i + 2) (i + 2) ("'" : slice e seg i : acc) ls
+                else Done (i + 1) $ case ls of
+                  FirstLine -> ScalarLines style (finish (slice e seg i : acc)) []
+                  Lines ps starts _ -> severalLines style (slice e seg i : acc) ps starts
+          | w == BACKSLASH && double -> backslash seg i acc ls
           | isWhite w ->
               let j = skipWhites e i
-              in if isBreak (byteAt e j) then fold i j acc else go seg j acc
+              in if isBreak (byteAt e j) then fold i j acc else go seg j acc ls
           | isBreak w -> fold i i acc
           | i >= e.end -> unterminated i
-          | otherwise -> go seg (i + 1) acc
+          | otherwise -> go seg (i + 1) acc ls
         where
-          fold :: Int -> Int -> [T.Text] -> Scanned T.Text
+          fold :: Int -> Int -> [T.Text] -> Scanned Content
           fold contentEnd brk acc'
             | isKeyCtx c = NoMatch brk
             | otherwise = case flowFold e n (breakEnd e brk) of
-                Just (k, j) -> go j j (foldText k : slice e seg contentEnd : acc')
+                Just (k, j) -> go j j [] (newLine (foldText k : slice e seg contentEnd : acc') ls)
                 Nothing -> badIndent brk
 
-      backslash :: Int -> Int -> [T.Text] -> Scanned T.Text
-      backslash seg i acc
+      backslash :: Int -> Int -> [T.Text] -> Lines -> Scanned Content
+      backslash seg i acc ls
         | isBreak (byteAt e (i + 1)) =
             if isKeyCtx c
               then NoMatch i
               else case flowFold e n (breakEnd e (i + 1)) of
-                Just (k, j) -> go j j (T.replicate k "\n" : slice e seg i : acc)
+                Just (k, j) -> go j j [] (newLine (T.replicate k "\n" : slice e seg i : acc) ls)
                 Nothing -> badIndent (i + 1)
         | i + 1 >= e.end = unterminated i
         | otherwise = case escape e (i + 1) of
-            Just (t, j) -> go j j (t : slice e seg i : acc)
+            Just (t, j) -> go j j (t : slice e seg i : acc) ls
             Nothing -> Failed i (badEscape i)
 
-      unterminated :: Int -> Scanned T.Text
+      unterminated :: Int -> Scanned Content
       unterminated i
         | isKeyCtx c = NoMatch i
         | otherwise = Failed p ("unterminated " ++ name ++ " scalar")
@@ -795,7 +797,7 @@ cQuoted style n c props = withScan $ \e p ->
             "invalid escape sequence"
         | otherwise = "invalid escape sequence, write \\\\ for a backslash or use single quotes"
 
-      badIndent :: Int -> Scanned T.Text
+      badIndent :: Int -> Scanned Content
       badIndent i
         | nextContent i >= e.end || not (hasClosingQuote e quote (nextContent i)) = unterminated i
         | otherwise =
@@ -805,8 +807,8 @@ cQuoted style n c props = withScan $ \e p ->
 
       nextContent :: Int -> Int
       nextContent i = skipWhites e (skipBlankLines e i)
-  in case go (p + 1) (p + 1) [] of
-       Done q t -> Done q (mkNode e p (toOffset e q) props (Scalar style t))
+  in case go (p + 1) (p + 1) [] FirstLine of
+       Done q content -> Done q (mkNode e p (toOffset e q) props content)
        NoMatch q -> NoMatch q
        Failed q msg -> Failed q msg
 -- Inlining gives a loop for each style. Without it, the parse benchmark of
@@ -833,6 +835,42 @@ finish :: [T.Text] -> T.Text
 finish = \case
   [t] -> t
   ts -> T.concat (reverse ts)
+
+-- | The lines of a scalar before its current line: the pieces of their text,
+-- in reverse order, the positions where they start, in reverse order, and
+-- the length of the pieces.
+data Lines
+  = FirstLine
+  | Lines [T.Text] [Int] !Int
+
+-- | Add the pieces of the current line, in reverse order, and start a new
+-- line after them.
+newLine :: [T.Text] -> Lines -> Lines
+newLine acc = \case
+  FirstLine -> next [] [] 0
+  Lines ps ls len -> next ps ls len
+  where
+    next :: [T.Text] -> [Int] -> Int -> Lines
+    next ps ls len =
+      let len' = len + sum (map T.length acc)
+      in Lines (acc ++ ps) (len' : ls) len'
+
+-- | The scalar from the pieces of its last line, and the pieces and the
+-- starts of the lines before it, all in reverse order.
+severalLines :: ScalarStyle -> [T.Text] -> [T.Text] -> [Int] -> Content
+severalLines style acc ps starts = ScalarLines style (finish (acc ++ ps)) (reverse starts)
+
+-- | The positions where the lines start, from the length of the first line
+-- and the separators and the texts of the next lines.
+lineStarts :: Int -> [T.Text] -> [Int]
+lineStarts = go []
+  where
+    go :: [Int] -> Int -> [T.Text] -> [Int]
+    go acc !len = \case
+      sep : t : rest ->
+        let !start = len + T.length sep
+        in go (start : acc) (start + T.length t) rest
+      _ -> reverse acc
 
 -- | Decode the escape sequence after a backslash.
 escape :: Env -> Int -> Maybe (T.Text, Int)
@@ -904,12 +942,13 @@ nsPlain n c props = withScan $ \e p ->
        then NoMatch p
        else
          let q = plainLine e c (p + 1)
-             node end t = mkNode e p (toOffset e end) props (Scalar Plain t)
+             first = slice e p q
+             node end t ls = mkNode e p (toOffset e end) props (ScalarLines Plain t ls)
          in if isKeyCtx c
-              then Done q (node q (slice e p q))
+              then Done q (node q first [])
               else case plainNextLines e n c q of
-                ([], _) -> Done q (node q (slice e p q))
-                (ts, r) -> Done r (node r (T.concat (slice e p q : ts)))
+                ([], _) -> Done q (node q first [])
+                (ts, r) -> Done r (node r (T.concat (first : ts)) (lineStarts (T.length first) ts))
 
 -- | The end of the plain scalar content on the current line.
 plainLine :: Env -> Ctx -> Int -> Int
@@ -1299,8 +1338,8 @@ cLBlockScalar n props = do
           i
           "a leading empty line of a block scalar has more spaces than the first non-empty line"
   let (lines_, trailing, r) = blockLines e indent q
-      text = case indicator of
-        PIPE -> literalText lines_
+      (text, starts) = case indicator of
+        PIPE -> (literalText lines_, [])
         _ -> foldedText lines_
       value = chomp chomping (not (null lines_)) trailing text
       style = if indicator == PIPE then Literal else Folded
@@ -1312,7 +1351,7 @@ cLBlockScalar n props = do
         (_, []) -> q
   setPos r
   lTrailComments indent
-  pure $! mkNode e p (toOffset e contentEnd) props (Scalar style value)
+  pure $! mkNode e p (toOffset e contentEnd) props (ScalarLines style value starts)
 
 -- | c-b-block-header(t). Return the chomping and the indentation indicator.
 cBBlockHeader :: Int -> P (Chomping, Maybe Int)
@@ -1417,10 +1456,14 @@ literalText = \case
     line :: BlockLine -> [T.Text]
     line (BlockLine k t) = ["\n", T.replicate k "\n", t]
 
-foldedText :: [BlockLine] -> T.Text
+-- | The text of a folded block scalar and the positions where its lines
+-- start.
+foldedText :: [BlockLine] -> (T.Text, [Int])
 foldedText = \case
-  [] -> T.empty
-  BlockLine k t : rest -> T.concat $ T.replicate k "\n" : t : go (isSpaced t) rest
+  [] -> (T.empty, [])
+  BlockLine k t : rest ->
+    let next = go (isSpaced t) rest
+    in (T.concat (T.replicate k "\n" : t : next), lineStarts (k + T.length t) next)
   where
     go :: Bool -> [BlockLine] -> [T.Text]
     go prevSpaced = \case

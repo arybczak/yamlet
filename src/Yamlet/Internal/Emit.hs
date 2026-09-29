@@ -7,9 +7,13 @@
 module Yamlet.Internal.Emit
   ( -- * Scalars
     plainSyntax
+  , plainLines
   , singleQuoted
+  , singleQuotedLines
   , quotedPlain
+  , quotedPlainLines
   , doubleQuoted
+  , doubleQuotedLines
   , literalBlock
   , foldedBlock
   , needsIndentIndicator
@@ -65,6 +69,11 @@ plainSyntax inFlow t = case T.uncons t of
         | prev == ' ' && c == '#' -> False
         | otherwise -> valid c s'
 
+    isPlainChar :: Char -> Bool
+    isPlainChar c =
+      (c == ' ' || (isScalarChar c && c /= '\t'))
+        && not (inFlow && asciiChar isFlowIndicator c)
+
     firstOk :: Char -> T.Text -> Bool
     firstOk c rest
       | c `elem` ("-?:" :: String) = case T.uncons rest of
@@ -72,10 +81,36 @@ plainSyntax inFlow t = case T.uncons t of
           Nothing -> False
       | otherwise = not (asciiChar isWhite c) && not (asciiChar isIndicator c)
 
+-- | The text reads back as the same text on a line of a plain scalar after
+-- the first line. Such a line can start with an indicator, but not with a
+-- comment.
+plainNextLine :: Bool -> T.Text -> Bool
+plainNextLine inFlow t = case (T.uncons t, T.unsnoc t) of
+  (Just (first, _), Just (_, lastChar)) ->
+    first /= '#'
+      && not (asciiChar isWhite first)
+      && not (asciiChar isWhite lastChar)
+      && lastChar /= ':'
+      && T.all isPlainChar t
+      && not (T.isInfixOf ": " t)
+      && not (T.isInfixOf " #" t)
+  _ -> False
+  where
     isPlainChar :: Char -> Bool
     isPlainChar c =
       (c == ' ' || (isScalarChar c && c /= '\t'))
         && not (inFlow && asciiChar isFlowIndicator c)
+
+-- | A plain scalar on the lines that start at the positions, with the lines
+-- after the first one at the given indentation, if the text can be plain. It
+-- is in a flow collection if the flag is set.
+plainLines :: Bool -> Int -> [Int] -> T.Text -> Maybe B.Builder
+plainLines inFlow indent starts t
+  | plainSyntax inFlow first && all (plainNextLine inFlow . snd) rest =
+      Just (onLines indent B.fromText ls)
+  | otherwise = Nothing
+  where
+    ls@(first, rest) = flowLines False False (asciiChar isWhite) starts t
 
 -- | A single-quoted scalar on one line, if the text has no line breaks.
 singleQuoted :: T.Text -> Maybe B.Builder
@@ -84,17 +119,45 @@ singleQuoted t
       Just $ "'" <> B.fromText (T.replace "'" "''" t) <> "'"
   | otherwise = Nothing
 
+-- | A single-quoted scalar on the lines that start at the positions, as in
+-- 'plainLines', if single quotes can hold the text.
+singleQuotedLines :: Int -> [Int] -> T.Text -> Maybe B.Builder
+singleQuotedLines indent starts t
+  | null starts = singleQuoted t
+  | all (T.all (\c -> c == '\t' || isScalarChar c)) (first : map snd rest) =
+      Just $ "'" <> onLines indent (\l -> B.fromText (T.replace "'" "''" l)) ls <> "'"
+  | otherwise = Nothing
+  where
+    ls@(first, rest) = flowLines True False (asciiChar isWhite) starts t
+
 -- | The quoted form of a plain scalar whose text cannot be plain: in single
 -- quotes, or in double quotes if the text has a tab or a character that
 -- single quotes cannot hold. A tab in single quotes is not visible.
 quotedPlain :: T.Text -> B.Builder
-quotedPlain t
-  | T.any (== '\t') t = doubleQuoted t
-  | otherwise = fromMaybe (doubleQuoted t) (singleQuoted t)
+quotedPlain = quotedPlainLines 0 []
+
+-- | 'quotedPlain' on the lines that start at the positions, as in
+-- 'plainLines'.
+quotedPlainLines :: Int -> [Int] -> T.Text -> B.Builder
+quotedPlainLines indent starts t
+  | T.any (== '\t') t = doubleQuotedLines indent starts t
+  | otherwise = fromMaybe (doubleQuotedLines indent starts t) (singleQuotedLines indent starts t)
 
 -- | A double-quoted scalar with escapes for the characters that need them.
 doubleQuoted :: T.Text -> B.Builder
-doubleQuoted t = "\"" <> T.foldr (\c b -> escape c <> b) mempty t <> "\""
+doubleQuoted t = "\"" <> doubleQuotedText t <> "\""
+
+-- | A double-quoted scalar on the lines that start at the positions, as in
+-- 'plainLines'. The escapes of the tabs keep them at the ends of the lines.
+doubleQuotedLines :: Int -> [Int] -> T.Text -> B.Builder
+doubleQuotedLines indent starts t
+  | null starts = doubleQuoted t
+  | otherwise = "\"" <> onLines indent doubleQuotedText (flowLines True True (== ' ') starts t) <> "\""
+
+-- | The text of a double-quoted scalar, with escapes for the characters that
+-- need them.
+doubleQuotedText :: T.Text -> B.Builder
+doubleQuotedText t = T.foldr (\c b -> escape c <> b) mempty t
   where
     escape :: Char -> B.Builder
     escape = \case
@@ -112,6 +175,81 @@ doubleQuoted t = "\"" <> T.foldr (\c b -> escape c <> b) mempty t <> "\""
 
     hex :: Int -> Int -> B.Builder
     hex k i = let s = map toUpper (showHex i "") in B.fromText (T.pack (replicate (k - length s) '0' ++ s))
+-- Inlining lets the builder write each character to the buffer. Without it,
+-- the builder allocates a closure for each character, and the render
+-- benchmark of the JSON input allocated 64 MB instead of 43 MB.
+{-# INLINE doubleQuotedText #-}
+
+-- | The lines of a flow scalar that start at the positions: the first line,
+-- and each next line with the number of empty lines above it, or 'Nothing'
+-- after an escaped line break. A line break replaces a space of the text,
+-- and an empty line replaces a line break of the text. A position where the
+-- style cannot start a line and keep the text joins its two lines.
+--
+-- The first flag allows an empty first and last line, e.g. for a quoted
+-- scalar. The second flag allows escaped line breaks. The parser drops a
+-- white character at the start or the end of a line.
+flowLines :: Bool -> Bool -> (Char -> Bool) -> [Int] -> T.Text -> (T.Text, [(Maybe Int, T.Text)])
+flowLines quoted escapes white starts t = case splitLines starts t of
+  first : rest -> go True first rest
+  [] -> (t, [])
+  where
+    go :: Bool -> T.Text -> [T.Text] -> (T.Text, [(Maybe Int, T.Text)])
+    go isFirst a = \case
+      [] -> (a, [])
+      b : rest -> case lineEnd isFirst (null rest) a b of
+        Just (a', end) -> let (l, ls) = go False b rest in (a', (end, l) : ls)
+        Nothing -> go isFirst (a <> b) rest
+
+    -- The first line without the text that the line break replaces, and the
+    -- number of empty lines.
+    lineEnd :: Bool -> Bool -> T.Text -> T.Text -> Maybe (T.Text, Maybe Int)
+    lineEnd isFirst isLast a b
+      | not startOk = Nothing
+      | Just (a', ' ') <- T.unsnoc a, endOk a' = Just (a', Just 0)
+      | k > 0, endOk a'' = Just (a'', Just k)
+      | escapes = Just (a, Nothing)
+      | otherwise = Nothing
+      where
+        startOk :: Bool
+        startOk = case T.uncons b of
+          Just (c, _) -> not (white c)
+          Nothing -> quoted && isLast
+
+        endOk :: T.Text -> Bool
+        endOk x = case T.unsnoc x of
+          Just (_, c) -> not (white c)
+          Nothing -> quoted && isFirst
+
+        k :: Int
+        k = T.length (T.takeWhileEnd (== '\n') a)
+
+        a'' :: T.Text
+        a'' = T.dropEnd k a
+
+-- | The flow scalar on its lines, with each line after the first one at the
+-- given indentation.
+onLines :: Int -> (T.Text -> B.Builder) -> (T.Text, [(Maybe Int, T.Text)]) -> B.Builder
+onLines indent text (first, rest) = text first <> mconcat [lineBreak end <> spaces indent <> text l | (end, l) <- rest]
+  where
+    lineBreak :: Maybe Int -> B.Builder
+    lineBreak = \case
+      Just k -> B.fromText (T.replicate (k + 1) "\n")
+      Nothing -> "\\\n"
+
+-- | The text split at the positions. A position that does not come after the
+-- one before it is ignored, and a position after the end of the text ends
+-- the split.
+splitLines :: [Int] -> T.Text -> [T.Text]
+splitLines = go 0
+  where
+    go :: Int -> [Int] -> T.Text -> [T.Text]
+    go at starts s = case starts of
+      p : rest
+        | p <= at -> go at rest s
+        | T.compareLength s (p - at) == LT -> [s]
+        | otherwise -> let (a, b) = T.splitAt (p - at) s in a : go p rest b
+      [] -> [s]
 
 -- | The header and the content lines of a literal block scalar, with the
 -- content at the given indentation. The flag allows the keep indicator for
@@ -125,13 +263,14 @@ literalBlock allowKeep indent t = do
   Just ("|" <> header, content)
 
 -- | The header and the content lines of a folded block scalar, with the
--- content at the given indentation. It has no keep indicator, and each line of
--- the text becomes one line of the output.
-foldedBlock :: Int -> T.Text -> Maybe (B.Builder, B.Builder)
-foldedBlock indent t = do
+-- content at the given indentation. It has no keep indicator. Each line of
+-- the text becomes one line of the output, or several lines if the lines
+-- start at the positions.
+foldedBlock :: Int -> [Int] -> T.Text -> Maybe (B.Builder, B.Builder)
+foldedBlock indent starts t = do
   (header, body, _) <- blockParts False t
   let (leading, rest) = span T.null (T.splitOn "\n" body)
-      content = mconcat (replicate (length leading) "\n") <> go Nothing (groups rest)
+      content = mconcat (replicate (length leading) "\n") <> go Nothing (length leading) starts (groups rest)
   Just (">" <> header, content)
   where
     -- The lines with content, each with the number of empty lines before it.
@@ -141,9 +280,10 @@ foldedBlock indent t = do
       (empties, l : ls') -> (length empties, l) : groups ls'
 
     -- A line break between two lines that start with content folds into a
-    -- space, so the output needs one empty line more there.
-    go :: Maybe T.Text -> [(Int, T.Text)] -> B.Builder
-    go prev = \case
+    -- space, so the output needs one empty line more there. The group starts
+    -- at the offset.
+    go :: Maybe T.Text -> Int -> [Int] -> [(Int, T.Text)] -> B.Builder
+    go prev offset ss = \case
       [] -> mempty
       (empties, l) : ls ->
         let extra = case prev of
@@ -152,7 +292,29 @@ foldedBlock indent t = do
             separator = case prev of
               Just _ -> mconcat (replicate (empties + extra) "\n")
               Nothing -> mempty
-        in separator <> line indent l <> go (Just l) ls
+            lineStart = offset + empties
+            lineEnd = lineStart + T.length l
+            (inLine, ss') = span (< lineEnd) (dropWhile (<= lineStart) ss)
+        in separator
+             <> mconcat (map (line indent) (lineParts (map (subtract lineStart) inLine) l))
+             <> go (Just l) (lineEnd + 1) ss' ls
+
+    -- The parts of a line of the text that start at the positions. A line
+    -- break replaces a space between two parts that start with content.
+    lineParts :: [Int] -> T.Text -> [T.Text]
+    lineParts ps l
+      | null ps || isSpaced l = [l]
+      | otherwise = join (splitLines ps l)
+      where
+        join :: [T.Text] -> [T.Text]
+        join = \case
+          a : b : rest
+            | Just (a', ' ') <- T.unsnoc a
+            , Just (c, _) <- T.uncons b
+            , c /= ' ' && c /= '\t' ->
+                a' : join (b : rest)
+            | otherwise -> join (a <> b : rest)
+          parts -> parts
 
     isSpaced :: T.Text -> Bool
     isSpaced l = case T.uncons l of
