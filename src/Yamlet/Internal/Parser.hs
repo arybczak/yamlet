@@ -727,76 +727,32 @@ cNsAliasNode = do
 
 -- | c-double-quoted(n,c)
 cDoubleQuoted :: Int -> Ctx -> Props -> P Node
-cDoubleQuoted n c props = withScan $ \e p ->
-  let go :: Int -> Int -> [T.Text] -> Scanned T.Text
-      go seg i acc = case byteAt e i of
-        DQUOTE -> Done (i + 1) (finish (slice e seg i : acc))
-        BACKSLASH
-          | isBreak (byteAt e (i + 1)) ->
-              if isKeyCtx c
-                then NoMatch i
-                else case flowFold e n (breakEnd e (i + 1)) of
-                  Just (k, j) -> go j j (T.replicate k "\n" : slice e seg i : acc)
-                  Nothing -> badIndent (i + 1)
-          | i + 1 >= e.end -> unterminated i
-          | otherwise -> case escape e (i + 1) of
-              Just (t, j) -> go j j (t : slice e seg i : acc)
-              Nothing -> Failed i (badEscape i)
-        w
-          | isWhite w ->
-              let j = skipWhites e i
-                  w' = byteAt e j
-              in if isBreak w' then fold i j acc else go seg j acc
-          | isBreak w -> fold i i acc
-          | i >= e.end -> unterminated i
-          | otherwise -> go seg (i + 1) acc
-        where
-          fold :: Int -> Int -> [T.Text] -> Scanned T.Text
-          fold contentEnd brk acc'
-            | isKeyCtx c = NoMatch brk
-            | otherwise = case flowFold e n (breakEnd e brk) of
-                Just (k, j) -> go j j (foldText k : slice e seg contentEnd : acc')
-                Nothing -> badIndent brk
-
-      unterminated :: Int -> Scanned T.Text
-      unterminated i
-        | isKeyCtx c = NoMatch i
-        | otherwise = Failed p "unterminated double-quoted scalar"
-
-      -- A hex escape with digits fails only for a bad code point. Any other
-      -- invalid escape likely comes from a Windows path or a regular
-      -- expression, e.g. "C:\Users" or "\d+".
-      badEscape :: Int -> String
-      badEscape i
-        | chr (fromIntegral (byteAt e (i + 1))) `elem` ("xuU" :: String)
-        , isHexDigit (chr (fromIntegral (byteAt e (i + 2)))) =
-            "invalid escape sequence"
-        | otherwise = "invalid escape sequence, write \\\\ for a backslash or use single quotes"
-
-      badIndent :: Int -> Scanned T.Text
-      badIndent i
-        | nextContent i >= e.end || not (hasClosingQuote e DQUOTE (nextContent i)) = unterminated i
-        | otherwise =
-            Failed
-              (nextContent i)
-              "invalid indentation of a line in a double-quoted scalar"
-
-      nextContent :: Int -> Int
-      nextContent i = skipWhites e (skipBlankLines e i)
-  in case go (p + 1) (p + 1) [] of
-       Done q t -> Done q (mkNode e p (toOffset e q) props (Scalar DoubleQuoted t))
-       NoMatch q -> NoMatch q
-       Failed q msg -> Failed q msg
+cDoubleQuoted = cQuoted DoubleQuoted
 
 -- | c-single-quoted(n,c)
 cSingleQuoted :: Int -> Ctx -> Props -> P Node
-cSingleQuoted n c props = withScan $ \e p ->
-  let go :: Int -> Int -> [T.Text] -> Scanned T.Text
+cSingleQuoted = cQuoted SingleQuoted
+
+-- | A double-quoted or a single-quoted scalar.
+cQuoted :: ScalarStyle -> Int -> Ctx -> Props -> P Node
+cQuoted style n c props = withScan $ \e p ->
+  let double :: Bool
+      double = style == DoubleQuoted
+
+      quote :: Word8
+      quote = if double then DQUOTE else SQUOTE
+
+      name :: String
+      name = if double then "double-quoted" else "single-quoted"
+
+      go :: Int -> Int -> [T.Text] -> Scanned T.Text
       go seg i acc = case byteAt e i of
-        SQUOTE
-          | byteAt e (i + 1) == SQUOTE -> go (i + 2) (i + 2) ("'" : slice e seg i : acc)
-          | otherwise -> Done (i + 1) (finish (slice e seg i : acc))
         w
+          | w == quote ->
+              if not double && byteAt e (i + 1) == SQUOTE
+                then go (i + 2) (i + 2) ("'" : slice e seg i : acc)
+                else Done (i + 1) (finish (slice e seg i : acc))
+          | w == BACKSLASH && double -> backslash seg i acc
           | isWhite w ->
               let j = skipWhites e i
               in if isBreak (byteAt e j) then fold i j acc else go seg j acc
@@ -811,25 +767,51 @@ cSingleQuoted n c props = withScan $ \e p ->
                 Just (k, j) -> go j j (foldText k : slice e seg contentEnd : acc')
                 Nothing -> badIndent brk
 
+      backslash :: Int -> Int -> [T.Text] -> Scanned T.Text
+      backslash seg i acc
+        | isBreak (byteAt e (i + 1)) =
+            if isKeyCtx c
+              then NoMatch i
+              else case flowFold e n (breakEnd e (i + 1)) of
+                Just (k, j) -> go j j (T.replicate k "\n" : slice e seg i : acc)
+                Nothing -> badIndent (i + 1)
+        | i + 1 >= e.end = unterminated i
+        | otherwise = case escape e (i + 1) of
+            Just (t, j) -> go j j (t : slice e seg i : acc)
+            Nothing -> Failed i (badEscape i)
+
       unterminated :: Int -> Scanned T.Text
       unterminated i
         | isKeyCtx c = NoMatch i
-        | otherwise = Failed p "unterminated single-quoted scalar"
+        | otherwise = Failed p ("unterminated " ++ name ++ " scalar")
+
+      -- A hex escape with digits fails only for a bad code point. Any other
+      -- invalid escape likely comes from a Windows path or a regular
+      -- expression, e.g. "C:\Users" or "\d+".
+      badEscape :: Int -> String
+      badEscape i
+        | chr (fromIntegral (byteAt e (i + 1))) `elem` ("xuU" :: String)
+        , isHexDigit (chr (fromIntegral (byteAt e (i + 2)))) =
+            "invalid escape sequence"
+        | otherwise = "invalid escape sequence, write \\\\ for a backslash or use single quotes"
 
       badIndent :: Int -> Scanned T.Text
       badIndent i
-        | nextContent i >= e.end || not (hasClosingQuote e SQUOTE (nextContent i)) = unterminated i
+        | nextContent i >= e.end || not (hasClosingQuote e quote (nextContent i)) = unterminated i
         | otherwise =
             Failed
               (nextContent i)
-              "invalid indentation of a line in a single-quoted scalar"
+              ("invalid indentation of a line in a " ++ name ++ " scalar")
 
       nextContent :: Int -> Int
       nextContent i = skipWhites e (skipBlankLines e i)
   in case go (p + 1) (p + 1) [] of
-       Done q t -> Done q (mkNode e p (toOffset e q) props (Scalar SingleQuoted t))
+       Done q t -> Done q (mkNode e p (toOffset e q) props (Scalar style t))
        NoMatch q -> NoMatch q
        Failed q msg -> Failed q msg
+-- Inlining gives a loop for each style. Without it, the parse benchmark of
+-- the JSON input allocated 5% more.
+{-# INLINE cQuoted #-}
 
 -- | Skip the line break at the index and the blank lines after it.
 skipBlankLines :: Env -> Int -> Int
@@ -1483,14 +1465,10 @@ lTrailComments n = optional_ $ do
 -- | l+block-sequence(n)
 lBlockSequence :: Int -> Props -> P Node
 lBlockSequence n props = do
-  e <- env
   k <- countSpaces
   guardP (k > n)
   advance k
-  p <- pos
-  x <- cLBlockSeqEntry k
-  xs <- many $ sIndent k >> cLBlockSeqEntry k
-  pure $! mkNode e p (last (x : xs)).endOffset props (Sequence Block (x : xs))
+  nsLCompactSequence k props
 
 -- | c-l-block-seq-entry(n)
 cLBlockSeqEntry :: Int -> P Node
@@ -1511,8 +1489,8 @@ sLBlockIndented n c = compact <|> sLBlockNode n c <|> (eNode <* sLComments)
       advance m
       p <- pos
       if mayStartEntry e p
-        then nsLCompactSequence (n + 1 + m) <|> nsLCompactMapping (n + 1 + m)
-        else nsLCompactSequence (n + 1 + m)
+        then nsLCompactSequence (n + 1 + m) noProps <|> nsLCompactMapping (n + 1 + m) noProps
+        else nsLCompactSequence (n + 1 + m) noProps
 
     -- An entry of a mapping has an explicit key or a colon on its first line.
     -- A key cannot start with the indicator of a sequence entry. Without this
@@ -1530,26 +1508,22 @@ sLBlockIndented n c = compact <|> sLBlockNode n c <|> (eNode <* sLComments)
             | w == 0 || isBreak w -> False
             | otherwise -> go (i + 1)
 
--- | ns-l-compact-sequence(n)
-nsLCompactSequence :: Int -> P Node
-nsLCompactSequence n = do
+-- | ns-l-compact-sequence(n), with the properties of the node.
+nsLCompactSequence :: Int -> Props -> P Node
+nsLCompactSequence n props = do
   e <- env
   p <- pos
   x <- cLBlockSeqEntry n
   xs <- many $ sIndent n >> cLBlockSeqEntry n
-  pure $! mkNode e p (last (x : xs)).endOffset noProps (Sequence Block (x : xs))
+  pure $! mkNode e p (lastOf x xs).endOffset props (Sequence Block (x : xs))
 
 -- | l+block-mapping(n)
 lBlockMapping :: Int -> Props -> P Node
 lBlockMapping n props = do
-  e <- env
   k <- countSpaces
   guardP (k > n)
   advance k
-  p <- pos
-  x <- nsLBlockMapEntry k
-  xs <- many $ sIndent k >> nsLBlockMapEntry k
-  pure $! mkNode e p (snd (last (x : xs))).endOffset props (Mapping Block (x : xs))
+  nsLCompactMapping k props
 
 -- | ns-l-block-map-entry(n)
 nsLBlockMapEntry :: Int -> P (Node, Node)
@@ -1596,14 +1570,20 @@ cLBlockMapImplicitValue n = do
   guardP . not $ isNsChar w
   sLBlockNode n BlockOut <|> (eNode <* sLComments)
 
--- | ns-l-compact-mapping(n)
-nsLCompactMapping :: Int -> P Node
-nsLCompactMapping n = do
+-- | ns-l-compact-mapping(n), with the properties of the node.
+nsLCompactMapping :: Int -> Props -> P Node
+nsLCompactMapping n props = do
   e <- env
   p <- pos
   x <- nsLBlockMapEntry n
   xs <- many $ sIndent n >> nsLBlockMapEntry n
-  pure $! mkNode e p (snd (last (x : xs))).endOffset noProps (Mapping Block (x : xs))
+  pure $! mkNode e p (snd (lastOf x xs)).endOffset props (Mapping Block (x : xs))
+
+-- | The last element of a non-empty list.
+lastOf :: a -> [a] -> a
+lastOf x = \case
+  [] -> x
+  y : ys -> lastOf y ys
 
 ----------------------------------------
 -- Block nodes

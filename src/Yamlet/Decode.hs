@@ -765,7 +765,9 @@ closeName known t = suggestion (T.unpack t)
     -- or change. After i characters of xs, the row holds the distance from
     -- them to each prefix of ys.
     distance :: String -> String -> Int
-    distance xs ys = last (L.foldl' nextRow [0 .. length ys] (zip [1 ..] xs))
+    distance xs ys = case reverse (L.foldl' nextRow [0 .. length ys] (zip [1 ..] xs)) of
+      d : _ -> d
+      [] -> length ys
       where
         nextRow :: [Int] -> (Int, Char) -> [Int]
         nextRow row (i, x) = scanl cell i (zip3 ys row (drop 1 row))
