@@ -272,6 +272,7 @@ module Yamlet.Syntax
   , contentNode
   , scalarNode
   , plainNode
+  , foldedNode
   , sequenceNode
   , mappingNode
 
@@ -343,6 +344,25 @@ scalarNode style = contentNode . Scalar style
 -- | A plain scalar.
 plainNode :: T.Text -> Node
 plainNode = scalarNode Plain
+
+-- | A folded block scalar (@>-@) with the given lines.
+--
+-- >>> T.putStr (renderSyntax defaultRenderOptions [document (mappingNode [(plainNode "options", foldedNode ["--health-cmd pg_isready", "--health-interval 5s"])])])
+-- options: >-
+--   --health-cmd pg_isready
+--   --health-interval 5s
+foldedNode :: [T.Text] -> Node
+foldedNode ls = contentNode (ScalarLines Folded t starts)
+  where
+    (t, starts) = foldedText (contentLines 0 ls)
+
+    -- The lines with content, each with the number of empty lines above it.
+    contentLines :: Int -> [T.Text] -> [BlockLine]
+    contentLines !empties = \case
+      [] -> []
+      l : rest
+        | T.null l -> contentLines (empties + 1) rest
+        | otherwise -> BlockLine empties l : contentLines 0 rest
 
 -- | A block sequence.
 sequenceNode :: [Node] -> Node

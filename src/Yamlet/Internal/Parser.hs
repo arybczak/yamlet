@@ -10,6 +10,10 @@
 -- in subsequent releases.
 module Yamlet.Internal.Parser
   ( parseStream
+
+    -- * Block scalars
+  , BlockLine (..)
+  , foldedText
   ) where
 
 import Control.Monad

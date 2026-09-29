@@ -293,6 +293,20 @@ test_scalarLines = do
   check "comment after the last line" "a: one\n  two # c\n"
   changes "key" "one two: a\n" "? one\n  two\n: a\n"
   changes "indentation" "a: one\n  two\n" "a:   one\n      two\n"
+  let folded :: String -> [T.Text] -> Assertion
+      folded preface ls = do
+        let out = renderSyntax defaultRenderOptions [document (mappingNode [(plainNode "a", foldedNode ls)])]
+        assertEqual preface ("a: >-\n" <> T.concat [if T.null l then "\n" else "  " <> l <> "\n" | l <- ls]) out
+        assertEqual
+          (preface ++ ", read back")
+          (Right [[(foldedNode ls).content]])
+          (map (\d -> [v.content | Mapping _ kvs <- [d.root.content], (_, v) <- kvs]) <$> parseDocumentsText out)
+  folded "folded node" ["one two", "three", "four"]
+  folded "folded node with a space at a line start" ["one", " two", "three"]
+  folded "folded node with a space at a line end" ["one ", "two"]
+  folded "folded node with one line" ["one"]
+  folded "folded node with empty lines" ["one", "", "two", "", "", "three"]
+  folded "folded node with an indented example" ["Example:", "  GET /orders", "", "The end."]
   assertEqual
     "positions"
     (Right [ScalarLines Plain "one two\nthree" [4, 8]])
