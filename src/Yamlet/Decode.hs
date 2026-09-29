@@ -34,13 +34,14 @@ module Yamlet.Decode
   , objectEntries
   , objectKeys
   , lookupKey
-  , (.:)
-  , (.:?)
-  , (.:!)
-  , (.!=)
-  , explicitParseField
-  , explicitParseFieldMaybe
-  , explicitParseFieldIfPresent
+  , parseField
+  , parseFieldMaybe
+  , parseFieldIfPresent
+  , parseFieldDefault
+  , parseFieldWith
+  , parseFieldMaybeWith
+  , parseFieldIfPresentWith
+  , parseFieldDefaultWith
   , rejectUnknownKeys
   ) where
 
@@ -107,7 +108,7 @@ import Yamlet.Value
 --
 -- @
 -- rejectUnknownKeys [\"name\", \"paths\"] o
---   *> (Config \<$> o .: \"name\" \<*> o .: \"paths\")
+--   *> (Config \<$> parseField o \"name\" \<*> parseField o \"paths\")
 -- @
 --
 -- '>>=' and '>>' stop at the first error. A statement of a @do@ block also
@@ -501,28 +502,23 @@ lookupKey :: T.Text -> Object -> Maybe S.Node
 lookupKey key o = snd <$> M.lookup key o.index
 
 -- | The value of a key. It is an error if the key is missing.
-(.:) :: FromYaml a => Object -> T.Text -> Parser a
-o .: key = case M.lookup key o.index of
-  Just entry -> parseEntry entry
-  Nothing -> missingKey o key
+parseField :: FromYaml a => Object -> T.Text -> Parser a
+parseField = entryField parseEntry
 
 -- | The value of a key, or 'Nothing' if the key is missing or its value is
 -- null.
-(.:?) :: FromYaml a => Object -> T.Text -> Parser (Maybe a)
-o .:? key =
-  findKey o key >>= \case
-    Just (_, v) | isNullNode v -> pure Nothing
-    entry -> traverse parseEntry entry
+parseFieldMaybe :: FromYaml a => Object -> T.Text -> Parser (Maybe a)
+parseFieldMaybe = entryFieldMaybe parseEntry
 
--- | The value of a key, or 'Nothing' if the key is missing. Unlike '.:?', a
--- null value goes to the parser of the value, e.g. @'Maybe' a@ gives
--- @'Just' 'Nothing'@ for a null value.
+-- | The value of a key, or 'Nothing' if the key is missing. Unlike
+-- 'parseFieldMaybe', a null value goes to the parser of the value, e.g.
+-- @'Maybe' a@ gives @'Just' 'Nothing'@ for a null value.
 --
 -- >>> :{
 -- newtype Limit = Limit (Maybe (Maybe Int))
 --   deriving stock (Show)
 -- instance FromYaml Limit where
---   parseYaml = withMapping $ \o -> Limit <$> o .:! "limit"
+--   parseYaml = withMapping $ \o -> Limit <$> parseFieldIfPresent o "limit"
 -- :}
 --
 -- >>> decodeText @Limit "limit: null\n"
@@ -530,18 +526,40 @@ o .:? key =
 --
 -- >>> decodeText @Limit "{}"
 -- Right (Limit Nothing)
-(.:!) :: FromYaml a => Object -> T.Text -> Parser (Maybe a)
-o .:! key = findKey o key >>= traverse parseEntry
+parseFieldIfPresent :: FromYaml a => Object -> T.Text -> Parser (Maybe a)
+parseFieldIfPresent = entryFieldIfPresent parseEntry
 
--- | Like '.:', with the given parser for the value, e.g. to check a value
--- without a new type for it. The errors of the parser point to the value. The parser gets only the value, so it cannot keep the comments of
--- the key, as a 'Yamlet.Commented' field does with '.:'.
+-- | The value of a key, or the default if the key is missing or its value is
+-- null.
+--
+-- >>> :{
+-- newtype Server = Server Int
+--   deriving stock (Show)
+-- instance FromYaml Server where
+--   parseYaml = withMapping $ \o -> Server <$> parseFieldDefault o "port" 80
+-- :}
+--
+-- >>> decodeText @Server "{}"
+-- Right (Server 80)
+--
+-- >>> decodeText @Server "port: null\n"
+-- Right (Server 80)
+--
+-- >>> decodeText @Server "port: 8080\n"
+-- Right (Server 8080)
+parseFieldDefault :: FromYaml a => Object -> T.Text -> a -> Parser a
+parseFieldDefault o key def = fromMaybe def <$> parseFieldMaybe o key
+
+-- | Like 'parseField', with the given parser for the value, e.g. to check a
+-- value without a new type for it. The errors of the parser point to the
+-- value. The parser gets only the value, so it cannot keep the comments of
+-- the key, as a 'Yamlet.Commented' field does with 'parseField'.
 --
 -- >>> :{
 -- newtype Port = Port Int
 --   deriving stock (Show)
 -- instance FromYaml Port where
---   parseYaml = withMapping $ \o -> Port <$> explicitParseField number o "port"
+--   parseYaml = withMapping $ \o -> Port <$> parseFieldWith number o "port"
 --     where
 --       number :: Node -> Parser Int
 --       number = withInt $ \i ->
@@ -558,13 +576,11 @@ o .:! key = findKey o key >>= traverse parseEntry
 --   |
 -- 1 | port: 70000
 --   |       ^
-explicitParseField :: (S.Node -> Parser a) -> Object -> T.Text -> Parser a
-explicitParseField p o key = case M.lookup key o.index of
-  Just (_, v) -> parseNode p v
-  Nothing -> missingKey o key
+parseFieldWith :: (S.Node -> Parser a) -> Object -> T.Text -> Parser a
+parseFieldWith p = entryField (parseNode p . snd)
 
--- | Like '.:?', with the given parser for the value, as in
--- 'explicitParseField'. The result is 'Nothing' if the key is missing or its
+-- | Like 'parseFieldMaybe', with the given parser for the value, as in
+-- 'parseFieldWith'. The result is 'Nothing' if the key is missing or its
 -- value is null. The parser never gets a null value, so a missing key and a
 -- null value mean the same.
 --
@@ -572,7 +588,7 @@ explicitParseField p o key = case M.lookup key o.index of
 -- newtype Job = Job (Maybe Int)
 --   deriving stock (Show)
 -- instance FromYaml Job where
---   parseYaml = withMapping $ \o -> Job <$> explicitParseFieldMaybe positive o "retries"
+--   parseYaml = withMapping $ \o -> Job <$> parseFieldMaybeWith positive o "retries"
 --     where
 --       positive :: Node -> Parser Int
 --       positive = withInt $ \i ->
@@ -588,15 +604,12 @@ explicitParseField p o key = case M.lookup key o.index of
 -- >>> decodeText @Job "retries: 3\n"
 -- Right (Job (Just 3))
 --
--- To give a null value to the parser, use 'explicitParseFieldIfPresent'.
-explicitParseFieldMaybe :: (S.Node -> Parser a) -> Object -> T.Text -> Parser (Maybe a)
-explicitParseFieldMaybe p o key =
-  findKey o key >>= \case
-    Just (_, v) | isNullNode v -> pure Nothing
-    entry -> traverse (parseNode p . snd) entry
+-- To give a null value to the parser, use 'parseFieldIfPresentWith'.
+parseFieldMaybeWith :: (S.Node -> Parser a) -> Object -> T.Text -> Parser (Maybe a)
+parseFieldMaybeWith p = entryFieldMaybe (parseNode p . snd)
 
--- | Like '.:!', with the given parser for the value, as in
--- 'explicitParseField'. The result is 'Nothing' only if the key is missing.
+-- | Like 'parseFieldIfPresent', with the given parser for the value, as in
+-- 'parseFieldWith'. The result is 'Nothing' only if the key is missing.
 -- A null value goes to the parser, so the parser can give it a meaning of
 -- its own. Here a missing key takes the default limit, and null means no
 -- limit:
@@ -607,7 +620,7 @@ explicitParseFieldMaybe p o key =
 -- newtype Job = Job (Maybe Limit)
 --   deriving stock (Show)
 -- instance FromYaml Job where
---   parseYaml = withMapping $ \o -> Job <$> explicitParseFieldIfPresent limit o "limit"
+--   parseYaml = withMapping $ \o -> Job <$> parseFieldIfPresentWith limit o "limit"
 --     where
 --       limit :: Node -> Parser Limit
 --       limit n = case view n of
@@ -624,10 +637,51 @@ explicitParseFieldMaybe p o key =
 -- >>> decodeText @Job "limit: 3\n"
 -- Right (Job (Just (Limit 3)))
 --
--- With 'explicitParseFieldMaybe', the null value would give 'Nothing', the
+-- With 'parseFieldMaybeWith', the null value would give 'Nothing', the
 -- same as the missing key.
-explicitParseFieldIfPresent :: (S.Node -> Parser a) -> Object -> T.Text -> Parser (Maybe a)
-explicitParseFieldIfPresent p o key = findKey o key >>= traverse (parseNode p . snd)
+parseFieldIfPresentWith :: (S.Node -> Parser a) -> Object -> T.Text -> Parser (Maybe a)
+parseFieldIfPresentWith p = entryFieldIfPresent (parseNode p . snd)
+
+-- | Like 'parseFieldDefault', with the given parser for the value, as in
+-- 'parseFieldWith'. The parser never gets a null value.
+--
+-- >>> :{
+-- newtype Job = Job Int
+--   deriving stock (Show)
+-- instance FromYaml Job where
+--   parseYaml = withMapping $ \o -> Job <$> parseFieldDefaultWith positive o "retries" 1
+--     where
+--       positive :: Node -> Parser Int
+--       positive = withInt $ \i ->
+--         if i > 0 then pure (fromInteger i) else fail "expected a positive number"
+-- :}
+--
+-- >>> decodeText @Job "{}"
+-- Right (Job 1)
+--
+-- >>> decodeText @Job "retries: 3\n"
+-- Right (Job 3)
+parseFieldDefaultWith :: (S.Node -> Parser a) -> Object -> T.Text -> a -> Parser a
+parseFieldDefaultWith p o key def = fromMaybe def <$> parseFieldMaybeWith p o key
+
+-- | The value of a key, with the given parser for the entry.
+entryField :: ((S.Node, S.Node) -> Parser a) -> Object -> T.Text -> Parser a
+entryField p o key = case M.lookup key o.index of
+  Just entry -> p entry
+  Nothing -> missingKey o key
+
+-- | The value of a key that can be missing or null, with the given parser
+-- for the entry.
+entryFieldMaybe :: ((S.Node, S.Node) -> Parser a) -> Object -> T.Text -> Parser (Maybe a)
+entryFieldMaybe p o key =
+  findKey o key >>= \case
+    Just (_, v) | isNullNode v -> pure Nothing
+    entry -> traverse p entry
+
+-- | The value of a key that can be missing, with the given parser for the
+-- entry.
+entryFieldIfPresent :: ((S.Node, S.Node) -> Parser a) -> Object -> T.Text -> Parser (Maybe a)
+entryFieldIfPresent p o key = findKey o key >>= traverse p
 
 -- | The value of an entry, with errors that point to the value.
 parseEntry :: FromYaml a => (S.Node, S.Node) -> Parser a
@@ -657,13 +711,6 @@ missingKey o key = Parser $ \off ->
          | M.member "<<" o.index -> failure o.node.offset ("missing key " ++ show key ++ ", " ++ noMergeKeys)
          | otherwise -> failure o.node.offset ("missing key " ++ show key)
        Result e _ -> Result e failed
-
--- | A default for an optional value.
-(.!=) :: Parser (Maybe a) -> a -> Parser a
-p .!= def = fromMaybe def <$> p
-
-infixl 9 .:, .:?, .:!
-infixl 8 .!=
 
 -- | Fail at each key that is not in the list. If a key in the list is close
 -- to an unknown key, e.g. "host" to "hots", its error suggests it. Otherwise
@@ -742,7 +789,11 @@ closeName known t = suggestion (T.unpack t)
 -- instance FromYaml Server where
 --   parseYaml = withMapping $ \o ->
 --     rejectUnknownKeys ["host", "port", "tags"] o
---       *> (Server <$> o .: "host" <*> o .:? "port" .!= 80 <*> o .:? "tags" .!= [])
+--       *> ( Server
+--              <$> parseField o "host"
+--              <*> parseFieldDefault o "port" 80
+--              <*> parseFieldDefault o "tags" []
+--          )
 -- :}
 --
 -- >>> decodeText @Server "host: example.com\ntags:\n- web\n"
@@ -781,8 +832,9 @@ class FromYaml a where
   parseYamlList = withSequence (mapM (parseNode parseYaml))
 
   -- | Parse the value of a mapping entry, with its key, e.g. to keep the
-  -- comments of the key as 'Yamlet.Commented' does. '.:', the derived decoders
-  -- and the instances for maps use it. The default ignores the key.
+  -- comments of the key as 'Yamlet.Commented' does. 'parseField' and the
+  -- other lookups without a parser argument, the derived decoders and the
+  -- instances for maps use it. The default ignores the key.
   parseYamlField :: S.Node -> S.Node -> Parser a
   parseYamlField _ = parseYaml
 
@@ -957,14 +1009,14 @@ instance FromYaml DayOfWeek where
 instance FromYaml CalendarDiffDays where
   parseYaml = withMapping $ \o ->
     rejectUnknownKeys ["months", "days"] o
-      *> (CalendarDiffDays <$> o .: "months" <*> o .: "days")
+      *> (CalendarDiffDays <$> parseField o "months" <*> parseField o "days")
 
 -- | A mapping with the keys @months@ and @time@, a number of seconds, e.g.
 -- @{months: 1, time: 1.5}@.
 instance FromYaml CalendarDiffTime where
   parseYaml = withMapping $ \o ->
     rejectUnknownKeys ["months", "time"] o
-      *> (CalendarDiffTime <$> o .: "months" <*> o .: "time")
+      *> (CalendarDiffTime <$> parseField o "months" <*> parseField o "time")
 
 zonedTimeMismatch :: String
 zonedTimeMismatch = "expected a date, a time and a time zone such as 2026-09-25T12:30:00Z"
@@ -1134,7 +1186,7 @@ instance (Integral a, FromYaml a) => FromYaml (Ratio a) where
   parseYaml = withMapping $ \o -> do
     (n, d) <-
       rejectUnknownKeys ["numerator", "denominator"] o
-        *> ((,) <$> (.:) @a o "numerator" <*> (.:) @a o "denominator")
+        *> ((,) <$> parseField @a o "numerator" <*> parseField @a o "denominator")
     when (d == 0) $ fail "the denominator is 0"
     -- The reduction happens in Integer, where the gcd is fast. For another
     -- type, the gcd takes quadratic time in the number of digits, and in a

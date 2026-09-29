@@ -48,16 +48,16 @@ instance ToYaml A where
 instance FromYaml A where
   parseYaml = withMapping $ \o ->
     A
-      <$> o .: "a01"
-      <*> o .:? "a02"
-      <*> o .: "a03"
-      <*> o .: "a04"
-      <*> o .:? "a05"
-      <*> o .: "a06"
-      <*> o .: "a07"
-      <*> o .:? "a08"
-      <*> o .: "a09"
-      <*> o .: "a10"
+      <$> parseField o "a01"
+      <*> parseFieldMaybe o "a02"
+      <*> parseField o "a03"
+      <*> parseField o "a04"
+      <*> parseFieldMaybe o "a05"
+      <*> parseField o "a06"
+      <*> parseField o "a07"
+      <*> parseFieldMaybe o "a08"
+      <*> parseField o "a09"
+      <*> parseField o "a10"
 
 data B = B
   { b01 :: T.Text
@@ -92,16 +92,16 @@ instance ToYaml B where
 instance FromYaml B where
   parseYaml = withMapping $ \o ->
     B
-      <$> o .: "b01"
-      <*> o .:? "b02"
-      <*> o .: "b03"
-      <*> o .: "b04"
-      <*> o .:? "b05"
-      <*> o .: "b06"
-      <*> o .: "b07"
-      <*> o .:? "b08"
-      <*> o .: "b09"
-      <*> o .: "b10"
+      <$> parseField o "b01"
+      <*> parseFieldMaybe o "b02"
+      <*> parseField o "b03"
+      <*> parseField o "b04"
+      <*> parseFieldMaybe o "b05"
+      <*> parseField o "b06"
+      <*> parseField o "b07"
+      <*> parseFieldMaybe o "b08"
+      <*> parseField o "b09"
+      <*> parseField o "b10"
 
 data C = C
   { c01 :: T.Text
@@ -136,16 +136,16 @@ instance ToYaml C where
 instance FromYaml C where
   parseYaml = withMapping $ \o ->
     C
-      <$> o .: "c01"
-      <*> o .:? "c02"
-      <*> o .: "c03"
-      <*> o .: "c04"
-      <*> o .:? "c05"
-      <*> o .: "c06"
-      <*> o .: "c07"
-      <*> o .:? "c08"
-      <*> o .: "c09"
-      <*> o .: "c10"
+      <$> parseField o "c01"
+      <*> parseFieldMaybe o "c02"
+      <*> parseField o "c03"
+      <*> parseField o "c04"
+      <*> parseFieldMaybe o "c05"
+      <*> parseField o "c06"
+      <*> parseField o "c07"
+      <*> parseFieldMaybe o "c08"
+      <*> parseField o "c09"
+      <*> parseField o "c10"
 
 -- | A sum of records with the default encoding.
 data X = X1 A | X2 B | X3 C
@@ -163,11 +163,11 @@ instance ToYaml X where
 
 instance FromYaml X where
   parseYaml = withMapping $ \o -> do
-    tag <- o .: "tag"
+    tag <- parseField o "tag"
     case tag :: T.Text of
-      "X1" -> X1 <$> o .: "contents"
-      "X2" -> X2 <$> o .: "contents"
-      "X3" -> X3 <$> o .: "contents"
+      "X1" -> X1 <$> parseField o "contents"
+      "X2" -> X2 <$> parseField o "contents"
+      "X3" -> X3 <$> parseField o "contents"
       _ -> fail ("unknown tag " ++ show tag)
 
 -- | The same sum with flat fields.
@@ -188,7 +188,7 @@ instance ToYaml F where
 
 instance FromYaml F where
   parseYaml = withMapping $ \o -> do
-    tag <- o .: "tag"
+    tag <- parseField o "tag"
     case tag :: T.Text of
       "F1" -> F1 <$> parseYaml (objectNode o)
       "F2" -> F2 <$> parseYaml (objectNode o)

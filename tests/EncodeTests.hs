@@ -380,7 +380,11 @@ test_syntax =
 data Workflow = Workflow {name :: T.Text, jobs :: Int, matrix :: Node}
 
 instance FromYaml Workflow where
-  parseYaml = withMapping $ \o -> Workflow <$> o .: "name" <*> o .: "jobs" <*> o .: "matrix"
+  parseYaml = withMapping $ \o ->
+    Workflow
+      <$> parseField o "name"
+      <*> parseField o "jobs"
+      <*> parseField o "matrix"
 
 instance ToYaml Workflow where
   toYaml w = mapping ["name" .= w.name, "jobs" .= w.jobs, "matrix" .= w.matrix]
@@ -455,7 +459,10 @@ test_keptNodes = do
 data Job = Job {name :: T.Text, permissions :: Commented Node}
 
 instance FromYaml Job where
-  parseYaml = withMapping $ \o -> Job <$> o .: "name" <*> o .: "permissions"
+  parseYaml = withMapping $ \o ->
+    Job
+      <$> parseField o "name"
+      <*> parseField o "permissions"
 
 instance ToYaml Job where
   toYaml j = mapping ["name" .= j.name, "permissions" .= j.permissions]

@@ -56,13 +56,13 @@ data Item = ItemNumber Double | ItemBool Bool | ItemNull
 instance FromYaml Config where
   parseYaml = withMapping $ \o ->
     Config
-      <$> o .: "name"
-      <*> o .: "id"
-      <*> o .: "tags"
-      <*> o .: "description"
-      <*> o .: "path"
-      <*> o .: "enabled"
-      <*> o .: "nested"
+      <$> parseField o "name"
+      <*> parseField o "id"
+      <*> parseField o "tags"
+      <*> parseField o "description"
+      <*> parseField o "path"
+      <*> parseField o "enabled"
+      <*> parseField o "nested"
 
 instance H.FromYAML Config where
   parseYAML = H.withMap "Config" $ \o ->
@@ -89,9 +89,9 @@ instance J.FromJSON Config where
 instance FromYaml Nested where
   parseYaml = withMapping $ \o ->
     Nested
-      <$> o .: "x"
-      <*> o .: "y"
-      <*> o .: "list"
+      <$> parseField o "x"
+      <*> parseField o "y"
+      <*> parseField o "list"
 
 instance H.FromYAML Nested where
   parseYAML = H.withMap "Nested" $ \o ->
@@ -110,10 +110,10 @@ instance J.FromJSON Nested where
 instance FromYaml Json where
   parseYaml = withMapping $ \o ->
     Json
-      <$> o .: "id"
-      <*> o .: "name"
-      <*> o .: "values"
-      <*> o .: "child"
+      <$> parseField o "id"
+      <*> parseField o "name"
+      <*> parseField o "values"
+      <*> parseField o "child"
 
 instance H.FromYAML Json where
   parseYAML = H.withMap "Json" $ \o ->

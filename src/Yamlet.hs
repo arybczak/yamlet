@@ -11,7 +11,10 @@
 -- instance FromYaml Config where
 --   parseYaml = withMapping $ \\o ->
 --     rejectUnknownKeys ["name", "paths"] o
---       *> (Config \<$> o .: "name" \<*> o .:? "paths" .!= [])
+--       *> ( Config
+--              \<$> parseField o "name"
+--              \<*> parseFieldDefault o "paths" []
+--          )
 --
 -- main :: IO ()
 -- main =
@@ -30,7 +33,10 @@
 --   }
 --
 -- instance FromYaml Workflow where
---   parseYaml = withMapping $ \\o -> Workflow \<$> o .: "name" \<*> o .: "matrix"
+--   parseYaml = withMapping $ \\o ->
+--     Workflow
+--       \<$> parseField o "name"
+--       \<*> parseField o "matrix"
 --
 -- instance ToYaml Workflow where
 --   toYaml w = mapping ["name" .= w.name, "matrix" .= w.matrix]

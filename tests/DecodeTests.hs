@@ -263,7 +263,10 @@ data Config = Config
 instance FromYaml Config where
   parseYaml = withMapping $ \o -> do
     rejectUnknownKeys ["name", "paths", "jobs"] o
-    Config <$> o .: "name" <*> o .:? "paths" .!= [] <*> o .:? "jobs" .!= 1
+    Config
+      <$> parseField o "name"
+      <*> parseFieldDefault o "paths" []
+      <*> parseFieldDefault o "jobs" 1
 
 -- | Edge cases of block scalars that the specification leaves unclear.
 test_blockScalars :: Assertion
@@ -535,7 +538,13 @@ test_optionalKeys = do
   let check :: String -> (Maybe (Maybe Int), Maybe (Maybe Int)) -> T.Text -> Assertion
       check preface expected input =
         assertEqual preface (Right (Right expected)) $
-          runParser (withMapping $ \o -> (,) <$> o .:? "a" <*> o .:! "a") <$> decodeText input
+          runParser
+            ( withMapping $ \o ->
+                (,)
+                  <$> parseFieldMaybe o "a"
+                  <*> parseFieldIfPresent o "a"
+            )
+            <$> decodeText input
   check "missing" (Nothing, Nothing) "b: 1\n"
   check "null" (Nothing, Just Nothing) "a: null\n"
   check "value" (Just (Just 1), Just (Just 1)) "a: 1\n"
@@ -545,9 +554,9 @@ test_optionalKeys = do
           runParser
             ( withMapping $ \o ->
                 (,,)
-                  <$> explicitParseField small o "a"
-                  <*> explicitParseFieldMaybe small o "b"
-                  <*> explicitParseFieldIfPresent (parseYaml @(Maybe Int)) o "b"
+                  <$> parseFieldWith small o "a"
+                  <*> parseFieldMaybeWith small o "b"
+                  <*> parseFieldIfPresentWith (parseYaml @(Maybe Int)) o "b"
             )
             <$> decodeText input
       small :: Node -> Parser Int
@@ -561,10 +570,10 @@ test_optionalKeys = do
       keyError op = either (error . show) (runParser (withMapping (`op` "404"))) (decodeText "200: 1\n404: 2\n")
       integerKey :: Either (NE.NonEmpty (Offset, String)) (Maybe Int)
       integerKey = Left (pure (Offset 7, "the key 404 is an integer, not a string"))
-  assertEqual "optional integer key" integerKey (keyError (.:?))
-  assertEqual "optional integer key, null as a value" integerKey (keyError (.:!))
-  assertEqual "explicit optional integer key" integerKey (keyError (explicitParseFieldMaybe parseYaml))
-  assertEqual "explicit optional integer key, null as a value" integerKey (keyError (explicitParseFieldIfPresent parseYaml))
+  assertEqual "optional integer key" integerKey (keyError parseFieldMaybe)
+  assertEqual "optional integer key, null as a value" integerKey (keyError parseFieldIfPresent)
+  assertEqual "explicit optional integer key" integerKey (keyError (parseFieldMaybeWith parseYaml))
+  assertEqual "explicit optional integer key, null as a value" integerKey (keyError (parseFieldIfPresentWith parseYaml))
 
 -- | A located value keeps the offset of its node, and the errors at its offset
 -- have lines, columns and paths.
@@ -1199,7 +1208,7 @@ test_keyErrors = do
   assertEqual
     "key missing next to a merge key"
     (Right (Left (pure (Offset 0, "missing key \"x\", merge keys are not supported"))))
-    (runParser (withMapping (.: "x")) <$> decodeText @Node "<<: {x: 1}\n" :: Either (NE.NonEmpty Error) (Either (NE.NonEmpty (Offset, String)) Int))
+    (runParser (withMapping (\o -> parseField o "x")) <$> decodeText @Node "<<: {x: 1}\n" :: Either (NE.NonEmpty Error) (Either (NE.NonEmpty (Offset, String)) Int))
   assertEqual
     "missing key"
     (Just (1, 1, "missing key \"name\""))
@@ -1217,7 +1226,7 @@ test_keyErrors = do
     (Just (2, 1, "unknown key \"job\", did you mean \"jobs\"?"))
     (errorOf (decodeText @Config "name: x\njob: 1\n"))
   let lookupError :: T.Text -> T.Text -> Maybe String
-      lookupError key input = case runParser (withMapping $ \o -> (.:) @T.Text o key) <$> decodeText input of
+      lookupError key input = case runParser (withMapping $ \o -> parseField @T.Text o key) <$> decodeText input of
         Right (Left ((_, msg) NE.:| [])) -> Just msg
         _ -> Nothing
   assertEqual
