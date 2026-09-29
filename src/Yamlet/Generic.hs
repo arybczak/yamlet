@@ -210,6 +210,7 @@ module Yamlet.Generic
   , genericParseYaml
 
     -- * Classes of the representation
+  , GDatatype (Constructors)
   , GConstructors
   , GEncoding
   , GToConstructor
@@ -250,7 +251,8 @@ newtype GenericYaml a = GenericYaml a
 instance
   ( Generic a
   , GenericYamlOptions a
-  , Rep a ~ D1 d f
+  , GDatatype (Rep a)
+  , Constructors (Rep a) ~ f
   , GConstructors f
   , GEncoding (SumEncoding a) f
   , GToConstructor f
@@ -258,11 +260,18 @@ instance
   => ToYaml (GenericYaml a)
   where
   toYaml = coerce (genericToYaml @a)
+  -- The pragma keeps the source of the method as its unfolding, and GHC
+  -- inlines it at the type of the derived instance, together with
+  -- 'genericToYaml'. Without it, GHC does not inline the optimized method
+  -- there, the derived encoders keep the generic representation, and 7 of
+  -- the encoders of the inspection tests fail.
+  {-# INLINE toYaml #-}
 
 instance
   ( Generic a
   , GenericYamlOptions a
-  , Rep a ~ D1 d f
+  , GDatatype (Rep a)
+  , Constructors (Rep a) ~ f
   , GConstructors f
   , GEncoding (SumEncoding a) f
   , GFromConstructor f
@@ -271,12 +280,9 @@ instance
   => FromYaml (GenericYaml a)
   where
   parseYaml = coerce (genericParseYaml @a)
-  -- The pragma keeps the source of the method as its unfolding, so that GHC
-  -- inlines 'genericParseYaml' at the type of the derived instance. Without
-  -- it, the optimized method is too large for an unfolding, the derived
-  -- decoders keep the generic representation, and 8 of the decoders of the
-  -- inspection tests fail. The optimized encoder is small enough, so 'toYaml'
-  -- needs no pragma.
+  -- The pragma has the reason of the one on 'toYaml'. Without it, the
+  -- optimized method is too large for an unfolding, and 8 of the decoders of
+  -- the inspection tests fail.
   {-# INLINE parseYaml #-}
 
   -- The list and the field decode their values with the instance of
@@ -445,9 +451,29 @@ separateWords sep = map toLower . afterLower . beforeLower
 ----------------------------------------
 -- Constructors
 
--- | The names and the number of the constructors of a representation. This
--- class and the others of the representation appear in the constraints of
--- 'genericToYaml' and 'genericParseYaml'. Their methods are internal.
+-- | The layer of the data type at the top of a representation, and the
+-- constructors below it. This class and the others of the representation
+-- appear in the constraints of 'genericToYaml' and 'genericParseYaml'. Their
+-- methods are internal.
+--
+-- An equality such as @Rep a ~ D1 d f@ would do the same, but for a type
+-- without a 'Generic' instance, GHC would report that the equality fails
+-- instead of the missing instance.
+class GDatatype (r :: Type -> Type) where
+  type Constructors r :: Type -> Type
+
+  gUnwrap :: r p -> Constructors r p
+
+  gWrap :: Constructors r p -> r p
+
+instance GDatatype (D1 d f) where
+  type Constructors (D1 d f) = f
+
+  gUnwrap = unM1
+
+  gWrap = M1
+
+-- | The names and the number of the constructors of a representation.
 class GConstructors f where
   gConstructorNames :: [String]
 
@@ -654,10 +680,11 @@ fieldKey opts = T.pack (opts.fieldLabelModifier (symbolVal (Proxy @name)))
 -- dictionary of such a class as a partial application of the method, and it
 -- does not inline that.
 genericToYaml
-  :: forall a d f
+  :: forall a f
    . ( Generic a
      , GenericYamlOptions a
-     , Rep a ~ D1 d f
+     , GDatatype (Rep a)
+     , Constructors (Rep a) ~ f
      , GConstructors f
      , GEncoding (SumEncoding a) f
      , GToConstructor f
@@ -667,7 +694,7 @@ genericToYaml x =
   -- Forcing the encoding forces the check of the shape, e.g. with deferred
   -- type errors in a test of the errors.
   let enc = gEncoding @(SumEncoding a) @f
-  in enc `seq` gToYaml (yamlOptions @a) enc (from <$> yamlDefault @a) (from x)
+  in enc `seq` gToYaml (yamlOptions @a) enc (gUnwrap . from <$> yamlDefault @a) (gUnwrap (from x))
 {-# INLINE genericToYaml #-}
 
 -- The encoder takes the default for 'omitNullFields': it leaves out a null
@@ -675,14 +702,14 @@ genericToYaml x =
 -- would fill the missing key from the default, and the value would not read
 -- back.
 gToYaml
-  :: forall f d p
+  :: forall f p
    . ( GConstructors f
      , GToConstructor f
      )
-  => YamlOptions -> SumEncodingKind -> Maybe (D1 d f p) -> D1 d f p -> S.Node
-gToYaml opts enc def (M1 x)
+  => YamlOptions -> SumEncodingKind -> Maybe (f p) -> f p -> S.Node
+gToYaml opts enc def x
   | gNullary @f = scalar (String (gTag opts x))
-  | otherwise = gToConstructor opts (if isTagged @f opts then Just enc else Nothing) (unM1 <$> def) x
+  | otherwise = gToConstructor opts (if isTagged @f opts then Just enc else Nothing) def x
 -- Without the pragma, GHC 9.2 does not inline this function, and GHC 9.4 does
 -- not inline it for an enumeration. Then the inspection tests of these
 -- derived encoders fail. Later versions inline it anyway.
@@ -833,10 +860,11 @@ instance ToYaml a => GToFields (S1 (MetaSel Nothing u s d) (Rec0 a)) where
 
 -- The code inlines in the derived method, for the reasons at 'genericToYaml'.
 genericParseYaml
-  :: forall a d f
+  :: forall a f
    . ( Generic a
      , GenericYamlOptions a
-     , Rep a ~ D1 d f
+     , GDatatype (Rep a)
+     , Constructors (Rep a) ~ f
      , GConstructors f
      , GEncoding (SumEncoding a) f
      , GFromConstructor f
@@ -846,14 +874,14 @@ genericParseYaml n =
   -- Forcing the encoding forces the check of the shape, e.g. with deferred
   -- type errors in a test of the errors.
   let enc = gEncoding @(SumEncoding a) @f
-  in enc `seq` gParseYaml (yamlOptions @a) enc (from <$> yamlDefault @a) to n
+  in enc `seq` gParseYaml (yamlOptions @a) enc (gUnwrap . from <$> yamlDefault @a) (to . gWrap) n
 {-# INLINE genericParseYaml #-}
 
 -- Each constructor applies 'to' to its own representation, e.g.
 -- @to (M1 (L1 (M1 fields)))@, and the optimizer reduces this to the real
 -- constructor in the same place. For this, the decoders of the constructors
--- take a continuation. It starts as 'to' and grows by 'M1', 'L1' or 'R1' at
--- each level of the sum.
+-- take a continuation. It starts as 'to' after 'gWrap' and grows by 'M1',
+-- 'L1' or 'R1' at each level of the sum.
 --
 -- In the direct style, each constructor returns its representation, the
 -- branches meet in 'mplus', and 'to' comes after them. The optimizer then no
@@ -866,30 +894,30 @@ genericParseYaml n =
 -- The representation of the default goes down with the options, so that each
 -- field finds its default value.
 gParseYaml
-  :: forall f d p a
+  :: forall f p a
    . ( GConstructors f
      , GFromConstructor f
      )
-  => YamlOptions -> SumEncodingKind -> Maybe (D1 d f p) -> (D1 d f p -> a) -> S.Node -> Parser a
+  => YamlOptions -> SumEncodingKind -> Maybe (f p) -> (f p -> a) -> S.Node -> Parser a
 gParseYaml opts enc def k n
   | gNullary @f =
-      withName tags (\t -> fromMaybe (unknown n "value" t) (gFromTag opts (k . M1) n t)) n
+      withName tags (\t -> fromMaybe (unknown n "value" t) (gFromTag opts k n t)) n
   | isTagged @f opts, enc == SingleField = single
   | isTagged @f opts = withMapping tagged n
-  | otherwise = gFromUntagged opts (unM1 <$> def) (k . M1) n
+  | otherwise = gFromUntagged opts def k n
   where
     tagged :: Object -> Parser a
     tagged o = case lookupKey opts.tagKey o of
       Nothing -> missingKey o opts.tagKey
       Just tn -> do
         t <- withName tags pure tn
-        fromMaybe (unknown tn "tag" t) (gFromTagged opts (enc == TaggedFlat) (unM1 <$> def) (k . M1) t o)
+        fromMaybe (unknown tn "tag" t) (gFromTagged opts (enc == TaggedFlat) def k t o)
 
     -- A constructor without fields is its tag, and another constructor is a
     -- mapping with its tag as the only key.
     single :: Parser a
     single = case view n of
-      StringView t -> fromMaybe (withoutValue t) (gFromTag opts (k . M1) n t)
+      StringView t -> fromMaybe (withoutValue t) (gFromTag opts k n t)
       _ | S.Mapping {} <- n.content -> withMapping singleEntry n
       _ -> typeMismatch "a string or a mapping with one key" n
 
@@ -897,7 +925,7 @@ gParseYaml opts enc def k n
     singleEntry o = case objectEntries o of
       [(kn, v)] -> do
         t <- withName tags pure kn
-        fromMaybe (unknown kn "constructor" t) (gFromSingle opts (unM1 <$> def) (k . M1) t (kn, v))
+        fromMaybe (unknown kn "constructor" t) (gFromSingle opts def k t (kn, v))
       _ : (kn, _) : _ -> failAt kn "expected a mapping with one key, but got a second key"
       [] -> failAt n "expected a mapping with one key, but got an empty mapping"
 
