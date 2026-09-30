@@ -502,8 +502,8 @@ inline opts pos indent n lineComment = case n.content of
     content_ :: B.Builder
     content_ = case n.content of
       ScalarLines style t starts -> scalar pos indent (if inKey then [] else starts) style t
-      Sequence _ [] | hasEndLines n -> "[\n" <> lines_ indent n.comments.after <> spaces indent <> "]"
-      Mapping _ [] | hasEndLines n -> "{\n" <> lines_ indent n.comments.after <> spaces indent <> "}"
+      Sequence _ [] | hasEndLines n -> "[\n" <> lines_ indent (fst (bracketLines n)) <> spaces indent <> "]"
+      Mapping _ [] | hasEndLines n -> "{\n" <> lines_ indent (fst (bracketLines n)) <> spaces indent <> "}"
       Sequence _ xs -> "[" <> commas (map (\x -> inline opts itemPos indent (flowItem x) Nothing) xs) <> "]"
       Mapping _ kvs -> "{" <> commas (map flowEntry kvs) <> "}"
       Alias {} -> mempty
@@ -609,7 +609,19 @@ linesBelow :: Int -> Node -> B.Builder
 linesBelow indent n = case n.content of
   Scalar {} -> lines_ indent n.comments.after
   Alias {} -> lines_ indent n.comments.after
+  Sequence _ [] -> lines_ indent (snd (bracketLines n))
+  Mapping _ [] -> lines_ indent (snd (bracketLines n))
   _ -> mempty
+
+-- | The lines of an empty flow collection inside its brackets, and the
+-- empty lines at their end, which go below the collection. The parser gives
+-- the empty lines before a closing bracket to the node below.
+bracketLines :: Node -> ([Line], [Line])
+bracketLines n
+  | hasEndLines n =
+      let (empties, rest) = span (== EmptyLine) (reverse n.comments.after)
+      in (reverse rest, empties)
+  | otherwise = ([], n.comments.after)
 
 -- | The node is an empty plain scalar without properties.
 isEmpty :: Node -> Bool

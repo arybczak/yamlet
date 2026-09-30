@@ -653,6 +653,16 @@ test_movedComments = do
     "# b\n# a\nk: 1\n"
     (render (mappingNode [((withBefore "b" (plainNode "k")) {comments = (withBefore "b" (plainNode "k")).comments {after = [Comment "a"]}}, plainNode "1")]))
   assertEqual
+    "empty lines at the end of an empty flow collection"
+    "a: [\n  # c\n  ]\n\nb: 1\n"
+    ( render
+        ( mappingNode
+            [ (plainNode "a", (contentNode (Sequence Flow [])) {comments = noComments {after = [Comment "c", EmptyLine]}})
+            , (plainNode "b", plainNode "1")
+            ]
+        )
+    )
+  assertEqual
     "two comments on one line"
     "# k\na: 1 # v\n"
     (render (mappingNode [(withInline "k" (plainNode "a"), withInline "v" (plainNode "1"))]))
