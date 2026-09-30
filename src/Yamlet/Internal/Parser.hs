@@ -1150,7 +1150,7 @@ nsFlowSeqEntry n c = do
       q <- pos
       let value = optional_ sSeparateInLine >> cNsFlowMapAdjacentValue n c
       if isJsonNode k && fitsKey e p q && not (any (isBreak . byteAt e) [p .. q - 1])
-        then (pair e p . (k,) <$> value) <|> pure k
+        then (pair e p . (k,) <$!> value) <|> pure k
         else pure k
 
     -- The content of c-flow-json-node(n,c).

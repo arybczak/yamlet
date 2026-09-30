@@ -275,7 +275,12 @@ byteBefore e i
 slice :: Env -> Int -> Int -> T.Text
 slice e i j
   | j > i = T.Text e.array i (j - i)
-  | otherwise = T.empty
+  -- With 'T.empty', GHC moves the content of an empty quoted key, e.g. in
+  -- "'': x", to a constant, and builds the node of the key as a thunk that
+  -- waits for the evaluation of 'T.empty'. A pragma on a copy of 'T.empty'
+  -- does not prevent this. The heap check of the render tests finds this
+  -- thunk.
+  | otherwise = T.Text e.array i 0
 
 toOffset :: Env -> Int -> Offset
 toOffset e i = Offset (i - e.base)
