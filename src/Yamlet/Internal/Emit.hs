@@ -257,9 +257,13 @@ splitLines = go 0
 literalBlock :: Bool -> Int -> T.Text -> Maybe (B.Builder, B.Builder)
 literalBlock allowKeep indent t = do
   (header, body, trailing) <- blockParts allowKeep t
-  let content =
-        mconcat (map (line indent) (T.splitOn "\n" body))
-          <> B.fromText (T.replicate (trailing - 1) "\n")
+  let content
+        -- The line break of the header comes first, and each empty line
+        -- below it is one line break of the text.
+        | T.null body = B.fromText (T.replicate trailing "\n")
+        | otherwise =
+            mconcat (map (line indent) (T.splitOn "\n" body))
+              <> B.fromText (T.replicate (trailing - 1) "\n")
   Just ("|" <> header, content)
 
 -- | The header and the content lines of a folded block scalar, with the
@@ -269,7 +273,7 @@ literalBlock allowKeep indent t = do
 foldedBlock :: Int -> [Int] -> T.Text -> Maybe (B.Builder, B.Builder)
 foldedBlock indent starts t = do
   (header, body, _) <- blockParts False t
-  let (leading, rest) = span T.null (T.splitOn "\n" body)
+  let (leading, rest) = span T.null (if T.null body then [] else T.splitOn "\n" body)
       content = mconcat (replicate (length leading) "\n") <> go Nothing (length leading) starts (groups rest)
   Just (">" <> header, content)
   where
@@ -325,11 +329,14 @@ foldedBlock indent starts t = do
 -- and the number of these line breaks.
 blockParts :: Bool -> T.Text -> Maybe (B.Builder, T.Text, Int)
 blockParts allowKeep t
-  | T.null body = Nothing
   | not (T.all (\c -> c == '\n' || c == '\t' || isScalarChar c) t) = Nothing
-  | trailing > 1 && not allowKeep = Nothing
+  | keep && not allowKeep = Nothing
   | otherwise = Just (indicator <> chomping, body, trailing)
   where
+    -- Without content, the clip indicator drops the line breaks too.
+    keep :: Bool
+    keep = trailing > 1 || T.null body && trailing > 0
+
     body :: T.Text
     body = T.dropWhileEnd (== '\n') t
 
@@ -340,10 +347,10 @@ blockParts allowKeep t
     indicator = if needsIndentIndicator t then B.fromDec indentStep else mempty
 
     chomping :: B.Builder
-    chomping = case trailing of
-      0 -> "-"
-      1 -> mempty
-      _ -> "+"
+    chomping
+      | trailing == 0 = "-"
+      | keep = "+"
+      | otherwise = mempty
 
 -- | A block scalar with the text needs an indentation indicator, because its
 -- first line with content starts with a space or a tab. YAML 1.2 does not

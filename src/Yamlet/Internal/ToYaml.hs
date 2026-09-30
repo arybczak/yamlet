@@ -499,16 +499,19 @@ scalar = \case
   String t -> string t
   v -> S.plainNode (plainText v)
 
--- | A string as a literal block scalar if it has a line break. Otherwise it
--- is a plain scalar if the schema reads the text as a string, and in single
--- quotes if not. The renderer puts a plain scalar in quotes if its text
--- cannot be plain, e.g. @a: b@. It uses double quotes for a text with a tab
--- or a character that single quotes cannot hold.
+-- | A string as a literal block scalar if it has a line break. A text of
+-- only line breaks is in double quotes, because quotes are easier to read
+-- than empty lines. Otherwise it is a plain scalar if the schema reads the
+-- text as a string, and in single quotes if not. The renderer puts a plain
+-- scalar in quotes if its text cannot be plain, e.g. @a: b@. It uses double
+-- quotes for a text with a tab or a character that single quotes cannot
+-- hold.
 --
 -- A text that YAML 1.1 reads as another type, e.g. @yes@ or @12:30@, is in
 -- quotes too, because many parsers still follow YAML 1.1.
 string :: T.Text -> S.Node
 string t
+  | T.all (== '\n') t, not (T.null t) = S.scalarNode S.DoubleQuoted t
   | T.any (== '\n') t = S.scalarNode S.Literal t
   | isPlainString t && not (isYaml11NonString t) = S.plainNode t
   | otherwise = S.scalarNode S.SingleQuoted t

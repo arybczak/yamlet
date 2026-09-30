@@ -338,6 +338,7 @@ test_literal = do
   assertEqual "clip" "key: |\n  a\n  b\n" (encodeText (mapping ["key" .= ("a\nb\n" :: T.Text)]))
   assertEqual "strip" "key: |-\n  a\n  b\n" (encodeText (mapping ["key" .= ("a\nb" :: T.Text)]))
   assertEqual "keep" "key: |+\n  a\n\n" (encodeText (mapping ["key" .= ("a\n\n" :: T.Text)]))
+  assertEqual "only line breaks" "key: \"\\n\\n\"\n" (encodeText (mapping ["key" .= ("\n\n" :: T.Text)]))
   assertEqual "indentation indicator" "- |2-\n    a\n  b\n" (encodeText ["  a\nb" :: T.Text])
   assertEqual "indentation indicator for a tab" "- |2-\n  \ta\n  b\n" (encodeText ["\ta\nb" :: T.Text])
   assertEqual "indentation indicator after empty lines" "- |2\n\n  \ta\n" (encodeText ["\n\ta\n" :: T.Text])
