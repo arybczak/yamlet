@@ -304,6 +304,12 @@ instance
   -- and the benchmark derive.contents.parseYaml.generic takes about 40%
   -- longer.
   parseYamlList = coerce (withSequence (mapM (parseNode (parseYaml @a))))
+  -- The derived method applies this one to the dictionaries of the instance.
+  -- The pragma inlines it there, so only the dictionary of 'FromYaml a'
+  -- remains. Without the pragma, GHC 9.14 keeps the call with all the
+  -- dictionaries, because its worker/wrapper does not drop unused
+  -- dictionaries, and the 13 list decoders of the inspection tests fail.
+  {-# INLINE parseYamlList #-}
 
   parseYamlField _ = coerce (parseYaml @a)
 

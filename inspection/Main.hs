@@ -16,19 +16,11 @@ import Test.Tasty.HUnit
 import Obligations
 import Yamlet
 
--- Each type has a test for each method. Some tests are known failures, which
--- 'assertFailureIf' expects.
---
--- The encoder of Step keeps the representation with every GHC. The optimizer
+-- Each type has a test for each method. The encoder of Step is a known
+-- failure with every GHC, which 'assertFailureIf' expects. The optimizer
 -- moves the node of Halt, which has no fields, to the top level. Then the code
 -- of the last constructors is in a function with two callers, which takes
 -- their representation.
---
--- With GHC 9.14, the decoders of lists pass dictionaries of the
--- representation. GHC 9.14 does not inline the list method of the instance
--- for GenericYaml, so the derived method applies it to all dictionaries of
--- the instance. The method ignores them, and the list decoders are as fast as
--- the written ones.
 main :: IO ()
 main =
   defaultMain $
@@ -43,7 +35,7 @@ main =
           , testCase "encode a list" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeServerList)
           , testCase "decode a list" $
-              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeServerList)
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeServerList)
           , testCase "encode a field" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeServerField)
           , testCase "decode a field" $
@@ -58,7 +50,7 @@ main =
           , testCase "encode a list" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeWideList)
           , testCase "decode a list" $
-              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeWideList)
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeWideList)
           , testCase "encode a field" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeWideField)
           , testCase "decode a field" $
@@ -73,7 +65,7 @@ main =
           , testCase "encode a list" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeNameList)
           , testCase "decode a list" $
-              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeNameList)
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeNameList)
           , testCase "encode a field" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeNameField)
           , testCase "decode a field" $
@@ -88,7 +80,7 @@ main =
           , testCase "encode a list" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeBoxList)
           , testCase "decode a list" $
-              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeBoxList)
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeBoxList)
           , testCase "encode a field" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeBoxField)
           , testCase "decode a field" $
@@ -103,7 +95,7 @@ main =
           , testCase "encode a list" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeVelocityList)
           , testCase "decode a list" $
-              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeVelocityList)
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeVelocityList)
           , testCase "encode a field" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeVelocityField)
           , testCase "decode a field" $
@@ -118,7 +110,7 @@ main =
           , testCase "encode a list" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeDistanceList)
           , testCase "decode a list" $
-              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeDistanceList)
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeDistanceList)
           , testCase "encode a field" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeDistanceField)
           , testCase "decode a field" $
@@ -133,7 +125,7 @@ main =
           , testCase "encode a list" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeSpeedList)
           , testCase "decode a list" $
-              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeSpeedList)
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeSpeedList)
           , testCase "encode a field" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeSpeedField)
           , testCase "decode a field" $
@@ -148,7 +140,7 @@ main =
           , testCase "encode a list" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeConfigList)
           , testCase "decode a list" $
-              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeConfigList)
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeConfigList)
           , testCase "encode a field" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeConfigField)
           , testCase "decode a field" $
@@ -163,7 +155,7 @@ main =
           , testCase "encode a list" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodePresetList)
           , testCase "decode a list" $
-              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodePresetList)
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodePresetList)
           , testCase "encode a field" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodePresetField)
           , testCase "decode a field" $
@@ -178,7 +170,7 @@ main =
           , testCase "encode a list" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeTurnList)
           , testCase "decode a list" $
-              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeTurnList)
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeTurnList)
           , testCase "encode a field" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeTurnField)
           , testCase "decode a field" $
@@ -193,7 +185,7 @@ main =
           , testCase "encode a list" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeShapeList)
           , testCase "decode a list" $
-              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeShapeList)
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeShapeList)
           , testCase "encode a field" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeShapeField)
           , testCase "decode a field" $
@@ -208,7 +200,7 @@ main =
           , testCase "encode a list" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeStepList)
           , testCase "decode a list" $
-              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeStepList)
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeStepList)
           , testCase "encode a field" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeStepField)
           , testCase "decode a field" $
@@ -223,7 +215,7 @@ main =
           , testCase "encode a list" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeFigureList)
           , testCase "decode a list" $
-              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeFigureList)
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeFigureList)
           , testCase "encode a field" $
               assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeFigureField)
           , testCase "decode a field" $
