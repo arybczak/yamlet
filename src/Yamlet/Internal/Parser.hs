@@ -352,7 +352,9 @@ lYamlStream markers0 = do
       withEnd limit $ many_ lComment
       e <- env
       p <- pos
-      when (p < limit) $ do
+      -- A byte order mark at the start of a line starts the prefix of the
+      -- next document.
+      when (p < limit && not (isBom e p && isStartOfLine e p)) $ do
         fu <- furthest
         throwUnexpected (max fu p)
       let explicitEnd = isMarker e p && byteAt e p == DOT
@@ -937,10 +939,14 @@ escape e i = case chr (fromIntegral (byteAt e i)) of
 nsPlain :: Int -> Ctx -> Props -> P Node
 nsPlain n c props = withScan $ \e p ->
   let w0 = byteAt e p
+      -- A byte order mark at the start of a line starts the prefix of a
+      -- document.
       firstOk =
-        (isNsChar w0 && not (isIndicator w0))
-          || ( (w0 == QUESTION || w0 == COLON || w0 == MINUS)
-                 && isPlainSafe (isFlowCtx c) (byteAt e (p + 1))
+        not (isBom e p && isStartOfLine e p)
+          && ( (isNsChar w0 && not (isIndicator w0))
+                 || ( (w0 == QUESTION || w0 == COLON || w0 == MINUS)
+                        && isPlainSafe (isFlowCtx c) (byteAt e (p + 1))
+                    )
              )
   in if not firstOk
        then NoMatch p
@@ -998,10 +1004,13 @@ plainNextLines e n c = go
                    in (foldText k : slice e t q' : ts, r)
              _ -> ([], q)
 
+    -- A byte order mark at the start of a line ends the document, as in
+    -- 'nsPlain'.
     startsPlain :: Int -> Bool
     startsPlain t =
       let w = byteAt e t
       in w /= HASH
+           && not (isBom e t && isStartOfLine e t)
            && isPlainSafe flow w
            && (w /= COLON || isPlainSafe flow (byteAt e (t + 1)))
 

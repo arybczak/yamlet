@@ -704,7 +704,14 @@ test_encodings = do
   bom "BOM before a key" (2, 1) "a: b\n\xFEFF\&c: d\n"
   bom "BOM before a list item" (2, 1) "- a\n\xFEFF- b\n"
   bom "BOM before an indented value" (2, 1) "a:\n\xFEFF  b\n"
-  bom "BOM before a comment in a mapping" (2, 1) "a: b\n\xFEFF#c\n"
+  assertEqual
+    "BOM before a comment after a mapping"
+    (Right [Mapping [(String "a", String "b")]])
+    (decodeAllText @Value "a: b\n\xFEFF#c\n")
+  documents "BOM before a comment after a scalar" ["a"] "a\n\xFEFF# c\n"
+  documents "BOM at the end after a scalar" ["a"] "a\n\xFEFF"
+  assertEqual "BOM at the end after a marker" (Right [Null]) (decodeAllText @Value "---\n\xFEFF")
+  bom "BOM before a scalar after a scalar" (2, 1) "a\n\xFEFF\&b\n"
   bom "BOM in a flow sequence" (2, 1) "a: [x,\n\xFEFF y]\n"
   bom "BOM in a flow mapping" (2, 1) "a: {x: 1,\n\xFEFF\&y: 2}\n"
   bom "BOM before a closing bracket" (2, 1) "a: [x,\n\xFEFF]\n"
