@@ -197,7 +197,7 @@ jobs:
     - name: Run doctest for yamlet
       working-directory: ${{ runner.temp }}/haskell-gha
       run: |
-        "$HOME"/.local/bin/doctest -XGHC2021 -XDataKinds -XDefaultSignatures -XDeriveAnyClass -XDerivingStrategies -XDuplicateRecordFields -XLambdaCase -XMultiWayIf -XNoFieldSelectors -XOverloadedRecordDot -XOverloadedStrings -XTypeFamilies -XUndecidableInstances src
+        "$HOME"/.local/bin/doctest -XGHC2021 -XDataKinds -XDeriveAnyClass -XDerivingStrategies -XDerivingVia -XDuplicateRecordFields -XLambdaCase -XMultiWayIf -XNoFieldSelectors -XOverloadedRecordDot -XOverloadedStrings -XTypeFamilies -XUndecidableInstances src
 
     - name: Check the packages
       working-directory: ${{ runner.temp }}/haskell-gha
