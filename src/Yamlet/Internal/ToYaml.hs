@@ -195,11 +195,15 @@ timeOfDay (TimeOfDay h m (MkFixed ps)) = buildTimeOfDay (TimeOfDay h m (MkFixed 
 localTime :: LocalTime -> TLB.Builder
 localTime (LocalTime d t) = buildDay d <> "T" <> timeOfDay t
 
--- | A number of seconds.
+-- | A number of seconds. A value whose exponent in scientific notation is
+-- beyond the range from -1000 to 1000, e.g. @10^1001@ seconds, does not read
+-- back, see 'Yamlet.Decode.withBoundedScientific'.
 instance ToYaml NominalDiffTime where
   toYaml d = let MkFixed ps = nominalDiffTimeToSeconds d in scalar (Float (Finite (Sci.scientific ps (negate picoDecimals))))
 
--- | A number of seconds.
+-- | A number of seconds. A value whose exponent in scientific notation is
+-- beyond the range from -1000 to 1000, e.g. @10^1001@ seconds, does not read
+-- back, see 'Yamlet.Decode.withBoundedScientific'.
 instance ToYaml DiffTime where
   toYaml d = scalar (Float (Finite (Sci.scientific (diffTimeToPicoseconds d) (negate picoDecimals))))
 
@@ -299,6 +303,10 @@ instance (Integral a, ToYaml a) => ToYaml (Ratio a) where
 -- can have no exact decimal form. It then becomes the nearest number with as
 -- many digits after the point as the resolution has, which does not read back.
 -- For such a resolution, use 'Rational' instead.
+--
+-- A value whose exponent in scientific notation is beyond the range from
+-- -1000 to 1000, e.g. @10^1001@, does not read back, see
+-- 'Yamlet.Decode.withBoundedScientific'.
 instance HasResolution a => ToYaml (Fixed a) where
   toYaml (MkFixed n) = scalar . Float . Finite $ case decimalPlaces res of
     Just places -> Sci.scientific (n * (10 ^ places `div` res)) (negate places)
