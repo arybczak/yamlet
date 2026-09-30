@@ -1208,7 +1208,7 @@ test_keyErrors = do
   assertEqual
     "key missing next to a merge key"
     (Right (Left (pure (Offset 0, "missing key \"x\", merge keys are not supported"))))
-    (runParser (withMapping (\o -> parseField o "x")) <$> decodeText @Node "<<: {x: 1}\n" :: Either (NE.NonEmpty Error) (Either (NE.NonEmpty (Offset, String)) Int))
+    (runParser (withMapping (`parseField` "x")) <$> decodeText @Node "<<: {x: 1}\n" :: Either (NE.NonEmpty Error) (Either (NE.NonEmpty (Offset, String)) Int))
   assertEqual
     "missing key"
     (Just (1, 1, "missing key \"name\""))

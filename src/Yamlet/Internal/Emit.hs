@@ -125,7 +125,7 @@ singleQuotedLines :: Int -> [Int] -> T.Text -> Maybe B.Builder
 singleQuotedLines indent starts t
   | null starts = singleQuoted t
   | all (T.all (\c -> c == '\t' || isScalarChar c)) (first : map snd rest) =
-      Just $ "'" <> onLines indent (\l -> B.fromText (T.replace "'" "''" l)) ls <> "'"
+      Just $ "'" <> onLines indent (B.fromText . T.replace "'" "''") ls <> "'"
   | otherwise = Nothing
   where
     ls@(first, rest) = flowLines True False (asciiChar isWhite) starts t
@@ -157,7 +157,7 @@ doubleQuotedLines indent starts t
 -- | The text of a double-quoted scalar, with escapes for the characters that
 -- need them.
 doubleQuotedText :: T.Text -> B.Builder
-doubleQuotedText t = T.foldr (\c b -> escape c <> b) mempty t
+doubleQuotedText = T.foldr (\c b -> escape c <> b) mempty
   where
     escape :: Char -> B.Builder
     escape = \case
