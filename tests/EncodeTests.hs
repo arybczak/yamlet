@@ -440,10 +440,12 @@ test_keptNodes = do
     (encodeText <$> decodeText @[Commented Node] "!!seq # c1\n- 1\n")
   let commentedRoot = "# c1\n1 # c2\n# c3\n"
   assertEqual "commented scalar root" (Right commentedRoot) (encodeText <$> decodeText @(Commented Int) commentedRoot)
+  let linesAfter = M.fromList [("a" :: T.Text, Commented (1 :: Int) noComments {after = [Comment "c"]}), ("b", Commented 2 noComments)]
+  assertEqual "lines after a commented scalar value" "a: 1\n  # c\nb: 2\n" (encodeText linesAfter)
   assertEqual
-    "lines after a commented scalar value"
-    "a: 1\n# c\nb: 2\n"
-    (encodeText (M.fromList [("a" :: T.Text, Commented (1 :: Int) noComments {after = [Comment "c"]}), ("b", Commented 2 noComments)]))
+    "lines after a commented scalar value read back"
+    (Right (M.map (.comments) linesAfter))
+    (M.map (.comments) <$> decodeText @(M.Map T.Text (Commented Int)) (encodeText linesAfter))
   let scalarRoot = "|\n  text\n# end\n"
   assertEqual "lines at the end of a scalar root" (Right scalarRoot) (encodeText <$> decodeText @Node scalarRoot)
   assertEqual

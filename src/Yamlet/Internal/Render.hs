@@ -314,8 +314,8 @@ block opts indent afterColumn atLineStart hoisted carried n = case n.content of
     item i x
       | startsBelow opts x =
           let (above, below, rest) = indicatorLines opts (i == 0) (if i == 0 then carried else []) x
-          in start i above <> "-" <> after opts indent below rest x
-      | otherwise = start i (aboveIndicator opts x) <> "-" <> after opts indent [] [] x
+          in start i above <> "-" <> after opts indent (indent + indentStep) below rest x
+      | otherwise = start i (aboveIndicator opts x) <> "-" <> after opts indent (indent + indentStep) [] [] x
 
     entry :: Int -> (Node, Node) -> B.Builder
     entry i (k, v) = case implicitKey opts k of
@@ -327,11 +327,11 @@ block opts indent afterColumn atLineStart hoisted carried n = case n.content of
             (valueAbove, valueBelow, valueRest) = indicatorLines opts False [] v
         in start i keyAbove
              <> "?"
-             <> after opts indent keyBelow keyRest k
+             <> after opts indent indent keyBelow keyRest k
              <> lines_ indent valueAbove
              <> spaces indent
              <> ":"
-             <> after opts indent valueBelow valueRest v
+             <> after opts indent (indent + indentStep) valueBelow valueRest v
 
 -- | The lines above the indicator of a sequence item or an explicit entry,
 -- the lines below it, and the lines for the first entry of a block
@@ -390,25 +390,36 @@ splitAtLastEmptyLine ls =
   in (reverse own, reverse rest)
 
 -- | The lines above an entry with an implicit key, the comment on its line
--- and the lines between the key and a block collection value. A line holds
--- one comment. If the value is on the line of the key, the lines above the
--- value and the comment of the key go above the entry. Otherwise the comment
--- of the value goes below the key.
+-- and the lines below the key. A line holds one comment. If the value is on
+-- the line of the key, the lines above the value and the comment of the key
+-- go above the entry. Otherwise the comment of the value goes below the key.
+--
+-- A scalar key has no place for the lines after it, so they go below the
+-- key: between the key and a block collection value, or below the entry, as
+-- in 'value'. They read back as the lines of the value. Below a block scalar
+-- they would be part of the scalar, so they go above the entry.
 entryComments :: RenderOptions -> Node -> Node -> ([Line], Maybe T.Text, [Line])
 entryComments opts k v
   | isBlock opts v = case (k.comments.inline, v.comments.inline) of
-      (Just kc, Just vc) -> (keyLines, Just kc, [Comment vc])
-      (kc, vc) -> (keyLines, kc <|> vc, [])
+      (Just kc, Just vc) -> (k.comments.before, Just kc, keyAfter ++ [Comment vc])
+      (kc, vc) -> (k.comments.before, kc <|> vc, keyAfter)
+  | isBlockScalarNode v = case (k.comments.inline, v.comments.inline) of
+      (Just kc, Just vc) -> (k.comments.before ++ keyAfter ++ v.comments.before ++ [Comment kc], Just vc, [])
+      (kc, vc) -> (k.comments.before ++ keyAfter ++ v.comments.before, vc <|> kc, [])
   | otherwise = case (k.comments.inline, v.comments.inline) of
-      (Just kc, Just vc) -> (keyLines ++ v.comments.before ++ [Comment kc], Just vc, [])
-      (kc, vc) -> (keyLines ++ v.comments.before, vc <|> kc, [])
+      (Just kc, Just vc) -> (k.comments.before ++ v.comments.before ++ [Comment kc], Just vc, keyAfter)
+      (kc, vc) -> (k.comments.before ++ v.comments.before, vc <|> kc, keyAfter)
   where
-    -- A scalar key has no place for the lines after it, so they go above it
-    -- too.
-    keyLines :: [Line]
-    keyLines
-      | isScalarLike k = k.comments.before ++ k.comments.after
-      | otherwise = k.comments.before
+    keyAfter :: [Line]
+    keyAfter
+      | isScalarLike k = k.comments.after
+      | otherwise = []
+
+-- | A scalar in the literal or the folded style.
+isBlockScalarNode :: Node -> Bool
+isBlockScalarNode n = case n.content of
+  Scalar style _ -> isBlockScalar style
+  _ -> False
 
 -- | A scalar or an alias.
 isScalarLike :: Node -> Bool
@@ -419,7 +430,8 @@ isScalarLike n = case n.content of
 
 -- | The value of a mapping entry after the colon with the comment of the
 -- line, and the line break. The lines go between the key and a block
--- collection.
+-- collection, or below the entry, indented deeper than the key, where the
+-- lines after the value go too.
 value :: RenderOptions -> Int -> Node -> Maybe T.Text -> [Line] -> B.Builder
 value opts indent v lineComment extra
   | isBlock opts v = case v.content of
@@ -431,9 +443,19 @@ value opts indent v lineComment extra
             header <> lines_ indent below <> block opts indent (indent + indentStep) True False rest v
         | otherwise -> header <> lines_ (indent + indentStep) below <> block opts (indent + indentStep) (indent + indentStep) True False rest v
       _ -> header <> lines_ (indent + indentStep) below <> block opts (indent + indentStep) (indent + indentStep) True False rest v
-  | isEmpty v = comment lineComment <> "\n" <> linesBelow indent v
-  | otherwise = " " <> inline opts InValue (indent + indentStep) v lineComment <> "\n" <> linesBelow indent v
+  | isEmpty v = comment lineComment <> "\n" <> entryBelow
+  | otherwise = " " <> inline opts InValue (indent + indentStep) v lineComment <> "\n" <> entryBelow
   where
+    -- The lines after a block scalar end it at the column of the key. Without
+    -- the first case, the render benchmark of the config input allocates
+    -- more.
+    entryBelow :: B.Builder
+    entryBelow
+      | null extra && null v.comments.after = mempty
+      | otherwise =
+          let column = if isBlockScalarNode v then indent else indent + indentStep
+          in lines_ column extra <> linesBelow column v
+
     header :: B.Builder
     header = maybe mempty (" " <>) (props v) <> comment lineComment <> "\n"
 
@@ -453,9 +475,9 @@ value opts indent v lineComment extra
 -- | A node after the indicator of a sequence item or an explicit entry, with
 -- the line break, and the lines below the indicator and the lines for the
 -- first entry from 'indicatorLines'. A block collection starts on the same
--- line if it can.
-after :: RenderOptions -> Int -> [Line] -> [Line] -> Node -> B.Builder
-after opts indent below rest n
+-- line if it can. The lines after a scalar go at the given column.
+after :: RenderOptions -> Int -> Int -> [Line] -> [Line] -> Node -> B.Builder
+after opts indent column below rest n
   | isBlock opts n =
       if startsBelow opts n
         then
@@ -465,8 +487,9 @@ after opts indent below rest n
             <> lines_ (indent + indentStep) below
             <> block opts (indent + indentStep) (indent + indentStep) True True rest n
         else " " <> block opts (indent + indentStep) (indent + indentStep) False True [] n
-  | isEmpty n = comment n.comments.inline <> "\n" <> linesBelow indent n
-  | otherwise = " " <> inline opts InValue (indent + indentStep) n n.comments.inline <> "\n" <> linesBelow indent n
+  | isEmpty n = comment n.comments.inline <> "\n" <> linesBelow column n
+  | isBlockScalarNode n = " " <> inline opts InValue (indent + indentStep) n n.comments.inline <> "\n" <> linesBelow indent n
+  | otherwise = " " <> inline opts InValue (indent + indentStep) n n.comments.inline <> "\n" <> linesBelow column n
 
 -- | Where an inline node is. A scalar in a key is on one line.
 data Position = InValue | InKey | InFlow | InFlowKey

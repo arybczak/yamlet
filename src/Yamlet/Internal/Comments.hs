@@ -247,7 +247,12 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
         go acc [] is = let !xs = reverse acc in (xs, is)
         go acc (x : rest) is =
           let !(x', is') = attachNode e (nextStart rest) itemColumn (s, lineStart) x is
-          in go (x' : acc) rest is'
+              !(x'', is'')
+                -- A list without indentation has no column of its own for the
+                -- lines after its last item, so they stay with the list.
+                | style == Block && not (null rest && minColumn > column) = linesBelow (nextStart rest) x' is'
+                | otherwise = (x', is')
+          in go (x'' : acc) rest is''
 
         nextStart :: [Node] -> Int
         nextStart = \case
@@ -266,7 +271,10 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
         go acc ((k, v) : rest) is =
           let !(k', is') = attachNode e (offsetOf v.offset) entryColumn (s, lineStart) k is
               !(v', is'') = attachNode e (nextStart rest) entryColumn (s, lineStart) v is'
-          in go ((k', v') : acc) rest is''
+              !(v'', is''')
+                | style == Block = linesBelow (nextStart rest) v' is''
+                | otherwise = (v', is'')
+          in go ((k', v'') : acc) rest is'''
 
         nextStart :: [(Node, Node)] -> Int
         nextStart = \case
@@ -275,6 +283,26 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
 
         entryColumn :: Int
         entryColumn = if style == Flow then 0 else column + 1
+
+    -- The lines below a scalar or an alias in a block collection, before the
+    -- limit, that are indented deeper than its entry, and the empty lines
+    -- between them. They go after the node, as 'blockAfter' does for a
+    -- collection. Below a block scalar, such a line is part of the scalar
+    -- if it is indented as deep as its content.
+    linesBelow :: Int -> Node -> [Item] -> (Node, [Item])
+    linesBelow lim x is = case x.content of
+      Sequence {} -> (x, is)
+      Mapping {} -> (x, is)
+      Scalar style _ | style == Literal || style == Folded -> (x, is)
+      _ ->
+        let ok i = i.at < lim && i.own && (isEmptyLine i || i.at - i.lineStart > column)
+            (taken, rest) = span ok is
+            (empties, taken') = span isEmptyLine (reverse taken)
+        in case taken' of
+             [] -> (x, is)
+             _ ->
+               let !x' = Node x.offset x.endOffset x.props (strictComments x.comments.before x.comments.inline (map (.line) (reverse taken'))) x.content
+               in (x', reverse empties ++ rest)
 
     between :: Int -> Int -> T.Text
     between i j = slice e (i + e.base) (j + e.base)

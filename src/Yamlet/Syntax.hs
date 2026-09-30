@@ -122,6 +122,35 @@
 --     >>> printComments input
 --     root.server (value) inline: "a"
 --
+-- * A comment below a scalar or an alias in a block collection belongs to the
+--   end of that node if it is indented deeper than the key or the @-@ of its
+--   entry. Below a block scalar, such a line is part of the scalar or belongs
+--   to the node below. Below the last item of a list without indentation, it
+--   belongs to the end of the list, by the rule below.
+--
+--     >>> input = "host: localhost\n  # a\n# b\nports:\n- 80\n  # c\n# d\n- 443\n  # e\n# f\nuser: admin\n"
+--
+--     >>> T.putStr input
+--     host: localhost
+--       # a
+--     # b
+--     ports:
+--     - 80
+--       # c
+--     # d
+--     - 443
+--       # e
+--     # f
+--     user: admin
+--
+--     >>> printComments input
+--     root.host (value) after: [Comment "a"]
+--     root.ports (key) before: [Comment "b"]
+--     root.ports (value) after: [Comment "e"]
+--     root.ports[0] after: [Comment "c"]
+--     root.ports[1] before: [Comment "d"]
+--     root.user (key) before: [Comment "f"]
+--
 -- * A comment after the last entry of a block collection belongs to the end
 --   of the collection if it is indented at least as deep as the entries, and
 --   deeper than the key of the collection. Otherwise it belongs to the node

@@ -644,14 +644,28 @@ test_movedComments = do
       withInline t n = n {comments = n.comments {inline = Just t}}
       withBefore :: T.Text -> Node -> Node
       withBefore t n = n {comments = n.comments {before = [Comment t]}}
+      withAfter :: T.Text -> Node -> Node
+      withAfter t n = n {comments = n.comments {after = [Comment t]}}
   assertEqual
     "lines above a value on the line of the key"
     "# v\na: 1\n"
     (render (mappingNode [(plainNode "a", withBefore "v" (plainNode "1"))]))
   assertEqual
     "lines after a scalar key"
-    "# b\n# a\nk: 1\n"
-    (render (mappingNode [((withBefore "b" (plainNode "k")) {comments = (withBefore "b" (plainNode "k")).comments {after = [Comment "a"]}}, plainNode "1")]))
+    "# b\nk: 1\n  # a\n"
+    (render (mappingNode [(withAfter "a" (withBefore "b" (plainNode "k")), plainNode "1")]))
+  assertEqual
+    "lines after a scalar key with a block scalar value"
+    "# a\nk: |\n  text\n"
+    (render (mappingNode [(withAfter "a" (plainNode "k"), contentNode (Scalar Literal "text\n"))]))
+  assertEqual
+    "lines after a block scalar value"
+    "k: |\n  text\n# a\nx: 1\n"
+    (render (mappingNode [(plainNode "k", withAfter "a" (contentNode (Scalar Literal "text\n"))), (plainNode "x", plainNode "1")]))
+  assertEqual
+    "lines after a list item"
+    "- 1\n  # a\n- 2\n"
+    (render (contentNode (Sequence Block [withAfter "a" (plainNode "1"), plainNode "2"])))
   assertEqual
     "empty lines at the end of an empty flow collection"
     "a: [\n  # c\n  ]\n\nb: 1\n"
