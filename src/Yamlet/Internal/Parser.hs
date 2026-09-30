@@ -44,7 +44,7 @@ parseStream input@(T.Text arr off len) = case prescan e start of
   Right (markers, boms) -> case runParser e start (lYamlStream markers) of
     Left (ParseError i msg) -> Left $ parseError i msg
     Right (Just docs, _, _) -> case filter (not . allowedBom docs) boms of
-      i : _ -> Left $ errorAt input (toOffset e i) "unexpected byte order mark"
+      (i, _) : _ -> Left $ errorAt input (toOffset e i) "unexpected byte order mark"
       [] -> Right docs
     Right (Nothing, _, fu) -> Left $ uncurry parseError (unexpected e fu)
   where
@@ -71,10 +71,10 @@ parseStream input@(T.Text arr off len) = case prescan e start of
 
     -- A byte order mark can start a line between documents, or be a
     -- character of a quoted scalar.
-    allowedBom :: [Document] -> Int -> Bool
-    allowedBom docs i = case M.lookupLE (toOffset e i) (scalarRanges docs) of
+    allowedBom :: [Document] -> (Int, Bool) -> Bool
+    allowedBom docs (i, lineStart) = case M.lookupLE (toOffset e i) (scalarRanges docs) of
       Just (_, (end, quoted)) | toOffset e i < end -> quoted
-      _ -> isStartOfLine e i
+      _ -> lineStart
 
     scalarRanges :: [Document] -> M.Map Offset (Offset, Bool)
     scalarRanges docs = M.fromList (foldr (\d -> ranges d.root) [] docs)
@@ -105,23 +105,25 @@ streamStart e = if isBom e e.base then e.base + bomLength else e.base
 -- | Check that the input has only characters that YAML allows, and find the
 -- lines that start with a document marker, and the byte order marks. A
 -- document cannot contain such a line. The index of a marker after a byte
--- order mark is the index of the mark. Return the index of an invalid
--- character on error.
-prescan :: Env -> Int -> Either Int ([Int], [Int])
-prescan e start = go start [start | isMarker e (skipBoms e start)] []
+-- order mark is the index of the mark. Each byte order mark comes with a
+-- flag that is true if the mark is at the start of a line, as
+-- 'isStartOfLine' tells. Return the index of an invalid character on error.
+prescan :: Env -> Int -> Either Int ([Int], [(Int, Bool)])
+prescan e start = go start start [start | isMarker e (skipBoms e start)] []
   where
-    go :: Int -> [Int] -> [Int] -> Either Int ([Int], [Int])
-    go i acc boms
+    -- A byte order mark at index ls is at the start of a line.
+    go :: Int -> Int -> [Int] -> [(Int, Bool)] -> Either Int ([Int], [(Int, Bool)])
+    go i ls acc boms
       | i >= e.end = Right (reverse acc, reverse boms)
       | otherwise =
           let w = A.unsafeIndex e.array i
           in if
-               | w >= SPACE && w < DEL -> go (i + 1) acc boms
+               | w >= SPACE && w < DEL -> go (i + 1) ls acc boms
                | w == LF || (w == CR && byteAt e (i + 1) /= LF) ->
                    let s = i + 1
                        marker = isMarker e (skipBoms e s)
-                   in go s (if marker then s : acc else acc) boms
-               | w == CR || w == TAB -> go (i + 1) acc boms
+                   in go s s (if marker then s : acc else acc) boms
+               | w == CR || w == TAB -> go (i + 1) ls acc boms
                | w < SPACE || w == DEL -> Left i
                -- C1 control characters except NEL.
                | w == 0xC2 && i + 1 < e.end
@@ -134,8 +136,10 @@ prescan e start = go start [start | isMarker e (skipBoms e start)] []
                , let w2 = A.unsafeIndex e.array (i + 2)
                , w2 == 0xBE || w2 == 0xBF ->
                    Left i
-               | w == 0xEF && isBom e i -> go (i + bomLength) acc (i : boms)
-               | otherwise -> go (i + 1) acc boms
+               | w == 0xEF && isBom e i ->
+                   let next = i + bomLength
+                   in go next (if i == ls then next else ls) acc ((i, i == ls) : boms)
+               | otherwise -> go (i + 1) ls acc boms
 
 ----------------------------------------
 -- Contexts
