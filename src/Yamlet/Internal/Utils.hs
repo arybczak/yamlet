@@ -9,6 +9,7 @@ module Yamlet.Internal.Utils
   ( textStripPrefix
   , textIsPrefixOf
   , maxImplicitKeyLength
+  , maxVersion
   , coreTagPrefix
   , picoDecimals
   , decimalPlaces
@@ -67,6 +68,14 @@ textIsPrefixOf a@(T.Text _aArr _aOff aLen) b@(T.Text bArr bOff bLen) =
 -- specification.
 maxImplicitKeyLength :: Int
 maxImplicitKeyLength = 1024
+
+-- | The largest number in a version of a @%YAML@ directive.
+--
+-- Without a limit, the largest number depends on the size of Int, which
+-- differs between architectures. The limit is far above any version of YAML,
+-- and a number below it times 10 fits in 32 bits.
+maxVersion :: Int
+maxVersion = 1000000
 
 -- | The prefix of the tags of the core schema, and of the @!!@ handle.
 coreTagPrefix :: T.Text

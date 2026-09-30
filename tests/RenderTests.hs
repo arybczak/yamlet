@@ -362,6 +362,12 @@ test_documents = do
     "comment above a document with directives"
     "a\n...\n# c\n%YAML 1.2\n---\nb\n"
     (renderSyntax defaultRenderOptions [document (plainNode "a"), commented (document (plainNode "b")) {version = Just (Version 1 2)}])
+  let versioned :: Version -> T.Text
+      versioned v = renderSyntax defaultRenderOptions [(document (plainNode "a")) {version = Just v}]
+  assertEqual "supported version" "%YAML 1.3\n---\na\n" (versioned (Version 1 3))
+  assertEqual "unsupported version" "a\n" (versioned (Version 2 0))
+  assertEqual "negative minor version" "a\n" (versioned (Version 1 (-1)))
+  assertEqual "minor version beyond the limit" "a\n" (versioned (Version 1 1000001))
   -- Without the marker, the next parse would give the comment to the root.
   let first :: String -> T.Text -> Node -> Assertion
       first preface expected root = do

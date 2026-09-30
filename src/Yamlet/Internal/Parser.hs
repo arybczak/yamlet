@@ -499,12 +499,6 @@ directives = go Nothing defaultHandles Set.empty
               guard (n' <= maxVersion)
               pure n'
 
-            -- Without a limit, the largest number depends on the size of Int,
-            -- which differs between architectures. The limit is far above any
-            -- version of YAML, and a number below it times 10 fits in 32 bits.
-            maxVersion :: Int
-            maxVersion = 1000000
-
     tagDirective :: P (T.Text, T.Text)
     tagDirective = do
       e <- env

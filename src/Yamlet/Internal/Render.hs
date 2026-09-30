@@ -56,7 +56,8 @@ defaultRenderOptions =
 -- on the line of the key.
 --
 -- An anchor name with a character that YAML does not allow in it, e.g. a
--- space, becomes a new name in the anchor and in its aliases.
+-- space, becomes a new name in the anchor and in its aliases. A version that
+-- the parser does not support, e.g. 2.0, has no @%YAML@ directive.
 --
 -- With 'forceBlock', the flow collections become block collections:
 --
@@ -185,7 +186,7 @@ document opts afterEnd doc =
         then
           foldMap
             (\v -> "%YAML " <> B.fromUnboundedDec v.major <> "." <> B.fromUnboundedDec v.minor <> "\n")
-            doc.version
+            version
             <> foldMap tagDirective handles
         else mempty
     , body
@@ -218,8 +219,14 @@ document opts afterEnd doc =
         Mapping _ kvs -> foldr (\(k, v) -> tags k . tags v) acc kvs
         _ -> acc
 
+    -- The parser rejects the other versions.
+    version :: Maybe Version
+    version = case doc.version of
+      Just v | v.major == 1, v.minor >= 0, v.minor <= maxVersion -> Just v
+      _ -> Nothing
+
     directives :: Bool
-    directives = isJust doc.version || not (null handles)
+    directives = isJust version || not (null handles)
 
     -- Without an end marker, the previous document takes the comments above
     -- this one.
