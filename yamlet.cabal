@@ -42,6 +42,11 @@ extra-source-files:
 
 tested-with: GHC ^>= { 9.2, 9.4, 9.6, 9.8, 9.10, 9.12, 9.14 }
 
+bug-reports: https://github.com/arybczak/yamlet/issues
+source-repository head
+    type:     git
+    location: https://github.com/arybczak/yamlet.git
+
 common language
     ghc-options:        -Wall
                         -Werror=missing-deriving-strategies
