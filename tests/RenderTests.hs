@@ -27,6 +27,7 @@ renderTests =
         [ testCase "attachment" test_attachment
         , testCase "configuration" test_configuration
         , testCase "round trip" test_commentRoundTrip
+        , testCase "several hashes" test_hashes
         , testCase "moved comments" test_movedComments
         , testCase "lines after a list" test_linesAfterList
         , testCase "lines below an indicator" test_linesBelowIndicator
@@ -637,6 +638,22 @@ test_commentRoundTrip = case parseDocumentsText configuration of
       Left err -> assertFailure (T.unpack out ++ "\n" ++ show err)
   Left err -> assertFailure (show err)
 
+-- | A comment on a line of its own keeps its # characters. A comment at the
+-- end of a line keeps them in its text.
+test_hashes :: Assertion
+test_hashes = do
+  let input = "## a\n### b ###\n####\n# #c\nk: 1 ##d\n  ## e\n"
+  assertEqual
+    "lines"
+    (Right [[CommentLine 2 "a", CommentLine 3 "b ###", CommentLine 4 "", Comment "#c"]])
+    (map ((\case Mapping _ ((k, _) : _) -> k.comments.before; _ -> []) . (.root.content)) <$> parseDocumentsText input)
+  assertEqual
+    "inline and below a value"
+    (Right [(Just "#d", [CommentLine 2 "e"])])
+    (map ((\case Mapping _ [(_, v)] -> (v.comments.inline, v.comments.after); _ -> (Nothing, [])) . (.root.content)) <$> parseDocumentsText input)
+  assertEqual "rendered" (Right "## a\n### b ###\n####\n# #c\nk: 1 # #d\n  ## e\n") (renderSyntax defaultRenderOptions <$> parseDocumentsText input)
+  assertEqual "count below 1" "# a\n---\nk: 1\n" (renderSyntax defaultRenderOptions [(document (mappingNode [(plainNode "k", plainNode "1")])) {docComments = noComments {before = [CommentLine (-1) "a"]}}])
+
 -- | A comment without a place at its node moves to one that has it.
 -- | The lines after a list under a key stay at the end of the list. Without
 -- indentation, a block collection as the last item would take them in.
@@ -895,7 +912,7 @@ genComments collection =
     genLines :: Gen [Line]
     genLines = do
       k <- choose (0, 2)
-      vectorOf k (frequency [(3, Comment <$> genCommentText), (1, pure EmptyLine)])
+      vectorOf k (frequency [(3, CommentLine <$> elements [1, 1, 2, 3] <*> genCommentText), (1, pure EmptyLine)])
 
 genCommentText :: Gen T.Text
 genCommentText = elements ["a comment", "", "x", "# hash", "key: value", "- item", "'quoted'"]

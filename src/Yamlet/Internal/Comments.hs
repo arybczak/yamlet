@@ -465,11 +465,19 @@ scanItems e start stop = go start start False False
                 in item ++ go next next False blank ranges
             | w == HASH && (i == ls || isWhite (A.unsafeIndex e.array (i - 1))) ->
                 let eol = lineEnd i
-                    text = T.stripEnd . dropSpace $ slice e (i + 1) eol
-                in Item (i - e.base) (ls - e.base) (not content) (Comment text)
+                    -- A comment at the end of a line keeps its text after
+                    -- the first #, because 'Comments' has no count for it.
+                    textStart = if content then i + 1 else hashesEnd i
+                    text = T.stripEnd . dropSpace $ slice e textStart eol
+                in Item (i - e.base) (ls - e.base) (not content) (CommentLine (textStart - i) text)
                      : go eol ls True prevEmpty ranges
             | isWhite w -> go (i + 1) ls content prevEmpty ranges
             | otherwise -> go (i + 1) ls True prevEmpty ranges
+
+    hashesEnd :: Int -> Int
+    hashesEnd i
+      | i < stop && A.unsafeIndex e.array i == HASH = hashesEnd (i + 1)
+      | otherwise = i
 
     lineEnd :: Int -> Int
     lineEnd i

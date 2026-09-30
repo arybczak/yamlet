@@ -701,15 +701,16 @@ lines_ indent = mconcat . map line
     line :: Line -> B.Builder
     line = \case
       EmptyLine -> B.fromText emptyLine <> "\n"
-      Comment t ->
-        mconcat . map commentLine $
-          T.split isCommentBreak (T.replace "\r\n" "\n" (printable t))
+      CommentLine n t ->
+        let hashes = B.fromText (T.replicate (max 1 n) "#")
+        in mconcat . map (commentLine hashes) $
+             T.split isCommentBreak (T.replace "\r\n" "\n" (printable t))
 
     -- The parser drops the white space at the end of a comment.
-    commentLine :: T.Text -> B.Builder
-    commentLine l
-      | T.null (T.stripEnd l) = spaces indent <> "#\n"
-      | otherwise = spaces indent <> "# " <> B.fromText (T.stripEnd l) <> "\n"
+    commentLine :: B.Builder -> T.Text -> B.Builder
+    commentLine hashes l
+      | T.null (T.stripEnd l) = spaces indent <> hashes <> "\n"
+      | otherwise = spaces indent <> hashes <> " " <> B.fromText (T.stripEnd l) <> "\n"
 
 -- | The mark of an empty line from the comments. The output has no other NUL
 -- character.

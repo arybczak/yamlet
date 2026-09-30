@@ -23,7 +23,7 @@ module Yamlet.Internal.Syntax
   , Comments (..)
   , noComments
   , Commented (..)
-  , Line (..)
+  , Line (.., Comment)
 
     -- * Positions
   , Offset (..)
@@ -283,13 +283,34 @@ data Located a = Located
 -- | A line of comments. Several empty lines in a row count as one.
 data Line
   = EmptyLine
-  | -- | The text after the @#@ and one space, without the white space at its
-    -- end. The renderer writes a text with line breaks as several comment
-    -- lines, and the parser reads them back as several comments. U+0085,
-    -- U+2028 and U+2029 count as line breaks here, because YAML 1.1 reads
-    -- them as line breaks.
-    Comment !T.Text
-  deriving stock (Eq, Ord, Show, Generic)
+  | -- | The number of @#@ characters at the start of the comment, e.g. 2 for
+    -- @## Section@, and the text after them and one space, without the white
+    -- space at its end. The renderer writes a count below 1 as 1. It writes a
+    -- text with line breaks as several comment lines with the same @#@
+    -- characters, and the parser reads them back as several comments.
+    -- U+0085, U+2028 and U+2029 count as line breaks here, because YAML 1.1
+    -- reads them as line breaks.
+    --
+    -- The comment at the end of a line in t'Comments' is a text without a
+    -- count. It keeps the @#@ characters after the first one in its text.
+    CommentLine !Int !T.Text
+  deriving stock (Eq, Ord, Generic)
+
+-- | A comment with one @#@. As a pattern, it matches every comment and
+-- ignores the number of @#@ characters.
+pattern Comment :: T.Text -> Line
+pattern Comment t <- CommentLine _ t
+  where
+    Comment t = CommentLine 1 t
+
+{-# COMPLETE EmptyLine, Comment #-}
+
+-- A comment with one @#@ shows as 'Comment', as a program usually writes it.
+instance Show Line where
+  showsPrec d = \case
+    EmptyLine -> showString "EmptyLine"
+    CommentLine 1 t -> showParen (d > 10) $ showString "Comment " . showsPrec 11 t
+    CommentLine n t -> showParen (d > 10) $ showString "CommentLine " . showsPrec 11 n . showChar ' ' . showsPrec 11 t
 
 instance NFData Line where
   rnf = rwhnf
@@ -358,7 +379,7 @@ copyComments c = case c of
   where
     copyLine :: Line -> Line
     copyLine = \case
-      Comment t -> Comment (T.copy t)
+      CommentLine n t -> CommentLine n (T.copy t)
       EmptyLine -> EmptyLine
 
 -- | A copy without a thunk, which would keep the original text alive.
