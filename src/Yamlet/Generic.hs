@@ -265,8 +265,8 @@ instance
   -- The pragma keeps the source of the method as its unfolding, and GHC
   -- inlines it at the type of the derived instance, together with
   -- 'genericToYaml'. Without it, GHC does not inline the optimized method
-  -- there, the derived encoders keep the generic representation, and 7 of
-  -- the encoders of the inspection tests fail.
+  -- there, the derived encoders keep the generic representation, and the
+  -- inspection tests of the encoders fail.
   {-# INLINE toYaml #-}
 
   -- The list and the field encode their values with the instance of
@@ -291,8 +291,8 @@ instance
   where
   parseYaml = coerce (genericParseYaml @a)
   -- The pragma has the reason of the one on 'toYaml'. Without it, the
-  -- optimized method is too large for an unfolding, and 8 of the decoders of
-  -- the inspection tests fail.
+  -- optimized method is too large for an unfolding, and the inspection tests
+  -- of the decoders fail.
   {-# INLINE parseYaml #-}
 
   -- The list and the field decode their values with the instance of
@@ -301,14 +301,13 @@ instance
   -- 'parseYaml' of this instance instead. GHC inlines the defaults here,
   -- where the type is not known, and the derived instance only calls the
   -- result. Each value would then go through the generic representation,
-  -- and the benchmark derive.contents.parseYaml.generic takes about 40%
-  -- longer.
+  -- and the benchmark derive.contents.parseYaml.generic would be slower.
   parseYamlList = coerce (withSequence (mapM (parseNode (parseYaml @a))))
   -- The derived method applies this one to the dictionaries of the instance.
   -- The pragma inlines it there, so only the dictionary of 'FromYaml a'
   -- remains. Without the pragma, GHC 9.14 keeps the call with all the
   -- dictionaries, because its worker/wrapper does not drop unused
-  -- dictionaries, and the 13 list decoders of the inspection tests fail.
+  -- dictionaries, and the inspection tests of the list decoders fail.
   {-# INLINE parseYamlList #-}
 
   parseYamlField _ = coerce (parseYaml @a)
