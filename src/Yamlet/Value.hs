@@ -65,7 +65,10 @@ data Value
     -- The encoder writes the tag. A value with its own tag of the core
     -- schema reads back without 'Tagged', e.g. @Tagged intTag (Int 1)@ reads
     -- back as @Int 1@. A value that does not fit a tag of the core schema,
-    -- e.g. a v'String' with 'intTag', does not read back.
+    -- e.g. a v'String' with 'intTag', does not read back. YAML has no
+    -- syntax for the empty tag or a tag of one character, e.g. @x@ or @!@.
+    -- The encoder writes such a tag as the non-specific tag @!@, and the
+    -- value reads back without 'Tagged'.
     Tagged !T.Text !Value
   deriving stock (Eq, Ord, Show, Generic)
 

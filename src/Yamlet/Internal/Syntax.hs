@@ -131,7 +131,10 @@ data Tag
     NoTag
   | -- | The @!@ tag.
     NonSpecificTag
-  | -- | A specific tag, e.g. @tag:yaml.org,2002:str@ for @!!str@.
+  | -- | A specific tag, e.g. @tag:yaml.org,2002:str@ for @!!str@. YAML has
+    -- no syntax for the empty tag or a tag of one character, e.g. @x@ or
+    -- @!@. The renderer writes such a tag as @!@, which reads back as
+    -- 'NonSpecificTag'.
     Tag !T.Text
   deriving stock (Eq, Ord, Show, Generic)
 
