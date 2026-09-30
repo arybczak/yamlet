@@ -214,11 +214,11 @@ instance ToYaml QuarterOfYear where toYaml = iso8601 buildQuarterOfYear
 iso8601 :: (a -> TLB.Builder) -> a -> S.Node
 iso8601 build = scalar . String . TL.toStrict . TLB.toLazyText . build
 
--- | Like 'iso8601', but plain even though YAML 1.1 reads the text as a
--- timestamp, because the value is one.
+-- | Like 'iso8601', but plain if YAML 1.1 reads the text as a timestamp,
+-- because the value is one.
 timestamp :: (a -> TLB.Builder) -> a -> S.Node
 timestamp build x
-  | isPlainString t = S.plainNode t
+  | isPlainString t && (isYaml11Timestamp t || not (isYaml11NonString t)) = S.plainNode t
   | otherwise = string t
   where
     t :: T.Text

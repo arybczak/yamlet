@@ -130,6 +130,29 @@ test_time = do
   assertEqual "local time" "2026-09-25T12:30:05.25\n" (encodeText noon)
   assertEqual "UTC time" "2026-09-25T12:30:00Z\n" (encodeText (UTCTime (fromGregorian 2026 9 25) (12 * 3600 + 30 * 60)))
   assertEqual "zoned time" "2026-09-25T12:30:05.25-02:30\n" (encodeText (ZonedTime noon (minutesToTimeZone (-150))))
+  assertEqual "day of the year 0, which PyYAML cannot build" "'0000-01-01'\n" (encodeText (fromGregorian 0 1 1))
+  assertEqual "day of the year 10000" "10000-01-01\n" (encodeText (fromGregorian 10000 1 1))
+  assertEqual
+    "UTC leap second"
+    "'2016-12-31T23:59:60.5Z'\n"
+    (encodeText (UTCTime (fromGregorian 2016 12 31) 86400.5))
+  assertEqual
+    "local leap second"
+    "'2016-12-31T23:59:60'\n"
+    (encodeText (LocalTime (fromGregorian 2016 12 31) (TimeOfDay 23 59 60)))
+  assertEqual
+    "zoned time of the year 0"
+    "'0000-06-01T12:00:00+01:00'\n"
+    (encodeText (ZonedTime (LocalTime (fromGregorian 0 6 1) (TimeOfDay 12 0 0)) (hoursToTimeZone 1)))
+  assertEqual
+    "hour 24"
+    "'2024-01-01T24:00:00'\n"
+    (encodeText (LocalTime (fromGregorian 2024 1 1) (TimeOfDay 24 0 0)))
+  assertEqual
+    "time zone of 25 hours"
+    "'2024-01-01T12:00:00+25:00'\n"
+    (encodeText (ZonedTime (LocalTime (fromGregorian 2024 1 1) (TimeOfDay 12 0 0)) (hoursToTimeZone 25)))
+  roundTrip "leap second" (UTCTime (fromGregorian 2016 12 31) 86400.5)
   assertEqual "duration" "1.5\n" (encodeText (1.5 :: NominalDiffTime))
   roundTrip "local time" noon
   roundTrip "UTC time" (UTCTime (fromGregorian (-44) 3 15) 0.000000000001)

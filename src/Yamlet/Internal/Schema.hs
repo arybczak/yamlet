@@ -14,6 +14,7 @@ module Yamlet.Internal.Schema
   , isPlainPortable
   , isYaml11Bool
   , isYaml11NonString
+  , isYaml11Timestamp
   , maxExponent
   , exponentOutOfRange
   ) where
@@ -21,8 +22,10 @@ module Yamlet.Internal.Schema
 import Control.Monad
 import Data.Bifunctor
 import Data.Char
+import Data.Maybe
 import Data.Scientific qualified as Sci
 import Data.Text qualified as T
+import Data.Time.Calendar
 
 import Yamlet.Internal.Emit
 import Yamlet.Internal.Utils
@@ -264,6 +267,55 @@ isYaml11NonString t = case T.uncons t of
 
     blank :: T.Text -> [T.Text]
     blank = one (`elem` [' ', '\t'])
+
+-- | A common YAML 1.1 parser reads a plain scalar with the text as a
+-- timestamp and can build it. PyYAML has the years from 1 to 9999 of Python,
+-- and it rejects the hour 24, a leap second and a time zone of 24 hours.
+-- Psych reads the hour 24 and a leap second as a later time.
+--
+-- >>> map isYaml11Timestamp ["2024-01-01", "2024-01-01T12:30:00Z", "0000-01-01", "2016-12-31T23:59:60Z", "12:30"]
+-- [True,True,False,False,False]
+isYaml11Timestamp :: T.Text -> Bool
+isYaml11Timestamp t =
+  isYaml11NonString t && case T.splitOn "-" date of
+    [y, m, d]
+      | T.length y == 4
+      , all (\ds -> not (T.null ds) && T.all isDigit ds) [y, m, d] ->
+          let year = digitsValue 10 y
+          in year >= 1
+               && year <= 9999
+               && isJust (fromGregorianValid year (number m) (number d))
+               && validTime (T.dropWhile isTimeSeparator rest)
+    _ -> False
+  where
+    (date, rest) = T.break isTimeSeparator t
+
+    isTimeSeparator :: Char -> Bool
+    isTimeSeparator c = c == 'T' || c == 't' || c == ' ' || c == '\t'
+
+    number :: T.Text -> Int
+    number = fromInteger . digitsValue 10
+
+    -- The time, with the hours, the minutes and the seconds of the pattern of
+    -- 'isYaml11NonString'.
+    validTime :: T.Text -> Bool
+    validTime s
+      | T.null s = True
+      | otherwise = case T.splitOn ":" (T.takeWhile (\c -> isDigit c || c == ':') s) of
+          h : _ : sec : _ ->
+            number h < 24 && number (T.take 2 sec) < 60 && validZone (T.dropWhile (\c -> isDigit c || c `elem` [':', '.', ' ', '\t']) s)
+          _ -> False
+
+    -- The hours of a zone are the digits before the last two, unless the
+    -- zone has a colon or at most two digits.
+    validZone :: T.Text -> Bool
+    validZone z = case T.uncons z of
+      Just (c, offset)
+        | c == '+' || c == '-' ->
+            let hours = T.takeWhile isDigit offset
+                h = if T.compareLength hours 2 == GT then T.dropEnd 2 hours else hours
+            in number h < 24
+      _ -> True
 
 -- | [-+]?[0-9]+, 0o[0-7]+ or 0x[0-9a-fA-F]+.
 readInt :: T.Text -> Maybe Integer
