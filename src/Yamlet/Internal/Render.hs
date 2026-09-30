@@ -257,7 +257,7 @@ document opts afterEnd doc =
           (if marker then "---" <> comment markerComment <> "\n" else mempty)
             <> lines_ 0 (separated rootLines ++ (if isJust (props r) then firstLines opts r else []))
             <> maybe mempty (<> "\n") (props r)
-            <> block opts 0 0 True (isJust (props r)) r
+            <> block opts 0 0 True (isJust (props r)) [] r
       | otherwise = scalarBody <> linesBelow 0 r
 
     -- The parser gives the lines directly above the first entry of a block
@@ -286,9 +286,10 @@ document opts afterEnd doc =
 -- | The entries of a block collection at the given indentation, and the lines
 -- after them at the given column. The first entry does not start with
 -- indentation if the collection continues a line, and the lines above it are
--- not written if the caller wrote them already.
-block :: RenderOptions -> Int -> Int -> Bool -> Bool -> Node -> B.Builder
-block opts indent afterColumn atLineStart hoisted n = case n.content of
+-- not written if the caller wrote them already. The given lines go to the
+-- first entry if it starts below its indicator, as in 'indicatorLines'.
+block :: RenderOptions -> Int -> Int -> Bool -> Bool -> [Line] -> Node -> B.Builder
+block opts indent afterColumn atLineStart hoisted carried n = case n.content of
   Sequence _ xs -> mconcat (zipWith item [0 :: Int ..] xs) <> lines_ afterColumn n.comments.after
   Mapping _ kvs -> mconcat (zipWith entry [0 :: Int ..] kvs) <> lines_ afterColumn n.comments.after
   _ -> mempty
@@ -299,8 +300,14 @@ block opts indent afterColumn atLineStart hoisted n = case n.content of
       | i == 0 && hoisted = spaces indent
       | otherwise = lines_ indent ls <> spaces indent
 
+    -- Without the second case, the tuple of 'indicatorLines' makes the render
+    -- benchmark of the config input allocate more.
     item :: Int -> Node -> B.Builder
-    item i x = start i (aboveIndicator opts x) <> "-" <> after opts indent x
+    item i x
+      | startsBelow opts x =
+          let (above, below, rest) = indicatorLines opts (i == 0) (if i == 0 then carried else []) x
+          in start i above <> "-" <> after opts indent below rest x
+      | otherwise = start i (aboveIndicator opts x) <> "-" <> after opts indent [] [] x
 
     entry :: Int -> (Node, Node) -> B.Builder
     entry i (k, v) = case implicitKey opts k of
@@ -308,28 +315,71 @@ block opts indent afterColumn atLineStart hoisted n = case n.content of
         let (above, lineComment, below) = entryComments opts k v
         in start i above <> key <> ":" <> value opts indent v lineComment below
       Nothing ->
-        start i (aboveIndicator opts k)
-          <> "?"
-          <> after opts indent k
-          <> lines_ indent (aboveIndicator opts v)
-          <> spaces indent
-          <> ":"
-          <> after opts indent v
+        let (keyAbove, keyBelow, keyRest) = indicatorLines opts (i == 0) (if i == 0 then carried else []) k
+            (valueAbove, valueBelow, valueRest) = indicatorLines opts False [] v
+        in start i keyAbove
+             <> "?"
+             <> after opts indent keyBelow keyRest k
+             <> lines_ indent valueAbove
+             <> spaces indent
+             <> ":"
+             <> after opts indent valueBelow valueRest v
 
--- | The lines above an indicator of a sequence item or an explicit entry. The
+-- | The lines above the indicator of a sequence item or an explicit entry,
+-- the lines below it, and the lines for the first entry of a block
+-- collection that starts below its indicator. The flag is set for the first
+-- entry of a collection, and the given lines come first.
+--
+-- The parser gives the lines above and below the indicator of a block
+-- collection that starts below it to the collection up to the last empty
+-- line, and the rest to its first entry. Above the indicator of a first
+-- entry, the collection around it takes the lines up to the last empty
+-- line, so the lines of a first entry go below its indicator.
+indicatorLines :: RenderOptions -> Bool -> [Line] -> Node -> ([Line], [Line], [Line])
+indicatorLines opts isFirst carried x
+  | startsBelow opts x =
+      let ls = carried ++ x.comments.before
+          (own, rest)
+            | firstStartsBelow opts x = splitAtLastEmptyLine ls
+            | otherwise = (ls ++ firstLines opts x, [])
+      in if isFirst then ([], own, rest) else (own, [], rest)
+  | otherwise = (aboveIndicator opts x, [], [])
+
+-- | The lines above an indicator of a node that does not start below it. The
 -- lines above the first entry of a block collection after the indicator go
--- there too, because no line can come between the indicator and the entry.
+-- there too.
 aboveIndicator :: RenderOptions -> Node -> [Line]
 aboveIndicator opts x = x.comments.before ++ if isBlock opts x then firstLines opts x else []
 
--- | The lines above the first entry of a collection.
+-- | The lines above the first entry of a collection, unless the entry starts
+-- below its indicator and has the lines there.
 firstLines :: RenderOptions -> Node -> [Line]
-firstLines opts x = case x.content of
-  Sequence _ (y : _) -> aboveIndicator opts y
-  Mapping _ ((k, v) : _) -> case implicitKey opts k of
-    Just _ -> let (above, _, _) = entryComments opts k v in above
-    Nothing -> aboveIndicator opts k
-  _ -> []
+firstLines opts x
+  | firstStartsBelow opts x = []
+  | otherwise = case x.content of
+      Sequence _ (y : _) -> aboveIndicator opts y
+      Mapping _ ((k, v) : _) -> case implicitKey opts k of
+        Just _ -> let (above, _, _) = entryComments opts k v in above
+        Nothing -> aboveIndicator opts k
+      _ -> []
+
+-- | A block collection starts on the line after its indicator if it has
+-- properties or a comment on the line of the indicator.
+startsBelow :: RenderOptions -> Node -> Bool
+startsBelow opts x = isBlock opts x && (isJust (props x) || isJust x.comments.inline)
+
+-- | The first entry of a collection starts below its indicator.
+firstStartsBelow :: RenderOptions -> Node -> Bool
+firstStartsBelow opts x = case x.content of
+  Sequence _ (y : _) -> startsBelow opts y
+  Mapping _ ((k, _) : _) -> startsBelow opts k
+  _ -> False
+
+-- | The lines up to the last empty line, and the lines after it.
+splitAtLastEmptyLine :: [Line] -> ([Line], [Line])
+splitAtLastEmptyLine ls =
+  let (rest, own) = break (== EmptyLine) (reverse ls)
+  in (reverse own, reverse rest)
 
 -- | The lines above an entry with an implicit key, the comment on its line
 -- and the lines between the key and a block collection value. A line holds
@@ -356,17 +406,20 @@ value opts indent v lineComment extra
       -- item takes in every line that is deeper than the key.
       Sequence _ xs
         | null [() | Comment _ <- v.comments.after] || not (endsWithBlock xs) ->
-            header <> lines_ indent below <> block opts indent (indent + indentStep) True False v
-        | otherwise -> header <> lines_ (indent + indentStep) below <> block opts (indent + indentStep) (indent + indentStep) True False v
-      _ -> header <> lines_ (indent + indentStep) below <> block opts (indent + indentStep) (indent + indentStep) True False v
+            header <> lines_ indent below <> block opts indent (indent + indentStep) True False rest v
+        | otherwise -> header <> lines_ (indent + indentStep) below <> block opts (indent + indentStep) (indent + indentStep) True False rest v
+      _ -> header <> lines_ (indent + indentStep) below <> block opts (indent + indentStep) (indent + indentStep) True False rest v
   | isEmpty v = comment lineComment <> "\n" <> linesBelow indent v
   | otherwise = " " <> inline opts InValue (indent + indentStep) v lineComment <> "\n" <> linesBelow indent v
   where
     header :: B.Builder
     header = maybe mempty (" " <>) (props v) <> comment lineComment <> "\n"
 
-    below :: [Line]
-    below = extra ++ v.comments.before
+    -- The value takes the lines below the key as in 'indicatorLines'.
+    below, rest :: [Line]
+    (below, rest)
+      | firstStartsBelow opts v = splitAtLastEmptyLine (extra ++ v.comments.before)
+      | otherwise = (extra ++ v.comments.before, [])
 
     endsWithBlock :: [Node] -> Bool
     endsWithBlock xs = case reverse xs of
@@ -376,17 +429,20 @@ value opts indent v lineComment extra
       [] -> False
 
 -- | A node after the indicator of a sequence item or an explicit entry, with
--- the line break. A block collection starts on the same line if it can.
-after :: RenderOptions -> Int -> Node -> B.Builder
-after opts indent n
+-- the line break, and the lines below the indicator and the lines for the
+-- first entry from 'indicatorLines'. A block collection starts on the same
+-- line if it can.
+after :: RenderOptions -> Int -> [Line] -> [Line] -> Node -> B.Builder
+after opts indent below rest n
   | isBlock opts n =
-      if isNothing (props n) && isNothing n.comments.inline
-        then " " <> block opts (indent + indentStep) (indent + indentStep) False True n
-        else
+      if startsBelow opts n
+        then
           maybe mempty (" " <>) (props n)
             <> comment n.comments.inline
             <> "\n"
-            <> block opts (indent + indentStep) (indent + indentStep) True True n
+            <> lines_ (indent + indentStep) below
+            <> block opts (indent + indentStep) (indent + indentStep) True True rest n
+        else " " <> block opts (indent + indentStep) (indent + indentStep) False True [] n
   | isEmpty n = comment n.comments.inline <> "\n" <> linesBelow indent n
   | otherwise = " " <> inline opts InValue (indent + indentStep) n n.comments.inline <> "\n" <> linesBelow indent n
 

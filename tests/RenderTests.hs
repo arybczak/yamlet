@@ -29,6 +29,7 @@ renderTests =
         , testCase "round trip" test_commentRoundTrip
         , testCase "moved comments" test_movedComments
         , testCase "lines after a list" test_linesAfterList
+        , testCase "lines below an indicator" test_linesBelowIndicator
         , testCase "no thunks" test_noThunks
         , testProperty "no thunks in generated documents" prop_noThunks
         ]
@@ -607,6 +608,27 @@ test_linesAfterList = do
   check "block scalar as the last item" "a:\n  - |\n    b\n  # c\n"
   check "scalar as the last item" "a:\n- b\n  # c\n"
   check "no lines after the list" "a:\n- b: 1\n"
+
+-- | The lines above and below the indicator of a block collection with
+-- properties stay with their nodes. Above the indicator of a first entry,
+-- the collection around it would take the lines up to the last empty line.
+test_linesBelowIndicator :: Assertion
+test_linesBelowIndicator = do
+  let check :: String -> T.Text -> Assertion
+      check preface input = case parseDocumentsText input of
+        Right docs -> do
+          let out = renderSyntax defaultRenderOptions docs
+          case parseDocumentsText out of
+            Right docs' -> do
+              assertEqual (preface ++ "\n" ++ T.unpack out) (map commentsOf docs) (map commentsOf docs')
+              assertEqual preface out (renderSyntax defaultRenderOptions docs')
+            Left err -> assertFailure (preface ++ ": " ++ show err)
+        Left err -> assertFailure (preface ++ ": " ++ show err)
+  check "first item with a tag" "k:\n- !!map\n  # a\n\n  # b\n  c: 1\n- d\n"
+  check "first item with a comment" "k:\n- &x # a\n  # b\n\n  c: 1\n- d\n"
+  check "explicit key" "- ? &x\n    # a\n\n    b: 1\n  : c\n"
+  check "nested first items" "- &x\n  - &y\n    # a\n\n    b: 1\n"
+  check "second item" "k:\n- a\n- !!map\n  # b\n  c: 1\n"
 
 test_movedComments :: Assertion
 test_movedComments = do
