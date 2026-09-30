@@ -282,7 +282,11 @@ scalar off props style t = case props.tag of
   S.NoTag
     | style == S.Plain -> case resolvePlainExact t of
         Right v -> Right v
-        Left _ -> Left $ failure off exponentOutOfRange
+        -- The check comes before the decoder, which knows if the value is
+        -- a string. A node that a program built has no input to quote.
+        Left _
+          | off == S.noOffset -> Left $ failure off exponentOutOfRange
+          | otherwise -> Left $ failure off $ exponentOutOfRange ++ ", quote the value if it is a string, e.g. '" ++ T.unpack t ++ "'"
     | otherwise -> Right (String t)
   S.NonSpecificTag -> Right (String t)
   S.Tag tag

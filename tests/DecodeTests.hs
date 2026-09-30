@@ -206,11 +206,15 @@ test_exactFloats = do
     "float without double rounding"
     (Right (1 + 2 ^^ (-23 :: Int)))
     (decodeText @Float "1.000000059604644776257986737988403547205962240695953369140625")
-  forM_ ["[1e1001]", "[10e1001]", "[0.1e-1001]", "[1e99999999999999999999]", "[11e9223372036854775807]"] $ \input ->
+  forM_ ["1e1001", "10e1001", "0.1e-1001", "1e99999999999999999999", "11e9223372036854775807"] $ \number ->
     assertEqual
-      ("exponent beyond the limit in " ++ show input)
-      (Just (1, 2, "the exponent of the number is out of the range from -1000 to 1000"))
-      (errorOf (decodeText @Sci.Scientific input))
+      ("exponent beyond the limit in " ++ show number)
+      (Just (1, 2, "the exponent of the number is out of the range from -1000 to 1000, quote the value if it is a string, e.g. '" ++ T.unpack number ++ "'"))
+      (errorOf (decodeText @Sci.Scientific ("[" <> number <> "]")))
+  assertEqual
+    "exponent beyond the limit for a string"
+    (Just (1, 9, "the exponent of the number is out of the range from -1000 to 1000, quote the value if it is a string, e.g. '61e9540'"))
+    (errorOf (decodeText @(M.Map T.Text T.Text) "gitsha: 61e9540"))
   assertEqual
     "exponent beyond the limit with a tag"
     (Just (1, 9, "the exponent of the number is out of the range from -1000 to 1000"))
@@ -1360,7 +1364,7 @@ test_longNumbers = do
     (decodeText @Value ("9." <> nines 999999))
   assertEqual
     "exponent"
-    (Just (1, 1, "the exponent of the number is out of the range from -1000 to 1000"))
+    (Just (1, 1, "the exponent of the number is out of the range from -1000 to 1000, quote the value if it is a string, e.g. '1e" ++ T.unpack (nines 1000000) ++ "'"))
     (errorOf (decodeText @Value ("1e" <> nines 1000000)))
   let zeros = T.replicate 300000 "0"
   assertEqual
