@@ -96,7 +96,11 @@ parseStream input@(T.Text arr off len) = case prescan e start of
         }
 
     start :: Int
-    start = if isBom e off then off + bomLength else off
+    start = streamStart e
+
+-- | The index after the byte order mark at the start of the input.
+streamStart :: Env -> Int
+streamStart e = if isBom e e.base then e.base + bomLength else e.base
 
 -- | Check that the input has only characters that YAML allows, and find the
 -- lines that start with a document marker, and the byte order marks. A
@@ -360,16 +364,21 @@ lYamlStream markers0 = do
       let explicitEnd = isMarker e p && byteAt e p == DOT
       when explicitEnd lDocumentSuffix
       q <- pos
-      rest <- documents markers explicitEnd q
-      let !doc =
+      -- The first empty line after the end marker ends the lines of the
+      -- document.
+      let gap = gapEnd e q
+      rest <- documents markers explicitEnd gap
+      let !(!doc, next) =
             attachComments
               e
+              (prefix == streamStart e)
+              (not (null rest))
               prefix
               marker
               p
               -- The lines after the last document belong to its end, also
               -- after more end markers.
-              (if null rest then e.end else q)
+              (if null rest then e.end else gap)
               Document
                 { version = version
                 , explicitStart = isJust marker
@@ -377,7 +386,8 @@ lYamlStream markers0 = do
                 , docComments = noComments
                 , root = root
                 }
-      pure (doc : rest)
+          !rest' = linesAbove next rest
+      pure (doc : rest')
 
 -- | Stop with an error at the furthest failure.
 throwUnexpected :: Int -> P a

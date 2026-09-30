@@ -350,27 +350,27 @@ test_documents = do
     "a: {\n key: value\n\n } # c\nb: 1\n"
   assertEqual
     "comment after a byte order mark between documents"
-    (Right [[], [("document", "before", "c")]])
-    (map commentsOf <$> parseDocumentsText "a: 1\n...\n\xFEFF# c\n---\nb: 2\n")
+    (Right [[("document", "after", "c")], [("document", "before", "d")]])
+    (map commentsOf <$> parseDocumentsText "a: 1\n...\n\xFEFF# c\n\n\xFEFF# d\n---\nb: 2\n")
   let commented :: Document -> Document
       commented d = d {docComments = noComments {before = [Comment "c"]}}
   assertEqual
     "comment above a document without an end marker above it"
-    "a\n...\n# c\n---\nb\n"
+    "a\n\n# c\n---\nb\n"
     (renderSyntax defaultRenderOptions [document (plainNode "a"), commented (document (plainNode "b"))])
   assertEqual
     "comment above a document with directives"
-    "a\n...\n# c\n%YAML 1.2\n---\nb\n"
+    "a\n...\n\n# c\n%YAML 1.2\n---\nb\n"
     (renderSyntax defaultRenderOptions [document (plainNode "a"), commented (document (plainNode "b")) {version = Just (Version 1 2)}])
   let rootWithGap :: Bool -> Document
       rootWithGap end =
         (document (contentNode (Sequence Block [plainNode "a"])) {comments = noComments {after = [Comment "c", EmptyLine]}})
           { explicitEnd = end
           }
-  assertEqual "empty line at the end of a block root before an end marker" "- a\n# c\n...\n" (renderSyntax defaultRenderOptions [rootWithGap True])
+  assertEqual "empty line at the end of a block root before an end marker" "- a\n# c\n\n...\n" (renderSyntax defaultRenderOptions [rootWithGap True])
   assertEqual
     "empty line at the end of a block root before a document"
-    "- a\n# c\n---\nb\n"
+    "- a\n# c\n\n---\nb\n"
     (renderSyntax defaultRenderOptions [rootWithGap False, document (plainNode "b")])
   let versioned :: Version -> T.Text
       versioned v = renderSyntax defaultRenderOptions [(document (plainNode "a")) {version = Just v}]
@@ -444,8 +444,11 @@ test_attachment = do
   check "at the key column after a list" [("/b:key", "before", "c")] "a:\n- 1\n# c\nb: 2\n"
   check "at the end of a nested mapping" [("/a", "after", "c")] "a:\n  b: 1\n  # c\nd: 2\n"
   check "at the end of the root" [("", "after", "c")] "a: 1\n# c\n"
-  check "after an empty line at the end of the root" [("document", "after", "d"), ("", "after", "c")] "a: 1\n# c\n\n# d\n"
-  check "at the end of the document" [("document", "after", "c")] "a\n# c\n"
+  check "after an empty line at the end of the root" [("", "after", "c"), ("", "after", "d")] "a: 1\n# c\n\n# d\n"
+  check "at the end of a scalar root" [("", "after", "c")] "a\n# c\n"
+  check "below a flow root" [("document", "after", "c")] "[a]\n# c\n"
+  check "before the end marker" [("document", "after", "d"), ("", "after", "c")] "a\n# c\n...\n# d\n"
+  check "below a flow root and the end marker" [("document", "after", "c"), ("document", "after", "d")] "[a]\n# c\n...\n# d\n"
   check "before the marker" [("document", "before", "c")] "# c\n---\na: 1\n"
   check "on the marker line" [("document", "inline", "c")] "--- # c\na: 1\n"
   check "after a root on the marker line" [("", "inline", "c")] "--- a # c\n"
@@ -481,19 +484,41 @@ test_attachment = do
     (Right "a:\n\n# c\nb:\n")
     (renderSyntax defaultRenderOptions <$> parseDocumentsText "? a\n\n# c\n? b\n")
   assertEqual
-    "empty line between the end of the root and the end of the document"
-    (Right [([Comment "c"], [Comment "d"])])
+    "empty line at the end of the root"
+    (Right [([Comment "c"], [EmptyLine, Comment "d"], [])])
     ( map
         ( \d -> case d.root.content of
-            Mapping _ [(_, v)] -> (v.comments.after, d.docComments.after)
-            _ -> ([], [])
+            Mapping _ [(_, v)] -> (v.comments.after, d.root.comments.after, d.docComments.after)
+            _ -> ([], [], [])
         )
         <$> parseDocumentsText "a:\n  b: 1\n  # c\n\n# d\n"
     )
-  assertEqual
+  let between :: String -> [([Line], [Line])] -> T.Text -> Assertion
+      between preface expected input =
+        assertEqual
+          preface
+          (Right expected)
+          (map (\d -> (d.root.comments.after ++ d.docComments.after, d.docComments.before ++ d.root.comments.before)) <$> parseDocumentsText input)
+  between
     "above the marker of the next document"
-    (Right [[("document", "after", "c")], []])
-    (map commentsOf <$> parseDocumentsText "a\n# c\n---\nb\n")
+    [([Comment "c"], []), ([], [])]
+    "a\n# c\n---\nb\n"
+  between
+    "empty line above the marker of the next document"
+    [([Comment "c"], []), ([], [EmptyLine, Comment "d"])]
+    "a\n# c\n\n# d\n---\nb\n"
+  between
+    "empty line after the end marker"
+    [([Comment "c"], []), ([], [EmptyLine, Comment "d"])]
+    "a\n...\n# c\n\n# d\n---\nb\n"
+  between
+    "empty line after the end marker above a bare document"
+    [([Comment "c"], []), ([], [EmptyLine, Comment "d"])]
+    "a\n...\n# c\n\n# d\nb\n"
+  between
+    "empty line below a flow root"
+    [([Comment "c"], []), ([], [EmptyLine, Comment "d"])]
+    "[a]\n# c\n\n# d\n---\nb\n"
   assertEqual
     "empty lines above the first key"
     (Right [([Comment "a", EmptyLine, Comment "b", EmptyLine], [Comment "c"])])

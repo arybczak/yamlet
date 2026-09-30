@@ -196,7 +196,7 @@ decodeDocument :: FromYaml a => T.Text -> S.Document -> Either (NE.NonEmpty Erro
 decodeDocument = convert
 
 -- | The root of a document with the lines of the document, e.g. the lines
--- before a @---@ marker and at the end of the document, so that a decoder
+-- above a @---@ marker and below a @...@ marker, so that a decoder
 -- can keep them. The renderer writes them at the same places. The comment on
 -- the line of the marker becomes a line above the root.
 documentRoot :: S.Document -> S.Node
@@ -215,16 +215,8 @@ documentRoot doc
       S.Comments
         { S.before = dc.before ++ [S.Comment c | Just c <- [dc.inline]] ++ r.comments.before
         , S.inline = r.comments.inline
-        , S.after = r.comments.after ++ separator ++ dc.after
+        , S.after = r.comments.after ++ dc.after
         }
-
-    -- The parser takes an empty line as the end of the lines after the last
-    -- entry of a block collection root.
-    separator :: [S.Line]
-    separator = case r.content of
-      S.Sequence S.Block (_ : _) | not (null dc.after) -> [S.EmptyLine]
-      S.Mapping S.Block (_ : _) | not (null dc.after) -> [S.EmptyLine]
-      _ -> []
 
 convert :: FromYaml a => T.Text -> S.Document -> Either (NE.NonEmpty Error) a
 convert input doc =

@@ -50,7 +50,8 @@ data Document = Document
   -- ^ The document ends with a @...@ marker.
   , docComments :: !Comments
   -- ^ The lines before the directives or the @---@ marker, the comment on the
-  -- line of the marker and the lines at the end of the document.
+  -- line of the marker and the lines at the end of the document: below the
+  -- @...@ marker, or below a flow collection root.
   , root :: !Node
   }
   deriving stock (Eq, Show, Generic)
@@ -168,10 +169,10 @@ data Comments = Comments
   -- writes a line break in it as a space, the same line breaks as in a
   -- 'Comment'.
   , after :: [Line]
-  -- ^ The lines after the last entry of a collection, or between the brackets
-  -- of an empty collection. The parser gives no such lines to a scalar or an
-  -- alias, but the renderer writes them below it, e.g. the lines at the end
-  -- of a document that 'Yamlet.decode' keeps at a root t'Node'.
+  -- ^ The lines after the last entry of a collection, between the brackets
+  -- of an empty collection, or below a scalar or an alias root. The parser
+  -- gives no such lines to other scalars and aliases, but the renderer
+  -- writes them below the node.
   }
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (NFData)

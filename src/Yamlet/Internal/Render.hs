@@ -104,7 +104,7 @@ renderSyntax opts = emptyLines . B.runBuilder . go True
     go :: Bool -> [Document] -> B.Builder
     go afterEnd = \case
       [] -> mempty
-      doc : docs -> document opts afterEnd (validAnchors doc) <> go doc.explicitEnd docs
+      doc : docs -> document opts afterEnd (validAnchors doc) <> go (writesEnd opts doc) docs
 
 -- | The document with anchor names that read back. A name that an anchor
 -- cannot have becomes a name that no other anchor of the document has, in
@@ -176,12 +176,24 @@ validAnchors doc
     isAnchorChar :: Char -> Bool
     isAnchorChar c = isPrintable c && c /= ' ' && not (asciiChar isFlowIndicator c)
 
+-- | The document ends with a @...@ marker. Without the marker, the lines at
+-- the end of the document read back as the root's, unless the root is a flow
+-- collection.
+writesEnd :: RenderOptions -> Document -> Bool
+writesEnd opts doc =
+  doc.explicitEnd
+    || not (null doc.docComments.after) && case doc.root.content of
+      Sequence {} -> isBlock opts doc.root
+      Mapping {} -> isBlock opts doc.root
+      _ -> True
+
 -- | A document. The flag tells if it starts the stream or follows a document
 -- end marker.
 document :: RenderOptions -> Bool -> Document -> B.Builder
 document opts afterEnd doc =
   mconcat
     [ if needsEnd then "...\n" else mempty
+    , gap
     , lines_ 0 doc.docComments.before
     , if directives
         then
@@ -191,30 +203,23 @@ document opts afterEnd doc =
             <> foldMap tagDirective handles
         else mempty
     , body
-    , lines_ 0 ((if isBlock opts r && not (null docEnd) then (EmptyLine :) else id) docEnd)
-    , if doc.explicitEnd then "...\n" else mempty
+    , if writesEnd opts doc then "...\n" else mempty
+    , lines_ 0 doc.docComments.after
     ]
   where
-    -- The parser drops the empty lines at the start of the end of a document
-    -- with a block collection root, e.g. a flow root that is written in the
-    -- block style, so they would not read back.
-    docEnd :: [Line]
-    docEnd = if isBlock opts doc.root then dropWhile (== EmptyLine) doc.docComments.after else doc.docComments.after
-
-    -- The parser also drops the empty lines at the end of a block collection
-    -- root, before a document marker or the end of the input.
     r :: Node
     r = case doc.root.content of
       ScalarLines style t starts
         | style == Literal || style == Folded
         , needsIndentIndicator t ->
             doc.root {content = ScalarLines DoubleQuoted t starts}
-      _
-        | isBlock opts doc.root
-        , null docEnd ->
-            let n = doc.root
-            in Node n.offset n.endOffset n.props n.comments {after = reverse (dropWhile (== EmptyLine) (reverse n.comments.after))} n.content
       _ -> doc.root
+
+    -- The end of the document above takes the comments right below it.
+    gap :: B.Builder
+    gap = case if null doc.docComments.before && not marker then r.comments.before else doc.docComments.before of
+      Comment _ : _ -> lines_ 0 [EmptyLine]
+      _ -> mempty
 
     -- The handles for the tags that are not valid URIs.
     handles :: [Char]
@@ -236,15 +241,8 @@ document opts afterEnd doc =
     directives :: Bool
     directives = isJust version || not (null handles)
 
-    -- Without an end marker, the previous document takes the comments above
-    -- this one.
     needsEnd :: Bool
-    needsEnd = not afterEnd && (directives || any isComment doc.docComments.before)
-
-    isComment :: Line -> Bool
-    isComment = \case
-      Comment _ -> True
-      EmptyLine -> False
+    needsEnd = not afterEnd && directives
 
     -- A document needs a start marker after another document, after
     -- directives, for a comment on the marker line, and if it is empty. A

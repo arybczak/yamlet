@@ -122,6 +122,15 @@
 --     >>> printComments input
 --     root.server (value) inline: "a"
 --
+--     >>> input = "--- !!map # a\nhost: localhost\n"
+--
+--     >>> T.putStr input
+--     --- !!map # a
+--     host: localhost
+--
+--     >>> printComments input
+--     document inline: "a"
+--
 -- * A comment below a scalar or an alias in a block collection belongs to the
 --   end of that node if it is indented deeper than the key or the @-@ of its
 --   entry. Below a block scalar, such a line is part of the scalar or belongs
@@ -154,10 +163,7 @@
 -- * A comment after the last entry of a block collection belongs to the end
 --   of the collection if it is indented at least as deep as the entries, and
 --   deeper than the key of the collection. Otherwise it belongs to the node
---   below it, or to the end of the document if no node is below it.
---
---     At the end of a block collection root, an empty line ends the lines of
---     the collection. The lines below it belong to the end of the document.
+--   below it, or to the end of an outer collection if no node is below it.
 --
 --     A comment before the closing bracket of a flow collection belongs to
 --     the end of the collection.
@@ -177,19 +183,6 @@
 --     root.server (value) after: [Comment "a",Comment "b"]
 --     root.user (key) before: [Comment "c"]
 --
---     >>> input = "host: localhost\nport: 80\n# a\n\n# b\n"
---
---     >>> T.putStr input
---     host: localhost
---     port: 80
---     # a
---     <BLANKLINE>
---     # b
---
---     >>> printComments input
---     root after: [Comment "a"]
---     document after: [Comment "b"]
---
 --     >>> input = "ports: [80, 443,\n  # a\n  ]\n"
 --
 --     >>> T.putStr input
@@ -201,47 +194,97 @@
 --     root.ports (value) after: [Comment "a"]
 --
 -- * The optional @---@ marker starts a document, and the optional @...@
---   marker ends it.
+--   marker ends it. The lines above the directives or the @---@ marker
+--   belong to the document. So do the comment on the line of the @...@
+--   marker and the lines below it. Without the markers, the root gets these
+--   lines.
 --
 --     A comment on the line of the @---@ marker belongs to the document,
 --     unless the rule for comments at the end of a line gives it to a node.
 --
---     A comment before the directives or the @---@ marker belongs to the
---     document if it is at the start of the stream or after a @...@ marker.
---     Otherwise it belongs to the end of the document above it. The renderer
---     writes a @---@ marker below the comments of a document, so that they
---     read back as the document's.
---
---     A comment on the line of a @...@ marker or below it belongs to the end
---     of the document. A comment with no node below it also belongs there,
---     unless the rule above gives it to the end of a collection.
---
---     >>> input = "# a\n--- # b\nlocalhost\n# c\n... # d\n"
+--     >>> input = "# a\n--- # b\n# c\n\nentry: value\n\n# e\n...\n# f\n"
 --
 --     >>> T.putStr input
 --     # a
 --     --- # b
---     localhost
 --     # c
---     ... # d
+--     <BLANKLINE>
+--     entry: value
+--     <BLANKLINE>
+--     # e
+--     ...
+--     # f
 --
 --     >>> printComments input
 --     document before: [Comment "a"]
 --     document inline: "b"
---     document after: [Comment "c",Comment "d"]
+--     root before: [Comment "c",EmptyLine]
+--     root after: [EmptyLine,Comment "e"]
+--     document after: [Comment "f"]
+--
+--     Between two documents, the first empty line below the end of the
+--     first document ends its lines. The end is the @...@ marker, or the
+--     root without the marker. The empty line and the lines below it belong
+--     to the second document: to the lines above its @---@ marker, or to its
+--     root without the marker.
+--
+--     >>> input = "x: 1\n...\n# a\n\n# b\n---\ny: 2\n"
+--
+--     >>> T.putStr input
+--     x: 1
+--     ...
+--     # a
+--     <BLANKLINE>
+--     # b
+--     ---
+--     y: 2
+--
+--     >>> printComments input
+--     document after: [Comment "a"]
+--     next document
+--     document before: [EmptyLine,Comment "b"]
+--
+--     >>> input = "x: 1\n# a\n\n# b\n---\ny: 2\n"
+--
+--     >>> T.putStr input
+--     x: 1
+--     # a
+--     <BLANKLINE>
+--     # b
+--     ---
+--     y: 2
+--
+--     >>> printComments input
+--     root after: [Comment "a"]
+--     next document
+--     document before: [EmptyLine,Comment "b"]
+--
+--     The lines of a flow collection are between its brackets, so the lines
+--     below a flow collection root belong to the document, also without the
+--     @...@ marker.
+--
+--     >>> input = "[80, 443]\n# a\n"
+--
+--     >>> T.putStr input
+--     [80, 443]
+--     # a
+--
+--     >>> printComments input
+--     document after: [Comment "a"]
+--
+--     The renderer writes the markers and the empty lines that these rules
+--     need, so that the lines read back at the same places.
 --
 -- Empty lines go with the comments that follow them, with the node below
 -- them, or with the end of the document. Thus, if a program removes an
 -- entry, the gap below the entry stays. Several empty lines in a row count as
 -- one.
 --
--- Two places are exceptions. Above the first entry of a block collection,
+-- One place is an exception. Above the first entry of a block collection,
 -- the last empty line stays with the collection. If the lines of a block
 -- collection root do not end with an empty line, e.g. lines that a program
 -- added, the renderer writes one below them, so that they read back as the
--- lines of the collection. At the end of a block
--- collection root, an empty line separates the collection from the end of
--- the document, and it belongs to neither.
+-- lines of the collection.
 --
 -- >>> input = "server:\n  host: localhost\n  # The end of the server.\n\nuser: admin\n"
 --
@@ -406,8 +449,12 @@ mappingNode = contentNode . Mapping Block
 --
 -- >>> :{
 -- printComments :: T.Text -> IO ()
--- printComments input = either print (mapM_ doc) (parseDocumentsText input)
+-- printComments input = either print docs (parseDocumentsText input)
 --   where
+--     docs :: [Document] -> IO ()
+--     docs = \case
+--       d : ds -> doc d >> mapM_ (\d' -> putStrLn "next document" >> doc d') ds
+--       [] -> pure ()
 --     doc :: Document -> IO ()
 --     doc d = do
 --       report "document" d.docComments {after = []}

@@ -10,6 +10,8 @@
 -- in subsequent releases.
 module Yamlet.Internal.Comments
   ( attachComments
+  , gapEnd
+  , linesAbove
   ) where
 
 import Control.Applicative
@@ -33,22 +35,32 @@ data Item = Item
   , line :: !Line
   }
 
--- | Attach the comments of a document. The indices are the start of the
--- lines that belong to the document, its @---@ marker, the end of its root
--- and its end.
-attachComments :: Env -> Int -> Maybe Int -> Int -> Int -> Document -> Document
-attachComments e start marker rootEnd end doc
-  | not (mayHaveItems e start end) = doc
-  | null items = doc
+-- | Attach the comments of a document, and return the lines at its end that
+-- belong to the next document. The flags tell if the document is the first
+-- one and if another one follows it. The indices are the start of the lines
+-- that belong to the document, its @---@ marker, the end of its root and its
+-- end.
+attachComments :: Env -> Bool -> Bool -> Int -> Maybe Int -> Int -> Int -> Document -> (Document, [Line])
+attachComments e first hasNext start marker rootEnd end doc
+  | not (mayHaveItems e start end) = (doc, [])
+  | null items = (doc, [])
   | otherwise =
-      doc
-        { docComments = strictComments (dropWhile (== EmptyLine) (map (.line) docItems)) markerComment docEnd
-        , root = root''
-        }
+      ( doc
+          { docComments =
+              strictComments
+                ((if first then dropWhile (== EmptyLine) else id) (map (.line) docItems))
+                markerComment
+                docEnd
+          , root = root''
+          }
+      , next
+      )
   where
+    -- Nothing is above the first document, so the empty lines at its start
+    -- separate it from nothing.
     items :: [Item]
     items =
-      (if isJust marker then id else dropWhile (\i -> isEmptyLine i && i.at < offsetOf doc.root.offset)) $
+      (if isJust marker || not first then id else dropWhile (\i -> isEmptyLine i && i.at < offsetOf doc.root.offset)) $
         scanItems e start end (skipRanges e doc.root)
 
     (docItems, afterMarker) = case marker of
@@ -71,22 +83,69 @@ attachComments e start marker rootEnd end doc
 
     (root', leftover) = attachNode e (rootEnd - e.base) 0 (rootStart, rootLine) doc.root rest
 
-    -- An empty line ends the lines after the last entry of a block collection
-    -- root. The lines below it belong to the end of the document.
-    root'' :: Node
-    docEnd :: [Line]
-    (root'', docEnd) = case root'.content of
-      Sequence Block (_ : _) -> splitEnd
-      Mapping Block (_ : _) -> splitEnd
-      _ -> (root', map (.line) leftover)
+    (below, afterEnd) = span (\i -> i.at < rootEnd - e.base) leftover
 
-    splitEnd :: (Node, [Line])
-    splitEnd =
-      let (rootLines, below) = break (== EmptyLine) root'.comments.after
-          c = root'.comments
-      in ( Node root'.offset root'.endOffset root'.props (strictComments c.before c.inline rootLines) root'.content
-         , dropWhile (== EmptyLine) (below ++ map (.line) leftover)
-         )
+    -- The lines of a flow collection are inside its brackets, so the lines
+    -- below a flow collection root belong to the document.
+    holdsLines :: Bool
+    holdsLines = case root'.content of
+      Sequence Flow _ -> False
+      Mapping Flow _ -> False
+      _ -> True
+
+    -- Without a @...@ marker, the first empty line ends the lines of the
+    -- document if another document follows it.
+    endLines, next :: [Line]
+    (endLines, next)
+      | doc.explicitEnd || not hasNext = (rootLines, [])
+      | otherwise = break (== EmptyLine) rootLines
+      where
+        rootLines :: [Line]
+        rootLines = (if holdsLines then root'.comments.after else []) ++ map (.line) below
+
+    root'' :: Node
+    root''
+      | holdsLines =
+          let c = root'.comments
+          in Node root'.offset root'.endOffset root'.props (strictComments c.before c.inline (if doc.explicitEnd then endLines else atEnd endLines)) root'.content
+      | otherwise = root'
+
+    docEnd :: [Line]
+    docEnd = atEnd ((if holdsLines then [] else endLines) ++ map (.line) afterEnd)
+
+    -- The empty lines at the end of the stream belong to no node.
+    atEnd :: [Line] -> [Line]
+    atEnd ls
+      | hasNext = ls
+      | otherwise = reverse (dropWhile (== EmptyLine) (reverse ls))
+
+-- | The start of the first line from the index that is empty or has more than
+-- a comment or a @...@ marker. The index is the start of a line.
+gapEnd :: Env -> Int -> Int
+gapEnd e i
+  | i < e.end && isMarker e b && byteAt e b == DOT = gapEnd e (nextLine b)
+  | i < e.end && byteAt e (skipWhites e b) == HASH = gapEnd e (nextLine b)
+  | otherwise = i
+  where
+    -- A byte order mark can start a line between documents.
+    b :: Int
+    b = skipBoms e i
+
+    nextLine :: Int -> Int
+    nextLine k
+      | k >= e.end = k
+      | isBreak (byteAt e k) = breakEnd e k
+      | otherwise = nextLine (k + 1)
+
+-- | The documents with the lines above the first one.
+linesAbove :: [Line] -> [Document] -> [Document]
+linesAbove ls = \case
+  d : ds
+    | not (null ls) ->
+        let c = d.docComments
+            !d' = d {docComments = strictComments (ls ++ c.before) c.inline c.after}
+        in d' : ds
+  ds -> ds
 
 -- | Comments with their lists evaluated. The parser returns a document
 -- without thunks, and a lazy list would keep the items of the input alive.
