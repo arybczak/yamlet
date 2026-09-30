@@ -45,6 +45,7 @@ tested-with: GHC ^>= { 9.2, 9.4, 9.6, 9.8, 9.10, 9.12, 9.14 }
 common language
     ghc-options:        -Wall
                         -Werror=missing-deriving-strategies
+                        -Werror=name-shadowing
                         -Werror=prepositive-qualified-module
                         -Wno-unticked-promoted-constructors
 

@@ -722,9 +722,7 @@ test_movedComments = do
             }
         ]
     )
-  let withAfter :: T.Text -> Node -> Node
-      withAfter t n = n {comments = n.comments {after = [Comment t]}}
-      list :: Node -> Node
+  let list :: Node -> Node
       list item =
         mappingNode
           [ (plainNode "a", withAfter "c" (sequenceNode [item]))
