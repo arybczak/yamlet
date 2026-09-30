@@ -403,7 +403,7 @@ splitAtLastEmptyLine ls =
 --
 -- A scalar key has no place for the lines after it, so they go below the
 -- key: between the key and a block collection value, or below the entry, as
--- in 'value'. They read back as the lines of the value. Below a block scalar
+-- in @value@. They read back as the lines of the value. Below a block scalar
 -- they would be part of the scalar, so they go above the entry.
 entryComments :: RenderOptions -> Node -> Node -> ([Line], Maybe T.Text, [Line])
 entryComments opts k v

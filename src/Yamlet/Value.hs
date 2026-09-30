@@ -60,12 +60,12 @@ data Value
     Mapping [(Value, Value)]
   | -- | A value with a tag that is not the tag of the core schema for it,
     -- e.g. @!point {x: 1}@. A scalar with a tag that the schema does not
-    -- know is a 'String' inside, e.g. @!secret abc@.
+    -- know is a v'String' inside, e.g. @!secret abc@.
     --
     -- The encoder writes the tag. A value with its own tag of the core
     -- schema reads back without 'Tagged', e.g. @Tagged intTag (Int 1)@ reads
     -- back as @Int 1@. A value that does not fit a tag of the core schema,
-    -- e.g. a 'String' with 'intTag', does not read back.
+    -- e.g. a v'String' with 'intTag', does not read back.
     Tagged !T.Text !Value
   deriving stock (Eq, Ord, Show, Generic)
 
@@ -165,7 +165,7 @@ describe = \case
   Tagged _ v -> describe v
 
 -- | The tag of a value: the tag of 'Tagged', or else the tag of the core
--- schema, e.g. 'intTag' for an 'Int'.
+-- schema, e.g. 'intTag' for an v'Int'.
 --
 -- >>> map valueTag [Int 1, Tagged "!point" (Mapping [])]
 -- ["tag:yaml.org,2002:int","!point"]

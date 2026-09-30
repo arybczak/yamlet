@@ -32,7 +32,7 @@
 -- only comments, has no such place. The parser drops its comments.
 --
 -- In the examples below, @printComments@ parses a text and prints each node
--- that has comments, with its path and the fields of 'Comments'. The key and
+-- that has comments, with its path and the fields of t'Comments'. The key and
 -- the value of an entry have the same path, with @(key)@ or @(value)@ after
 -- it.
 --

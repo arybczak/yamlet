@@ -193,15 +193,15 @@ noComments = Comments [] Nothing []
 --
 -- A value without a key, e.g. an item of a list, has the comments of its
 -- node. The decoder gives the lines above a list or a mapping to its first
--- item or key, so a list of 'Commented' values keeps a comment above its
+-- item or key, so a list of t'Commented' values keeps a comment above its
 -- first item. The comment on the first line of the list or the mapping, e.g.
 -- after its tag, becomes one of these lines.
 --
 -- A comment survives only if its node decodes into a type with a place for
--- it, i.e. a node or a 'Commented' value. A key without a corresponding
+-- it, i.e. a node or a t'Commented' value. A key without a corresponding
 -- Haskell field, e.g. the tag of a constructor, has no such type, so its
 -- comments are lost. A comment at the end of a nested mapping survives only
--- if the field that holds the mapping is 'Commented', because a record has
+-- if the field that holds the mapping is t'Commented', because a record has
 -- no place for the end of its mapping.
 --
 -- The comments of the key are lost for a type such as
@@ -211,7 +211,7 @@ noComments = Comments [] Nothing []
 -- a type as a newtype and derive its instances with @deriving newtype@,
 -- which gives the key to the value.
 --
--- In a map, use 'Commented' on the key or on the value, not on both. With
+-- In a map, use t'Commented' on the key or on the value, not on both. With
 -- both, the decoder gives the comments of the key to both, and the encoder
 -- writes only those of the value, so a change to the comments of the key is
 -- lost.
@@ -267,7 +267,7 @@ data Commented a = Commented
 -- offset of the node with the anchor, because each alias is a copy of that
 -- node.
 --
--- Two equal values at different places are not equal as 'Located' values,
+-- Two equal values at different places are not equal as t'Located' values,
 -- e.g. a set keeps both. The equality and the order compare the values first
 -- and then the offsets. To compare only the values, e.g. in a test, use the
 -- field @value@.
