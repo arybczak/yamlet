@@ -16,46 +16,218 @@ import Test.Tasty.HUnit
 import Obligations
 import Yamlet
 
+-- Each type has a test for each method. Some tests are known failures, which
+-- 'assertFailureIf' expects.
+--
+-- The encoder of Step keeps the representation with every GHC. The optimizer
+-- moves the node of Halt, which has no fields, to the top level. Then the code
+-- of the last constructors is in a function with two callers, which takes
+-- their representation.
+--
+-- With GHC 9.14, the decoders of lists pass dictionaries of the
+-- representation. GHC 9.14 does not inline the list method of the instance
+-- for GenericYaml, so the derived method applies it to all dictionaries of
+-- the instance. The method ignores them, and the list decoders are as fast as
+-- the written ones.
 main :: IO ()
 main =
   defaultMain $
     testGroup
       "Inspection"
       [ testGroup
-          "products"
-          [ testCase "encode Server" $ assertSuccess $(inspectTest $ hasNoGenericRep 'encodeServer)
-          , testCase "decode Server" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeServer)
-          , testCase "encode Wide" $ assertSuccess $(inspectTest $ hasNoGenericRep 'encodeWide)
-          , testCase "decode Wide" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeWide)
-          , testCase "encode Name" $ assertSuccess $(inspectTest $ hasNoGenericRep 'encodeName)
-          , testCase "decode Name" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeName)
-          , testCase "encode Box" $ assertSuccess $(inspectTest $ hasNoGenericRep 'encodeBox)
-          , testCase "decode Box" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeBox)
-          , testCase "encode Velocity" $ assertSuccess $(inspectTest $ hasNoGenericRep 'encodeVelocity)
-          , testCase "decode Velocity" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeVelocity)
-          , testCase "encode Config" $ assertSuccess $(inspectTest $ hasNoGenericRep 'encodeConfig)
-          , testCase "decode Config" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeConfig)
-          , testCase "encode Preset" $ assertSuccess $(inspectTest $ hasNoGenericRep 'encodePreset)
-          , testCase "decode Preset" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodePreset)
+          "Server"
+          [ testCase "encode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'encodeServer)
+          , testCase "decode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeServer)
+          , testCase "encode a list" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeServerList)
+          , testCase "decode a list" $
+              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeServerList)
+          , testCase "encode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeServerField)
+          , testCase "decode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeServerField)
           ]
       , testGroup
-          "sums"
-          [ testCase "encode Turn" $ assertSuccess $(inspectTest $ hasNoGenericRep 'encodeTurn)
-          , testCase "decode Turn" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeTurn)
-          , testCase "encode Shape" $ assertSuccess $(inspectTest $ hasNoGenericRep 'encodeShape)
-          , testCase "decode Shape" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeShape)
-          , testCase "decode Step" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeStep)
-          , testCase "encode Figure" $ assertSuccess $(inspectTest $ hasNoGenericRep 'encodeFigure)
-          , testCase "decode Figure" $ assertSuccess $(inspectTest $ hasNoGenericRep 'decodeFigure)
+          "Wide"
+          [ testCase "encode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'encodeWide)
+          , testCase "decode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeWide)
+          , testCase "encode a list" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeWideList)
+          , testCase "decode a list" $
+              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeWideList)
+          , testCase "encode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeWideField)
+          , testCase "decode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeWideField)
           ]
       , testGroup
-          "lists and fields"
-          [ testCase "encode a list of Server" $ assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeServers)
-          , testCase "encode a field of Server" $ assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeServerField)
-          , testCase "encode a list of Shape" $ assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeShapes)
-          , testCase "encode a field of Shape" $ assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeShapeField)
-          , testCase "decode a field of Server" $ assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeServerField)
-          , testCase "decode a field of Shape" $ assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeShapeField)
+          "Name"
+          [ testCase "encode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'encodeName)
+          , testCase "decode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeName)
+          , testCase "encode a list" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeNameList)
+          , testCase "decode a list" $
+              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeNameList)
+          , testCase "encode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeNameField)
+          , testCase "decode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeNameField)
+          ]
+      , testGroup
+          "Box"
+          [ testCase "encode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'encodeBox)
+          , testCase "decode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeBox)
+          , testCase "encode a list" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeBoxList)
+          , testCase "decode a list" $
+              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeBoxList)
+          , testCase "encode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeBoxField)
+          , testCase "decode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeBoxField)
+          ]
+      , testGroup
+          "Velocity"
+          [ testCase "encode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'encodeVelocity)
+          , testCase "decode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeVelocity)
+          , testCase "encode a list" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeVelocityList)
+          , testCase "decode a list" $
+              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeVelocityList)
+          , testCase "encode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeVelocityField)
+          , testCase "decode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeVelocityField)
+          ]
+      , testGroup
+          "Distance"
+          [ testCase "encode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'encodeDistance)
+          , testCase "decode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeDistance)
+          , testCase "encode a list" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeDistanceList)
+          , testCase "decode a list" $
+              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeDistanceList)
+          , testCase "encode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeDistanceField)
+          , testCase "decode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeDistanceField)
+          ]
+      , testGroup
+          "Speed"
+          [ testCase "encode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'encodeSpeed)
+          , testCase "decode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeSpeed)
+          , testCase "encode a list" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeSpeedList)
+          , testCase "decode a list" $
+              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeSpeedList)
+          , testCase "encode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeSpeedField)
+          , testCase "decode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeSpeedField)
+          ]
+      , testGroup
+          "Config"
+          [ testCase "encode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'encodeConfig)
+          , testCase "decode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeConfig)
+          , testCase "encode a list" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeConfigList)
+          , testCase "decode a list" $
+              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeConfigList)
+          , testCase "encode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeConfigField)
+          , testCase "decode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeConfigField)
+          ]
+      , testGroup
+          "Preset"
+          [ testCase "encode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'encodePreset)
+          , testCase "decode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'decodePreset)
+          , testCase "encode a list" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodePresetList)
+          , testCase "decode a list" $
+              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodePresetList)
+          , testCase "encode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodePresetField)
+          , testCase "decode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodePresetField)
+          ]
+      , testGroup
+          "Turn"
+          [ testCase "encode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'encodeTurn)
+          , testCase "decode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeTurn)
+          , testCase "encode a list" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeTurnList)
+          , testCase "decode a list" $
+              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeTurnList)
+          , testCase "encode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeTurnField)
+          , testCase "decode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeTurnField)
+          ]
+      , testGroup
+          "Shape"
+          [ testCase "encode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'encodeShape)
+          , testCase "decode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeShape)
+          , testCase "encode a list" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeShapeList)
+          , testCase "decode a list" $
+              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeShapeList)
+          , testCase "encode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeShapeField)
+          , testCase "decode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeShapeField)
+          ]
+      , testGroup
+          "Step"
+          [ testCase "encode" $
+              assertFailureIf True $(inspectTest $ hasNoGenericRep 'encodeStep)
+          , testCase "decode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeStep)
+          , testCase "encode a list" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeStepList)
+          , testCase "decode a list" $
+              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeStepList)
+          , testCase "encode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeStepField)
+          , testCase "decode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeStepField)
+          ]
+      , testGroup
+          "Figure"
+          [ testCase "encode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'encodeFigure)
+          , testCase "decode" $
+              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeFigure)
+          , testCase "encode a list" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeFigureList)
+          , testCase "decode a list" $
+              assertFailureIf (ghcVersion >= (9, 14)) $(inspectTest $ hasNoGenericDictionaries 'decodeFigureList)
+          , testCase "encode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeFigureField)
+          , testCase "decode a field" $
+              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeFigureField)
           ]
       ]
 
@@ -220,55 +392,8 @@ data Preset = Preset {paths :: [T.Text], jobs :: Int, verbose :: Maybe Bool}
 instance GenericYamlOptions Preset where
   yamlDefault = Just (Preset ["."] 1 Nothing)
 
-encodeServer :: Server -> Node
-encodeServer = toYaml
-
-decodeServer :: Node -> Either (NE.NonEmpty (Offset, String)) Server
-decodeServer = runParser parseYaml
-
-encodeWide :: Wide -> Node
-encodeWide = toYaml
-
-decodeWide :: Node -> Either (NE.NonEmpty (Offset, String)) Wide
-decodeWide = runParser parseYaml
-
-encodeName :: Name -> Node
-encodeName = toYaml
-
-decodeName :: Node -> Either (NE.NonEmpty (Offset, String)) Name
-decodeName = runParser parseYaml
-
-encodeBox :: Box Int -> Node
-encodeBox = toYaml
-
-decodeBox :: Node -> Either (NE.NonEmpty (Offset, String)) (Box Int)
-decodeBox = runParser parseYaml
-
-encodeVelocity :: Velocity -> Node
-encodeVelocity = toYaml
-
-decodeVelocity :: Node -> Either (NE.NonEmpty (Offset, String)) Velocity
-decodeVelocity = runParser parseYaml
-
-encodeConfig :: Config -> Node
-encodeConfig = toYaml
-
-encodePreset :: Preset -> Node
-encodePreset = toYaml
-
-decodePreset :: Node -> Either (NE.NonEmpty (Offset, String)) Preset
-decodePreset = runParser parseYaml
-
-decodeConfig :: Node -> Either (NE.NonEmpty (Offset, String)) Config
-decodeConfig = runParser parseYaml
-
 ----------------------------------------
 -- Sums
-
--- The encoder of Step keeps the representation. The optimizer moves the node
--- of Halt, which has no fields, to the top level. Then the code of the last
--- constructors is in a function with two callers, which takes their
--- representation.
 
 data Turn = TurnLeft | TurnRight | TurnBack
   deriving stock (Generic)
@@ -295,11 +420,188 @@ data Figure = Round {radius :: Double} | Named T.Text | Point
 instance GenericYamlOptions Figure where
   type SumEncoding Figure = SingleField
 
+----------------------------------------
+-- Functions under test
+
+encodeServer :: Server -> Node
+encodeServer = toYaml
+
+decodeServer :: Node -> Either (NE.NonEmpty (Offset, String)) Server
+decodeServer = runParser parseYaml
+
+encodeServerList :: [Server] -> Node
+encodeServerList = toYamlList
+
+decodeServerList :: Node -> Either (NE.NonEmpty (Offset, String)) [Server]
+decodeServerList = runParser parseYamlList
+
+encodeServerField :: Node -> Server -> (Node, Node)
+encodeServerField = toYamlField
+
+decodeServerField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Server
+decodeServerField k = runParser (parseYamlField k)
+
+encodeWide :: Wide -> Node
+encodeWide = toYaml
+
+decodeWide :: Node -> Either (NE.NonEmpty (Offset, String)) Wide
+decodeWide = runParser parseYaml
+
+encodeWideList :: [Wide] -> Node
+encodeWideList = toYamlList
+
+decodeWideList :: Node -> Either (NE.NonEmpty (Offset, String)) [Wide]
+decodeWideList = runParser parseYamlList
+
+encodeWideField :: Node -> Wide -> (Node, Node)
+encodeWideField = toYamlField
+
+decodeWideField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Wide
+decodeWideField k = runParser (parseYamlField k)
+
+encodeName :: Name -> Node
+encodeName = toYaml
+
+decodeName :: Node -> Either (NE.NonEmpty (Offset, String)) Name
+decodeName = runParser parseYaml
+
+encodeNameList :: [Name] -> Node
+encodeNameList = toYamlList
+
+decodeNameList :: Node -> Either (NE.NonEmpty (Offset, String)) [Name]
+decodeNameList = runParser parseYamlList
+
+encodeNameField :: Node -> Name -> (Node, Node)
+encodeNameField = toYamlField
+
+decodeNameField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Name
+decodeNameField k = runParser (parseYamlField k)
+
+encodeBox :: Box Int -> Node
+encodeBox = toYaml
+
+decodeBox :: Node -> Either (NE.NonEmpty (Offset, String)) (Box Int)
+decodeBox = runParser parseYaml
+
+encodeBoxList :: [Box Int] -> Node
+encodeBoxList = toYamlList
+
+decodeBoxList :: Node -> Either (NE.NonEmpty (Offset, String)) [Box Int]
+decodeBoxList = runParser parseYamlList
+
+encodeBoxField :: Node -> Box Int -> (Node, Node)
+encodeBoxField = toYamlField
+
+decodeBoxField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) (Box Int)
+decodeBoxField k = runParser (parseYamlField k)
+
+encodeVelocity :: Velocity -> Node
+encodeVelocity = toYaml
+
+decodeVelocity :: Node -> Either (NE.NonEmpty (Offset, String)) Velocity
+decodeVelocity = runParser parseYaml
+
+encodeVelocityList :: [Velocity] -> Node
+encodeVelocityList = toYamlList
+
+decodeVelocityList :: Node -> Either (NE.NonEmpty (Offset, String)) [Velocity]
+decodeVelocityList = runParser parseYamlList
+
+encodeVelocityField :: Node -> Velocity -> (Node, Node)
+encodeVelocityField = toYamlField
+
+decodeVelocityField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Velocity
+decodeVelocityField k = runParser (parseYamlField k)
+
+encodeDistance :: Distance -> Node
+encodeDistance = toYaml
+
+decodeDistance :: Node -> Either (NE.NonEmpty (Offset, String)) Distance
+decodeDistance = runParser parseYaml
+
+encodeDistanceList :: [Distance] -> Node
+encodeDistanceList = toYamlList
+
+decodeDistanceList :: Node -> Either (NE.NonEmpty (Offset, String)) [Distance]
+decodeDistanceList = runParser parseYamlList
+
+encodeDistanceField :: Node -> Distance -> (Node, Node)
+encodeDistanceField = toYamlField
+
+decodeDistanceField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Distance
+decodeDistanceField k = runParser (parseYamlField k)
+
+encodeSpeed :: Speed -> Node
+encodeSpeed = toYaml
+
+decodeSpeed :: Node -> Either (NE.NonEmpty (Offset, String)) Speed
+decodeSpeed = runParser parseYaml
+
+encodeSpeedList :: [Speed] -> Node
+encodeSpeedList = toYamlList
+
+decodeSpeedList :: Node -> Either (NE.NonEmpty (Offset, String)) [Speed]
+decodeSpeedList = runParser parseYamlList
+
+encodeSpeedField :: Node -> Speed -> (Node, Node)
+encodeSpeedField = toYamlField
+
+decodeSpeedField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Speed
+decodeSpeedField k = runParser (parseYamlField k)
+
+encodeConfig :: Config -> Node
+encodeConfig = toYaml
+
+decodeConfig :: Node -> Either (NE.NonEmpty (Offset, String)) Config
+decodeConfig = runParser parseYaml
+
+encodeConfigList :: [Config] -> Node
+encodeConfigList = toYamlList
+
+decodeConfigList :: Node -> Either (NE.NonEmpty (Offset, String)) [Config]
+decodeConfigList = runParser parseYamlList
+
+encodeConfigField :: Node -> Config -> (Node, Node)
+encodeConfigField = toYamlField
+
+decodeConfigField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Config
+decodeConfigField k = runParser (parseYamlField k)
+
+encodePreset :: Preset -> Node
+encodePreset = toYaml
+
+decodePreset :: Node -> Either (NE.NonEmpty (Offset, String)) Preset
+decodePreset = runParser parseYaml
+
+encodePresetList :: [Preset] -> Node
+encodePresetList = toYamlList
+
+decodePresetList :: Node -> Either (NE.NonEmpty (Offset, String)) [Preset]
+decodePresetList = runParser parseYamlList
+
+encodePresetField :: Node -> Preset -> (Node, Node)
+encodePresetField = toYamlField
+
+decodePresetField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Preset
+decodePresetField k = runParser (parseYamlField k)
+
 encodeTurn :: Turn -> Node
 encodeTurn = toYaml
 
 decodeTurn :: Node -> Either (NE.NonEmpty (Offset, String)) Turn
 decodeTurn = runParser parseYaml
+
+encodeTurnList :: [Turn] -> Node
+encodeTurnList = toYamlList
+
+decodeTurnList :: Node -> Either (NE.NonEmpty (Offset, String)) [Turn]
+decodeTurnList = runParser parseYamlList
+
+encodeTurnField :: Node -> Turn -> (Node, Node)
+encodeTurnField = toYamlField
+
+decodeTurnField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Turn
+decodeTurnField k = runParser (parseYamlField k)
 
 encodeShape :: Shape -> Node
 encodeShape = toYaml
@@ -307,8 +609,35 @@ encodeShape = toYaml
 decodeShape :: Node -> Either (NE.NonEmpty (Offset, String)) Shape
 decodeShape = runParser parseYaml
 
+encodeShapeList :: [Shape] -> Node
+encodeShapeList = toYamlList
+
+decodeShapeList :: Node -> Either (NE.NonEmpty (Offset, String)) [Shape]
+decodeShapeList = runParser parseYamlList
+
+encodeShapeField :: Node -> Shape -> (Node, Node)
+encodeShapeField = toYamlField
+
+decodeShapeField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Shape
+decodeShapeField k = runParser (parseYamlField k)
+
+encodeStep :: Step -> Node
+encodeStep = toYaml
+
 decodeStep :: Node -> Either (NE.NonEmpty (Offset, String)) Step
 decodeStep = runParser parseYaml
+
+encodeStepList :: [Step] -> Node
+encodeStepList = toYamlList
+
+decodeStepList :: Node -> Either (NE.NonEmpty (Offset, String)) [Step]
+decodeStepList = runParser parseYamlList
+
+encodeStepField :: Node -> Step -> (Node, Node)
+encodeStepField = toYamlField
+
+decodeStepField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Step
+decodeStepField k = runParser (parseYamlField k)
 
 encodeFigure :: Figure -> Node
 encodeFigure = toYaml
@@ -316,28 +645,14 @@ encodeFigure = toYaml
 decodeFigure :: Node -> Either (NE.NonEmpty (Offset, String)) Figure
 decodeFigure = runParser parseYaml
 
-----------------------------------------
--- Lists and fields
+encodeFigureList :: [Figure] -> Node
+encodeFigureList = toYamlList
 
--- The decoders of lists have no test. GHC 9.14 does not inline the list
--- method of the instance for GenericYaml, so the derived method passes it the
--- dictionaries of the representation. The method ignores them, and the list
--- decoders are as fast as the written ones.
+decodeFigureList :: Node -> Either (NE.NonEmpty (Offset, String)) [Figure]
+decodeFigureList = runParser parseYamlList
 
-encodeServers :: [Server] -> Node
-encodeServers = toYamlList
+encodeFigureField :: Node -> Figure -> (Node, Node)
+encodeFigureField = toYamlField
 
-encodeServerField :: Node -> Server -> (Node, Node)
-encodeServerField = toYamlField
-
-encodeShapes :: [Shape] -> Node
-encodeShapes = toYamlList
-
-encodeShapeField :: Node -> Shape -> (Node, Node)
-encodeShapeField = toYamlField
-
-decodeServerField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Server
-decodeServerField k = runParser (parseYamlField k)
-
-decodeShapeField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Shape
-decodeShapeField k = runParser (parseYamlField k)
+decodeFigureField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Figure
+decodeFigureField k = runParser (parseYamlField k)

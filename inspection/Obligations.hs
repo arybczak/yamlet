@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TemplateHaskellQuotes #-}
 
 -- | Obligations for the inspection tests. They are in their own module,
@@ -6,6 +7,8 @@ module Obligations
   ( hasNoGenericRep
   , hasNoGenericDictionaries
   , assertSuccess
+  , assertFailureIf
+  , ghcVersion
   ) where
 
 import GHC.Generics qualified as G
@@ -58,3 +61,17 @@ assertSuccess :: Result -> Assertion
 assertSuccess = \case
   Success _ -> pure ()
   Failure err -> assertFailure err
+
+-- | If the flag is set, the obligation must not hold, e.g. for a known
+-- failure with some versions of GHC. Then the test also shows when a version
+-- of GHC fixes the failure.
+assertFailureIf :: Bool -> Result -> Assertion
+assertFailureIf = \case
+  True -> \case
+    Success msg -> assertFailure ("expected a failure, but " ++ msg)
+    Failure _ -> pure ()
+  False -> assertSuccess
+
+-- | The major and minor version of GHC, e.g. (9, 14).
+ghcVersion :: (Int, Int)
+ghcVersion = __GLASGOW_HASKELL__ `quotRem` 100
