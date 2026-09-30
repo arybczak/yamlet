@@ -22,8 +22,15 @@ A YAML 1.2.2 library written in Haskell.
   strings that these parsers read as other types, e.g. `yes`, `22:22`,
   `1,000` and `2024-01-01`. The decoder follows only the YAML 1.2 rules.
 - Instances of `FromYaml` and `ToYaml` for the common types. They use the
-  same formats as the instances of aeson, with one difference: the keys of a
-  map keep their type, e.g. `1: a`, while JSON writes every key as a string.
+  same formats as the instances of aeson, with these differences:
+  - The keys of a map keep their type, e.g. `1: a`, while JSON writes every
+    key as a string.
+  - An `IntMap` and a map with keys that aeson cannot write as strings, e.g.
+    a `Map (Int, Int)`, are mappings too. aeson writes them as lists of
+    pairs.
+  - A `Double` or a `Float` that is not a number or is infinite is `.nan`,
+    `.inf` or `-.inf`. aeson writes `null`, `"+inf"` and `"-inf"`.
+
   The decoders are stricter than aeson. They reject some values that aeson
   converts, e.g. `1.0` for an `Int`, `null` for a `Double`, `0.5` for a
   `Rational` and a duplicate item of a `Set`.
@@ -38,7 +45,9 @@ A YAML 1.2.2 library written in Haskell.
   fields is the name of the constructor, e.g. `Dot`, also with only one
   constructor, which aeson writes as `[]`. With the second encoding, a
   constructor without fields is its name too, which aeson writes as
-  `{Dot: []}`.
+  `{Dot: []}`. With `omitNullFields`, the encoder leaves out a field of
+  type `Maybe (Maybe a)` with the value `Just Nothing`, while aeson writes
+  `null`.
 - The syntax tree keeps the comments and the empty lines, so a program can
   read a file, change it and write it back with its comments.
 - A decoded type can keep a part of a document as a `Node`. The encoder
