@@ -28,10 +28,12 @@ A YAML 1.2.2 library written in Haskell.
   converts, e.g. `1.0` for an `Int`, `null` for a `Double`, `0.5` for a
   `Rational` and a duplicate item of a `Set`.
 - Generic instances with the formats of aeson, for fewer shapes of types. A
-  constructor cannot have several fields without names. Such a type is a
-  compile error. A sum type is a mapping with a tag, e.g.
-  `{tag: Circle, radius: 1}`, or a mapping with the constructor as its only
-  key, e.g. `{Circle: {radius: 1}}`. With the tag, a constructor without
+  sum type is a mapping with a tag, e.g. `{tag: Circle, radius: 1}`, or a
+  mapping with the constructor as its only key, e.g.
+  `{Circle: {radius: 1}}`. A constructor cannot have several fields without
+  names. With the tag, the constructors of a type cannot mix named fields
+  with a field without a name, e.g. `A {size :: Int} | B Int`. Such a type
+  is a compile error. With the tag, a constructor without
   fields is `{tag: Dot}`, as in aeson. A type whose constructors have no
   fields is the name of the constructor, e.g. `Dot`, also with only one
   constructor, which aeson writes as `[]`. With the second encoding, a
