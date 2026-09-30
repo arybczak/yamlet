@@ -649,6 +649,10 @@ test_movedComments = do
     "# v\na: 1\n"
     (render (mappingNode [(plainNode "a", withBefore "v" (plainNode "1"))]))
   assertEqual
+    "lines after a scalar key"
+    "# b\n# a\nk: 1\n"
+    (render (mappingNode [((withBefore "b" (plainNode "k")) {comments = (withBefore "b" (plainNode "k")).comments {after = [Comment "a"]}}, plainNode "1")]))
+  assertEqual
     "two comments on one line"
     "# k\na: 1 # v\n"
     (render (mappingNode [(withInline "k" (plainNode "a"), withInline "v" (plainNode "1"))]))

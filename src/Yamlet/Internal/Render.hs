@@ -396,11 +396,25 @@ splitAtLastEmptyLine ls =
 entryComments :: RenderOptions -> Node -> Node -> ([Line], Maybe T.Text, [Line])
 entryComments opts k v
   | isBlock opts v = case (k.comments.inline, v.comments.inline) of
-      (Just kc, Just vc) -> (k.comments.before, Just kc, [Comment vc])
-      (kc, vc) -> (k.comments.before, kc <|> vc, [])
+      (Just kc, Just vc) -> (keyLines, Just kc, [Comment vc])
+      (kc, vc) -> (keyLines, kc <|> vc, [])
   | otherwise = case (k.comments.inline, v.comments.inline) of
-      (Just kc, Just vc) -> (k.comments.before ++ v.comments.before ++ [Comment kc], Just vc, [])
-      (kc, vc) -> (k.comments.before ++ v.comments.before, vc <|> kc, [])
+      (Just kc, Just vc) -> (keyLines ++ v.comments.before ++ [Comment kc], Just vc, [])
+      (kc, vc) -> (keyLines ++ v.comments.before, vc <|> kc, [])
+  where
+    -- A scalar key has no place for the lines after it, so they go above it
+    -- too.
+    keyLines :: [Line]
+    keyLines
+      | isScalarLike k = k.comments.before ++ k.comments.after
+      | otherwise = k.comments.before
+
+-- | A scalar or an alias.
+isScalarLike :: Node -> Bool
+isScalarLike n = case n.content of
+  Sequence {} -> False
+  Mapping {} -> False
+  _ -> True
 
 -- | The value of a mapping entry after the colon with the comment of the
 -- line, and the line break. The lines go between the key and a block
@@ -546,7 +560,8 @@ implicitKey :: RenderOptions -> Node -> Maybe B.Builder
 implicitKey opts k
   | isBlock opts k = Nothing
   | isEmpty k = Nothing
-  | hasEndLines k = Nothing
+  -- An empty collection with lines inside is on several lines.
+  | hasEndLines k, not (isScalarLike k) = Nothing
   | T.length key > maxImplicitKeyLength = Nothing
   | otherwise = Just (B.fromText key)
   where
