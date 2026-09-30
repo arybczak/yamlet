@@ -199,14 +199,21 @@ document opts afterEnd doc =
     -- with a block collection root, e.g. a flow root that is written in the
     -- block style, so they would not read back.
     docEnd :: [Line]
-    docEnd = if isBlock opts r then dropWhile (== EmptyLine) doc.docComments.after else doc.docComments.after
+    docEnd = if isBlock opts doc.root then dropWhile (== EmptyLine) doc.docComments.after else doc.docComments.after
 
+    -- The parser also drops the empty lines at the end of a block collection
+    -- root, before a document marker or the end of the input.
     r :: Node
     r = case doc.root.content of
       ScalarLines style t starts
         | style == Literal || style == Folded
         , needsIndentIndicator t ->
             doc.root {content = ScalarLines DoubleQuoted t starts}
+      _
+        | isBlock opts doc.root
+        , null docEnd ->
+            let n = doc.root
+            in Node n.offset n.endOffset n.props n.comments {after = reverse (dropWhile (== EmptyLine) (reverse n.comments.after))} n.content
       _ -> doc.root
 
     -- The handles for the tags that are not valid URIs.

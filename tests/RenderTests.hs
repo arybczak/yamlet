@@ -362,6 +362,16 @@ test_documents = do
     "comment above a document with directives"
     "a\n...\n# c\n%YAML 1.2\n---\nb\n"
     (renderSyntax defaultRenderOptions [document (plainNode "a"), commented (document (plainNode "b")) {version = Just (Version 1 2)}])
+  let rootWithGap :: Bool -> Document
+      rootWithGap end =
+        (document (contentNode (Sequence Block [plainNode "a"])) {comments = noComments {after = [Comment "c", EmptyLine]}})
+          { explicitEnd = end
+          }
+  assertEqual "empty line at the end of a block root before an end marker" "- a\n# c\n...\n" (renderSyntax defaultRenderOptions [rootWithGap True])
+  assertEqual
+    "empty line at the end of a block root before a document"
+    "- a\n# c\n---\nb\n"
+    (renderSyntax defaultRenderOptions [rootWithGap False, document (plainNode "b")])
   let versioned :: Version -> T.Text
       versioned v = renderSyntax defaultRenderOptions [(document (plainNode "a")) {version = Just v}]
   assertEqual "supported version" "%YAML 1.3\n---\na\n" (versioned (Version 1 3))
