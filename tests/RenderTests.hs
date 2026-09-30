@@ -189,6 +189,19 @@ test_fallbacks = do
     "comment in an empty collection reads back"
     (Right [[("/k", "after", "c")]])
     (map commentsOf <$> parseDocumentsText (render commented))
+  let keyWithLineBelow :: Node -> Node
+      keyWithLineBelow v = mappingNode [((plainNode "k") {comments = noComments {after = [Comment "c"]}}, v), (plainNode "l", plainNode "y")]
+      flowSequence :: Node
+      flowSequence = contentNode (Sequence Flow [plainNode "a"])
+  assertEqual "lines after a key with a flow value" "# c\nk: [a]\nl: y\n" (render (keyWithLineBelow flowSequence))
+  assertEqual
+    "lines after a key with a flow value read back"
+    (Right [[("/k:key", "before", "c")]])
+    (map commentsOf <$> parseDocumentsText (render (keyWithLineBelow flowSequence)))
+  assertEqual
+    "lines after a key with an empty flow value"
+    "# c\nk: {}\nl: y\n"
+    (render (keyWithLineBelow (contentNode (Mapping Flow []))))
   assertEqual
     "comment in an empty key"
     "? [\n  # c\n  ]\n: v\n"

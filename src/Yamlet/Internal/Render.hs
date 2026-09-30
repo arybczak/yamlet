@@ -404,13 +404,14 @@ splitAtLastEmptyLine ls =
 -- A scalar key has no place for the lines after it, so they go below the
 -- key: between the key and a block collection value, or below the entry, as
 -- in @value@. They read back as the lines of the value. Below a block scalar
--- they would be part of the scalar, so they go above the entry.
+-- they would be part of the scalar, and below a flow collection they would
+-- read back as the lines of the next entry, so they go above the entry.
 entryComments :: RenderOptions -> Node -> Node -> ([Line], Maybe T.Text, [Line])
 entryComments opts k v
   | isBlock opts v = case (k.comments.inline, v.comments.inline) of
       (Just kc, Just vc) -> (k.comments.before, Just kc, keyAfter ++ [Comment vc])
       (kc, vc) -> (k.comments.before, kc <|> vc, keyAfter)
-  | isBlockScalarNode v = case (k.comments.inline, v.comments.inline) of
+  | isBlockScalarNode v || not (isScalarLike v) = case (k.comments.inline, v.comments.inline) of
       (Just kc, Just vc) -> (k.comments.before ++ keyAfter ++ v.comments.before ++ [Comment kc], Just vc, [])
       (kc, vc) -> (k.comments.before ++ keyAfter ++ v.comments.before, vc <|> kc, [])
   | otherwise = case (k.comments.inline, v.comments.inline) of
