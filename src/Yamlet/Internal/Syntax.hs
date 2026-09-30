@@ -201,6 +201,16 @@ noComments = Comments [] Nothing []
 -- first item. The comment on the first line of the list or the mapping, e.g.
 -- after its tag, becomes one of these lines.
 --
+-- By the rules in [Comments]("Yamlet.Syntax#comments"), some lines read
+-- back with a change:
+--
+-- * The lines after a text of several lines, which the encoder writes as a
+--   block scalar, read back as the lines above the next entry. After the
+--   last entry, they belong to the end of the collection around the entry.
+-- * The lines above a list or a mapping without a key can get an empty line
+--   below them, e.g. at the top level. The empty line reads back as the last
+--   of these lines.
+--
 -- A comment survives only if its node decodes into a type with a place for
 -- it, i.e. a node or a t'Commented' value. A key without a corresponding
 -- Haskell field, e.g. the tag of a constructor, has no such type, so its

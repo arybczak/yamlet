@@ -347,6 +347,11 @@ mappingNode = contentNode . Mapping Block
 -- >>> printComments input
 -- root.user (key) before: [Comment "b"]
 --
+-- Thus the text has no place for the lines after a block scalar. The
+-- renderer writes them at the column of the key or the @-@ of the entry, and
+-- they read back as the lines of the node below, or of the end of an outer
+-- collection.
+--
 -- A comment after the last entry of a block collection belongs to the end of
 -- the collection if it is indented at least as deep as the entries, and
 -- deeper than the key of the collection. Otherwise it belongs to the node
@@ -462,7 +467,10 @@ mappingNode = contentNode . Mapping Block
 -- document after: [Comment "a"]
 --
 -- The renderer writes the markers and the empty lines that these rules
--- need, so that the lines read back at the same places.
+-- need, so that the lines read back at the same places. One case has no
+-- such text: if the lines at the end of a document have an empty line and
+-- another document follows, the empty line and the lines below it read back
+-- as the lines of the next document.
 
 -- $emptyLines
 -- Empty lines go with the node below them, or with the end of the document.
@@ -500,10 +508,12 @@ mappingNode = contentNode . Mapping Block
 -- root.user (key) before: [EmptyLine]
 --
 -- One place is an exception. Above the first entry of a block collection,
--- the last empty line stays with the collection. If the lines of a block
--- collection root do not end with an empty line, e.g. lines that a program
--- added, the renderer writes one below them, so that they read back as the
--- lines of the collection.
+-- the last empty line stays with the collection. The renderer writes the
+-- lines of a block collection there if the collection is the root, the
+-- value of a key or a first list item that starts below its @-@. If these
+-- lines do not end with an empty line, e.g. lines that a program added, the
+-- renderer writes one below them, so that they read back as the lines of
+-- the collection. The added empty line reads back as their last line.
 --
 -- >>> input = "# The file.\n\nhost: localhost\n"
 --
