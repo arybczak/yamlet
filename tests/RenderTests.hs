@@ -715,6 +715,21 @@ test_linesBelowIndicator = do
   check "explicit key" "- ? &x\n    # a\n\n    b: 1\n  : c\n"
   check "nested first items" "- &x\n  - &y\n    # a\n\n    b: 1\n"
   check "second item" "k:\n- a\n- !!map\n  # b\n  c: 1\n"
+  let render :: Node -> T.Text
+      render n = renderSyntax defaultRenderOptions [document n]
+      withAbove :: Node -> Node
+      withAbove n = n {comments = noComments {before = [Comment "a"]}}
+      list :: Node
+      list = sequenceNode [plainNode "1"]
+  assertEqual
+    "lines of a first item below its indicator"
+    (Right [[("/0", "before", "a"), ("/0", "inline", "i")]])
+    (map commentsOf <$> parseDocumentsText (render (sequenceNode [list {comments = noComments {before = [Comment "a"], inline = Just "i"}}])))
+  assertEqual "lines of a block value below its key" "k:\n# a\n\n- 1\n" (render (mappingNode [(plainNode "k", withAbove list)]))
+  assertEqual
+    "lines of a block value below its key read back"
+    (Right [[("/k", "before", "a")]])
+    (map commentsOf <$> parseDocumentsText (render (mappingNode [(plainNode "k", withAbove list)])))
 
 test_movedComments :: Assertion
 test_movedComments = do

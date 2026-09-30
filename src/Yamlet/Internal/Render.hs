@@ -275,15 +275,6 @@ document opts afterEnd doc =
             <> block opts 0 0 True (isJust (props r)) [] r
       | otherwise = scalarBody <> linesBelow 0 r
 
-    -- The parser gives the lines directly above the first entry of a block
-    -- collection to the entry, so the lines of the collection end with an
-    -- empty line.
-    separated :: [Line] -> [Line]
-    separated ls = case reverse ls of
-      [] -> []
-      EmptyLine : _ -> ls
-      _ -> ls ++ [EmptyLine]
-
     scalarBody :: B.Builder
     scalarBody
       | isEmpty r = case (doc.docComments.inline, r.comments.inline) of
@@ -356,9 +347,19 @@ indicatorLines opts isFirst carried x
       let ls = carried ++ x.comments.before
           (own, rest)
             | firstStartsBelow opts x = splitAtLastEmptyLine ls
+            | isFirst = (separated ls ++ firstLines opts x, [])
             | otherwise = (ls ++ firstLines opts x, [])
       in if isFirst then ([], own, rest) else (own, [], rest)
   | otherwise = (aboveIndicator opts x, [], [])
+
+-- | The lines of a block collection that go directly above its first entry.
+-- The parser gives the lines there to the entry, so the lines of the
+-- collection end with an empty line.
+separated :: [Line] -> [Line]
+separated ls = case reverse ls of
+  [] -> []
+  EmptyLine : _ -> ls
+  _ -> ls ++ [EmptyLine]
 
 -- | The lines above an indicator of a node that does not start below it. The
 -- lines above the first entry of a block collection after the indicator go
@@ -471,7 +472,7 @@ value opts indent v lineComment extra
     below, rest :: [Line]
     (below, rest)
       | firstStartsBelow opts v = splitAtLastEmptyLine (extra ++ v.comments.before)
-      | otherwise = (extra ++ v.comments.before, [])
+      | otherwise = (separated (extra ++ v.comments.before), [])
 
     endsWithBlock :: [Node] -> Bool
     endsWithBlock xs = case reverse xs of
