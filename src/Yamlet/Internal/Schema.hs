@@ -190,18 +190,21 @@ isYaml11NonString t = case T.uncons t of
         ]
 
     -- The numbers of go-yaml v2, which removes the underscores first: the
-    -- integers of Go and a float whose dot and sign of the exponent are
-    -- optional.
+    -- integers of Go, a float whose dot and sign of the exponent are
+    -- optional, and a binary integer with its sign after "0b", e.g. 0b-1.
     goNumber :: T.Text -> [T.Text]
     goNumber =
-      sign
-        >=> alt
-          [ one (== '0') >=> one (`elem` ['x', 'X']) >=> some (one isHexDigit)
-          , one (== '0') >=> one (`elem` ['o', 'O']) >=> some (one isOctDigit)
-          , one (== '0') >=> one (`elem` ['b', 'B']) >=> some (one (`elem` ['0', '1']))
-          , alt [one (== '.') >=> some digit, some digit >=> opt (one (== '.') >=> many digit)]
-              >=> opt (one (`elem` ['e', 'E']) >=> opt (one (`elem` ['+', '-'])) >=> some digit)
-          ]
+      alt
+        [ sign
+            >=> alt
+              [ one (== '0') >=> one (`elem` ['x', 'X']) >=> some (one isHexDigit)
+              , one (== '0') >=> one (`elem` ['o', 'O']) >=> some (one isOctDigit)
+              , one (== '0') >=> one (`elem` ['b', 'B']) >=> some (one (`elem` ['0', '1']))
+              , alt [one (== '.') >=> some digit, some digit >=> opt (one (== '.') >=> many digit)]
+                  >=> opt (one (`elem` ['e', 'E']) >=> opt (one (`elem` ['+', '-'])) >=> some digit)
+              ]
+        , str "0b" >=> one (`elem` ['+', '-']) >=> some (one (`elem` ['0', '1']))
+        ]
 
     -- Each matcher gives the rests of the text after all its possible
     -- matches, so the patterns backtrack as the regular expressions of the
