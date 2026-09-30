@@ -133,6 +133,16 @@ encodes a value of that type back to YAML. The times below come from GHC
 one core of the CCD with the 3D V-cache. The `yaml` package uses the libyaml C
 library and converts the data by way of an aeson `Value`.
 
+To run the benchmarks in this way and print the tables below, run this
+command:
+
+```
+scripts/bench-readme.sh
+```
+
+The script pins each benchmark to core 2. To use another core, set the
+`CORE` variable, e.g. `CORE=4 scripts/bench-readme.sh`.
+
 Decoding:
 
 | Input              | yamlet | HsYAML  | yaml   |
