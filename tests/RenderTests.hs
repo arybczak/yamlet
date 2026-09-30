@@ -499,6 +499,7 @@ test_noThunks =
     , ("documents", "# a\n--- # b\nc\n...\n# d\n---\ne: 1\n")
     , ("empty quoted keys", "'': a\n? \"\"\n: b\nc: {'': d}\n")
     , ("pairs in flow sequences", "[[]: a, '': b]\n")
+    , ("empty nodes", "a:\nb: !t\n? c\nd: {e: , &f : g}\n")
     ]
   where
     check :: (String, T.Text) -> Assertion

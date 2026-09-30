@@ -615,7 +615,7 @@ eScalar :: Props -> P Node
 eScalar props = do
   e <- env
   p <- pos
-  pure $! mkNode e p (toOffset e p) props emptyContent
+  pure $! mkNode e p (toOffset e p) props (emptyContent e)
 
 -- | c-ns-properties(n,c)
 cNsProperties :: Int -> Ctx -> P Props
@@ -1583,13 +1583,14 @@ cLBlockMapExplicitEntry n = do
   w <- peek
   guardP . not $ isNsChar w
   k <- sLBlockIndented n BlockOut
-  v <- lBlockMapExplicitValue <|> (pure $! missingValue k)
+  e <- env
+  v <- lBlockMapExplicitValue <|> (pure $! missingValue e k)
   pure (k, v)
   where
     -- The key took the comments and the empty lines below it, so the position
     -- of the parser is after them. A value there would take them.
-    missingValue :: Node -> Node
-    missingValue k = Node k.endOffset k.endOffset noProps noComments emptyContent
+    missingValue :: Env -> Node -> Node
+    missingValue e k = Node k.endOffset k.endOffset noProps noComments (emptyContent e)
 
     lBlockMapExplicitValue :: P Node
     lBlockMapExplicitValue = do
@@ -1698,14 +1699,14 @@ sLBlockCollection n c = do
         <|> ((\a -> Props (Just a) NoTag) <$> cNsAnchorProperty)
 
 -- | The content of an empty node.
-emptyContent :: Content
-emptyContent = Scalar Plain T.empty
--- Without the pragma, GHC sees a constructor, takes a node with this content
--- for a value and drops the '$!' that builds it. The node must still wait for
--- the evaluation of 'T.empty', so the parser returned it as a thunk, e.g. the
--- value of "a:" above another key. The heap check of the render tests finds
--- this thunk without the pragma.
-{-# NOINLINE emptyContent #-}
+emptyContent :: Env -> Content
+-- With a constant that contains 'T.empty', the parser returns a node with
+-- this content as a thunk, e.g. the value of "a:" above another key. GHC
+-- sees a constructor, takes the node for a value and drops the '$!' that
+-- builds it, but the node must wait for the evaluation of 'T.empty'. A
+-- NOINLINE pragma on the constant prevents this on GHC 9.10, but not on GHC
+-- 9.14. The heap check of the render tests finds this thunk.
+emptyContent e = Scalar Plain (slice e e.base e.base)
 
 -- | A node without comments from the given index to the given offset.
 mkNode :: Env -> Int -> Offset -> Props -> Content -> Node
