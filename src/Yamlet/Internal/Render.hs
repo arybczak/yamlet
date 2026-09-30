@@ -49,7 +49,8 @@ defaultRenderOptions =
 -- quotes. An empty line from the comments after a block scalar with the @+@
 -- indicator goes away, because it would become part of the scalar. A flow
 -- collection with comments inside becomes a block collection, so that every
--- comment has a line.
+-- comment has a line. A flow collection without comments is on one line, so
+-- the empty lines inside it go away.
 --
 -- A comment that has no place at its node moves to a place that has one,
 -- e.g. the lines above the value of a key go above the key if the value is
