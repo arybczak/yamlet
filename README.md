@@ -15,7 +15,8 @@ A YAML 1.2.2 library written in Haskell.
   values in plain words, e.g. `expected a list, but got an integer`.
 - The decoder reports the errors of independent parts together, e.g. every
   bad field of a record, every bad item of a list and every unknown key. A
-  syntax error stops the parser at the first one.
+  syntax error stops the parser at the first one, and two equal keys in a
+  mapping stop the decoder at the first pair.
 - Mappings keep the order of their keys, on input and on output.
 - The encoder writes output that common YAML 1.1 parsers read the same way:
   PyYAML, Ruby's Psych and go-yaml v2, which Kubernetes uses. It quotes the
