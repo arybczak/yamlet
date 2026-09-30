@@ -69,10 +69,12 @@ A decoded value is never much larger than its text. Two parts of the syntax
 can let a short text stand for a large value: aliases and exponents. The
 library limits both:
 
-- A small document with aliases to aliases can expand to billions of nodes.
-  To prevent this, the aliases of a document can add at most 100000 nodes.
-  For a document with more than 100000 nodes, they can add as many nodes as
-  the document has. A document beyond the limit is an error.
+- A small document with aliases to aliases can expand to billions of nodes,
+  and many aliases to one long string can expand to billions of characters.
+  To prevent this, the library counts each node and each character of a
+  scalar as one unit. The aliases of a document can add at most 100000
+  units. For a document with more than 100000 units, they can add as many
+  units as the document has. A document beyond the limit is an error.
 - A program that converts `1e999999999` to an integer gets a billion digits.
   To prevent this, the decoder looks at two exponents of a float: the
   exponent in its text, and the exponent of its first digit that is not

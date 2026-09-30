@@ -41,10 +41,11 @@ represent root
   | needsNumbering root = fst . fst <$> go (Numbering M.empty M.empty 0) root
   | otherwise = plain root
   where
-    -- The limit of the visits of a traversal of the document. Aliases can add
-    -- as many visits as the document has nodes, or 'smallBudget' for a small
-    -- document. Without a limit, the visits of a small input can be
-    -- exponential in its size.
+    -- The limit of the visits of a traversal of the document. A node is one
+    -- visit and each character of a scalar is one more, because the decoder
+    -- copies the text of each alias. Aliases can add as many visits as the
+    -- document has, or 'smallBudget' for a small document. Without a limit,
+    -- the visits of a small input can be exponential in its size.
     limit :: Int
     limit = n + max smallBudget n
       where
@@ -59,9 +60,13 @@ represent root
 
         syntaxSize :: S.Node -> Int
         syntaxSize sn = case sn.content of
+          S.Scalar _ t -> scalarVisits t
           S.Sequence _ xs -> 1 + sum (map syntaxSize xs)
           S.Mapping _ kvs -> 1 + sum [syntaxSize k + syntaxSize v | (k, v) <- kvs]
-          _ -> 1
+          S.Alias _ -> 1
+
+    scalarVisits :: T.Text -> Int
+    scalarVisits t = 1 + T.length t
 
     -- Without aliases the anchors do not matter, and without collection keys
     -- only scalar keys compare.
@@ -91,7 +96,7 @@ represent root
                | st.visits + visits > limit ->
                    Left
                      $ failure off
-                     $ "the aliases expand the document to more than " ++ show limit ++ " nodes"
+                     $ "the aliases expand the document to more than " ++ show limit ++ " nodes and characters"
                | otherwise -> Right ((v, i), st {visits = st.visits + visits})
              Just Nothing ->
                Left
@@ -103,19 +108,20 @@ represent root
                  $ "undefined alias *" ++ T.unpack name
            S.Scalar style t -> do
              v <- scalar off props style t
-             Right $ number props v (ScalarShape v) 1 st
+             let visits = scalarVisits t
+             Right $ number props v (ScalarShape v) visits visits st
            S.Sequence _ xs -> do
              tag <- collectionTag off props seqTag
              (vs, st') <- goList (open props st) xs
              let v = withTag tag (Sequence (map fst vs))
-             Right $ number props v (SequenceShape tag (map snd vs)) (st'.visits - st.visits + 1) st'
+             Right $ number props v (SequenceShape tag (map snd vs)) 1 (st'.visits - st.visits + 1) st'
            S.Mapping _ kvs -> do
              tag <- collectionTag off props mapTag
              (entries, st') <- goPairs (open props st) kvs
              checkUniqueNumbers entries
              let v = withTag tag (Mapping [(k, x) | (_, (k, _), (x, _)) <- entries])
                  shape = MappingShape tag (L.sort [(i, j) | (_, (_, i), (_, j)) <- entries])
-             Right $ number props v shape (st'.visits - st.visits + 1) st'
+             Right $ number props v shape 1 (st'.visits - st.visits + 1) st'
 
     goList :: Numbering -> [S.Node] -> Either Failure ([(Value, Int)], Numbering)
     goList st = \case
@@ -144,9 +150,10 @@ represent root
       Nothing -> st
 
     -- Give the value the number of its shape, and define its anchor. The
-    -- visits are those of the node and of everything inside it.
-    number :: S.Props -> Value -> Shape -> Int -> Numbering -> ((Value, Int), Numbering)
-    number props v shape visits st = ((v, i), Numbering anchors' shapes' (st.visits + 1))
+    -- own visits are those of the node alone, and the visits are those of the
+    -- node and of everything inside it.
+    number :: S.Props -> Value -> Shape -> Int -> Int -> Numbering -> ((Value, Int), Numbering)
+    number props v shape own visits st = ((v, i), Numbering anchors' shapes' (st.visits + own))
       where
         i :: Int
         shapes' :: M.Map Shape Int
