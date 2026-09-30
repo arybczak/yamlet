@@ -436,6 +436,15 @@ test_record = do
     "string keys with the same text"
     (Just ((2, 6, "duplicate key \"name\""), (1, 1, "the first key \"name\"")))
     (errorWithNote (decodeText @Config "name: x\n!foo name: y\n"))
+  assertEqual
+    "several string keys with the same text and a bad field"
+    [ (2, 1, "duplicate key \"name\"")
+    , (1, 6, "the first key \"name\"")
+    , (3, 7, "expected an integer, but got a string")
+    , (4, 6, "duplicate key \"jobs\"")
+    , (3, 1, "the first key \"jobs\"")
+    ]
+    (errorsOf (decodeText @Config "!foo name: x\nname: y\njobs: z\n!foo jobs: 4\n"))
 
 -- | Decoded texts and error lines do not point into the input.
 test_copies :: Assertion

@@ -453,7 +453,14 @@ withoutComments n = S.Node n.offset n.endOffset n.props S.noComments n.content
 -- these lines, but 'Yamlet.Commented' on its first field keeps them.
 withMapping :: (Object -> Parser a) -> S.Node -> Parser a
 withMapping f = parseNode $ \n -> case n.content of
-  S.Mapping _ kvs -> mkObject n (keyEntries n kvs) >>= f
+  S.Mapping _ kvs -> case mkObject n (keyEntries n kvs) of
+    (NoErrors, o) -> f o
+    -- The errors of the fields come with the duplicate keys, and a field
+    -- reads the value of the first key.
+    (errs, o) ->
+      let Parser g = f o
+      in Parser $ \off -> case g off of
+           Result e _ -> Result (bothErrors errs e) failed
   _ -> typeMismatch "a mapping" n
 
 -- | The entries of a mapping, with the lines above the mapping moved to its
@@ -472,26 +479,33 @@ data Object = Object
   -- ^ The keys that are not strings, for the error of a lookup.
   }
 
+-- | The object and the errors of its duplicate keys. The index has the first
+-- of equal keys.
+--
 -- A list with linear lookups is faster only for a few keys, and it saves
 -- little of the time to decode a typical record.
-mkObject :: S.Node -> [(S.Node, S.Node)] -> Parser Object
-mkObject n kvs = do
-  index <- foldM insert M.empty kvs
-  pure
-    Object
-      { node = n
-      , entries = kvs
-      , index = index
-      , otherKeys = [(k, v) | (k@S.Node {S.content = S.Scalar style t}, _) <- kvs, let v = scalarValue k.props.tag style t, case v of String _ -> False; _ -> True]
-      }
+mkObject :: S.Node -> [(S.Node, S.Node)] -> (Errors, Object)
+mkObject n kvs =
+  let (index, errs) = L.foldl' insert (M.empty, NoErrors) kvs
+  in ( errs
+     , Object
+         { node = n
+         , entries = kvs
+         , index = index
+         , otherKeys = [(k, v) | (k@S.Node {S.content = S.Scalar style t}, _) <- kvs, let v = scalarValue k.props.tag style t, case v of String _ -> False; _ -> True]
+         }
+     )
   where
-    insert :: M.Map T.Text (S.Node, S.Node) -> (S.Node, S.Node) -> Parser (M.Map T.Text (S.Node, S.Node))
-    insert m kv@(k, _) = case stringValue k of
+    insert
+      :: (M.Map T.Text (S.Node, S.Node), Errors)
+      -> (S.Node, S.Node)
+      -> (M.Map T.Text (S.Node, S.Node), Errors)
+    insert (!m, !errs) kv@(k, _) = case stringValue k of
       Just t -> case M.insertLookupWithKey (\_ _ old -> old) t kv m of
         (Just (first, _), _) ->
-          Parser $ \_ -> Result (OneError k.offset ("duplicate key " ++ show t) [(first.offset, "the first key " ++ show t)]) failed
-        (Nothing, m') -> pure m'
-      _ -> pure m
+          (m, bothErrors errs (OneError k.offset ("duplicate key " ++ show t) [(first.offset, "the first key " ++ show t)]))
+        (Nothing, m') -> (m', errs)
+      _ -> (m, errs)
 
 -- | The node of the mapping.
 objectNode :: Object -> S.Node
