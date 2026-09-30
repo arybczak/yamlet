@@ -514,6 +514,18 @@ test_aliases = do
     (Right (M.fromList [("a", "<x"), ("b", "<x")]))
     (decodeText @(M.Map T.Text T.Text) "a: &x \"<x\"\nb: *x\n")
   assertEqual
+    "anchor inside a node with the same anchor"
+    (Right (Sequence [Sequence [Int 1], Int 1]))
+    (decodeText @Value "- &a [&a 1]\n- *a\n")
+  assertEqual
+    "anchor inside a node with the same anchor, typed"
+    (Right ([1], 1))
+    (decodeText @([Int], Int) "- &a [&a 1]\n- *a\n")
+  assertEqual
+    "anchor inside a mapping with the same anchor"
+    (Right (M.fromList [("x", 1)], 1))
+    (decodeText @(M.Map T.Text Int, Int) "- &a {x: &a 1}\n- *a\n")
+  assertEqual
     "error inside an alias"
     [(1, 11, "expected an integer, but got a string")]
     (errorsOf (decodeText @(M.Map T.Text [Int]) "a: &x [1, x]\nb: *x\nc: *x\n"))

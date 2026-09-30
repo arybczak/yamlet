@@ -109,7 +109,7 @@ represent root
            S.Scalar style t -> do
              v <- scalar off props style t
              let visits = scalarVisits t
-             Right $ number props v (ScalarShape v) visits visits st
+             Right $ number props v (ScalarShape v) visits visits (open props st)
            S.Sequence _ xs -> do
              tag <- collectionTag off props seqTag
              (vs, st') <- goList (open props st) xs
@@ -151,7 +151,8 @@ represent root
 
     -- Give the value the number of its shape, and define its anchor. The
     -- own visits are those of the node alone, and the visits are those of the
-    -- node and of everything inside it.
+    -- node and of everything inside it. A node inside with the same anchor
+    -- comes later in the document, so its definition stays.
     number :: S.Props -> Value -> Shape -> Int -> Int -> Numbering -> ((Value, Int), Numbering)
     number props v shape own visits st = ((v, i), Numbering anchors' shapes' (st.visits + own))
       where
@@ -163,8 +164,8 @@ represent root
 
         anchors' :: M.Map T.Text (Maybe (Value, Int, Int))
         anchors' = case props.anchor of
-          Just a -> M.insert a (Just (v, i, visits)) st.anchors
-          Nothing -> st.anchors
+          Just a | Just Nothing <- M.lookup a st.anchors -> M.insert a (Just (v, i, visits)) st.anchors
+          _ -> st.anchors
 
     -- Unlike in 'duplicate', comparing all pairs is not faster for few keys.
     checkUniqueNumbers :: [(S.Node, (Value, Int), (Value, Int))] -> Either Failure ()
@@ -230,14 +231,25 @@ expandAliases = fst . go M.empty
         Nothing -> (sn, anchors)
       S.Scalar {} -> define sn anchors
       S.Sequence style xs ->
-        let (xs', anchors') = goList anchors xs
-        in define (withContent (S.Sequence style xs')) anchors'
+        let (xs', anchors') = goList (open anchors) xs
+        in close (withContent (S.Sequence style xs')) anchors'
       S.Mapping style kvs ->
-        let (kvs', anchors') = goPairs anchors kvs
-        in define (withContent (S.Mapping style kvs')) anchors'
+        let (kvs', anchors') = goPairs (open anchors) kvs
+        in close (withContent (S.Mapping style kvs')) anchors'
       where
         withContent :: S.Content -> S.Node
         withContent = S.Node sn.offset sn.endOffset sn.props sn.comments
+
+        -- No alias inside refers to the anchor, so its old definition can
+        -- go. A node inside with the same anchor comes later in the
+        -- document, so its definition stays.
+        open :: M.Map T.Text (S.Tag, S.Content) -> M.Map T.Text (S.Tag, S.Content)
+        open = maybe id M.delete sn.props.anchor
+
+        close :: S.Node -> M.Map T.Text (S.Tag, S.Content) -> (S.Node, M.Map T.Text (S.Tag, S.Content))
+        close n anchors' = case sn.props.anchor of
+          Just a | M.member a anchors' -> (n, anchors')
+          _ -> define n anchors'
 
     define :: S.Node -> M.Map T.Text (S.Tag, S.Content) -> (S.Node, M.Map T.Text (S.Tag, S.Content))
     define sn anchors = case sn.props.anchor of
