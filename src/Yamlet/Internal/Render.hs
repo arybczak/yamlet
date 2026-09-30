@@ -207,11 +207,13 @@ document opts afterEnd doc =
     , lines_ 0 doc.docComments.after
     ]
   where
+    -- A block scalar without content at the top level would take the lines
+    -- below it in.
     r :: Node
     r = case doc.root.content of
       ScalarLines style t starts
         | style == Literal || style == Folded
-        , needsIndentIndicator t ->
+        , needsIndentIndicator t || T.all (== '\n') t && not (null doc.root.comments.after) ->
             doc.root {content = ScalarLines DoubleQuoted t starts}
       _ -> doc.root
 

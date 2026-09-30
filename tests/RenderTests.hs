@@ -156,6 +156,17 @@ test_fallbacks = do
   assertEqual "single-quoted line break" "\"a\\nb\"\n" (render (scalarNode SingleQuoted "a\nb"))
   assertEqual "literal with an indicator at the top level" "\" a\\nb\"\n" (render (scalarNode Literal " a\nb"))
   assertEqual "folded with an indicator at the top level" "\" a\\nb\"\n" (render (scalarNode Folded " a\nb"))
+  let withLineBelow :: Node -> Node
+      withLineBelow n = n {comments = noComments {after = [Comment "c"]}}
+  assertEqual "empty literal with a line below at the top level" "\"\"\n# c\n" (render (withLineBelow (scalarNode Literal "")))
+  assertEqual "empty folded with a line below at the top level" "\"\"\n# c\n" (render (withLineBelow (scalarNode Folded "")))
+  assertEqual
+    "literal of only line breaks with a line below at the top level"
+    (Right [(Scalar DoubleQuoted "\n", [("", "after", "c")])])
+    ( map (\d -> (d.root.content, commentsOf d))
+        <$> parseDocumentsText (render (withLineBelow (scalarNode Literal "\n")))
+    )
+  assertEqual "literal with a line below in a list" "- |-\n# c\n" (render (sequenceNode [withLineBelow (scalarNode Literal "")]))
   assertEqual "literal with an indicator in a list" "- |2-\n   a\n  b\n" (render (sequenceNode [scalarNode Literal " a\nb"]))
   assertEqual "folded with a tab in a list" "- >2-\n  \ta\n  b\n" (render (sequenceNode [scalarNode Folded "\ta\nb"]))
   assertEqual
