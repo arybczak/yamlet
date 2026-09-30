@@ -1,46 +1,91 @@
 -- | A YAML 1.2.2 library.
 --
--- Decode a configuration file:
+-- The library handles two typical use cases well:
 --
--- @
--- data Config = Config
---   { name :: Text
---   , paths :: [FilePath]
---   }
+-- 1. Decoding a document that describes a configuration:
 --
--- instance FromYaml Config where
---   parseYaml = withMapping $ \\o ->
---     rejectUnknownKeys ["name", "paths"] o
---       *> ( Config
---              \<$> parseField o "name"
---              \<*> parseFieldDefault o "paths" []
---          )
+--     >>> :{
+--     data Config = Config
+--       { name :: T.Text
+--       , paths :: [FilePath]
+--       }
+--       deriving stock (Generic, Show)
+--       deriving (FromYaml) via GenericYaml Config
+--     instance GenericYamlOptions Config where
+--       yamlOptions = defaultYamlOptions {rejectUnknownFields = True}
+--       yamlDefault = Just Config {name = requiredField, paths = ["."]}
+--     :}
 --
--- main :: IO ()
--- main =
---   decodeFile "config.yaml" >>= \\case
---     Left errs -> mapM_ (putStrLn . prettyError "config.yaml") errs
---     Right config -> ...
--- @
+--     >>> input = "name: app\n"
 --
--- A field of type t'Yamlet.Node' keeps a part of the document as it was
--- written, and the encoder writes it back with its comments and styles:
+--     >>> T.putStr input
+--     name: app
 --
--- @
--- data Workflow = Workflow
---   { name :: Text
---   , matrix :: Node
---   }
+--     >>> either printErrors print (decodeText @Config input)
+--     Config {name = "app", paths = ["."]}
 --
--- instance FromYaml Workflow where
---   parseYaml = withMapping $ \\o ->
---     Workflow
---       \<$> parseField o "name"
---       \<*> parseField o "matrix"
+--     When a document fails to decode, you get multiple errors pointing at what
+--     failed and why:
 --
--- instance ToYaml Workflow where
---   toYaml w = mapping ["name" .= w.name, "matrix" .= w.matrix]
--- @
+--     >>> input = "paths:\n- src\n- 42\nport: 80\n"
+--
+--     >>> T.putStr input
+--     paths:
+--     - src
+--     - 42
+--     port: 80
+--
+--     >>> either printErrors print (decodeText @Config input)
+--     input.yaml:1:1: missing key "name"
+--       |
+--     1 | paths:
+--       | ^
+--     input.yaml:3:3: paths[1]: expected a string, but got an integer, quote the value, e.g. '42'
+--       |
+--     3 | - 42
+--       |   ^
+--     input.yaml:4:1: unknown key "port", expected one of: name, paths
+--       |
+--     4 | port: 80
+--       | ^
+--
+-- 2. Decoding a document into a Haskell type and encoding it back. The
+--    following example showcases capturing comments of some nodes, as well as
+--    parts of the document verbatim as a t'Yamlet.Node':
+--
+--     >>> :{
+--     data Workflow = Workflow
+--       { name :: Commented T.Text
+--       , matrix :: Node
+--       }
+--       deriving stock (Generic)
+--       deriving anyclass (GenericYamlOptions)
+--       deriving (FromYaml, ToYaml) via GenericYaml Workflow
+--     :}
+--
+--     >>> input = "# The name in the UI.\nname: build # short\nmatrix:\n  # Each system runs the jobs.\n  os: [linux, macos]\n"
+--
+--     >>> T.putStr input
+--     # The name in the UI.
+--     name: build # short
+--     matrix:
+--       # Each system runs the jobs.
+--       os: [linux, macos]
+--
+--     >>> Right workflow = decodeText @Workflow input
+--
+--     The decoded name keeps the comment above its key and the comment after
+--     its value:
+--
+--     >>> print workflow.name
+--     Commented {value = "build", comments = Comments {before = [Comment "The name in the UI."], inline = Just "short", after = []}}
+--
+--     >>> T.putStr (encodeText workflow)
+--     # The name in the UI.
+--     name: build # short
+--     matrix:
+--       # Each system runs the jobs.
+--       os: [linux, macos]
 module Yamlet
   ( -- * Decoding
     decode
@@ -287,5 +332,7 @@ encodeAllFile :: ToYaml a => FilePath -> [a] -> IO ()
 encodeAllFile path = BS.writeFile path . encodeAll
 
 -- $setup
+-- >>> import Data.Text qualified as T
 -- >>> import Data.Text.IO qualified as T
+-- >>> import Yamlet
 -- >>> printErrors = mapM_ (putStrLn . prettyError "input.yaml")
