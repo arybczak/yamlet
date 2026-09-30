@@ -879,6 +879,14 @@ test_syntaxErrors = do
     (1, 1103, "a key can be at most 1024 characters long, write a longer key after '? '")
     ("\"" <> T.replicate 1100 "k" <> "\": 1\n")
   check
+    "spaces after a key count toward its length"
+    (1, 1026, "a key can be at most 1024 characters long, write a longer key after '? '")
+    ("a" <> T.replicate 1024 " " <> ": 1\n")
+  check
+    "spaces after a key in a flow sequence"
+    (1, 1029, "expected ',' or ']'")
+    ("['a'" <> T.replicate 1024 " " <> ": 1]\n")
+  check
     "list on the line of its anchor"
     (1, 9, "unexpected '-', a list cannot start on the line of its anchor or tag")
     "&anchor - sequence entry\n"

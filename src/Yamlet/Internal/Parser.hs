@@ -1148,7 +1148,11 @@ nsFlowSeqEntry n c = do
     nodeEntry e p = do
       k <- nsFlowNode n c
       q <- pos
-      let value = optional_ sSeparateInLine >> cNsFlowMapAdjacentValue n c
+      let value = do
+            optional_ sSeparateInLine
+            r <- pos
+            guardP $ fitsKey e p r
+            cNsFlowMapAdjacentValue n c
       if isJsonNode k && fitsKey e p q && not (any (isBreak . byteAt e) [p .. q - 1])
         then (pair e p . (k,) <$!> value) <|> pure k
         else pure k
@@ -1242,16 +1246,16 @@ nsSImplicitYamlKey c = implicitKey $ nsFlowYamlNode 0 c
 cSImplicitJsonKey :: Ctx -> P Node
 cSImplicitJsonKey c = implicitKey $ cFlowJsonNode 0 c
 
--- | An implicit key with the separation after it. It is at most
+-- | An implicit key with the separation after it. Both together are at most
 -- 'maxImplicitKeyLength' characters long.
 implicitKey :: P Node -> P Node
 implicitKey key = do
   e <- env
   p <- pos
   k <- key
+  optional_ sSeparateInLine
   q <- pos
   guardP $ fitsKey e p q
-  optional_ sSeparateInLine
   pure k
 
 ----------------------------------------
