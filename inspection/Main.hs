@@ -7,7 +7,6 @@
 -- binding before the plugin checks it.
 module Main where
 
-import Data.List.NonEmpty qualified as NE
 import Data.Text qualified as T
 import Test.Inspection
 import Test.Tasty
@@ -418,233 +417,233 @@ instance GenericYamlOptions Figure where
 encodeServer :: Server -> Node
 encodeServer = toYaml
 
-decodeServer :: Node -> Either (NE.NonEmpty (Offset, String)) Server
-decodeServer = runParser parseYaml
+decodeServer :: Node -> Parser Server
+decodeServer = parseYaml
 
 encodeServerList :: [Server] -> Node
 encodeServerList = toYamlList
 
-decodeServerList :: Node -> Either (NE.NonEmpty (Offset, String)) [Server]
-decodeServerList = runParser parseYamlList
+decodeServerList :: Node -> Parser [Server]
+decodeServerList = parseYamlList
 
 encodeServerField :: Node -> Server -> (Node, Node)
 encodeServerField = toYamlField
 
-decodeServerField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Server
-decodeServerField k = runParser (parseYamlField k)
+decodeServerField :: Node -> Node -> Parser Server
+decodeServerField = parseYamlField
 
 encodeWide :: Wide -> Node
 encodeWide = toYaml
 
-decodeWide :: Node -> Either (NE.NonEmpty (Offset, String)) Wide
-decodeWide = runParser parseYaml
+decodeWide :: Node -> Parser Wide
+decodeWide = parseYaml
 
 encodeWideList :: [Wide] -> Node
 encodeWideList = toYamlList
 
-decodeWideList :: Node -> Either (NE.NonEmpty (Offset, String)) [Wide]
-decodeWideList = runParser parseYamlList
+decodeWideList :: Node -> Parser [Wide]
+decodeWideList = parseYamlList
 
 encodeWideField :: Node -> Wide -> (Node, Node)
 encodeWideField = toYamlField
 
-decodeWideField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Wide
-decodeWideField k = runParser (parseYamlField k)
+decodeWideField :: Node -> Node -> Parser Wide
+decodeWideField = parseYamlField
 
 encodeName :: Name -> Node
 encodeName = toYaml
 
-decodeName :: Node -> Either (NE.NonEmpty (Offset, String)) Name
-decodeName = runParser parseYaml
+decodeName :: Node -> Parser Name
+decodeName = parseYaml
 
 encodeNameList :: [Name] -> Node
 encodeNameList = toYamlList
 
-decodeNameList :: Node -> Either (NE.NonEmpty (Offset, String)) [Name]
-decodeNameList = runParser parseYamlList
+decodeNameList :: Node -> Parser [Name]
+decodeNameList = parseYamlList
 
 encodeNameField :: Node -> Name -> (Node, Node)
 encodeNameField = toYamlField
 
-decodeNameField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Name
-decodeNameField k = runParser (parseYamlField k)
+decodeNameField :: Node -> Node -> Parser Name
+decodeNameField = parseYamlField
 
 encodeBox :: Box Int -> Node
 encodeBox = toYaml
 
-decodeBox :: Node -> Either (NE.NonEmpty (Offset, String)) (Box Int)
-decodeBox = runParser parseYaml
+decodeBox :: Node -> Parser (Box Int)
+decodeBox = parseYaml
 
 encodeBoxList :: [Box Int] -> Node
 encodeBoxList = toYamlList
 
-decodeBoxList :: Node -> Either (NE.NonEmpty (Offset, String)) [Box Int]
-decodeBoxList = runParser parseYamlList
+decodeBoxList :: Node -> Parser [Box Int]
+decodeBoxList = parseYamlList
 
 encodeBoxField :: Node -> Box Int -> (Node, Node)
 encodeBoxField = toYamlField
 
-decodeBoxField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) (Box Int)
-decodeBoxField k = runParser (parseYamlField k)
+decodeBoxField :: Node -> Node -> Parser (Box Int)
+decodeBoxField = parseYamlField
 
 encodeVelocity :: Velocity -> Node
 encodeVelocity = toYaml
 
-decodeVelocity :: Node -> Either (NE.NonEmpty (Offset, String)) Velocity
-decodeVelocity = runParser parseYaml
+decodeVelocity :: Node -> Parser Velocity
+decodeVelocity = parseYaml
 
 encodeVelocityList :: [Velocity] -> Node
 encodeVelocityList = toYamlList
 
-decodeVelocityList :: Node -> Either (NE.NonEmpty (Offset, String)) [Velocity]
-decodeVelocityList = runParser parseYamlList
+decodeVelocityList :: Node -> Parser [Velocity]
+decodeVelocityList = parseYamlList
 
 encodeVelocityField :: Node -> Velocity -> (Node, Node)
 encodeVelocityField = toYamlField
 
-decodeVelocityField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Velocity
-decodeVelocityField k = runParser (parseYamlField k)
+decodeVelocityField :: Node -> Node -> Parser Velocity
+decodeVelocityField = parseYamlField
 
 encodeDistance :: Distance -> Node
 encodeDistance = toYaml
 
-decodeDistance :: Node -> Either (NE.NonEmpty (Offset, String)) Distance
-decodeDistance = runParser parseYaml
+decodeDistance :: Node -> Parser Distance
+decodeDistance = parseYaml
 
 encodeDistanceList :: [Distance] -> Node
 encodeDistanceList = toYamlList
 
-decodeDistanceList :: Node -> Either (NE.NonEmpty (Offset, String)) [Distance]
-decodeDistanceList = runParser parseYamlList
+decodeDistanceList :: Node -> Parser [Distance]
+decodeDistanceList = parseYamlList
 
 encodeDistanceField :: Node -> Distance -> (Node, Node)
 encodeDistanceField = toYamlField
 
-decodeDistanceField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Distance
-decodeDistanceField k = runParser (parseYamlField k)
+decodeDistanceField :: Node -> Node -> Parser Distance
+decodeDistanceField = parseYamlField
 
 encodeSpeed :: Speed -> Node
 encodeSpeed = toYaml
 
-decodeSpeed :: Node -> Either (NE.NonEmpty (Offset, String)) Speed
-decodeSpeed = runParser parseYaml
+decodeSpeed :: Node -> Parser Speed
+decodeSpeed = parseYaml
 
 encodeSpeedList :: [Speed] -> Node
 encodeSpeedList = toYamlList
 
-decodeSpeedList :: Node -> Either (NE.NonEmpty (Offset, String)) [Speed]
-decodeSpeedList = runParser parseYamlList
+decodeSpeedList :: Node -> Parser [Speed]
+decodeSpeedList = parseYamlList
 
 encodeSpeedField :: Node -> Speed -> (Node, Node)
 encodeSpeedField = toYamlField
 
-decodeSpeedField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Speed
-decodeSpeedField k = runParser (parseYamlField k)
+decodeSpeedField :: Node -> Node -> Parser Speed
+decodeSpeedField = parseYamlField
 
 encodeConfig :: Config -> Node
 encodeConfig = toYaml
 
-decodeConfig :: Node -> Either (NE.NonEmpty (Offset, String)) Config
-decodeConfig = runParser parseYaml
+decodeConfig :: Node -> Parser Config
+decodeConfig = parseYaml
 
 encodeConfigList :: [Config] -> Node
 encodeConfigList = toYamlList
 
-decodeConfigList :: Node -> Either (NE.NonEmpty (Offset, String)) [Config]
-decodeConfigList = runParser parseYamlList
+decodeConfigList :: Node -> Parser [Config]
+decodeConfigList = parseYamlList
 
 encodeConfigField :: Node -> Config -> (Node, Node)
 encodeConfigField = toYamlField
 
-decodeConfigField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Config
-decodeConfigField k = runParser (parseYamlField k)
+decodeConfigField :: Node -> Node -> Parser Config
+decodeConfigField = parseYamlField
 
 encodePreset :: Preset -> Node
 encodePreset = toYaml
 
-decodePreset :: Node -> Either (NE.NonEmpty (Offset, String)) Preset
-decodePreset = runParser parseYaml
+decodePreset :: Node -> Parser Preset
+decodePreset = parseYaml
 
 encodePresetList :: [Preset] -> Node
 encodePresetList = toYamlList
 
-decodePresetList :: Node -> Either (NE.NonEmpty (Offset, String)) [Preset]
-decodePresetList = runParser parseYamlList
+decodePresetList :: Node -> Parser [Preset]
+decodePresetList = parseYamlList
 
 encodePresetField :: Node -> Preset -> (Node, Node)
 encodePresetField = toYamlField
 
-decodePresetField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Preset
-decodePresetField k = runParser (parseYamlField k)
+decodePresetField :: Node -> Node -> Parser Preset
+decodePresetField = parseYamlField
 
 encodeTurn :: Turn -> Node
 encodeTurn = toYaml
 
-decodeTurn :: Node -> Either (NE.NonEmpty (Offset, String)) Turn
-decodeTurn = runParser parseYaml
+decodeTurn :: Node -> Parser Turn
+decodeTurn = parseYaml
 
 encodeTurnList :: [Turn] -> Node
 encodeTurnList = toYamlList
 
-decodeTurnList :: Node -> Either (NE.NonEmpty (Offset, String)) [Turn]
-decodeTurnList = runParser parseYamlList
+decodeTurnList :: Node -> Parser [Turn]
+decodeTurnList = parseYamlList
 
 encodeTurnField :: Node -> Turn -> (Node, Node)
 encodeTurnField = toYamlField
 
-decodeTurnField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Turn
-decodeTurnField k = runParser (parseYamlField k)
+decodeTurnField :: Node -> Node -> Parser Turn
+decodeTurnField = parseYamlField
 
 encodeShape :: Shape -> Node
 encodeShape = toYaml
 
-decodeShape :: Node -> Either (NE.NonEmpty (Offset, String)) Shape
-decodeShape = runParser parseYaml
+decodeShape :: Node -> Parser Shape
+decodeShape = parseYaml
 
 encodeShapeList :: [Shape] -> Node
 encodeShapeList = toYamlList
 
-decodeShapeList :: Node -> Either (NE.NonEmpty (Offset, String)) [Shape]
-decodeShapeList = runParser parseYamlList
+decodeShapeList :: Node -> Parser [Shape]
+decodeShapeList = parseYamlList
 
 encodeShapeField :: Node -> Shape -> (Node, Node)
 encodeShapeField = toYamlField
 
-decodeShapeField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Shape
-decodeShapeField k = runParser (parseYamlField k)
+decodeShapeField :: Node -> Node -> Parser Shape
+decodeShapeField = parseYamlField
 
 encodeStep :: Step -> Node
 encodeStep = toYaml
 
-decodeStep :: Node -> Either (NE.NonEmpty (Offset, String)) Step
-decodeStep = runParser parseYaml
+decodeStep :: Node -> Parser Step
+decodeStep = parseYaml
 
 encodeStepList :: [Step] -> Node
 encodeStepList = toYamlList
 
-decodeStepList :: Node -> Either (NE.NonEmpty (Offset, String)) [Step]
-decodeStepList = runParser parseYamlList
+decodeStepList :: Node -> Parser [Step]
+decodeStepList = parseYamlList
 
 encodeStepField :: Node -> Step -> (Node, Node)
 encodeStepField = toYamlField
 
-decodeStepField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Step
-decodeStepField k = runParser (parseYamlField k)
+decodeStepField :: Node -> Node -> Parser Step
+decodeStepField = parseYamlField
 
 encodeFigure :: Figure -> Node
 encodeFigure = toYaml
 
-decodeFigure :: Node -> Either (NE.NonEmpty (Offset, String)) Figure
-decodeFigure = runParser parseYaml
+decodeFigure :: Node -> Parser Figure
+decodeFigure = parseYaml
 
 encodeFigureList :: [Figure] -> Node
 encodeFigureList = toYamlList
 
-decodeFigureList :: Node -> Either (NE.NonEmpty (Offset, String)) [Figure]
-decodeFigureList = runParser parseYamlList
+decodeFigureList :: Node -> Parser [Figure]
+decodeFigureList = parseYamlList
 
 encodeFigureField :: Node -> Figure -> (Node, Node)
 encodeFigureField = toYamlField
 
-decodeFigureField :: Node -> Node -> Either (NE.NonEmpty (Offset, String)) Figure
-decodeFigureField k = runParser (parseYamlField k)
+decodeFigureField :: Node -> Node -> Parser Figure
+decodeFigureField = parseYamlField
