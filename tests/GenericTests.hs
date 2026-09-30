@@ -1,5 +1,6 @@
 module GenericTests (genericTests) where
 
+import Control.Exception
 import Data.Aeson qualified as A
 import Data.Bifunctor
 import Data.Char
@@ -25,6 +26,7 @@ genericTests =
     , testCase "flat fields" test_flatten
     , testCase "single field" test_singleField
     , testCase "default" test_default
+    , testCase "required field" test_requiredField
     , testCase "modifiers" test_modifiers
     , testCase "commented fields" test_commentedFields
     , testCase "commented values" test_commentedValues
@@ -281,6 +283,28 @@ data Profile = Profile {user :: T.Text, proxy :: Maybe T.Text, note :: Maybe T.T
 instance GenericYamlOptions Profile where
   yamlOptions = defaultYamlOptions {omitNullFields = True}
   yamlDefault = Just (Profile "app" (Just "proxy") Nothing)
+
+data Account = Account {user :: T.Text, shell :: T.Text, home :: Maybe T.Text}
+  deriving stock (Eq, Show, Generic)
+  deriving (FromYaml, ToYaml) via GenericYaml Account
+
+instance GenericYamlOptions Account where
+  yamlOptions = defaultYamlOptions {omitNullFields = True}
+  yamlDefault = Just (Account requiredField "/bin/sh" requiredField)
+
+data Task = Once Int | Never
+  deriving stock (Eq, Show, Generic)
+  deriving (FromYaml, ToYaml) via GenericYaml Task
+
+instance GenericYamlOptions Task where
+  yamlDefault = Just (Once requiredField)
+
+data Login = Login {user :: !T.Text, shell :: T.Text}
+  deriving stock (Eq, Show, Generic)
+  deriving (FromYaml, ToYaml) via GenericYaml Login
+
+instance GenericYamlOptions Login where
+  yamlDefault = Just (Login requiredField "/bin/sh")
 
 -- | Records that keep the comments of their keys.
 data Pipeline = Pipeline {name :: Commented T.Text, lint :: Commented Lint}
@@ -611,6 +635,29 @@ test_default = do
     "user: x\nproxy: null\n"
     (encodeText (Profile "x" Nothing Nothing))
   roundTrip "round trip of null fields" (Profile "x" Nothing Nothing)
+
+test_requiredField :: Assertion
+test_requiredField = do
+  assertEqual "present" (Right (Account "x" "/bin/sh" (Just "/home/x"))) (decodeText "user: x\nhome: /home/x\n")
+  assertEqual "missing" (Just (1, 1, "missing key \"user\"")) (errorOf (decodeText @Account "shell: /bin/zsh\nhome: null\n"))
+  assertEqual "explicit null" (Right (Account "x" "/bin/sh" Nothing)) (decodeText "user: x\nhome: null\n")
+  assertEqual "missing field that accepts null" (Just (1, 1, "missing key \"home\"")) (errorOf (decodeText @Account "user: x"))
+  assertEqual "null field kept" "user: x\nshell: /bin/sh\nhome: null\n" (encodeText (Account "x" "/bin/sh" Nothing))
+  roundTrip "round trip of a null field" (Account "x" "/bin/sh" Nothing)
+  roundTrip "round trip" (Account "x" "/bin/zsh" (Just "/home/x"))
+  assertEqual "present contents" (Right (Once 2)) (decodeText "tag: Once\ncontents: 2\n")
+  assertEqual "missing contents" (Just (1, 1, "missing key \"contents\"")) (errorOf (decodeText @Task "tag: Once\n"))
+  decoded <- try @ErrorCall (evaluate (length (show (decodeText @Login "user: x\nshell: y\n"))))
+  assertEqual "decoder with a strict field" (Left strictError) (first message decoded)
+  encoded <- try @ErrorCall (evaluate (T.length (encodeText (Login "x" "y"))))
+  assertEqual "encoder with a strict field" (Left strictError) (first message encoded)
+  where
+    strictError :: String
+    strictError = "requiredField in a strict field of the default of Login"
+
+    -- The equality of 'ErrorCall' also compares the location of the call.
+    message :: ErrorCall -> String
+    message (ErrorCall m) = m
 
 test_modifiers :: Assertion
 test_modifiers = do

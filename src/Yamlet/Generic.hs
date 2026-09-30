@@ -159,6 +159,25 @@
 -- >>> decodeText @Config "proxy: null\n"
 -- Right (Config {name = "app", retries = 3, proxy = Nothing})
 --
+-- A field with the value 'requiredField' has no default:
+--
+-- >>> :{
+-- data Account = Account {user :: T.Text, shell :: T.Text}
+--   deriving stock (Generic, Show)
+--   deriving (FromYaml) via GenericYaml Account
+-- instance GenericYamlOptions Account where
+--   yamlDefault = Just (Account requiredField "/bin/sh")
+-- :}
+--
+-- >>> decodeText @Account "user: alice\n"
+-- Right (Account {user = "alice", shell = "/bin/sh"})
+--
+-- >>> either printErrors print (decodeText @Account "shell: /bin/zsh\n")
+-- input.yaml:1:1: missing key "user"
+--   |
+-- 1 | shell: /bin/zsh
+--   | ^
+--
 -- A present key that holds a mapping takes the missing keys of that mapping
 -- from the default of its own type, not from the outer default:
 --
@@ -200,6 +219,7 @@ module Yamlet.Generic
   , YamlOptions (..)
   , defaultYamlOptions
   , SumEncodingKind (..)
+  , requiredField
 
     -- * Modifiers
   , snakeCase
@@ -223,6 +243,7 @@ module Yamlet.Generic
   , Generic
   ) where
 
+import Control.Exception hiding (TypeError)
 import Control.Monad
 import Data.Char
 import Data.Coerce
@@ -233,6 +254,7 @@ import Data.Proxy
 import Data.Text qualified as T
 import GHC.Generics
 import GHC.TypeLits
+import System.IO.Unsafe
 
 import Yamlet.Internal.FromYaml
 import Yamlet.Internal.Syntax qualified as S
@@ -428,6 +450,51 @@ class GenericYamlOptions a where
   yamlDefault :: Maybe a
   yamlDefault = Nothing
 
+-- | The value of a field without a default in 'yamlDefault'. A missing key
+-- of the field is an error, also if the field accepts null, e.g. for a field
+-- of type 'Maybe'. The encoder with 'omitNullFields' keeps such a field. The
+-- field must be 'requiredField' itself, not a value that contains it. The
+-- field must be lazy, so that the default does not throw when you build it.
+-- The decoder and the encoder of a type with a 'requiredField' in a strict
+-- field throw an error each time you use them.
+--
+-- With 'TaggedFlat', a field without a name has no key of its own, because
+-- its keys are next to the tag. Thus the type of the field decides about
+-- these keys. E.g. for a mapping with only the tag, the decoder reports the
+-- missing keys of that type, or takes them from the 'yamlDefault' of that
+-- type. To require a key of the field, use 'requiredField' in the default of
+-- the type of the field.
+--
+-- The value throws an exception, e.g. if you use 'yamlDefault' directly.
+requiredField :: a
+requiredField = throw RequiredField
+
+-- | The exception of 'requiredField'.
+data RequiredField = RequiredField
+  deriving stock (Show)
+
+instance Exception RequiredField where
+  displayException _ = "the field has no default"
+
+-- | The field of a default, or 'Nothing' for 'requiredField'.
+defaultField :: a -> Maybe a
+defaultField x = case unsafeDupablePerformIO (try (evaluate x)) of
+  Left RequiredField -> Nothing
+  Right _ -> Just x
+
+-- | An error if the 'yamlDefault' of the type has a 'requiredField' in a
+-- strict field. Without the check, each field would look required, and a
+-- missing key would give the error of a field that has a default.
+checkDefault :: forall a. (GenericYamlOptions a, GDatatype (Rep a)) => ()
+checkDefault = case yamlDefault @a of
+  Just d
+    | isNothing (defaultField d) ->
+        error $ "requiredField in a strict field of the default of " ++ gDatatypeName @(Rep a)
+  _ -> ()
+-- Without the pragma, the derived encoders and decoders of lists and fields
+-- keep the generic dictionaries, and their inspection tests fail.
+{-# INLINE checkDefault #-}
+
 -- | The words of a name in lower case, separated by underscores, e.g.
 -- @source_paths@ for @sourcePaths@ or @SourcePaths@, and @http_server@ for
 -- @HTTPServer@. The rules are the same as for @camelTo2 \'_\'@ of aeson.
@@ -480,12 +547,16 @@ class GDatatype (r :: Type -> Type) where
 
   gWrap :: Constructors r p -> r p
 
-instance GDatatype (D1 d f) where
-  type Constructors (D1 d f) = f
+  gDatatypeName :: String
+
+instance KnownSymbol name => GDatatype (D1 (MetaData name m p nt) f) where
+  type Constructors (D1 (MetaData name m p nt) f) = f
 
   gUnwrap = unM1
 
   gWrap = M1
+
+  gDatatypeName = symbolVal (Proxy @name)
 
 -- | The names and the number of the constructors of a representation.
 class GConstructors f where
@@ -708,7 +779,7 @@ genericToYaml x =
   -- Forcing the encoding forces the check of the shape, e.g. with deferred
   -- type errors in a test of the errors.
   let enc = gEncoding @(SumEncoding a) @f
-  in enc `seq` gToYaml (yamlOptions @a) enc (gUnwrap . from <$> yamlDefault @a) (gUnwrap (from x))
+  in enc `seq` checkDefault @a `seq` gToYaml (yamlOptions @a) enc (gUnwrap . from <$> yamlDefault @a) (gUnwrap (from x))
 {-# INLINE genericToYaml #-}
 
 -- The encoder takes the default for 'omitNullFields': it leaves out a null
@@ -837,7 +908,7 @@ instance
       -- The decoder fills a missing key from the default.
       nullDefault :: Bool
       nullDefault = case def of
-        Just (M1 (K1 d)) -> isNullNode (toYaml d)
+        Just (M1 (K1 d)) -> maybe False (isNullNode . toYaml) (defaultField d)
         Nothing -> True
   {-# INLINE gToEntries #-}
 
@@ -888,7 +959,7 @@ genericParseYaml n =
   -- Forcing the encoding forces the check of the shape, e.g. with deferred
   -- type errors in a test of the errors.
   let enc = gEncoding @(SumEncoding a) @f
-  in enc `seq` gParseYaml (yamlOptions @a) enc (gUnwrap . from <$> yamlDefault @a) (to . gWrap) n
+  in enc `seq` checkDefault @a `seq` gParseYaml (yamlOptions @a) enc (gUnwrap . from <$> yamlDefault @a) (to . gWrap) n
 {-# INLINE genericParseYaml #-}
 
 -- Each constructor applies 'to' to its own representation, e.g.
@@ -1053,9 +1124,11 @@ fromObject opts flat keys def o
   | otherwise = checked [opts.contentsKey] $ case M.lookup opts.contentsKey o.index of
       Just entry -> gFromEntry entry
       -- A missing contents key is null, if the fields accept null. A flat
-      -- field can also have only optional keys.
+      -- field can also have only optional keys. A flat field has no key to
+      -- require.
       Nothing
-        | Just fields <- def -> pure fields
+        | Just fields <- gDefaultValue =<< def -> pure fields
+        | isJust def, not flat -> missingKey o opts.contentsKey
         | flat -> maybe merged pure (succeeds gFromValue nullNode)
         | otherwise -> maybe (missingKey o opts.contentsKey) pure (succeeds gFromValue nullNode)
   where
@@ -1105,6 +1178,11 @@ class GFromFields f where
   gFromEntry :: (S.Node, S.Node) -> Parser (f p)
   gFromEntry (_, v) = gFromValue v
 
+  -- | The only field without a name from a default, or 'Nothing' for
+  -- 'requiredField'.
+  gDefaultValue :: f p -> Maybe (f p)
+  gDefaultValue = Just
+
 -- The value of a constructor without fields is its tag.
 instance GFromFields U1 where
   gFromObject _ _ _ = pure U1
@@ -1128,7 +1206,9 @@ instance
     M1 . K1 <$> case M.lookup key o.index of
       Just entry -> parseEntry entry
       Nothing -> case def of
-        Just (M1 (K1 x)) -> x <$ findKey o key
+        Just (M1 (K1 d))
+          | Just x <- defaultField d -> x <$ findKey o key
+          | otherwise -> missingKey o key
         -- A missing field is null, if its type accepts null.
         Nothing -> maybe (missingKey o key) (<$ findKey o key) (succeeds parseYaml nullNode)
     where
@@ -1140,6 +1220,8 @@ instance FromYaml a => GFromFields (S1 (MetaSel Nothing u s d) (Rec0 a)) where
   gFromValue n = M1 . K1 <$> parseNode parseYaml n
 
   gFromEntry entry = M1 . K1 <$> parseEntry entry
+
+  gDefaultValue (M1 (K1 x)) = M1 . K1 <$> defaultField x
 
 -- | The key is a string with the text.
 isKey :: T.Text -> S.Node -> Bool
