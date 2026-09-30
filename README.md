@@ -147,17 +147,17 @@ Decoding:
 
 | Input              | yamlet | HsYAML  | yaml   |
 |--------------------|--------|---------|--------|
-| `config`, 1105 KiB | 26 ms  | 2968 ms | 115 ms |
-| `json`, 432 KiB    | 16 ms  | 2419 ms | 60 ms  |
-| `text`, 834 KiB    | 6.5 ms | 628 ms  | 13 ms  |
+| `config`, 1105 KiB | 27 ms  | 3031 ms | 114 ms |
+| `json`, 432 KiB    | 16 ms  | 2440 ms | 60 ms  |
+| `text`, 834 KiB    | 7.1 ms | 641 ms  | 13 ms  |
 
 Encoding:
 
 | Input              | yamlet | HsYAML | yaml   |
 |--------------------|--------|--------|--------|
-| `config`, 1105 KiB | 18 ms  | 38 ms  | 57 ms  |
-| `json`, 432 KiB    | 11 ms  | 19 ms  | 34 ms  |
-| `text`, 834 KiB    | 3.0 ms | 9.8 ms | 9.4 ms |
+| `config`, 1105 KiB | 20 ms  | 38 ms  | 57 ms  |
+| `json`, 432 KiB    | 12 ms  | 19 ms  | 33 ms  |
+| `text`, 834 KiB    | 3.2 ms | 10 ms  | 9.4 ms |
 
 ## Tests
 
