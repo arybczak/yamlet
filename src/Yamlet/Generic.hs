@@ -271,8 +271,7 @@ instance
 
   -- The list and the field encode their values with the instance of
   -- 'ToYaml a', for the reason at 'parseYamlList' below. With the defaults
-  -- of the class, the benchmark derive.contents.toYaml.generic takes 3.4
-  -- times as long.
+  -- of the class, the benchmark derive.contents.toYaml.generic is slower.
   toYamlList xs = S.sequenceNode (map (toYaml @a) (coerce xs))
 
   toYamlField k (GenericYaml x) = (k, toYaml @a x)

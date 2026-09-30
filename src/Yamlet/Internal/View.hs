@@ -62,9 +62,9 @@ scalarValue tag style t = case tag of
   S.NonSpecificTag -> String t
   -- 'Yamlet.Decode.runParser' rejects a value that is not valid for its tag.
   S.Tag tag' -> fromMaybe (String t) (resolveTagged tag' t)
--- Inlined, it saves about 1% of the allocation of a decoder, measured with
--- the decode benchmarks, but each match on 'view' gets a copy of it, e.g. a
--- small instance grows by half.
+-- Inlined, it saves little of the allocation of a decoder in the decode
+-- benchmarks, but each match on 'view' gets a copy of it, and a small
+-- instance grows much.
 {-# NOINLINE scalarValue #-}
 
 -- | The kind of a node in plain words, e.g. "a list".

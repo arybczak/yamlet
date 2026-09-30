@@ -816,7 +816,7 @@ cQuoted style n c props = withScan $ \e p ->
        NoMatch q -> NoMatch q
        Failed q msg -> Failed q msg
 -- Inlining gives a loop for each style. Without it, the parse benchmark of
--- the JSON input allocated 5% more.
+-- the JSON input allocates more.
 {-# INLINE cQuoted #-}
 
 -- | Skip the line break at the index and the blank lines after it.

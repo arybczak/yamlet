@@ -445,7 +445,7 @@ isPrintable c
 -- U+2028 and U+2029 as line breaks, so they get escapes too.
 isScalarChar :: Char -> Bool
 -- The guards for ASCII come first. Without them, the encode benchmark of
--- the long texts takes about 15% longer.
+-- the long texts is slower.
 isScalarChar c
   | c < ' ' = False
   | c <= '~' = True
