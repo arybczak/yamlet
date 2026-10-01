@@ -304,8 +304,7 @@ data Commented a = Commented
 -- A value that no node gives, e.g. a value of 'Yamlet.Generic.yamlDefault',
 -- has 'noOffset'. Its error has no position, and 'Yamlet.Error.prettyError'
 -- prints only the file and the message. A value inside an alias has the
--- offset of the node with the anchor, because each alias is a copy of that
--- node.
+-- offset of the alias, i.e. of the place where the document uses the value.
 --
 -- Two equal values at different places are not equal as t'Located' values,
 -- e.g. a set keeps both. The equality and the order compare the values first

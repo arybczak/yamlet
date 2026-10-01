@@ -166,8 +166,8 @@ failure off msg = Result (OneError off msg []) failed
 
 -- | The errors in the order of their offsets, each with its notes after it.
 -- Errors at the same offset keep their order. An error comes only once: the
--- nodes of an alias are the nodes of its anchor, so an error in them repeats
--- for each alias.
+-- nodes inside an alias have the offset of the alias, so the same error in
+-- several of them repeats at that offset.
 sortedErrors :: Errors -> [(S.Offset, String)]
 sortedErrors = concatMap (\(off, msg, notes) -> (off, msg) : notes) . nubOrd . L.sortOn (\(off, _, _) -> off) . flip go []
   where

@@ -521,8 +521,15 @@ test_aliases = do
     (decodeText @(M.Map T.Text Int, Int) "- &a {x: &a 1}\n- *a\n")
   assertEqual
     "error inside an alias"
-    [(1, 11, "expected an integer, but got a string")]
+    [(1, 11, "expected an integer, but got a string"), (2, 4, "expected an integer, but got a string"), (3, 4, "expected an integer, but got a string")]
     (errorsOf (decodeText @(M.Map T.Text [Int]) "a: &x [1, x]\nb: *x\nc: *x\n"))
+  assertEqual
+    "path of an error inside an alias"
+    (Left [(2, 3, [Index 1])])
+    ( first
+        (map (\err -> (err.location.line, err.location.column, err.path)) . NE.toList)
+        (decodeText @([T.Text], [Int]) "- &x [a, b]\n- *x\n")
+    )
 
 -- | The time to parse nested flow sequences is linear in the depth.
 test_nesting :: Assertion

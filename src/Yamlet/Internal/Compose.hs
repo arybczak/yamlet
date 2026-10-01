@@ -216,18 +216,18 @@ check sn =
 
 -- | Replace each alias with a copy of the node that it refers to. The copy
 -- has the offsets and the comments of the alias, and no anchor. The nodes
--- inside the copy have no comments, because the comments are at the anchor
--- already. The node must pass 'represent', so every alias refers to an
--- earlier anchor.
+-- inside the copy have the offsets of the alias too, so that an error inside
+-- the copy names the place and the path where the document uses the value,
+-- and not those of the anchor. They have no comments, because the comments
+-- are at the anchor already. The node must pass 'represent', so every alias
+-- refers to an earlier anchor.
 expandAliases :: S.Node -> S.Node
 expandAliases = fst . go M.empty
   where
-    -- An anchor maps to its tag and to its content without comments, which
-    -- its aliases share.
     go :: M.Map T.Text (S.Tag, S.Content) -> S.Node -> (S.Node, M.Map T.Text (S.Tag, S.Content))
     go anchors sn = case sn.content of
       S.AliasContent name -> case M.lookup name anchors of
-        Just (tag, content) -> (S.Node sn.offset sn.endOffset (S.Props Nothing tag) sn.comments content, anchors)
+        Just (tag, content) -> (S.Node sn.offset sn.endOffset (S.Props Nothing tag) sn.comments (copyAt sn content), anchors)
         Nothing -> (sn, anchors)
       S.ScalarContent {} -> define sn anchors
       S.SequenceContent style xs ->
@@ -253,17 +253,18 @@ expandAliases = fst . go M.empty
 
     define :: S.Node -> M.Map T.Text (S.Tag, S.Content) -> (S.Node, M.Map T.Text (S.Tag, S.Content))
     define sn anchors = case sn.props.anchor of
-      Just a -> (sn, M.insert a (sn.props.tag, withoutComments sn.content) anchors)
+      Just a -> (sn, M.insert a (sn.props.tag, sn.content) anchors)
       Nothing -> (sn, anchors)
 
-    withoutComments :: S.Content -> S.Content
-    withoutComments = \case
+    -- The content at the alias.
+    copyAt :: S.Node -> S.Content -> S.Content
+    copyAt alias = \case
       S.SequenceContent style xs -> S.SequenceContent style (map node xs)
       S.MappingContent style kvs -> S.MappingContent style [(node k, node v) | (k, v) <- kvs]
       c -> c
       where
         node :: S.Node -> S.Node
-        node n = S.Node n.offset n.endOffset n.props S.noComments (withoutComments n.content)
+        node n = S.Node alias.offset alias.endOffset n.props S.noComments (copyAt alias n.content)
 
     goList :: M.Map T.Text (S.Tag, S.Content) -> [S.Node] -> ([S.Node], M.Map T.Text (S.Tag, S.Content))
     goList anchors = \case
