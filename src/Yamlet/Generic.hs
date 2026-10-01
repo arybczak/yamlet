@@ -1137,8 +1137,8 @@ fromObject opts flat keys def o
     checked :: [T.Text] -> Parser (f p) -> Parser (f p)
     checked fields = (when opts.rejectUnknownFields (rejectUnknownKeys (keys ++ fields) o) *>)
 
-    -- The field decodes from the mapping without the given keys. The first
-    -- key already has the lines above the mapping.
+    -- The field decodes from the mapping without the given keys, and without
+    -- the comments of the mapping, which the record drops.
     merged :: Parser (f p)
     merged =
       let n = objectNode o

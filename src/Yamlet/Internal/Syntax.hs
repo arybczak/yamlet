@@ -191,15 +191,39 @@ noComments = Comments [] Nothing []
 -- * 'after': the lines after the value, e.g. after the last entry of a
 --   collection.
 --
--- The parser can give these comments to the key or to the value. The decoder
--- takes them from both and decodes the value without them. The lines above
--- the first entry of a block collection value stay inside the value.
+-- A t'Commented' value of a mapping entry has the comments of the entry. A
+-- block list or mapping under the key has its own comments: the lines below
+-- the key up to the last empty line above its first entry. A t'Commented'
+-- value inside the first one keeps them, so a type that keeps both nests two
+-- t'Commented' values:
+--
+-- >>> input = "# The CI jobs.\njobs:\n  # Run on every push.\n\n  # Check the formatting.\n  - lint\n"
+--
+-- >>> T.putStr input
+-- # The CI jobs.
+-- jobs:
+--   # Run on every push.
+-- <BLANKLINE>
+--   # Check the formatting.
+--   - lint
+--
+-- >>> Right entries = decodeText @(M.Map T.Text (Commented (Commented [Commented T.Text]))) input
+-- >>> Just jobs = M.lookup "jobs" entries
+--
+-- >>> jobs.comments
+-- Comments {before = [Comment "The CI jobs."], inline = Nothing, after = []}
+--
+-- >>> jobs.value.comments
+-- Comments {before = [Comment "Run on every push.",EmptyLine], inline = Nothing, after = []}
+--
+-- >>> map (.comments) jobs.value.value
+-- [Comments {before = [Comment "Check the formatting."], inline = Nothing, after = []}]
 --
 -- A value without a key, e.g. an item of a list, has the comments of its
--- node. The decoder gives the lines above a list or a mapping to its first
--- item or key, so a list of t'Commented' values keeps a comment above its
--- first item. The comment on the first line of the list or the mapping, e.g.
--- after its tag, becomes one of these lines.
+-- node. The comments of a list or a mapping stay with it, not with its first
+-- item or key: the lines up to the last empty line above its first entry, and
+-- the comment on its first line, e.g. after its tag. A t'Commented' value of
+-- the whole list or mapping keeps them.
 --
 -- By the rules in [Comments]("Yamlet.Syntax#comments"), some lines read
 -- back with a change:
@@ -216,7 +240,9 @@ noComments = Comments [] Nothing []
 -- Haskell field, e.g. the tag of a constructor, has no such type, so its
 -- comments are lost. A comment at the end of a nested mapping survives only
 -- if the field that holds the mapping is t'Commented', because a record has
--- no place for the end of its mapping.
+-- no place for the end of its mapping. A record also has no place for the
+-- comments of its mapping above its first key, so they are lost, e.g. a
+-- comment at the top of a file above an empty line.
 --
 -- The comments of the key are lost for a type such as
 -- @data Name = Name (Commented Text)@ that derives its instances through

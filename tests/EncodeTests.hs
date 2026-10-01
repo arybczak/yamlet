@@ -431,14 +431,30 @@ test_keptNodes = do
     "comments inside an alias"
     (Right "a: &x\n  k: v # c1\nb: # c2\n  k: v\n")
     (encodeText <$> decodeText @Node "a: &x\n  k: v # c1\nb: *x # c2\n")
+  -- The comment belongs to the mapping, and a map has no place for it.
   assertEqual
     "comment after the tag of a mapping"
-    (Right "# c1\na: 1\n")
+    (Right "a: 1\n")
     (encodeText <$> decodeText @(M.Map T.Text (Commented Node)) "!!map # c1\na: 1\n")
   assertEqual
+    "lines above the first key of a mapping"
+    (Right (M.fromList [("b" :: T.Text, [Comment "c2"])]))
+    (M.map (.comments.before) <$> decodeText @(M.Map T.Text (Commented Int)) "# c1\n\n# c2\nb: 1\n")
+  assertEqual
     "comment after the tag of a list"
-    (Right "# c1\n- 1\n")
+    (Right "- 1\n")
     (encodeText <$> decodeText @[Commented Node] "!!seq # c1\n- 1\n")
+  let valueLines = "# c1\nk:\n  # c2\n\n  # c3\n  - 1\n"
+  assertEqual
+    "lines above the first item of a value"
+    (Right "# c1\nk:\n# c2\n\n# c3\n- 1\n")
+    (encodeText <$> decodeText @(M.Map T.Text (Commented (Commented [Commented Int]))) valueLines)
+  -- The lines belong to the list, and the comments of the entry have no place
+  -- for them.
+  assertEqual
+    "lines above the first item of a value without a commented list"
+    (Right "# c1\nk:\n# c3\n- 1\n")
+    (encodeText <$> decodeText @(M.Map T.Text (Commented [Commented Int])) valueLines)
   let commentedRoot = "# c1\n1 # c2\n# c3\n"
   assertEqual "commented scalar root" (Right commentedRoot) (encodeText <$> decodeText @(Commented Int) commentedRoot)
   let linesAfter = M.fromList [("a" :: T.Text, Commented (1 :: Int) noComments {after = [Comment "c"]}), ("b", Commented 2 noComments)]

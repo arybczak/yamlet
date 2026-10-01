@@ -317,8 +317,8 @@ data Lint = Lint {version :: Commented T.Text, level :: T.Text}
   deriving anyclass (GenericYamlOptions)
   deriving (FromYaml, ToYaml) via GenericYaml Lint
 
--- | The comment at the top and the comment above a first key belong to the
--- mapping in the syntax tree, but the decoder gives them to the first key.
+-- | A comment above a key with no empty line below it belongs to the key, also
+-- for the first key of a mapping.
 test_commentedFields :: Assertion
 test_commentedFields =
   assertEqual "round trip" (Right input) (encodeText <$> decodeText @Pipeline input)
@@ -366,7 +366,9 @@ data Note = Note (Commented T.Text) | Blank
 -- | The comments at the end of a collection and after a value.
 test_commentedValues :: Assertion
 test_commentedValues = do
-  assertEqual "round trip" (Right input) (encodeText <$> decodeText @Setup input)
+  -- The comment at the top belongs to the root mapping, and a record has no
+  -- place for it.
+  assertEqual "round trip" (Right (T.unlines (drop 2 (T.lines input)))) (encodeText <$> decodeText @Setup input)
   let optional = T.unlines ["first: a", "# The extra part.", "extra: # optional", "  x: 1"]
   assertEqual "optional field" (Right optional) (encodeText <$> decodeText @Optional optional)
   let note = T.unlines ["tag: Note", "# The text.", "contents: hello # c"]

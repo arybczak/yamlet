@@ -422,34 +422,12 @@ stringMismatch n = mismatchMessage "a string" n ++ hint
 ----------------------------------------
 -- Collections
 
--- | The items of a sequence. As for 'withMapping', the lines above the
--- sequence go to its first item.
+-- | The items of a sequence. As for 'withMapping', the comments of the
+-- sequence stay with it, not with its first item.
 withSequence :: ([S.Node] -> Parser a) -> S.Node -> Parser a
 withSequence f = parseNode $ \n -> case n.content of
-  S.SequenceContent _ xs -> f (items n xs)
+  S.SequenceContent _ xs -> f xs
   _ -> typeMismatch "a list" n
-
--- | The items of a sequence, with the lines above the sequence moved to its
--- first item.
-items :: S.Node -> [S.Node] -> [S.Node]
-items n = \case
-  x : xs | ls@(_ : _) <- linesAbove n -> withLinesAbove ls x : xs
-  xs -> xs
--- If GHC inlines this function into 'withSequence', 'withSequence' becomes
--- too large to inline. A derived decoder then keeps the code after its type
--- error, and the inspection test of the derived decoder of a sum type fails.
-{-# NOINLINE items #-}
-
--- | The lines above a collection, and the comment on its first line as a line
--- too, e.g. after its tag. They go above its first item or key.
-linesAbove :: S.Node -> [S.Line]
-linesAbove n = n.comments.before ++ [S.Comment c | Just c <- [n.comments.inline]]
-
--- | The node with the lines above it after the given ones.
-withLinesAbove :: [S.Line] -> S.Node -> S.Node
-withLinesAbove ls n =
-  let c = n.comments
-  in S.Node n.offset n.endOffset n.props c {S.before = ls ++ c.before} n.content
 
 -- | The node without its comments.
 withoutComments :: S.Node -> S.Node
@@ -459,15 +437,13 @@ withoutComments n = S.Node n.offset n.endOffset n.props S.noComments n.content
 -- not matter, so two string keys with the same text are an error, e.g. @a@
 -- and @!foo a@.
 --
--- The lines above the mapping go to its first key. The comment on the first
--- line of the mapping, e.g. after its tag, goes there too as a line.
---
--- The parser gives a mapping the lines up to the last empty line above its
--- first key, e.g. a comment at the top of a file. A record has no place for
--- these lines, but 'Yamlet.Commented' on its first field keeps them.
+-- The comments of the mapping stay with it, not with its first key. The parser
+-- gives a mapping the lines up to the last empty line above its first key,
+-- e.g. a comment at the top of a file, and the comment on its first line, e.g.
+-- after its tag. A record has no place for them.
 withMapping :: (Object -> Parser a) -> S.Node -> Parser a
 withMapping f = parseNode $ \n -> case n.content of
-  S.MappingContent _ kvs -> case mkObject n (keyEntries n kvs) of
+  S.MappingContent _ kvs -> case mkObject n kvs of
     (NoErrors, o) -> f o
     -- The errors of the fields come with the duplicate keys, and a field
     -- reads the value of the first key.
@@ -476,13 +452,6 @@ withMapping f = parseNode $ \n -> case n.content of
       in Parser $ \off -> case g off of
            Result e _ -> Result (bothErrors errs e) failed
   _ -> typeMismatch "a mapping" n
-
--- | The entries of a mapping, with the lines above the mapping moved to its
--- first key. The renderer writes both at the same place.
-keyEntries :: S.Node -> [(S.Node, S.Node)] -> [(S.Node, S.Node)]
-keyEntries n = \case
-  (k, v) : rest | ls@(_ : _) <- linesAbove n -> (withLinesAbove ls k, v) : rest
-  kvs -> kvs
 
 -- | A mapping with fast access to the values of string keys.
 data Object = Object
@@ -1126,14 +1095,14 @@ instance (Ord k, FromYaml k, FromYaml v) => FromYaml (M.Map k v) where
   -- The index of 'withMapping' would be of no use here.
   parseYaml = parseNode $ \n -> case n.content of
     S.MappingContent _ kvs ->
-      insertUnique fst mapEntry fst (\(k, v) -> M.alterF (\old -> (isJust old, old <|> Just v)) k) M.empty "duplicate key after conversion" "the first key" (keyEntries n kvs)
+      insertUnique fst mapEntry fst (\(k, v) -> M.alterF (\old -> (isJust old, old <|> Just v)) k) M.empty "duplicate key after conversion" "the first key" kvs
     _ -> typeMismatch "a mapping" n
 
 -- | Two keys that convert to the same key are an error.
 instance FromYaml v => FromYaml (IM.IntMap v) where
   parseYaml = parseNode $ \n -> case n.content of
     S.MappingContent _ kvs ->
-      insertUnique fst mapEntry fst (\(k, v) -> IM.alterF (\old -> (isJust old, old <|> Just v)) k) IM.empty "duplicate key after conversion" "the first key" (keyEntries n kvs)
+      insertUnique fst mapEntry fst (\(k, v) -> IM.alterF (\old -> (isJust old, old <|> Just v)) k) IM.empty "duplicate key after conversion" "the first key" kvs
     _ -> typeMismatch "a mapping" n
 
 -- | A list. Two elements that convert to the same value, e.g. @1@ and @1.0@
