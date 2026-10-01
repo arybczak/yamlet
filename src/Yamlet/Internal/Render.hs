@@ -235,7 +235,7 @@ document opts afterEnd doc =
         _ -> acc
 
     -- The parser rejects the other versions.
-    version :: Maybe Version
+    version :: Maybe YamlVersion
     version = case doc.version of
       Just v | v.major == 1, v.minor >= 0, v.minor <= maxVersion -> Just v
       _ -> Nothing

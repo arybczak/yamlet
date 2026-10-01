@@ -324,7 +324,7 @@ lYamlStream markers0 = do
         | afterEnd -> bareDocument markers prefix
         | otherwise -> throwAt p "expected a document start marker (---)"
 
-    document :: [Int] -> Maybe Version -> M.Map T.Text T.Text -> Int -> P [Document]
+    document :: [Int] -> Maybe YamlVersion -> M.Map T.Text T.Text -> Int -> P [Document]
     document markers version hs prefix = do
       m <- pos
       advance markerLength
@@ -355,7 +355,7 @@ lYamlStream markers0 = do
       [] -> (e.end, [])
 
     finishDocument
-      :: [Int] -> Maybe Version -> Int -> Maybe Int -> Int -> Node -> P [Document]
+      :: [Int] -> Maybe YamlVersion -> Int -> Maybe Int -> Int -> Node -> P [Document]
     finishDocument markers version prefix marker limit root = do
       withEnd limit $ many_ lComment
       e <- env
@@ -416,14 +416,14 @@ lDocumentSuffix = do
   sBComment <|> throwAt p "unexpected content after the document end marker (...)"
 
 -- | l-directive, repeated, with the version and the tag handles they define.
-directives :: P (Maybe Version, M.Map T.Text T.Text)
+directives :: P (Maybe YamlVersion, M.Map T.Text T.Text)
 directives = go Nothing defaultHandles Set.empty
   where
     go
-      :: Maybe Version
+      :: Maybe YamlVersion
       -> M.Map T.Text T.Text
       -> Set.Set T.Text
-      -> P (Maybe Version, M.Map T.Text T.Text)
+      -> P (Maybe YamlVersion, M.Map T.Text T.Text)
     go version hs defined = do
       w <- peek
       if w /= PERCENT
@@ -474,7 +474,7 @@ directives = go Nothing defaultHandles Set.empty
       q <- pos
       guardP (q > p)
 
-    yamlVersion :: Int -> P Version
+    yamlVersion :: Int -> P YamlVersion
     yamlVersion p = do
       w <- peek
       unless (isWhite w) $ throwAfter badVersion
@@ -488,7 +488,7 @@ directives = go Nothing defaultHandles Set.empty
       when (major /= 1)
         $ throwAt p
         $ "unsupported YAML version " ++ show major ++ "." ++ show minor
-      pure $ Version major minor
+      pure $ YamlVersion major minor
       where
         badVersion :: String
         badVersion = "expected a version such as 1.2 after %YAML"

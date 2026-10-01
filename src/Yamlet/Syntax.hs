@@ -42,7 +42,7 @@ module Yamlet.Syntax
 
     -- * Documents
   , Document (..)
-  , Version (..)
+  , YamlVersion (..)
   , document
 
     -- * Nodes

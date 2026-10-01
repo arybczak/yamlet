@@ -390,7 +390,7 @@ test_documents = do
   assertEqual
     "comment above a document with directives"
     "a\n...\n\n# c\n%YAML 1.2\n---\nb\n"
-    (renderSyntax defaultRenderOptions [document (plainNode "a"), commented (document (plainNode "b")) {version = Just (Version 1 2)}])
+    (renderSyntax defaultRenderOptions [document (plainNode "a"), commented (document (plainNode "b")) {version = Just (YamlVersion 1 2)}])
   let rootWithGap :: Bool -> Document
       rootWithGap end =
         (document (contentNode (SequenceContent Block [plainNode "a"])) {comments = noComments {after = [Comment "c", EmptyLine]}})
@@ -401,12 +401,12 @@ test_documents = do
     "empty line at the end of a block root before a document"
     "- a\n# c\n\n---\nb\n"
     (renderSyntax defaultRenderOptions [rootWithGap False, document (plainNode "b")])
-  let versioned :: Version -> T.Text
+  let versioned :: YamlVersion -> T.Text
       versioned v = renderSyntax defaultRenderOptions [(document (plainNode "a")) {version = Just v}]
-  assertEqual "supported version" "%YAML 1.3\n---\na\n" (versioned (Version 1 3))
-  assertEqual "unsupported version" "a\n" (versioned (Version 2 0))
-  assertEqual "negative minor version" "a\n" (versioned (Version 1 (-1)))
-  assertEqual "minor version beyond the limit" "a\n" (versioned (Version 1 1000001))
+  assertEqual "supported version" "%YAML 1.3\n---\na\n" (versioned (YamlVersion 1 3))
+  assertEqual "unsupported version" "a\n" (versioned (YamlVersion 2 0))
+  assertEqual "negative minor version" "a\n" (versioned (YamlVersion 1 (-1)))
+  assertEqual "minor version beyond the limit" "a\n" (versioned (YamlVersion 1 1000001))
   -- Without the marker, the next parse would give the comment to the root.
   let first :: String -> T.Text -> Node -> Assertion
       first preface expected root = do

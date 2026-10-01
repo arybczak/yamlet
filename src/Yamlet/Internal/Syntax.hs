@@ -8,7 +8,7 @@
 module Yamlet.Internal.Syntax
   ( -- * Documents
     Document (..)
-  , Version (..)
+  , YamlVersion (..)
 
     -- * Nodes
   , Node (..)
@@ -42,7 +42,7 @@ import GHC.Generics
 
 -- | A document of a YAML stream.
 data Document = Document
-  { version :: !(Maybe Version)
+  { version :: !(Maybe YamlVersion)
   -- ^ The version from the @%YAML@ directive.
   , explicitStart :: !Bool
   -- ^ The document starts with a @---@ marker.
@@ -58,7 +58,7 @@ data Document = Document
   deriving anyclass (NFData)
 
 -- | The version of YAML that a document declares.
-data Version = Version
+data YamlVersion = YamlVersion
   { major :: !Int
   , minor :: !Int
   }

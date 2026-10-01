@@ -960,11 +960,11 @@ test_syntaxErrors = do
   check "minor version beyond Int" (1, 1, "unsupported YAML version") ("%YAML 1." <> T.replicate 100000 "9" <> "\n--- a\n")
   assertEqual
     "minor version at the limit"
-    (Right [Just (S.Version 1 1000000)])
+    (Right [Just (S.YamlVersion 1 1000000)])
     (map (.version) <$> S.parseDocumentsText "%YAML 1.1000000\n--- a\n")
   assertEqual
     "version with leading zeros"
-    (Right [Just (S.Version 1 2)])
+    (Right [Just (S.YamlVersion 1 2)])
     (map (.version) <$> S.parseDocumentsText "%YAML 001.0002\n--- a\n")
   check "verbatim tag without a name" (1, 1, "invalid verbatim tag") "!<!> a\n"
   check "verbatim tag without a scheme" (1, 1, "invalid verbatim tag") "!<$:?> a\n"
