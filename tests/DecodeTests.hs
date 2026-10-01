@@ -59,6 +59,8 @@ decodeTests =
     , localOption (mkTimeout 10000000) $ testCase "alias keys" test_aliasKeys
     , localOption (mkTimeout 10000000) $ testCase "alias limit" test_aliasLimit
     , localOption (mkTimeout 10000000) $ testCase "long numbers" test_longNumbers
+    , -- 0.2 s with the check of the lengths, 8 s without it.
+      localOption (mkTimeout 2000000) $ testCase "long unknown names" test_longUnknownNames
     , testCase "optional keys" test_optionalKeys
     , testCase "located values" test_located
     , testCase "syntax tree" test_syntaxTree
@@ -1415,6 +1417,20 @@ test_longNumbers = do
     "float with a long integer part"
     (Right (Float (Finite (Sci.scientific (10 ^ (1000000 :: Int) - 1) (-999000)))))
     (decodeText @Value (nines 1000 <> "." <> nines 999000))
+
+-- | The search for a close known name does not compute the distance of a
+-- long unknown name to each known name.
+test_longUnknownNames :: Assertion
+test_longUnknownNames = do
+  let name = T.replicate 1000000 "a"
+  assertEqual
+    "value"
+    (Just (1, 1, "unknown value " ++ show name ++ ", expected one of: small, large, 10"))
+    (errorOf (decodeText @Size name))
+  assertEqual
+    "key"
+    (Just (2, 3, "unknown key " ++ show name ++ ", expected one of: name, paths, jobs"))
+    (errorOf (decodeText @Config ("name: x\n? " <> name <> "\n: 1\n")))
 
 -- | The time of the check for duplicate keys is not quadratic in the number
 -- of keys.

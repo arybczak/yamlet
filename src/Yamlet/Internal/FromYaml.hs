@@ -753,18 +753,19 @@ expectedOneOf known = ", expected one of: " ++ L.intercalate ", " (map T.unpack 
 
 -- | The known name that is close to the name, e.g. "host" for "hots".
 closeName :: [T.Text] -> T.Text -> Maybe T.Text
-closeName known t = suggestion (T.unpack t)
+closeName known t =
+  case L.sortOn fst [(d, s) | s <- known, abs (T.length s - n) <= maxEdits, let d = distance (T.unpack t) (T.unpack s), d <= maxEdits, d < n] of
+    (_, s) : _ -> Just s
+    [] -> Nothing
   where
-    suggestion :: String -> Maybe T.Text
-    suggestion u =
-      case L.sortOn fst [(d, s) | s <- known, let d = distance u (T.unpack s), d <= maxEdits, d < length u] of
-        (_, s) : _ -> Just s
-        [] -> Nothing
-      where
-        -- A swap of two adjacent characters, e.g. "hots" for "host", takes
-        -- two edits.
-        maxEdits :: Int
-        maxEdits = 2
+    n :: Int
+    n = T.length t
+
+    -- A swap of two adjacent characters, e.g. "hots" for "host", takes two
+    -- edits. The distance is at least the difference of the lengths, so a
+    -- long input from an attacker needs no table of distances.
+    maxEdits :: Int
+    maxEdits = 2
 
     -- The Levenshtein distance: the number of characters to insert, delete
     -- or change. After i characters of xs, the row holds the distance from
