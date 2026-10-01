@@ -91,13 +91,12 @@ library limits both:
   units. For a document with more than 100000 units, they can add as many
   units as the document has. A document beyond the limit is an error.
 - A program that converts `1e999999999` to an integer gets a billion digits.
-  To prevent this, the decoder looks at two exponents of a float: the
-  exponent in its text, and the exponent of its first digit that is not
-  zero. If both are outside the range from -1000 to 1000, the float is an
-  error. Thus the value of a float has at most 1000 digits more than its
-  text. The instances for `Fixed` and the
-  durations apply a similar limit with `withBoundedScientific`. Use it in
-  your own instances for exact types too.
+  To prevent this, a float whose exponent in scientific notation is outside
+  the range from -1000 to 1000 is an error, e.g. `1e1001` or `10e1000`.
+  Thus a float converts to an integer of at most 1001 digits. The limit
+  covers every `Double`, and every float that the decoder accepts reads back
+  after the encoder writes it. The limit also applies to a document that a
+  program built.
 
 The library also applies these rules:
 

@@ -23,7 +23,6 @@ module Yamlet.Decode
   , withInt
   , withFloat
   , withScientific
-  , withBoundedScientific
   , withText
   , oneOf
 

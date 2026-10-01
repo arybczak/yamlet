@@ -231,8 +231,8 @@ single = first (NE.:| [])
 -- * an undefined alias,
 -- * aliases beyond the limit in "Yamlet.Value",
 -- * a value that is not valid for its tag,
--- * a float whose exponent and value are both beyond the range from -1000 to
---   1000 in scientific notation.
+-- * a float whose exponent in scientific notation is beyond the range from
+--   -1000 to 1000.
 --
 -- The text is the input of the document. An error takes its line from the
 -- text. For a document that the program built, the text can be empty. The

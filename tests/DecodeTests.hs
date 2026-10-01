@@ -206,7 +206,7 @@ test_exactFloats = do
     "float without double rounding"
     (Right (1 + 2 ^^ (-23 :: Int)))
     (decodeText @Float "1.000000059604644776257986737988403547205962240695953369140625")
-  forM_ ["1e1001", "10e1001", "0.1e-1001", "1e99999999999999999999", "11e9223372036854775807"] $ \number ->
+  forM_ ["1e1001", "10e1000", "0.1e-1000", "1" <> T.replicate 1001 "0" <> ".0", "1e99999999999999999999", "11e9223372036854775807"] $ \number ->
     assertEqual
       ("exponent beyond the limit in " ++ show number)
       (Just (1, 2, "the exponent of the number is out of the range from -1000 to 1000, quote the value if it is a string, e.g. '" ++ T.unpack number ++ "'"))
@@ -220,17 +220,9 @@ test_exactFloats = do
     (Just (1, 9, "the exponent of the number is out of the range from -1000 to 1000"))
     (errorOf (decodeText @Double "!!float 1e-99999999999999999999"))
   assertEqual
-    "exponent within the limit, value beyond it"
-    (Right [Sci.scientific 1 1001, Sci.scientific 1 (-1001)])
-    (decodeText @[Sci.Scientific] "[10e1000, 0.1e-1000]")
-  assertEqual
-    "exponent beyond the limit, value within it"
+    "exponent beyond the limit in the text, value within it"
     (Right (Sci.scientific 1 997))
     (decodeText @Sci.Scientific "0.0001e1001")
-  assertEqual
-    "written digits beyond the limit"
-    (Right [Sci.scientific 1 1001, Sci.scientific 1 1001])
-    (decodeText @[Sci.Scientific] ("[1" <> T.replicate 1001 "0" <> ".0, !!float 1" <> T.replicate 1001 "0" <> "]"))
   assertEqual
     "exponent beyond the limit in the schema"
     [Float Infinity, Float (Finite 0), Float (Finite 0)]
@@ -409,9 +401,9 @@ test_time = do
   assertEqual "tiny duration" (Right (0 :: DiffTime)) (decodeText "1e-1000")
   assertEqual "largest duration" (Right (10 ^ (1000 :: Int) :: NominalDiffTime)) (decodeText "1e1000")
   assertEqual
-    "huge duration"
-    (Just (1, 1, "the exponent of the number is out of the range from -1000 to 1000"))
-    (errorOf (decodeText @NominalDiffTime ("1" <> T.replicate 1001 "0")))
+    "integer duration beyond the limit of floats"
+    (Right (10 ^ (1001 :: Int) :: NominalDiffTime))
+    (decodeText ("1" <> T.replicate 1001 "0"))
   forM_ [minBound, maxBound - 11, maxBound] $ \ex ->
     assertEqual
       ("duration with the exponent " ++ show ex)
@@ -1420,9 +1412,9 @@ test_longNumbers = do
     (Right big)
     (numerator <$> decodeText @Rational ("{numerator: " <> T.pack (show big) <> ", denominator: " <> T.pack (show (7 ^ (1200000 :: Int) :: Integer)) <> "}"))
   assertEqual
-    "long integer as a float"
-    (Right (Float (Finite (Sci.scientific (10 ^ (1000000 :: Int) - 1) (-1)))))
-    (decodeText @Value (nines 999999 <> ".9"))
+    "float with a long integer part"
+    (Right (Float (Finite (Sci.scientific (10 ^ (1000000 :: Int) - 1) (-999000)))))
+    (decodeText @Value (nines 1000 <> "." <> nines 999000))
 
 -- | The time of the check for duplicate keys is not quadratic in the number
 -- of keys.

@@ -24,7 +24,6 @@ module Yamlet.Internal.FromYaml
   , withInt
   , withFloat
   , withScientific
-  , withBoundedScientific
   , withText
   , withName
   , oneOf
@@ -88,7 +87,6 @@ import Data.UUID.Types qualified as UUID
 import Data.Void
 import Data.Word
 import GHC.Real
-import Math.NumberTheory.Logarithms
 import Numeric.Natural
 
 import Yamlet.Internal.Compose
@@ -338,9 +336,10 @@ withFloat f = parseNode $ \n -> case view n of
 -- | The exact value of a finite number. An integer counts too, and negative
 -- zero becomes 0.
 --
--- For a conversion to an exact type, e.g. with 'truncate', use
--- 'withBoundedScientific', because a node that a program built can have any
--- exponent.
+-- A conversion to an exact type, e.g. with 'truncate', is safe for untrusted
+-- input. An integer has the digits of its text, and the decoder rejects a
+-- float whose exponent in scientific notation is beyond the range from -1000
+-- to 1000, also in a node that a program built.
 withScientific :: (Sci.Scientific -> Parser a) -> S.Node -> Parser a
 withScientific f = parseNode $ \n -> case view n of
   FloatView (Finite s) -> f s
@@ -348,21 +347,6 @@ withScientific f = parseNode $ \n -> case view n of
   IntView i -> f (Sci.scientific i 0)
   FloatView _ -> fail "expected a finite number"
   _ -> typeMismatch "a number" n
-
--- | Like 'withScientific', but the exponent of the first digit must be in
--- the range from -1000 to 1000. Then a conversion to an exact integer, e.g.
--- with 'truncate', computes at most about 1000 more digits than the
--- coefficient has. The decoder applies a similar limit to floats, so the
--- check matters mostly for a node that a program built.
-withBoundedScientific :: (Sci.Scientific -> Parser a) -> S.Node -> Parser a
-withBoundedScientific f = withScientific $ \s ->
-  let c = Sci.coefficient s
-  in if
-       -- The exponent of a zero also makes 'truncate' compute its power of 10.
-       | c == 0 -> f 0
-       | abs (toInteger (Sci.base10Exponent s) + toInteger (integerLog10 (abs c))) > maxExponent ->
-           fail exponentOutOfRange
-       | otherwise -> f s
 
 -- | The text of a string. The text is a copy, so it does not keep the input
 -- alive. For a plain scalar that YAML reads as a number or a boolean, e.g.
@@ -1022,11 +1006,11 @@ instance FromYaml UTCTime where
 
 -- | A number of seconds, rounded down to a picosecond.
 instance FromYaml NominalDiffTime where
-  parseYaml = withBoundedScientific $ pure . secondsToNominalDiffTime . MkFixed . picoseconds
+  parseYaml = withScientific $ pure . secondsToNominalDiffTime . MkFixed . picoseconds
 
 -- | A number of seconds, rounded down to a picosecond.
 instance FromYaml DiffTime where
-  parseYaml = withBoundedScientific $ pure . picosecondsToDiffTime . picoseconds
+  parseYaml = withScientific $ pure . picosecondsToDiffTime . picoseconds
 
 -- | The text form with hyphens, e.g. @123e4567-e89b-12d3-a456-426614174000@.
 instance FromYaml UUID.UUID where
@@ -1251,7 +1235,7 @@ instance (Integral a, FromYaml a) => FromYaml (Ratio a) where
 -- the step have no decimal form, so they cannot come from YAML. For such a
 -- resolution, use 'Rational' instead.
 instance HasResolution a => FromYaml (Fixed a) where
-  parseYaml = withBoundedScientific $ \s ->
+  parseYaml = withScientific $ \s ->
     let scaled = s * fromInteger res
     in if Sci.isInteger scaled
          then pure (MkFixed (truncate scaled))
