@@ -25,6 +25,7 @@ module Yamlet.Decode
   , withScientific
   , withBoundedScientific
   , withText
+  , oneOf
 
     -- * Collections
   , withSequence

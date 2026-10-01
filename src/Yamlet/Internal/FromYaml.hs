@@ -27,6 +27,7 @@ module Yamlet.Internal.FromYaml
   , withBoundedScientific
   , withText
   , withName
+  , oneOf
 
     -- * Collections
   , withSequence
@@ -379,6 +380,35 @@ withName names f = parseNode $ \n -> case (view n, n.content) of
   (StringView t, _) -> f t
   (_, S.Scalar S.Plain t) | S.NoTag <- n.props.tag, t `elem` names -> failAt n (stringMismatch n)
   _ -> typeMismatch ("one of: " ++ L.intercalate ", " (map T.unpack names)) n
+
+-- | The value that goes with the string in the list of pairs, e.g. for names
+-- that the program knows only at run time. An empty list rejects every value.
+-- The errors are the same as for the constructors of an enumeration. An
+-- unknown name gets the closest name or the list of names:
+--
+-- >>> :{
+-- newtype Size = Size Int
+--   deriving stock (Show)
+-- instance FromYaml Size where
+--   parseYaml = oneOf [("small", Size 1), ("large", Size 2)]
+-- :}
+--
+-- >>> decodeText @Size "large"
+-- Right (Size 2)
+--
+-- >>> either printErrors print (decodeText @Size "lage")
+-- input.yaml:1:1: unknown value "lage", did you mean "large"?
+--   |
+-- 1 | lage
+--   | ^
+oneOf :: [(T.Text, a)] -> S.Node -> Parser a
+oneOf choices n = withName names (\t -> maybe (unknown t) pure (lookup t choices)) n
+  where
+    names :: [T.Text]
+    names = map fst choices
+
+    unknown :: T.Text -> Parser a
+    unknown t = failAt n $ "unknown value " ++ show t ++ alternatives names t
 
 -- | The message for a node that is not a string, with the hint to quote a
 -- plain number, boolean or written null.

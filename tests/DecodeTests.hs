@@ -992,6 +992,12 @@ newtype IntOrText = IntOrText (Either Integer T.Text)
 instance FromYaml IntOrText where
   parseYaml n = IntOrText <$> ((Left <$> withInt pure n) `orElse` (Right <$> withText pure n))
 
+newtype Size = Size Int
+  deriving stock (Eq, Show)
+
+instance FromYaml Size where
+  parseYaml = oneOf [("small", Size 1), ("large", Size 2), ("10", Size 10)]
+
 -- | A resolution of 1/40, which needs three places after the point.
 data Fortieths
 
@@ -1012,6 +1018,23 @@ test_typeErrors = do
     "error of the second alternative"
     (Just (1, 1, "expected a string, but got a boolean, quote the value, e.g. 'true'"))
     (errorOf (decodeText @IntOrText "true"))
+  assertEqual "known name" (Right (Size 2)) (decodeText "large")
+  assertEqual
+    "close name"
+    (Just (1, 1, "unknown value \"lage\", did you mean \"large\"?"))
+    (errorOf (decodeText @Size "lage"))
+  assertEqual
+    "other name"
+    (Just (1, 1, "unknown value \"medium\", expected one of: small, large, 10"))
+    (errorOf (decodeText @Size "medium"))
+  assertEqual
+    "plain name that is not a string"
+    (Just (1, 1, "expected a string, but got an integer, quote the value, e.g. '10'"))
+    (errorOf (decodeText @Size "10"))
+  assertEqual
+    "collection"
+    (Just (1, 1, "expected one of: small, large, 10, but got a list"))
+    (errorOf (decodeText @Size "[small]"))
   assertEqual
     "pair"
     (Just (1, 1, "expected a list of 2 elements, but got 1"))
