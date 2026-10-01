@@ -162,7 +162,7 @@ test_fallbacks = do
   assertEqual "empty folded with a line below at the top level" "\"\"\n# c\n" (render (withLineBelow (scalarNode Folded "")))
   assertEqual
     "literal of only line breaks with a line below at the top level"
-    (Right [(Scalar DoubleQuoted "\n", [("", "after", "c")])])
+    (Right [(ScalarContent DoubleQuoted "\n", [("", "after", "c")])])
     ( map (\d -> (d.root.content, commentsOf d))
         <$> parseDocumentsText (render (withLineBelow (scalarNode Literal "\n")))
     )
@@ -176,13 +176,13 @@ test_fallbacks = do
   assertEqual
     "block scalar in a flow collection"
     "[\"a\\n\"]\n"
-    (render (contentNode (Sequence Flow [scalarNode Literal "a\n"])))
+    (render (contentNode (SequenceContent Flow [scalarNode Literal "a\n"])))
   assertEqual
     "empty item of a flow sequence"
     "[!!null, a]\n"
-    (render (contentNode (Sequence Flow [plainNode "", plainNode "a"])))
+    (render (contentNode (SequenceContent Flow [plainNode "", plainNode "a"])))
   assertEqual "empty key" "?\n: a\n" (render (mappingNode [(plainNode "", plainNode "a")]))
-  let emptyWithComment = (contentNode (Sequence Block [])) {comments = noComments {after = [Comment "c"]}}
+  let emptyWithComment = (contentNode (SequenceContent Block [])) {comments = noComments {after = [Comment "c"]}}
       commented = mappingNode [(plainNode "k", emptyWithComment)]
   assertEqual "comment in an empty collection" "k: [\n  # c\n  ]\n" (render commented)
   assertEqual
@@ -192,7 +192,7 @@ test_fallbacks = do
   let keyWithLineBelow :: Node -> Node
       keyWithLineBelow v = mappingNode [((plainNode "k") {comments = noComments {after = [Comment "c"]}}, v), (plainNode "l", plainNode "y")]
       flowSequence :: Node
-      flowSequence = contentNode (Sequence Flow [plainNode "a"])
+      flowSequence = contentNode (SequenceContent Flow [plainNode "a"])
   assertEqual "lines after a key with a flow value" "# c\nk: [a]\nl: y\n" (render (keyWithLineBelow flowSequence))
   assertEqual
     "lines after a key with a flow value read back"
@@ -201,7 +201,7 @@ test_fallbacks = do
   assertEqual
     "lines after a key with an empty flow value"
     "# c\nk: {}\nl: y\n"
-    (render (keyWithLineBelow (contentNode (Mapping Flow []))))
+    (render (keyWithLineBelow (contentNode (MappingContent Flow []))))
   assertEqual
     "comment in an empty key"
     "? [\n  # c\n  ]\n: v\n"
@@ -220,14 +220,14 @@ test_fallbacks = do
     "invalid anchor names"
     "[&a_b x, *a_b, &a_b_2 y, *a_b_2, &anchor z, *anchor]\n"
     ( render . contentNode $
-        Sequence
+        SequenceContent
           Flow
           [ anchored "a b" (plainNode "x")
-          , contentNode (Alias "a b")
+          , contentNode (AliasContent "a b")
           , anchored "a]b" (plainNode "y")
-          , contentNode (Alias "a]b")
+          , contentNode (AliasContent "a]b")
           , anchored "" (plainNode "z")
-          , contentNode (Alias "")
+          , contentNode (AliasContent "")
           ]
     )
   let tagged :: T.Text -> Node
@@ -244,14 +244,14 @@ test_fallbacks = do
     ["tag:x>y", "x%2", "foo", "#a b", "!a b", "tag:x%41", "tag:yaml.org,2002:a%", "\x100\&z"]
   assertEqual
     "directives after a document"
-    (Right [(NoTag, Scalar Plain "a"), (Tag "foo", Scalar Plain "x")])
+    (Right [(NoTag, ScalarContent Plain "a"), (Tag "foo", ScalarContent Plain "x")])
     ( map (\d -> (d.root.props.tag, d.root.content))
         <$> parseDocumentsText (renderSyntax defaultRenderOptions [document (plainNode "a"), document (tagged "foo")])
     )
   assertEqual
     "taken anchor name"
     "- &a_b x\n- &a_b_2 y\n- *a_b_2\n"
-    (render (sequenceNode [anchored "a_b" (plainNode "x"), anchored "a b" (plainNode "y"), contentNode (Alias "a b")]))
+    (render (sequenceNode [anchored "a_b" (plainNode "x"), anchored "a b" (plainNode "y"), contentNode (AliasContent "a b")]))
 
 -- | The new names of many invalid anchor names with one base take linear
 -- time, not quadratic.
@@ -330,7 +330,7 @@ test_scalarLines = do
         assertEqual
           (preface ++ ", read back")
           (Right [[(foldedNode ls).content]])
-          (map (\d -> [v.content | Mapping _ kvs <- [d.root.content], (_, v) <- kvs]) <$> parseDocumentsText out)
+          (map (\d -> [v.content | MappingContent _ kvs <- [d.root.content], (_, v) <- kvs]) <$> parseDocumentsText out)
   folded "folded node" ["one two", "three", "four"]
   folded "folded node with a space at a line start" ["one", " two", "three"]
   folded "folded node with a space at a line end" ["one ", "two"]
@@ -339,7 +339,7 @@ test_scalarLines = do
   folded "folded node with an indented example" ["Example:", "  GET /orders", "", "The end."]
   assertEqual
     "positions"
-    (Right [ScalarLines Plain "one two\nthree" [4, 8]])
+    (Right [ScalarLinesContent Plain "one two\nthree" [4, 8]])
     (map (\d -> d.root.content) <$> parseDocumentsText "one\n two\n\n three\n")
 
 test_documents :: Assertion
@@ -393,7 +393,7 @@ test_documents = do
     (renderSyntax defaultRenderOptions [document (plainNode "a"), commented (document (plainNode "b")) {version = Just (Version 1 2)}])
   let rootWithGap :: Bool -> Document
       rootWithGap end =
-        (document (contentNode (Sequence Block [plainNode "a"])) {comments = noComments {after = [Comment "c", EmptyLine]}})
+        (document (contentNode (SequenceContent Block [plainNode "a"])) {comments = noComments {after = [Comment "c", EmptyLine]}})
           { explicitEnd = end
           }
   assertEqual "empty line at the end of a block root before an end marker" "- a\n# c\n\n...\n" (renderSyntax defaultRenderOptions [rootWithGap True])
@@ -425,8 +425,8 @@ commentsOf doc = lines_ "document" doc.docComments ++ node "" doc.root
       where
         inner :: [(String, String, T.Text)]
         inner = case n.content of
-          Sequence _ xs -> concat (zipWith (\i x -> node (path ++ "/" ++ show i) x) [0 :: Int ..] xs)
-          Mapping _ kvs -> concatMap (entry path) kvs
+          SequenceContent _ xs -> concat (zipWith (\i x -> node (path ++ "/" ++ show i) x) [0 :: Int ..] xs)
+          MappingContent _ kvs -> concatMap (entry path) kvs
           _ -> []
 
     entry :: String -> (Node, Node) -> [(String, String, T.Text)]
@@ -436,7 +436,7 @@ commentsOf doc = lines_ "document" doc.docComments ++ node "" doc.root
 
     keyText :: Node -> String
     keyText k = case k.content of
-      Scalar _ t -> T.unpack t
+      ScalarContent _ t -> T.unpack t
       _ -> "?"
 
     lines_ :: String -> Comments -> [(String, String, T.Text)]
@@ -497,13 +497,13 @@ test_attachment = do
   assertEqual
     "empty line"
     (Right [EmptyLine])
-    ((\case [d] | Mapping _ [_, (k, _)] <- d.root.content -> k.comments.before; _ -> []) <$> parseDocumentsText "a: 1\n\n\nb: 2\n")
+    ((\case [d] | MappingContent _ [_, (k, _)] <- d.root.content -> k.comments.before; _ -> []) <$> parseDocumentsText "a: 1\n\n\nb: 2\n")
   assertEqual
     "empty line below the end of a collection"
     (Right [([Comment "c"], [EmptyLine])])
     ( map
         ( \d -> case d.root.content of
-            Mapping _ [(_, v), (k, _)] -> (v.comments.after, k.comments.before)
+            MappingContent _ [(_, v), (k, _)] -> (v.comments.after, k.comments.before)
             _ -> ([], [])
         )
         <$> parseDocumentsText "a:\n  b: 1\n  # c\n\nd: 2\n"
@@ -517,7 +517,7 @@ test_attachment = do
     (Right [([Comment "c"], [EmptyLine, Comment "d"], [])])
     ( map
         ( \d -> case d.root.content of
-            Mapping _ [(_, v)] -> (v.comments.after, d.root.comments.after, d.docComments.after)
+            MappingContent _ [(_, v)] -> (v.comments.after, d.root.comments.after, d.docComments.after)
             _ -> ([], [], [])
         )
         <$> parseDocumentsText "a:\n  b: 1\n  # c\n\n# d\n"
@@ -555,7 +555,7 @@ test_attachment = do
   where
     firstKey :: Node -> [Line]
     firstKey n = case n.content of
-      Mapping _ ((k, _) : _) -> k.comments.before
+      MappingContent _ ((k, _) : _) -> k.comments.before
       _ -> []
 
 -- | The parser returns documents with comments without thunks, as it does for
@@ -674,11 +674,11 @@ test_hashes = do
   assertEqual
     "lines"
     (Right [[CommentLine 2 "a", CommentLine 3 "b ###", CommentLine 4 "", Comment "#c"]])
-    (map ((\case Mapping _ ((k, _) : _) -> k.comments.before; _ -> []) . (.root.content)) <$> parseDocumentsText input)
+    (map ((\case MappingContent _ ((k, _) : _) -> k.comments.before; _ -> []) . (.root.content)) <$> parseDocumentsText input)
   assertEqual
     "inline and below a value"
     (Right [(Just "#d", [CommentLine 2 "e"])])
-    (map ((\case Mapping _ [(_, v)] -> (v.comments.inline, v.comments.after); _ -> (Nothing, [])) . (.root.content)) <$> parseDocumentsText input)
+    (map ((\case MappingContent _ [(_, v)] -> (v.comments.inline, v.comments.after); _ -> (Nothing, [])) . (.root.content)) <$> parseDocumentsText input)
   assertEqual "rendered" (Right "## a\n### b ###\n####\n# #c\nk: 1 # #d\n  ## e\n") (renderSyntax defaultRenderOptions <$> parseDocumentsText input)
   assertEqual "count below 1" "# a\n---\nk: 1\n" (renderSyntax defaultRenderOptions [(document (mappingNode [(plainNode "k", plainNode "1")])) {docComments = noComments {before = [CommentLine (-1) "a"]}}])
 
@@ -752,21 +752,21 @@ test_movedComments = do
   assertEqual
     "lines after a scalar key with a block scalar value"
     "# a\nk: |\n  text\n"
-    (render (mappingNode [(withAfter "a" (plainNode "k"), contentNode (Scalar Literal "text\n"))]))
+    (render (mappingNode [(withAfter "a" (plainNode "k"), contentNode (ScalarContent Literal "text\n"))]))
   assertEqual
     "lines after a block scalar value"
     "k: |\n  text\n# a\nx: 1\n"
-    (render (mappingNode [(plainNode "k", withAfter "a" (contentNode (Scalar Literal "text\n"))), (plainNode "x", plainNode "1")]))
+    (render (mappingNode [(plainNode "k", withAfter "a" (contentNode (ScalarContent Literal "text\n"))), (plainNode "x", plainNode "1")]))
   assertEqual
     "lines after a list item"
     "- 1\n  # a\n- 2\n"
-    (render (contentNode (Sequence Block [withAfter "a" (plainNode "1"), plainNode "2"])))
+    (render (contentNode (SequenceContent Block [withAfter "a" (plainNode "1"), plainNode "2"])))
   assertEqual
     "empty lines at the end of an empty flow collection"
     "a: [\n  # c\n  ]\n\nb: 1\n"
     ( render
         ( mappingNode
-            [ (plainNode "a", (contentNode (Sequence Flow [])) {comments = noComments {after = [Comment "c", EmptyLine]}})
+            [ (plainNode "a", (contentNode (SequenceContent Flow [])) {comments = noComments {after = [Comment "c", EmptyLine]}})
             , (plainNode "b", plainNode "1")
             ]
         )
@@ -778,7 +778,7 @@ test_movedComments = do
   assertEqual
     "comment in a flow sequence"
     "a:\n- 1 # c\n- 2\n"
-    (render (mappingNode [(plainNode "a", contentNode (Sequence Flow [withInline "c" (plainNode "1"), plainNode "2"]))]))
+    (render (mappingNode [(plainNode "a", contentNode (SequenceContent Flow [withInline "c" (plainNode "1"), plainNode "2"]))]))
   assertEqual
     "YAML 1.1 line breaks in comments"
     "# a\n# b\n# c\n# d\nk: v # e f g h\n"
@@ -842,10 +842,10 @@ prop_roundTrip (Tree doc) =
     strip :: Node -> Node
     strip n =
       ( contentNode $ case n.content of
-          Scalar _ t -> Scalar Plain t
-          Sequence _ xs -> Sequence Block (map strip xs)
-          Mapping _ kvs -> Mapping Block [(strip k, strip v) | (k, v) <- kvs]
-          Alias a -> Alias a
+          ScalarContent _ t -> ScalarContent Plain t
+          SequenceContent _ xs -> SequenceContent Block (map strip xs)
+          MappingContent _ kvs -> MappingContent Block [(strip k, strip v) | (k, v) <- kvs]
+          AliasContent a -> AliasContent a
       )
         { props = n.props
         }
@@ -855,25 +855,25 @@ prop_roundTrip (Tree doc) =
 
     hasLines :: Node -> Bool
     hasLines n = case n.content of
-      ScalarLines _ _ starts -> not (null starts)
-      Sequence _ xs -> any hasLines xs
-      Mapping _ kvs -> any (\(k, v) -> hasLines k || hasLines v) kvs
-      Alias _ -> False
+      ScalarLinesContent _ _ starts -> not (null starts)
+      SequenceContent _ xs -> any hasLines xs
+      MappingContent _ kvs -> any (\(k, v) -> hasLines k || hasLines v) kvs
+      AliasContent _ -> False
 
     -- The renderer gives an empty item of a flow sequence a tag.
     flowItems :: Bool -> Node -> Node
     flowItems inFlow n = case n.content of
-      Sequence s xs ->
+      SequenceContent s xs ->
         let inFlow' = inFlow || (s == Flow && not (hasComments n))
-        in n {content = Sequence s (map (item inFlow' . flowItems inFlow') xs)}
-      Mapping s kvs ->
+        in n {content = SequenceContent s (map (item inFlow' . flowItems inFlow') xs)}
+      MappingContent s kvs ->
         let inFlow' = inFlow || (s == Flow && not (hasComments n))
-        in n {content = Mapping s [(flowItems inFlow' k, flowItems inFlow' v) | (k, v) <- kvs]}
+        in n {content = MappingContent s [(flowItems inFlow' k, flowItems inFlow' v) | (k, v) <- kvs]}
       _ -> n
 
     item :: Bool -> Node -> Node
     item inFlow n = case (n.props, n.content) of
-      (Props Nothing NoTag, Scalar Plain "")
+      (Props Nothing NoTag, ScalarContent Plain "")
         | inFlow ->
             n {props = Props Nothing (Tag "tag:yaml.org,2002:null")}
       _ -> n
@@ -882,8 +882,8 @@ prop_roundTrip (Tree doc) =
     hasComments :: Node -> Bool
     hasComments n =
       not (null [() | Comment _ <- n.comments.after]) || case n.content of
-        Sequence _ xs -> any inner xs
-        Mapping _ kvs -> any (\(k, v) -> inner k || inner v) kvs
+        SequenceContent _ xs -> any inner xs
+        MappingContent _ kvs -> any (\(k, v) -> inner k || inner v) kvs
         _ -> False
       where
         inner :: Node -> Bool
@@ -909,12 +909,12 @@ genNode size = do
       else
         frequency
           [ (3, genScalar)
-          , (1, contentNode . Alias <$> genAnchor)
-          , (1, contentNode <$> (Sequence <$> genStyle <*> genList))
-          , (1, contentNode <$> (Mapping <$> genStyle <*> genEntries))
+          , (1, contentNode . AliasContent <$> genAnchor)
+          , (1, contentNode <$> (SequenceContent <$> genStyle <*> genList))
+          , (1, contentNode <$> (MappingContent <$> genStyle <*> genEntries))
           ]
   p <- case n.content of
-    Alias _ -> pure noProps
+    AliasContent _ -> pure noProps
     _ -> genProps
   c <- genComments (isCollection n)
   pure n {props = p, comments = c}
@@ -934,8 +934,8 @@ genNode size = do
 
     isCollection :: Node -> Bool
     isCollection n = case n.content of
-      Sequence _ (_ : _) -> True
-      Mapping _ (_ : _) -> True
+      SequenceContent _ (_ : _) -> True
+      MappingContent _ (_ : _) -> True
       _ -> False
 
 -- | Comments for a node. Only a non-empty collection has lines after it.
@@ -967,7 +967,7 @@ genScalar = do
   style <- elements [minBound .. maxBound]
   t <- genText
   starts <- frequency [(1, pure []), (2, L.sort <$> listOf (choose (0, T.length t + 1)))]
-  pure (contentNode (ScalarLines style t starts))
+  pure (contentNode (ScalarLinesContent style t starts))
 
 genProps :: Gen Props
 genProps =

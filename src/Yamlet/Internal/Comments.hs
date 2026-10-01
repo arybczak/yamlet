@@ -89,8 +89,8 @@ attachComments e first hasNext start marker rootEnd end doc
     -- below a flow collection root belong to the document.
     holdsLines :: Bool
     holdsLines = case root'.content of
-      Sequence Flow _ -> False
-      Mapping Flow _ -> False
+      SequenceContent Flow _ -> False
+      MappingContent Flow _ -> False
       _ -> True
 
     -- Without a @...@ marker, the first empty line ends the lines of the
@@ -191,8 +191,8 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
     (pre, items1) =
       let (ls, rest) = span (\i -> i.at < s) items0
       in case n.content of
-           Sequence Block (_ : _) | startsLine -> toFirstEntry ls rest
-           Mapping Block (_ : _) | startsLine -> toFirstEntry ls rest
+           SequenceContent Block (_ : _) | startsLine -> toFirstEntry ls rest
+           MappingContent Block (_ : _) | startsLine -> toFirstEntry ls rest
            _ -> (ls, rest)
 
     -- A collection after "- " on the same line keeps the lines above the
@@ -232,7 +232,7 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
 
     -- The comment on the line of a block scalar header.
     (header, items2) = case (n.content, items1) of
-      (Scalar style _, i : is)
+      (ScalarContent style _, i : is)
         | style == Literal || style == Folded
         , not i.own
         , i.lineStart == lineStart ->
@@ -240,18 +240,18 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
       _ -> (Nothing, items1)
 
     (content', items3) = case n.content of
-      Sequence style xs ->
-        let !(xs', is) = sequenceItems style xs items2 in (Sequence style xs', is)
-      Mapping style kvs ->
-        let !(kvs', is) = mappingEntries style kvs items2 in (Mapping style kvs', is)
+      SequenceContent style xs ->
+        let !(xs', is) = sequenceItems style xs items2 in (SequenceContent style xs', is)
+      MappingContent style kvs ->
+        let !(kvs', is) = mappingEntries style kvs items2 in (MappingContent style kvs', is)
       c -> (c, items2)
 
     -- The lines before the closing bracket come before the comment after it.
     (trailing, afterLines, items5) = case n.content of
-      Sequence Block (_ : _) -> blockEnd
-      Mapping Block (_ : _) -> blockEnd
-      Sequence Flow _ -> flowEnd
-      Mapping Flow _ -> flowEnd
+      SequenceContent Block (_ : _) -> blockEnd
+      MappingContent Block (_ : _) -> blockEnd
+      SequenceContent Flow _ -> flowEnd
+      MappingContent Flow _ -> flowEnd
       _ -> let (t, is) = trailingComment items3 in (t, [], is)
 
     blockEnd, flowEnd :: (Maybe T.Text, [Line], [Item])
@@ -350,9 +350,9 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
     -- if it is indented as deep as its content.
     linesBelow :: Int -> Node -> [Item] -> (Node, [Item])
     linesBelow lim x is = case x.content of
-      Sequence {} -> (x, is)
-      Mapping {} -> (x, is)
-      Scalar style _ | style == Literal || style == Folded -> (x, is)
+      SequenceContent {} -> (x, is)
+      MappingContent {} -> (x, is)
+      ScalarContent style _ | style == Literal || style == Folded -> (x, is)
       _ ->
         let ok i = i.at < lim && i.own && (isEmptyLine i || i.at - i.lineStart > column)
             (taken, rest) = span ok is
@@ -414,7 +414,7 @@ skipRanges e root = go root []
   where
     go :: Node -> [(Int, Int)] -> [(Int, Int)]
     go n acc = case n.content of
-      Scalar style _
+      ScalarContent style _
         | style == Literal || style == Folded ->
             let s = nextLine (offsetOf n.offset + e.base)
             in if s < en then (s, en) : acc else acc
@@ -422,8 +422,8 @@ skipRanges e root = go root []
         where
           en :: Int
           en = offsetOf n.endOffset + e.base
-      Sequence _ xs -> foldr go acc xs
-      Mapping _ kvs -> foldr (\(k, v) a -> go k (go v a)) acc kvs
+      SequenceContent _ xs -> foldr go acc xs
+      MappingContent _ kvs -> foldr (\(k, v) a -> go k (go v a)) acc kvs
       _ -> acc
 
     nextLine :: Int -> Int

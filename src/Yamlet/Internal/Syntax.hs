@@ -12,7 +12,7 @@ module Yamlet.Internal.Syntax
 
     -- * Nodes
   , Node (..)
-  , Content (.., Scalar)
+  , Content (.., ScalarContent)
   , Props (..)
   , noProps
   , Tag (..)
@@ -87,31 +87,31 @@ data Content
     -- source, so that the renderer can write the text on the same lines. The
     -- renderer ignores a position where the style of the output cannot start
     -- a new line and keep the text.
-    ScalarLines !ScalarStyle !T.Text ![Int]
-  | Sequence !CollectionStyle [Node]
-  | Mapping !CollectionStyle [(Node, Node)]
+    ScalarLinesContent !ScalarStyle !T.Text ![Int]
+  | SequenceContent !CollectionStyle [Node]
+  | MappingContent !CollectionStyle [(Node, Node)]
   | -- | An alias has no properties.
-    Alias !T.Text
+    AliasContent !T.Text
   deriving stock (Eq, Show, Generic)
 
 -- | A scalar without positions of new lines. As a pattern, it matches every
 -- scalar and ignores its positions.
-pattern Scalar :: ScalarStyle -> T.Text -> Content
-pattern Scalar style t <- ScalarLines style t _
+pattern ScalarContent :: ScalarStyle -> T.Text -> Content
+pattern ScalarContent style t <- ScalarLinesContent style t _
   where
-    Scalar style t = ScalarLines style t []
+    ScalarContent style t = ScalarLinesContent style t []
 
-{-# COMPLETE Scalar, Sequence, Mapping, Alias #-}
+{-# COMPLETE ScalarContent, SequenceContent, MappingContent, AliasContent #-}
 
 -- The instances of the sum types are written by hand, because GHC does not
 -- always remove the generic representation of a sum type. A strict field of
 -- a type without lazy parts, e.g. a text, is already in normal form.
 instance NFData Content where
   rnf = \case
-    ScalarLines _ _ ls -> rnf ls
-    Sequence _ xs -> rnf xs
-    Mapping _ kvs -> rnf kvs
-    Alias _ -> ()
+    ScalarLinesContent _ _ ls -> rnf ls
+    SequenceContent _ xs -> rnf xs
+    MappingContent _ kvs -> rnf kvs
+    AliasContent _ -> ()
 
 -- | The properties of a node.
 data Props = Props
@@ -370,10 +370,10 @@ copyNode n =
         c@(Comments [] Nothing []) -> c
         c -> copyComments c
     , content = case n.content of
-        ScalarLines style t ls -> ScalarLines style (T.copy t) ls
-        Sequence style xs -> Sequence style $! evaluated (map copyNode xs)
-        Mapping style kvs -> Mapping style $! evaluated (map copyEntry kvs)
-        Alias name -> Alias (T.copy name)
+        ScalarLinesContent style t ls -> ScalarLinesContent style (T.copy t) ls
+        SequenceContent style xs -> SequenceContent style $! evaluated (map copyNode xs)
+        MappingContent style kvs -> MappingContent style $! evaluated (map copyEntry kvs)
+        AliasContent name -> AliasContent (T.copy name)
     }
   where
     copyEntry :: (Node, Node) -> (Node, Node)

@@ -384,10 +384,10 @@ test_syntax =
     -- Add a comment above the first key and use the flow style for the list.
     edit :: S.Node -> S.Node
     edit n = case n.content of
-      S.Mapping style [(k1, v1), (k2, v2)] ->
+      S.MappingContent style [(k1, v1), (k2, v2)] ->
         n
           { S.content =
-              S.Mapping
+              S.MappingContent
                 style
                 [ (k1 {S.comments = S.noComments {S.before = [S.Comment "The name."]}}, v1)
                 , (k2, v2 {S.content = flow v2.content})
@@ -397,7 +397,7 @@ test_syntax =
 
     flow :: S.Content -> S.Content
     flow = \case
-      S.Sequence _ xs -> S.Sequence S.Flow xs
+      S.SequenceContent _ xs -> S.SequenceContent S.Flow xs
       c -> c
 
     expected :: T.Text

@@ -227,14 +227,14 @@ runParser f n0 = case prepare n0 of
 
     mergeValues :: S.Node -> Set.Set S.Offset
     mergeValues n = case n.content of
-      S.Sequence _ xs -> foldMap mergeValues xs
-      S.Mapping _ kvs -> foldMap (\(k, v) -> mergeValue k v <> mergeValues k <> mergeValues v) kvs
+      S.SequenceContent _ xs -> foldMap mergeValues xs
+      S.MappingContent _ kvs -> foldMap (\(k, v) -> mergeValue k v <> mergeValues k <> mergeValues v) kvs
       _ -> Set.empty
 
     mergeValue :: S.Node -> S.Node -> Set.Set S.Offset
     mergeValue k v = case (stringValue k, v.content) of
-      (Just "<<", S.Mapping {}) -> Set.singleton v.offset
-      (Just "<<", S.Sequence {}) -> Set.singleton v.offset
+      (Just "<<", S.MappingContent {}) -> Set.singleton v.offset
+      (Just "<<", S.SequenceContent {}) -> Set.singleton v.offset
       _ -> Set.empty
 
 -- | Run a parser on a node that passed 'prepare'.
@@ -266,7 +266,7 @@ mismatchMessage expected n = "expected " ++ expected ++ ", but got " ++ describe
 
 -- | The null node for a missing value.
 nullNode :: S.Node
-nullNode = S.Node S.noOffset S.noOffset S.noProps S.noComments (S.Scalar S.Plain "")
+nullNode = S.Node S.noOffset S.noOffset S.noProps S.noComments (S.ScalarContent S.Plain "")
 
 -- | Run the second parser if the first one fails. A port can be a number or
 -- a name:
@@ -313,7 +313,7 @@ withBool :: (Bool -> Parser a) -> S.Node -> Parser a
 withBool f = parseNode $ \n -> case view n of
   BoolView b -> f b
   StringView t
-    | S.Scalar S.Plain _ <- n.content
+    | S.ScalarContent S.Plain _ <- n.content
     , S.NoTag <- n.props.tag
     , isYaml11Bool t ->
         failAt n $
@@ -378,7 +378,7 @@ withText f = parseNode $ \n -> case view n of
 withName :: [T.Text] -> (T.Text -> Parser a) -> S.Node -> Parser a
 withName names f = parseNode $ \n -> case (view n, n.content) of
   (StringView t, _) -> f t
-  (_, S.Scalar S.Plain t) | S.NoTag <- n.props.tag, t `elem` names -> failAt n (stringMismatch n)
+  (_, S.ScalarContent S.Plain t) | S.NoTag <- n.props.tag, t `elem` names -> failAt n (stringMismatch n)
   _ -> typeMismatch ("one of: " ++ L.intercalate ", " (map T.unpack names)) n
 
 -- | The value that goes with the string in the list of pairs, e.g. for names
@@ -417,7 +417,7 @@ stringMismatch n = mismatchMessage "a string" n ++ hint
   where
     hint :: String
     hint = case n.content of
-      S.Scalar S.Plain t
+      S.ScalarContent S.Plain t
         | S.NoTag <- n.props.tag
         , notString t ->
             ", quote the value, e.g. '" ++ T.unpack t ++ "'"
@@ -442,7 +442,7 @@ stringMismatch n = mismatchMessage "a string" n ++ hint
 -- sequence go to its first item.
 withSequence :: ([S.Node] -> Parser a) -> S.Node -> Parser a
 withSequence f = parseNode $ \n -> case n.content of
-  S.Sequence _ xs -> f (items n xs)
+  S.SequenceContent _ xs -> f (items n xs)
   _ -> typeMismatch "a list" n
 
 -- | The items of a sequence, with the lines above the sequence moved to its
@@ -483,7 +483,7 @@ withoutComments n = S.Node n.offset n.endOffset n.props S.noComments n.content
 -- these lines, but 'Yamlet.Commented' on its first field keeps them.
 withMapping :: (Object -> Parser a) -> S.Node -> Parser a
 withMapping f = parseNode $ \n -> case n.content of
-  S.Mapping _ kvs -> case mkObject n (keyEntries n kvs) of
+  S.MappingContent _ kvs -> case mkObject n (keyEntries n kvs) of
     (NoErrors, o) -> f o
     -- The errors of the fields come with the duplicate keys, and a field
     -- reads the value of the first key.
@@ -522,7 +522,7 @@ mkObject n kvs =
          { node = n
          , entries = kvs
          , index = index
-         , otherKeys = [(k, v) | (k@S.Node {S.content = S.Scalar style t}, _) <- kvs, let v = scalarValue k.props.tag style t, case v of String _ -> False; _ -> True]
+         , otherKeys = [(k, v) | (k@S.Node {S.content = S.ScalarContent style t}, _) <- kvs, let v = scalarValue k.props.tag style t, case v of String _ -> False; _ -> True]
          }
      )
   where
@@ -921,8 +921,8 @@ entryComments k v = (S.Comments before inline v.comments.after, value)
   where
     block :: Bool
     block = case v.content of
-      S.Sequence S.Block (_ : _) -> True
-      S.Mapping S.Block (_ : _) -> True
+      S.SequenceContent S.Block (_ : _) -> True
+      S.MappingContent S.Block (_ : _) -> True
       _ -> False
 
     above :: [S.Line]
@@ -1141,14 +1141,14 @@ instance FromYaml a => FromYaml (Maybe a) where
 instance (Ord k, FromYaml k, FromYaml v) => FromYaml (M.Map k v) where
   -- The index of 'withMapping' would be of no use here.
   parseYaml = parseNode $ \n -> case n.content of
-    S.Mapping _ kvs ->
+    S.MappingContent _ kvs ->
       insertUnique fst mapEntry fst (\(k, v) -> M.alterF (\old -> (isJust old, old <|> Just v)) k) M.empty "duplicate key after conversion" "the first key" (keyEntries n kvs)
     _ -> typeMismatch "a mapping" n
 
 -- | Two keys that convert to the same key are an error.
 instance FromYaml v => FromYaml (IM.IntMap v) where
   parseYaml = parseNode $ \n -> case n.content of
-    S.Mapping _ kvs ->
+    S.MappingContent _ kvs ->
       insertUnique fst mapEntry fst (\(k, v) -> IM.alterF (\old -> (isJust old, old <|> Just v)) k) IM.empty "duplicate key after conversion" "the first key" (keyEntries n kvs)
     _ -> typeMismatch "a mapping" n
 

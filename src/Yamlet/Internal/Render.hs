@@ -120,10 +120,10 @@ validAnchors doc
     collect :: Node -> [T.Text] -> [T.Text]
     collect n acc =
       maybe id (:) n.props.anchor $ case n.content of
-        Alias a -> a : acc
-        Sequence _ xs -> foldr collect acc xs
-        Mapping _ kvs -> foldr (\(k, v) -> collect k . collect v) acc kvs
-        Scalar _ _ -> acc
+        AliasContent a -> a : acc
+        SequenceContent _ xs -> foldr collect acc xs
+        MappingContent _ kvs -> foldr (\(k, v) -> collect k . collect v) acc kvs
+        ScalarContent _ _ -> acc
 
     newNames :: M.Map T.Text T.Text
     newNames = (\(_, _, m) -> m) $ L.foldl' add (S.fromList (filter isAnchorName names), M.empty, M.empty) names
@@ -161,9 +161,9 @@ validAnchors doc
       n
         { props = n.props {anchor = newName <$> n.props.anchor}
         , content = case n.content of
-            Alias a -> Alias (newName a)
-            Sequence style xs -> Sequence style (map rename xs)
-            Mapping style kvs -> Mapping style (map (bimap rename rename) kvs)
+            AliasContent a -> AliasContent (newName a)
+            SequenceContent style xs -> SequenceContent style (map rename xs)
+            MappingContent style kvs -> MappingContent style (map (bimap rename rename) kvs)
             c -> c
         }
 
@@ -183,8 +183,8 @@ writesEnd :: RenderOptions -> Document -> Bool
 writesEnd opts doc =
   doc.explicitEnd
     || not (null doc.docComments.after) && case doc.root.content of
-      Sequence {} -> isBlock opts doc.root
-      Mapping {} -> isBlock opts doc.root
+      SequenceContent {} -> isBlock opts doc.root
+      MappingContent {} -> isBlock opts doc.root
       _ -> True
 
 -- | A document. The flag tells if it starts the stream or follows a document
@@ -211,10 +211,10 @@ document opts afterEnd doc =
     -- below it in.
     r :: Node
     r = case doc.root.content of
-      ScalarLines style t starts
+      ScalarLinesContent style t starts
         | style == Literal || style == Folded
         , needsIndentIndicator t || T.all (== '\n') t && not (null doc.root.comments.after) ->
-            doc.root {content = ScalarLines DoubleQuoted t starts}
+            doc.root {content = ScalarLinesContent DoubleQuoted t starts}
       _ -> doc.root
 
     -- The end of the document above takes the comments right below it.
@@ -230,8 +230,8 @@ document opts afterEnd doc =
     tags :: Node -> [T.Text] -> [T.Text]
     tags n acc =
       (case n.props.tag of Tag t -> (t :); _ -> id) $ case n.content of
-        Sequence _ xs -> foldr tags acc xs
-        Mapping _ kvs -> foldr (\(k, v) -> tags k . tags v) acc kvs
+        SequenceContent _ xs -> foldr tags acc xs
+        MappingContent _ kvs -> foldr (\(k, v) -> tags k . tags v) acc kvs
         _ -> acc
 
     -- The parser rejects the other versions.
@@ -296,8 +296,8 @@ document opts afterEnd doc =
 -- first entry if it starts below its indicator, as in 'indicatorLines'.
 block :: RenderOptions -> Int -> Int -> Bool -> Bool -> [Line] -> Node -> B.Builder
 block opts indent afterColumn atLineStart hoisted carried n = case n.content of
-  Sequence _ xs -> mconcat (zipWith item [0 :: Int ..] xs) <> lines_ afterColumn n.comments.after
-  Mapping _ kvs -> mconcat (zipWith entry [0 :: Int ..] kvs) <> lines_ afterColumn n.comments.after
+  SequenceContent _ xs -> mconcat (zipWith item [0 :: Int ..] xs) <> lines_ afterColumn n.comments.after
+  MappingContent _ kvs -> mconcat (zipWith entry [0 :: Int ..] kvs) <> lines_ afterColumn n.comments.after
   _ -> mempty
   where
     start :: Int -> [Line] -> B.Builder
@@ -373,8 +373,8 @@ firstLines :: RenderOptions -> Node -> [Line]
 firstLines opts x
   | firstStartsBelow opts x = []
   | otherwise = case x.content of
-      Sequence _ (y : _) -> aboveIndicator opts y
-      Mapping _ ((k, v) : _) -> case implicitKey opts k of
+      SequenceContent _ (y : _) -> aboveIndicator opts y
+      MappingContent _ ((k, v) : _) -> case implicitKey opts k of
         Just _ -> let (above, _, _) = entryComments opts k v in above
         Nothing -> aboveIndicator opts k
       _ -> []
@@ -387,8 +387,8 @@ startsBelow opts x = isBlock opts x && (isJust (props x) || isJust x.comments.in
 -- | The first entry of a collection starts below its indicator.
 firstStartsBelow :: RenderOptions -> Node -> Bool
 firstStartsBelow opts x = case x.content of
-  Sequence _ (y : _) -> startsBelow opts y
-  Mapping _ ((k, _) : _) -> startsBelow opts k
+  SequenceContent _ (y : _) -> startsBelow opts y
+  MappingContent _ ((k, _) : _) -> startsBelow opts k
   _ -> False
 
 -- | The lines up to the last empty line, and the lines after it.
@@ -427,14 +427,14 @@ entryComments opts k v
 -- | A scalar in the literal or the folded style.
 isBlockScalarNode :: Node -> Bool
 isBlockScalarNode n = case n.content of
-  Scalar style _ -> isBlockScalar style
+  ScalarContent style _ -> isBlockScalar style
   _ -> False
 
 -- | A scalar or an alias.
 isScalarLike :: Node -> Bool
 isScalarLike n = case n.content of
-  Sequence {} -> False
-  Mapping {} -> False
+  SequenceContent {} -> False
+  MappingContent {} -> False
   _ -> True
 
 -- | The value of a mapping entry after the colon with the comment of the
@@ -447,7 +447,7 @@ value opts indent v lineComment extra
       -- A sequence without indentation has no column of its own for the lines
       -- after its last item: a block collection or a block scalar as the last
       -- item takes in every line that is deeper than the key.
-      Sequence _ xs
+      SequenceContent _ xs
         | null [() | Comment _ <- v.comments.after] || not (endsWithBlock xs) ->
             header <> lines_ indent below <> block opts indent (indent + indentStep) True False rest v
         | otherwise -> header <> lines_ (indent + indentStep) below <> block opts (indent + indentStep) (indent + indentStep) True False rest v
@@ -476,8 +476,8 @@ value opts indent v lineComment extra
 
     endsWithBlock :: [Node] -> Bool
     endsWithBlock xs = case reverse xs of
-      Node {content = Scalar Literal t} : _ -> isJust (literalBlock True 0 t)
-      Node {content = Scalar Folded t} : _ -> isJust (foldedBlock 0 [] t)
+      Node {content = ScalarContent Literal t} : _ -> isJust (literalBlock True 0 t)
+      Node {content = ScalarContent Folded t} : _ -> isJust (foldedBlock 0 [] t)
       x : _ -> isBlock opts x
       [] -> False
 
@@ -508,8 +508,8 @@ data Position = InValue | InKey | InFlow | InFlowKey
 -- a scalar after the first one are at the given indentation.
 inline :: RenderOptions -> Position -> Int -> Node -> Maybe T.Text -> B.Builder
 inline opts pos indent n lineComment = case n.content of
-  Alias name -> "*" <> B.fromText name <> comment lineComment
-  ScalarLines style t starts
+  AliasContent name -> "*" <> B.fromText name <> comment lineComment
+  ScalarLinesContent style t starts
     | isBlockScalar style && pos == InValue -> withProps (blockScalar style t starts)
   _ -> withProps content_ <> comment lineComment
   where
@@ -522,7 +522,7 @@ inline opts pos indent n lineComment = case n.content of
 
     isEmpty' :: Bool
     isEmpty' = case n.content of
-      Scalar Plain t -> T.null t
+      ScalarContent Plain t -> T.null t
       _ -> False
 
     -- The comment goes on the line of the header.
@@ -534,12 +534,12 @@ inline opts pos indent n lineComment = case n.content of
 
     content_ :: B.Builder
     content_ = case n.content of
-      ScalarLines style t starts -> scalar pos indent (if inKey then [] else starts) style t
-      Sequence _ [] | hasEndLines n -> "[\n" <> lines_ indent (fst (bracketLines n)) <> spaces indent <> "]"
-      Mapping _ [] | hasEndLines n -> "{\n" <> lines_ indent (fst (bracketLines n)) <> spaces indent <> "}"
-      Sequence _ xs -> "[" <> commas (map (\x -> inline opts itemPos indent (flowItem x) Nothing) xs) <> "]"
-      Mapping _ kvs -> "{" <> commas (map flowEntry kvs) <> "}"
-      Alias {} -> mempty
+      ScalarLinesContent style t starts -> scalar pos indent (if inKey then [] else starts) style t
+      SequenceContent _ [] | hasEndLines n -> "[\n" <> lines_ indent (fst (bracketLines n)) <> spaces indent <> "]"
+      MappingContent _ [] | hasEndLines n -> "{\n" <> lines_ indent (fst (bracketLines n)) <> spaces indent <> "}"
+      SequenceContent _ xs -> "[" <> commas (map (\x -> inline opts itemPos indent (flowItem x) Nothing) xs) <> "]"
+      MappingContent _ kvs -> "{" <> commas (map flowEntry kvs) <> "}"
+      AliasContent {} -> mempty
 
     inKey :: Bool
     inKey = pos == InKey || pos == InFlowKey
@@ -551,7 +551,7 @@ inline opts pos indent n lineComment = case n.content of
     -- An empty scalar cannot be an item of a flow sequence.
     flowItem :: Node -> Node
     flowItem x = case x.content of
-      Scalar Plain ""
+      ScalarContent Plain ""
         | Props Nothing NoTag <- x.props ->
             x {props = Props Nothing (Tag (coreTagPrefix <> "null"))}
       _ -> x
@@ -600,14 +600,14 @@ implicitKey opts k
   where
     key :: T.Text
     key = case (k.props, k.content) of
-      (Props Nothing NoTag, Scalar Plain t) | plainSyntax False t -> t
+      (Props Nothing NoTag, ScalarContent Plain t) | plainSyntax False t -> t
       _ -> B.runBuilder $ inline opts InKey 0 k Nothing <> if endsWithName k then " " else mempty
 
 -- | The node is a collection that the renderer writes in the block style.
 isBlock :: RenderOptions -> Node -> Bool
 isBlock opts n = case n.content of
-  Sequence style (_ : _) -> style == Block || opts.forceBlock || hasComments n
-  Mapping style (_ : _) -> style == Block || opts.forceBlock || hasComments n
+  SequenceContent style (_ : _) -> style == Block || opts.forceBlock || hasComments n
+  MappingContent style (_ : _) -> style == Block || opts.forceBlock || hasComments n
   _ -> False
 
 -- | The node or a node inside it has a comment, other than the lines above
@@ -615,8 +615,8 @@ isBlock opts n = case n.content of
 hasComments :: Node -> Bool
 hasComments n =
   not (null (commentLines n.comments.after)) || case n.content of
-    Sequence _ xs -> any inner xs
-    Mapping _ kvs -> any (\(k, v) -> inner k || inner v) kvs
+    SequenceContent _ xs -> any inner xs
+    MappingContent _ kvs -> any (\(k, v) -> inner k || inner v) kvs
     _ -> False
   where
     inner :: Node -> Bool
@@ -629,8 +629,8 @@ hasComments n =
 -- empty collection and below a scalar or an alias.
 hasEndLines :: Node -> Bool
 hasEndLines n = case n.content of
-  Sequence _ (_ : _) -> False
-  Mapping _ (_ : _) -> False
+  SequenceContent _ (_ : _) -> False
+  MappingContent _ (_ : _) -> False
   _ -> hasComment
   where
     hasComment :: Bool
@@ -640,10 +640,10 @@ hasEndLines n = case n.content of
 -- They cannot be deeper, because a block scalar would take them in.
 linesBelow :: Int -> Node -> B.Builder
 linesBelow indent n = case n.content of
-  Scalar {} -> lines_ indent n.comments.after
-  Alias {} -> lines_ indent n.comments.after
-  Sequence _ [] -> lines_ indent (snd (bracketLines n))
-  Mapping _ [] -> lines_ indent (snd (bracketLines n))
+  ScalarContent {} -> lines_ indent n.comments.after
+  AliasContent {} -> lines_ indent n.comments.after
+  SequenceContent _ [] -> lines_ indent (snd (bracketLines n))
+  MappingContent _ [] -> lines_ indent (snd (bracketLines n))
   _ -> mempty
 
 -- | The lines of an empty flow collection inside its brackets, and the
@@ -659,21 +659,21 @@ bracketLines n
 -- | The node is an empty plain scalar without properties.
 isEmpty :: Node -> Bool
 isEmpty n = case (n.props, n.content) of
-  (Props Nothing NoTag, Scalar Plain t) -> T.null t
+  (Props Nothing NoTag, ScalarContent Plain t) -> T.null t
   _ -> False
 
 -- | The node ends with an alias, an anchor or a tag. A colon right after it
 -- would be part of the name.
 endsWithName :: Node -> Bool
 endsWithName n = case n.content of
-  Alias {} -> True
-  Scalar Plain t -> T.null t && (isJust n.props.anchor || n.props.tag /= NoTag)
+  AliasContent {} -> True
+  ScalarContent Plain t -> T.null t && (isJust n.props.anchor || n.props.tag /= NoTag)
   _ -> False
 
 -- | The anchor and the tag of a node.
 props :: Node -> Maybe B.Builder
 props n = case n.content of
-  Alias {} -> Nothing
+  AliasContent {} -> Nothing
   _ -> case (anchor, tag) of
     (Nothing, Nothing) -> Nothing
     (Just a, Nothing) -> Just a

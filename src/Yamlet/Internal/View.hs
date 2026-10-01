@@ -40,15 +40,15 @@ data View
 -- | The view of a node.
 view :: S.Node -> View
 view n = case n.content of
-  S.Scalar style t -> case scalarValue n.props.tag style t of
+  S.ScalarContent style t -> case scalarValue n.props.tag style t of
     Null -> NullView
     Bool b -> BoolView b
     Int i -> IntView i
     Float f -> FloatView f
     _ -> StringView t
-  S.Sequence _ xs -> SequenceView xs
-  S.Mapping _ kvs -> MappingView kvs
-  S.Alias name -> AliasView name
+  S.SequenceContent _ xs -> SequenceView xs
+  S.MappingContent _ kvs -> MappingView kvs
+  S.AliasContent name -> AliasView name
 -- GHC does not inline it without the pragma. Inlined, a match on the view
 -- allocates no view.
 {-# INLINE view #-}
@@ -73,10 +73,10 @@ scalarValue tag style t = case tag of
 -- Right ["a list","a floating-point number","null","a string"]
 describeNode :: S.Node -> String
 describeNode n = case n.content of
-  S.Scalar style t -> describe (scalarValue n.props.tag style t)
-  S.Sequence _ _ -> "a list"
-  S.Mapping _ _ -> "a mapping"
-  S.Alias _ -> "an alias"
+  S.ScalarContent style t -> describe (scalarValue n.props.tag style t)
+  S.SequenceContent _ _ -> "a list"
+  S.MappingContent _ _ -> "a mapping"
+  S.AliasContent _ -> "an alias"
 
 -- | The node is null.
 isNullNode :: S.Node -> Bool

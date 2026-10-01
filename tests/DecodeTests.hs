@@ -474,10 +474,10 @@ test_copies = do
 
     texts :: S.Node -> [T.Text]
     texts n = case n.content of
-      S.Scalar _ t -> t : maybe [] pure n.props.anchor
-      S.Sequence _ xs -> concatMap texts xs
-      S.Mapping _ kvs -> concatMap (\(k, v) -> texts k ++ texts v) kvs
-      S.Alias name -> [name]
+      S.ScalarContent _ t -> t : maybe [] pure n.props.anchor
+      S.SequenceContent _ xs -> concatMap texts xs
+      S.MappingContent _ kvs -> concatMap (\(k, v) -> texts k ++ texts v) kvs
+      S.AliasContent name -> [name]
 
 -- | JSON is valid YAML, including the escapes that JSON encoders write.
 test_json :: Assertion
@@ -624,7 +624,7 @@ test_located = do
     (errorOf (decodeWithDocument @Int "1\n--- 2\n"))
   assertEqual
     "empty stream"
-    (Right (Nothing, S.document (S.Node (Offset 0) (Offset 0) S.noProps S.noComments (S.Scalar S.Plain ""))))
+    (Right (Nothing, S.document (S.Node (Offset 0) (Offset 0) S.noProps S.noComments (S.ScalarContent S.Plain ""))))
     (decodeWithDocument @(Maybe Int) "")
   assertEqual
     "comments of the key"
@@ -1533,7 +1533,7 @@ test_manyErrors = do
 
     items :: S.Node -> [S.Node]
     items node = case node.content of
-      S.Sequence _ xs -> xs
+      S.SequenceContent _ xs -> xs
       _ -> []
 
 test_prettyError :: Assertion

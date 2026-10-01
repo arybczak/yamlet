@@ -60,10 +60,10 @@ represent root
 
         syntaxSize :: S.Node -> Int
         syntaxSize sn = case sn.content of
-          S.Scalar _ t -> scalarVisits t
-          S.Sequence _ xs -> 1 + sum (map syntaxSize xs)
-          S.Mapping _ kvs -> 1 + sum [syntaxSize k + syntaxSize v | (k, v) <- kvs]
-          S.Alias _ -> 1
+          S.ScalarContent _ t -> scalarVisits t
+          S.SequenceContent _ xs -> 1 + sum (map syntaxSize xs)
+          S.MappingContent _ kvs -> 1 + sum [syntaxSize k + syntaxSize v | (k, v) <- kvs]
+          S.AliasContent _ -> 1
 
     scalarVisits :: T.Text -> Int
     scalarVisits t = 1 + T.length t
@@ -74,24 +74,24 @@ represent root
     plain sn =
       let off = sn.offset; props = sn.props
       in case sn.content of
-           S.Scalar style t -> scalar off props style t
-           S.Sequence _ xs -> do
+           S.ScalarContent style t -> scalar off props style t
+           S.SequenceContent _ xs -> do
              tag <- collectionTag off props seqTag
              vs <- mapM plain xs
              Right $ withTag tag (Sequence vs)
-           S.Mapping _ kvs -> do
+           S.MappingContent _ kvs -> do
              tag <- collectionTag off props mapTag
              entries <- mapM (\(k, v) -> (,) <$> plain k <*> plain v) kvs
              checkUniqueKeys (zip (map fst kvs) (map fst entries))
              Right $ withTag tag (Mapping entries)
-           S.Alias _ -> Left $ failure off "unexpected alias"
+           S.AliasContent _ -> Left $ failure off "unexpected alias"
 
     -- Each value comes with its number.
     go :: Numbering -> S.Node -> Either Failure ((Value, Int), Numbering)
     go st sn =
       let off = sn.offset; props = sn.props
       in case sn.content of
-           S.Alias name -> case M.lookup name st.anchors of
+           S.AliasContent name -> case M.lookup name st.anchors of
              Just (Just (v, i, visits))
                | st.visits + visits > limit ->
                    Left
@@ -106,16 +106,16 @@ represent root
                Left
                  $ failure off
                  $ "undefined alias *" ++ T.unpack name
-           S.Scalar style t -> do
+           S.ScalarContent style t -> do
              v <- scalar off props style t
              let visits = scalarVisits t
              Right $ number props v (ScalarShape v) visits visits (open props st)
-           S.Sequence _ xs -> do
+           S.SequenceContent _ xs -> do
              tag <- collectionTag off props seqTag
              (vs, st') <- goList (open props st) xs
              let v = withTag tag (Sequence (map fst vs))
              Right $ number props v (SequenceShape tag (map snd vs)) 1 (st'.visits - st.visits + 1) st'
-           S.Mapping _ kvs -> do
+           S.MappingContent _ kvs -> do
              tag <- collectionTag off props mapTag
              (entries, st') <- goPairs (open props st) kvs
              checkUniqueNumbers entries
@@ -191,18 +191,18 @@ check :: S.Node -> Either Failure ()
 check sn =
   let off = sn.offset; props = sn.props
   in case sn.content of
-       S.Scalar style t
+       S.ScalarContent style t
          -- Only a number can fail without a tag.
          | S.NoTag <- props.tag
          , style /= S.Plain || not (maybeNumber t) ->
              Right ()
          | otherwise -> void (scalar off props style t)
-       S.Sequence _ xs -> collectionTag off props seqTag *> traverse_ check xs
-       S.Mapping _ kvs -> do
+       S.SequenceContent _ xs -> collectionTag off props seqTag *> traverse_ check xs
+       S.MappingContent _ kvs -> do
          _ <- collectionTag off props mapTag
          keys <- traverse (\(k, v) -> key k <* check v) kvs
          checkUniqueKeys keys
-       S.Alias _ -> Left $ failure off "unexpected alias"
+       S.AliasContent _ -> Left $ failure off "unexpected alias"
   where
     maybeNumber :: T.Text -> Bool
     maybeNumber t = case T.uncons t of
@@ -211,7 +211,7 @@ check sn =
 
     key :: S.Node -> Either Failure (S.Node, Value)
     key k = case k.content of
-      S.Scalar style t -> (k,) <$> scalar k.offset k.props style t
+      S.ScalarContent style t -> (k,) <$> scalar k.offset k.props style t
       _ -> Left $ failure k.offset "unexpected collection key"
 
 -- | Replace each alias with a copy of the node that it refers to. The copy
@@ -226,16 +226,16 @@ expandAliases = fst . go M.empty
     -- its aliases share.
     go :: M.Map T.Text (S.Tag, S.Content) -> S.Node -> (S.Node, M.Map T.Text (S.Tag, S.Content))
     go anchors sn = case sn.content of
-      S.Alias name -> case M.lookup name anchors of
+      S.AliasContent name -> case M.lookup name anchors of
         Just (tag, content) -> (S.Node sn.offset sn.endOffset (S.Props Nothing tag) sn.comments content, anchors)
         Nothing -> (sn, anchors)
-      S.Scalar {} -> define sn anchors
-      S.Sequence style xs ->
+      S.ScalarContent {} -> define sn anchors
+      S.SequenceContent style xs ->
         let (xs', anchors') = goList (open anchors) xs
-        in close (withContent (S.Sequence style xs')) anchors'
-      S.Mapping style kvs ->
+        in close (withContent (S.SequenceContent style xs')) anchors'
+      S.MappingContent style kvs ->
         let (kvs', anchors') = goPairs (open anchors) kvs
-        in close (withContent (S.Mapping style kvs')) anchors'
+        in close (withContent (S.MappingContent style kvs')) anchors'
       where
         withContent :: S.Content -> S.Node
         withContent = S.Node sn.offset sn.endOffset sn.props sn.comments
@@ -258,8 +258,8 @@ expandAliases = fst . go M.empty
 
     withoutComments :: S.Content -> S.Content
     withoutComments = \case
-      S.Sequence style xs -> S.Sequence style (map node xs)
-      S.Mapping style kvs -> S.Mapping style [(node k, node v) | (k, v) <- kvs]
+      S.SequenceContent style xs -> S.SequenceContent style (map node xs)
+      S.MappingContent style kvs -> S.MappingContent style [(node k, node v) | (k, v) <- kvs]
       c -> c
       where
         node :: S.Node -> S.Node
@@ -364,9 +364,9 @@ noMergeKeys = "merge keys are not supported"
 -- empty scalar have no text.
 keyText :: S.Node -> Value -> Maybe String
 keyText n v = case (n.content, v) of
-  (S.Alias name, _) -> Just ('*' : T.unpack name)
-  (S.Scalar {}, String t) -> Just (show t)
-  (S.Scalar _ t, _) | not (T.null t) -> Just (T.unpack t)
+  (S.AliasContent name, _) -> Just ('*' : T.unpack name)
+  (S.ScalarContent {}, String t) -> Just (show t)
+  (S.ScalarContent _ t, _) | not (T.null t) -> Just (T.unpack t)
   _ -> Nothing
 
 -- | The state of the composition of a document with aliases or collection
@@ -394,15 +394,15 @@ data Shape
 -- | The node has an alias or a collection key inside it.
 needsNumbering :: S.Node -> Bool
 needsNumbering n = case n.content of
-  S.Scalar {} -> False
-  S.Sequence _ xs -> any needsNumbering xs
-  S.Mapping _ kvs -> any (\(k, v) -> isCollection k || needsNumbering k || needsNumbering v) kvs
-  S.Alias {} -> True
+  S.ScalarContent {} -> False
+  S.SequenceContent _ xs -> any needsNumbering xs
+  S.MappingContent _ kvs -> any (\(k, v) -> isCollection k || needsNumbering k || needsNumbering v) kvs
+  S.AliasContent {} -> True
   where
     isCollection :: S.Node -> Bool
     isCollection k = case k.content of
-      S.Sequence {} -> True
-      S.Mapping {} -> True
+      S.SequenceContent {} -> True
+      S.MappingContent {} -> True
       _ -> False
 
 -- | The first scalar key that is equal to an earlier one, and the earlier

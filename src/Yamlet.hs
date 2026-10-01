@@ -203,7 +203,7 @@ decodeText input = do
 decodeWithDocument :: FromYaml a => T.Text -> Either (NE.NonEmpty Error) (a, S.Document)
 decodeWithDocument input =
   single (parseStream input) >>= \case
-    [] -> withDocument (S.document (S.Node (S.Offset 0) (S.Offset 0) S.noProps S.noComments (S.Scalar S.Plain "")))
+    [] -> withDocument (S.document (S.Node (S.Offset 0) (S.Offset 0) S.noProps S.noComments (S.ScalarContent S.Plain "")))
     [doc] -> withDocument doc
     docs@(_ : doc : _) -> do
       mapM_ (\d -> first (fmap (uncurry (decoderError input d.root))) (prepare d.root)) docs

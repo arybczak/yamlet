@@ -237,8 +237,8 @@ nodePaths offs root = map (\off -> M.findWithDefault [] off found) offs
     walk wanted rpath n acc
       | Set.null inside = here
       | otherwise = case n.content of
-          Sequence _ xs -> L.foldl' (\a (i, x) -> walk inside (Index i : rpath) x a) here (zip [0 ..] xs)
-          Mapping _ kvs -> L.foldl' (\a (k, v) -> walk inside (keyElement k : rpath) v (key inside rpath k a)) here kvs
+          SequenceContent _ xs -> L.foldl' (\a (i, x) -> walk inside (Index i : rpath) x a) here (zip [0 ..] xs)
+          MappingContent _ kvs -> L.foldl' (\a (k, v) -> walk inside (keyElement k : rpath) v (key inside rpath k a)) here kvs
           _ -> here
       where
         here :: M.Map Offset [PathElement]
@@ -269,8 +269,8 @@ nodePaths offs root = map (\off -> M.findWithDefault [] off found) offs
 
     keyElement :: Node -> PathElement
     keyElement k = case k.content of
-      Scalar _ t -> Key t
-      Alias name -> AliasKey name
+      ScalarContent _ t -> Key t
+      AliasContent name -> AliasKey name
       _ -> CollectionKey
 
 -- | Create an error at the given offset of the input.

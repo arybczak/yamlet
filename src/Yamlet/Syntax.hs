@@ -141,7 +141,7 @@ contentNode c =
 -- >>> T.putStr (renderSyntax defaultRenderOptions [document (mappingNode [(plainNode "key", scalarNode Plain "a: b")])])
 -- key: 'a: b'
 scalarNode :: ScalarStyle -> T.Text -> Node
-scalarNode style = contentNode . Scalar style
+scalarNode style = contentNode . ScalarContent style
 
 -- | A plain scalar.
 plainNode :: T.Text -> Node
@@ -154,7 +154,7 @@ plainNode = scalarNode Plain
 --   --health-cmd pg_isready
 --   --health-interval 5s
 foldedNode :: [T.Text] -> Node
-foldedNode ls = contentNode (ScalarLines Folded t starts)
+foldedNode ls = contentNode (ScalarLinesContent Folded t starts)
   where
     (t, starts) = foldedText (contentLines 0 ls)
 
@@ -168,11 +168,11 @@ foldedNode ls = contentNode (ScalarLines Folded t starts)
 
 -- | A block sequence.
 sequenceNode :: [Node] -> Node
-sequenceNode = contentNode . Sequence Block
+sequenceNode = contentNode . SequenceContent Block
 
 -- | A block mapping.
 mappingNode :: [(Node, Node)] -> Node
-mappingNode = contentNode . Mapping Block
+mappingNode = contentNode . MappingContent Block
 
 -- $comments
 -- #comments#
@@ -545,14 +545,14 @@ mappingNode = contentNode . Mapping Block
 --     node path role n = do
 --       report (path <> role) n.comments
 --       case n.content of
---         Sequence _ items ->
+--         SequenceContent _ items ->
 --           sequence_ [node (path <> "[" <> show i <> "]") "" item | (i, item) <- zip [0 :: Int ..] items]
---         Mapping _ entries ->
+--         MappingContent _ entries ->
 --           sequence_ [node (path <> "." <> name k) " (key)" k >> node (path <> "." <> name k) " (value)" v | (k, v) <- entries]
 --         _ -> pure ()
 --     name :: Node -> String
 --     name k = case k.content of
---       Scalar _ t -> T.unpack t
+--       ScalarContent _ t -> T.unpack t
 --       _ -> "?"
 --     report :: String -> Comments -> IO ()
 --     report path c =

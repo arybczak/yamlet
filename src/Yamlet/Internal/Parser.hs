@@ -81,10 +81,10 @@ parseStream input@(T.Text arr off len) = case prescan e start of
       where
         ranges :: Node -> [(Offset, (Offset, Bool))] -> [(Offset, (Offset, Bool))]
         ranges n acc = case n.content of
-          Scalar style _ -> (n.offset, (n.endOffset, style == SingleQuoted || style == DoubleQuoted)) : acc
-          Sequence _ xs -> foldr ranges acc xs
-          Mapping _ kvs -> foldr (\(k, v) -> ranges k . ranges v) acc kvs
-          Alias _ -> acc
+          ScalarContent style _ -> (n.offset, (n.endOffset, style == SingleQuoted || style == DoubleQuoted)) : acc
+          SequenceContent _ xs -> foldr ranges acc xs
+          MappingContent _ kvs -> foldr (\(k, v) -> ranges k . ranges v) acc kvs
+          AliasContent _ -> acc
 
     e :: Env
     e =
@@ -734,7 +734,7 @@ cNsAliasNode = do
   char STAR
   name <- nsAnchorName
   q <- pos
-  pure $! mkNode e p (toOffset e q) noProps (Alias name)
+  pure $! mkNode e p (toOffset e q) noProps (AliasContent name)
 
 ----------------------------------------
 -- Flow scalars
@@ -766,7 +766,7 @@ cQuoted style n c props = withScan $ \e p ->
               if not double && byteAt e (i + 1) == SQUOTE
                 then go (i + 2) (i + 2) ("'" : slice e seg i : acc) ls
                 else Done (i + 1) $ case ls of
-                  FirstLine -> ScalarLines style (finish (slice e seg i : acc)) []
+                  FirstLine -> ScalarLinesContent style (finish (slice e seg i : acc)) []
                   Lines ps starts _ -> severalLines style (slice e seg i : acc) ps starts
           | w == BACKSLASH && double -> backslash seg i acc ls
           | isWhite w ->
@@ -872,7 +872,7 @@ newLine acc = \case
 -- | The scalar from the pieces of its last line, and the pieces and the
 -- starts of the lines before it, all in reverse order.
 severalLines :: ScalarStyle -> [T.Text] -> [T.Text] -> [Int] -> Content
-severalLines style acc ps starts = ScalarLines style (finish (acc ++ ps)) (reverse starts)
+severalLines style acc ps starts = ScalarLinesContent style (finish (acc ++ ps)) (reverse starts)
 
 -- | The positions where the lines start, from the length of the first line
 -- and the separators and the texts of the next lines.
@@ -961,7 +961,7 @@ nsPlain n c props = withScan $ \e p ->
        else
          let q = plainLine e c (p + 1)
              first = slice e p q
-             node end t ls = mkNode e p (toOffset e end) props (ScalarLines Plain t ls)
+             node end t ls = mkNode e p (toOffset e end) props (ScalarLinesContent Plain t ls)
          in if isKeyCtx c
               then Done q (node q first [])
               else case plainNextLines e n c q of
@@ -1038,7 +1038,7 @@ cFlowSequence n c props = do
   entries <- flowEntries n c' (nsFlowSeqEntry n c')
   closing c' p RBRACKET "flow sequence" "expected ',' or ']'"
   q <- pos
-  pure $! mkNode e p (toOffset e q) props (Sequence Flow entries)
+  pure $! mkNode e p (toOffset e q) props (SequenceContent Flow entries)
   where
     c' :: Ctx
     c' = inFlow c
@@ -1053,7 +1053,7 @@ cFlowMapping n c props = do
   entries <- flowEntries n c' (nsFlowMapEntry n c')
   closing c' p RBRACE "flow mapping" (expected entries)
   q <- pos
-  pure $! mkNode e p (toOffset e q) props (Mapping Flow entries)
+  pure $! mkNode e p (toOffset e q) props (MappingContent Flow entries)
   where
     c' :: Ctx
     c' = inFlow c
@@ -1063,7 +1063,7 @@ cFlowMapping n c props = do
     expected :: [(Node, Node)] -> String
     expected entries = case reverse entries of
       (k, v) : _
-        | v.content == Scalar Plain T.empty
+        | v.content == ScalarContent Plain T.empty
         , v.props == noProps
         , v.offset == k.endOffset ->
             "expected ':', ',' or '}'"
@@ -1159,7 +1159,7 @@ nsFlowSeqEntry n c = do
   (pair e p <$!> nsFlowPair n c) <|> nodeEntry e p
   where
     pair :: Env -> Int -> (Node, Node) -> Node
-    pair e p (k, v) = mkNode e p v.endOffset noProps (Mapping Flow [(k, v)])
+    pair e p (k, v) = mkNode e p v.endOffset noProps (MappingContent Flow [(k, v)])
 
     nodeEntry :: Env -> Int -> P Node
     nodeEntry e p = do
@@ -1177,10 +1177,10 @@ nsFlowSeqEntry n c = do
     -- The content of c-flow-json-node(n,c).
     isJsonNode :: Node -> Bool
     isJsonNode k = case k.content of
-      Sequence Flow _ -> True
-      Mapping Flow _ -> True
-      Scalar SingleQuoted _ -> True
-      Scalar DoubleQuoted _ -> True
+      SequenceContent Flow _ -> True
+      MappingContent Flow _ -> True
+      ScalarContent SingleQuoted _ -> True
+      ScalarContent DoubleQuoted _ -> True
       _ -> False
 
 -- | ns-flow-map-entry(n,c)
@@ -1376,7 +1376,7 @@ cLBlockScalar n props = do
         (_, []) -> q
   setPos r
   lTrailComments indent
-  pure $! mkNode e p (toOffset e contentEnd) props (ScalarLines style value starts)
+  pure $! mkNode e p (toOffset e contentEnd) props (ScalarLinesContent style value starts)
 
 -- | c-b-block-header(t). Return the chomping and the indentation indicator.
 cBBlockHeader :: Int -> P (Chomping, Maybe Int)
@@ -1583,7 +1583,7 @@ nsLCompactSequence n props = do
   p <- pos
   x <- cLBlockSeqEntry n
   xs <- many $ sIndent n >> cLBlockSeqEntry n
-  pure $! mkNode e p (lastOf x xs).endOffset props (Sequence Block (x : xs))
+  pure $! mkNode e p (lastOf x xs).endOffset props (SequenceContent Block (x : xs))
 
 -- | l+block-mapping(n)
 lBlockMapping :: Int -> Props -> P Node
@@ -1646,7 +1646,7 @@ nsLCompactMapping n props = do
   p <- pos
   x <- nsLBlockMapEntry n
   xs <- many $ sIndent n >> nsLBlockMapEntry n
-  pure $! mkNode e p (snd (lastOf x xs)).endOffset props (Mapping Block (x : xs))
+  pure $! mkNode e p (snd (lastOf x xs)).endOffset props (MappingContent Block (x : xs))
 
 -- | The last element of a non-empty list.
 lastOf :: a -> [a] -> a
@@ -1727,7 +1727,7 @@ emptyContent :: Env -> Content
 -- builds it, but the node must wait for the evaluation of 'T.empty'. A
 -- NOINLINE pragma on the constant prevents this on GHC 9.10, but not on GHC
 -- 9.14. The heap check of the render tests finds this thunk.
-emptyContent e = Scalar Plain (slice e e.base e.base)
+emptyContent e = ScalarContent Plain (slice e e.base e.base)
 
 -- | A node without comments from the given index to the given offset.
 mkNode :: Env -> Int -> Offset -> Props -> Content -> Node

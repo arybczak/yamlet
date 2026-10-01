@@ -860,7 +860,7 @@ instance
 -- as the other form.
 flatEntries :: YamlOptions -> S.Node -> Maybe [(S.Node, S.Node)]
 flatEntries opts v = case v.content of
-  S.Mapping _ kvs
+  S.MappingContent _ kvs
     | null kvs -> Nothing
     | any (\(k, _) -> isKey opts.tagKey k || isKey opts.contentsKey k) kvs -> Nothing
     | otherwise -> Just kvs
@@ -1003,7 +1003,7 @@ gParseYaml opts enc def k n
     single :: Parser a
     single = case view n of
       StringView t -> fromMaybe (withoutValue t) (gFromTag opts k n t)
-      _ | S.Mapping {} <- n.content -> withMapping singleEntry n
+      _ | S.MappingContent {} <- n.content -> withMapping singleEntry n
       _ -> typeMismatch "a string or a mapping with one key" n
 
     singleEntry :: Object -> Parser a
@@ -1143,9 +1143,9 @@ fromObject opts flat keys def o
     merged =
       let n = objectNode o
           style = case n.content of
-            S.Mapping s _ -> s
+            S.MappingContent s _ -> s
             _ -> S.Block
-      in gFromValue (S.Node n.offset n.endOffset n.props S.noComments (S.Mapping style others))
+      in gFromValue (S.Node n.offset n.endOffset n.props S.noComments (S.MappingContent style others))
 
     others :: [(S.Node, S.Node)]
     others = foldr removeKey (objectEntries o) keys

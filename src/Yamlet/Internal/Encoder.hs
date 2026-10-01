@@ -42,15 +42,15 @@ renderDocuments docs
     tagHandles :: S.Node -> [Char] -> [Char]
     tagHandles n acc =
       (case n.props.tag of S.Tag t -> maybe id (:) (tagHandle t); _ -> id) $ case n.content of
-        S.Sequence _ xs -> foldr tagHandles acc xs
-        S.Mapping _ kvs -> foldr (\(k, v) -> tagHandles k . tagHandles v) acc kvs
+        S.SequenceContent _ xs -> foldr tagHandles acc xs
+        S.MappingContent _ kvs -> foldr (\(k, v) -> tagHandles k . tagHandles v) acc kvs
         _ -> acc
 
     topLevel :: S.Node -> B.Builder
     topLevel n = case n.content of
-      S.Sequence _ (_ : _) -> tagLine n <> blockSequence 0 True n
-      S.Mapping _ (_ : _) -> tagLine n <> blockMapping 0 True n
-      S.Scalar S.Literal t | needsIndentIndicator t -> withTag n (doubleQuoted t) <> "\n"
+      S.SequenceContent _ (_ : _) -> tagLine n <> blockSequence 0 True n
+      S.MappingContent _ (_ : _) -> tagLine n <> blockMapping 0 True n
+      S.ScalarContent S.Literal t | needsIndentIndicator t -> withTag n (doubleQuoted t) <> "\n"
       _ -> inlineValue indentStep n <> "\n"
 
     -- A tag of a block collection takes a line of its own.
@@ -70,22 +70,22 @@ simple n =
     && isNothing n.props.anchor
     && n.props.tag /= S.NonSpecificTag
     && case n.content of
-      S.ScalarLines _ _ (_ : _) -> False
+      S.ScalarLinesContent _ _ (_ : _) -> False
       -- The renderer gives an empty plain scalar no text.
-      S.Scalar S.Plain t -> not (T.null t)
-      S.Scalar S.SingleQuoted _ -> True
-      S.Scalar S.DoubleQuoted _ -> True
-      S.Scalar S.Literal _ -> True
-      S.Scalar _ _ -> False
-      S.Sequence style xs -> (style == S.Block || null xs) && all simple xs
-      S.Mapping style kvs -> (style == S.Block || null kvs) && all (\(k, v) -> simple k && simple v) kvs
-      S.Alias _ -> False
+      S.ScalarContent S.Plain t -> not (T.null t)
+      S.ScalarContent S.SingleQuoted _ -> True
+      S.ScalarContent S.DoubleQuoted _ -> True
+      S.ScalarContent S.Literal _ -> True
+      S.ScalarContent _ _ -> False
+      S.SequenceContent style xs -> (style == S.Block || null xs) && all simple xs
+      S.MappingContent style kvs -> (style == S.Block || null kvs) && all (\(k, v) -> simple k && simple v) kvs
+      S.AliasContent _ -> False
 
 -- | A block sequence of a 'simple' node. The first entry does not start with
 -- indentation if the sequence continues a line.
 blockSequence :: Int -> Bool -> S.Node -> B.Builder
 blockSequence indent atLineStart n = case n.content of
-  S.Sequence _ xs -> mconcat $ zipWith entry [0 :: Int ..] xs
+  S.SequenceContent _ xs -> mconcat $ zipWith entry [0 :: Int ..] xs
   _ -> mempty
   where
     entry :: Int -> S.Node -> B.Builder
@@ -96,8 +96,8 @@ blockSequence indent atLineStart n = case n.content of
 -- line of the indicator, unless it has a tag.
 afterIndicator :: Int -> S.Node -> B.Builder
 afterIndicator indent x = case x.content of
-  S.Sequence _ (_ : _) -> collection $ blockSequence (indent + indentStep) False x
-  S.Mapping _ (_ : _) -> collection $ blockMapping (indent + indentStep) False x
+  S.SequenceContent _ (_ : _) -> collection $ blockSequence (indent + indentStep) False x
+  S.MappingContent _ (_ : _) -> collection $ blockMapping (indent + indentStep) False x
   _ -> " " <> inlineValue (indent + indentStep) x <> "\n"
   where
     collection :: B.Builder -> B.Builder
@@ -109,7 +109,7 @@ afterIndicator indent x = case x.content of
 -- indentation if the mapping continues a line.
 blockMapping :: Int -> Bool -> S.Node -> B.Builder
 blockMapping indent atLineStart n = case n.content of
-  S.Mapping _ kvs -> mconcat $ zipWith entry [0 :: Int ..] kvs
+  S.MappingContent _ kvs -> mconcat $ zipWith entry [0 :: Int ..] kvs
   _ -> mempty
   where
     entry :: Int -> (S.Node, S.Node) -> B.Builder
@@ -120,8 +120,8 @@ blockMapping indent atLineStart n = case n.content of
 
     value :: S.Node -> B.Builder
     value v = case v.content of
-      S.Sequence _ (_ : _) -> tagged v <> "\n" <> blockSequence indent True v
-      S.Mapping _ (_ : _) -> tagged v <> "\n" <> blockMapping (indent + indentStep) True v
+      S.SequenceContent _ (_ : _) -> tagged v <> "\n" <> blockSequence indent True v
+      S.MappingContent _ (_ : _) -> tagged v <> "\n" <> blockMapping (indent + indentStep) True v
       _ -> " " <> inlineValue (indent + indentStep) v <> "\n"
 
     tagged :: S.Node -> B.Builder
@@ -130,14 +130,14 @@ blockMapping indent atLineStart n = case n.content of
 -- | A key that fits on one line, or 'Nothing' if it needs an explicit entry.
 implicitKey :: S.Node -> Maybe B.Builder
 implicitKey k = case k.content of
-  S.Scalar style t
+  S.ScalarContent style t
     | S.NoTag <- k.props.tag
     , style == S.Plain
     , plainSyntax False t ->
         if T.length t > maxImplicitKeyLength then Nothing else Just (B.fromText t)
     | otherwise -> fits (withTag k (scalarText style t))
-  S.Sequence _ [] -> fits (inlineValue 0 k)
-  S.Mapping _ [] -> fits (inlineValue 0 k)
+  S.SequenceContent _ [] -> fits (inlineValue 0 k)
+  S.MappingContent _ [] -> fits (inlineValue 0 k)
   _ -> Nothing
   where
     fits :: B.Builder -> Maybe B.Builder
@@ -146,11 +146,11 @@ implicitKey k = case k.content of
 -- | A scalar, or an empty collection in the flow style.
 inlineValue :: Int -> S.Node -> B.Builder
 inlineValue indent n = withTag n $ case n.content of
-  S.Sequence _ _ -> "[]"
-  S.Mapping _ _ -> "{}"
-  S.Scalar S.Literal t | Just (h, b) <- literalBlock True indent t -> h <> b
-  S.Scalar style t -> scalarText style t
-  S.Alias _ -> mempty
+  S.SequenceContent _ _ -> "[]"
+  S.MappingContent _ _ -> "{}"
+  S.ScalarContent S.Literal t | Just (h, b) <- literalBlock True indent t -> h <> b
+  S.ScalarContent style t -> scalarText style t
+  S.AliasContent _ -> mempty
 
 -- | Prefix the tag if the node has one.
 withTag :: S.Node -> B.Builder -> B.Builder
