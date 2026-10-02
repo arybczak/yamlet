@@ -303,9 +303,13 @@ test_containers :: Assertion
 test_containers = do
   assertEqual "set" (Right (Set.fromList [1, 2, 3])) (decodeText @(Set.Set Int) "[3, 1, 2]")
   assertEqual
-    "set with a duplicate after conversion"
-    (Just ((1, 5, "duplicate element after conversion"), (1, 2, "the first element")))
+    "set with a duplicate"
+    (Just ((1, 5, "duplicate element"), (1, 2, "the first element")))
     (errorWithNote (decodeText @(Set.Set Double) "[1, 1.0]"))
+  assertEqual
+    "set with an equal element"
+    (Just ((1, 5, "duplicate element"), (1, 2, "the first element")))
+    (errorWithNote (decodeText @(Set.Set Int) "[1, 1]"))
   assertEqual "int map" (Right (IM.fromList [(1, "a"), (2, "b")])) (decodeText @(IM.IntMap T.Text) "{2: b, 1: a}")
   assertEqual
     "int map with a duplicate key"
@@ -1290,9 +1294,9 @@ test_collectedErrors = do
     (errorsOf (decodeText @(M.Map Double T.Text) "{1: a, 1.0: b, 2: c, 2.0: d}"))
   assertEqual
     "duplicate elements of a set"
-    [ (1, 5, "duplicate element after conversion")
+    [ (1, 5, "duplicate element")
     , (1, 2, "the first element")
-    , (1, 13, "duplicate element after conversion")
+    , (1, 13, "duplicate element")
     , (1, 10, "the first element")
     ]
     (errorsOf (decodeText @(Set.Set Double) "[1, 1.0, 2, 2.0]"))
@@ -1302,7 +1306,7 @@ test_collectedErrors = do
     (errorsOf (decodeText @(Set.Set Double) "[x, y]"))
   assertEqual
     "duplicate and invalid elements of a set"
-    [(1, 5, "duplicate element after conversion"), (1, 2, "the first element"), (1, 10, "expected a number, but got a string")]
+    [(1, 5, "duplicate element"), (1, 2, "the first element"), (1, 10, "expected a number, but got a string")]
     (errorsOf (decodeText @(Set.Set Double) "[1, 1.0, x]"))
   assertEqual
     "duplicate elements of an int set"

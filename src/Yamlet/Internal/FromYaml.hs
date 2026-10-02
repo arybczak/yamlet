@@ -1139,9 +1139,10 @@ instance FromYaml v => FromYaml (IM.IntMap v) where
 instance (Ord a, FromYaml a) => FromYaml (Set.Set a) where
   parseYaml =
     withSequence $
-      insertUnique id (parseNode parseYaml) id (Set.alterF (,True)) Set.empty "duplicate element after conversion" "the first element"
+      insertUnique id (parseNode parseYaml) id (Set.alterF (,True)) Set.empty "duplicate element" "the first element"
 
--- | A list. Two equal elements are an error.
+-- | A list. Two elements that convert to the same value, e.g. @1@ and @0x1@,
+-- are an error.
 instance FromYaml IS.IntSet where
   parseYaml =
     withSequence $
