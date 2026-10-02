@@ -61,8 +61,8 @@ format name mkG mkM =
         ]
     , bgroup
         "decode"
-        [ bench "generic" $ nf (either (const Nothing) Just . decode @[g]) bs
-        , bench "manual" $ nf (either (const Nothing) Just . decode @[m]) bs
+        [ bench "generic" $ nf (either (error . show) id . decode @[g]) bs
+        , bench "manual" $ nf (either (error . show) id . decode @[m]) bs
         ]
     ]
   where

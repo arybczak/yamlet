@@ -36,11 +36,11 @@ parsing name bs =
     , bgroup
         "HsYAML"
         [ bench "events" $ nf HE.parseEvents lazy
-        , bench "nodes" $ nf (either (const ()) (foldMap (\(H.Doc n) -> forceNode n)) . H.decodeNode) lazy
+        , bench "nodes" $ nf (foldMap (\(H.Doc n) -> forceNode n) . either (error . show) id . H.decodeNode) lazy
         ]
     , bgroup
         "yaml"
-        [bench "aeson value" $ nf (either (const Nothing) Just . Y.decodeEither' @J.Value) bs]
+        [bench "aeson value" $ nf (either (error . show) id . Y.decodeEither' @J.Value) bs]
     ]
   where
     lazy :: BL.ByteString
@@ -64,9 +64,9 @@ decoding
   -> Benchmark
 decoding name bs others =
   bgroup name $
-    [ bench "yamlet" $ nf (either (const Nothing) Just . decode @a) bs
-    , bench "HsYAML" $ nf (either (const Nothing) Just . H.decode1Strict @a) bs
-    , bench "yaml" $ nf (either (const Nothing) Just . Y.decodeEither' @a) bs
+    [ bench "yamlet" $ nf (either (error . show) id . decode @a) bs
+    , bench "HsYAML" $ nf (either (error . show) id . H.decode1Strict @a) bs
+    , bench "yaml" $ nf (either (error . show) id . Y.decodeEither' @a) bs
     ]
       ++ others
 
