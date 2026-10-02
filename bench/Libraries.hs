@@ -92,7 +92,7 @@ encoding name bs others =
 
 -- | The benchmark that decodes a JSON input with aeson.
 aesonDecoding :: forall a. (NFData a, J.FromJSON a) => BS.ByteString -> Benchmark
-aesonDecoding bs = bench "aeson" $ nf (J.decodeStrict' @a) bs
+aesonDecoding bs = bench "aeson" $ nf (either error id . J.eitherDecodeStrict' @a) bs
 
 -- | The benchmark that encodes the value of a JSON input as JSON with aeson.
 aesonEncoding :: forall a. (NFData a, FromYaml a, J.ToJSON a) => BS.ByteString -> Benchmark
