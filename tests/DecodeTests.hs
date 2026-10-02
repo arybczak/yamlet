@@ -771,6 +771,10 @@ test_encodings = do
   documents "two BOMs before a marker" ["a", "b"] "a\n\xFEFF\xFEFF--- b\n"
   documents "two BOMs before a marker after an end marker" ["a", "b"] "--- a\n...\n\xFEFF\xFEFF--- b\n"
   documents "two BOMs before a marker after a block scalar" ["x\n", "b"] "--- |\n x\n\xFEFF\xFEFF--- b\n"
+  documents "BOM before a marker after a literal at the top level" ["x\n", "b"] "--- |\nx\n\xFEFF--- b\n"
+  documents "BOM before a marker after a folded at the top level" ["x y\n", "b"] "--- >\nx\ny\n\xFEFF--- b\n"
+  documents "BOM before a comment after a literal at the top level" ["x\n"] "--- |\nx\n\xFEFF# c\n"
+  documents "BOM before a marker as the first line of a literal" ["", "b"] "--- |\n\xFEFF--- b\n"
   -- The time to check a run of BOMs is linear in its length.
   documents "many BOMs at the start" ["a"] (T.replicate 400000 "\xFEFF" <> "a\n")
   documents "many BOMs after an end marker" ["a", "b"] ("a\n...\n" <> T.replicate 400000 "\xFEFF" <> "b\n")

@@ -1512,7 +1512,11 @@ blockLines e indent = go 0 []
                -- Spaces at the end of the input are an empty line, as in the
                -- test JEF9/02 of the YAML test suite.
                | s >= e.end -> (reverse acc, empties + 1, s)
-               | s - i == indent ->
+               -- A byte order mark at the start of a line starts the prefix
+               -- of a document, as in 'nsPlain'. Only a block scalar at the
+               -- top level has content at the start of a line.
+               | s - i == indent
+               , not (isBom e s && isStartOfLine e s) ->
                    let t = lineEnd s
                        acc' = BlockLine empties (slice e s t) : acc
                    in if t >= e.end
