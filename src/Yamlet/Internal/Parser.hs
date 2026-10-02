@@ -833,6 +833,8 @@ cQuoted style n c props = withScan $ \e p ->
       badIndent i
         | nextContent i >= e.end = endOfDocument i
         | not (hasClosingQuote e quote (nextContent i)) = unterminated
+        | Just tab <- L.find (\j -> byteAt e j == TAB) [skipBlankLines e i .. nextContent i - 1] =
+            Failed tab "tabs cannot be used for indentation"
         | otherwise =
             Failed
               (nextContent i)

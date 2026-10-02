@@ -408,19 +408,25 @@ indentationMistake e i = go (lineStart e i)
 -- "-" or the ":" after a key, if the entries above it at the same position
 -- are list items or mapping entries.
 blockMistake :: Env -> Int -> Maybe (Int, String)
-blockMistake e i = do
+blockMistake e at = do
   guard $ start < i
   k <- entryAbove (lineStart e i)
   if
     | isListItem e k && byteAt e start == MINUS && i == start + 1 ->
         Just (i, "expected a space after '-'")
-    | not (isListItem e k) && (w == 0 || isBreak w) && not (any (isKeyColon e) [start .. i - 1]) ->
+    | not (isListItem e k) && (w == 0 || isBreak w || i < at) && not (any (isKeyColon e) [start .. i - 1]) ->
         Just $ case filter tightColon [start .. i - 1] of
           _ | openQuote -> (i, "a key must be on a single line")
           colon : _ -> (colon + 1, "expected a space after ':'")
           [] -> (i, "expected ':' after the key")
     | otherwise -> Nothing
   where
+    -- The parser fails at a comment after the content, as in "key # note".
+    i :: Int
+    i
+      | byteAt e at == HASH && isWhite (byteBefore e at) = skipBackWhites e at
+      | otherwise = at
+
     -- The line starts a quoted scalar that does not end on it, as in "a
     -- quoted key on two lines".
     openQuote :: Bool

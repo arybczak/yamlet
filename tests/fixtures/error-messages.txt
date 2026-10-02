@@ -77,7 +77,7 @@
 # DK4H: Implicit key followed by newline
 3:3: expected ',' or ']'
 # DK95/01: Tabs that look like indentation
-2:2: invalid indentation of a line in a double-quoted scalar
+2:1: tabs cannot be used for indentation
 # DK95/06: Tabs that look like indentation
 3:3: tabs cannot be used for indentation
 # DMG6: Wrong indendation in Map
@@ -93,7 +93,7 @@
 # G9HC: Invalid anchor in zero indented sequence
 3:1: an anchor or a tag cannot be on a line of its own here, write it after the key or the '-'
 # GDY7: Comment that looks like a mapping key
-2:9: unexpected '#'
+2:8: expected ':' after the key
 # GT5M: Node anchor in sequence
 2:1: an anchor or a tag cannot be on a line of its own here, write it after the key or the '-'
 # H7J7: Node anchor not indented

@@ -889,6 +889,8 @@ test_syntaxErrors = do
     "name: 'abc\nnext'\n"
   check "missing colon" (2, 4, "expected ':' after the key") "a: 1\nb 2\nc: 3\n"
   check "missing colon in a list item" (2, 8, "expected ':' after the key") "- key: value\n  other\n"
+  check "missing colon before a comment" (2, 10, "expected ':' after the key") "name: x\nport 8080 # default\n"
+  check "missing colon after a key before a comment" (2, 5, "expected ':' after the key") "name: x\nport # default\n"
   check "missing space after a colon" (2, 3, "expected a space after ':'") "a: 1\nb:2\n"
   check "line that has its colon" (2, 5, "expected an alias name after '*'") "a: 1\nb: *\n"
   check "anchor without a name" (1, 5, "expected an anchor name after '&'") "a: & 1\n"
@@ -919,6 +921,8 @@ test_syntaxErrors = do
     (3, 1, "'}' is indented too little to end the flow mapping")
     "key: {\n  # c\n}\n"
   check "tab in a flow sequence" (2, 1, "tabs cannot be used for indentation") "a: [\n\tb\n]\n"
+  check "tab in a double-quoted scalar" (2, 1, "tabs cannot be used for indentation") "a: \"x\n\ty\"\n"
+  check "tab after a blank line in a single-quoted scalar" (3, 1, "tabs cannot be used for indentation") "a: 'x\n\n\ty'\n"
   check
     "block scalar in a flow sequence"
     (1, 2, "unexpected '|', a block scalar cannot be inside a flow collection")
