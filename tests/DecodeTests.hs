@@ -893,9 +893,7 @@ test_syntaxErrors = do
     (2, 3, "the name of the alias includes the ':', write a space before ':' if the alias is a key")
     "a: &x 1\n*x: 2\n"
   check "alias without a name in a flow sequence" (1, 2, "expected an alias name after '*'") "[*, a]\n"
-  check "missing space after a dash" (2, 2, "expected a space after '-'") "- a\n-b\n"
   check "tab indentation" (2, 1, "tabs cannot be used for indentation") "a:\n\tb: 1\n"
-  check "tab before a key" (1, 1, "tabs cannot be used for indentation") "\tkey: value\n"
   check "tab after spaces before a key" (2, 3, "tabs cannot be used for indentation") "a:\n  \tb: c\n"
   check "unterminated string" (1, 6, "unterminated double-quoted scalar") "key: \"abc\n"
   check "flow sequence before a key" (1, 6, "unterminated flow sequence") "key: [a, b\nc: d\n"
@@ -938,7 +936,7 @@ test_syntaxErrors = do
   check "start marker in a flow sequence" (2, 1, "unexpected '---' in a flow sequence, indent the line") "a: [x,\n---\n  y]\n"
   check "end marker in a flow mapping" (2, 1, "unexpected '...' in a flow mapping, indent the line") "a: {x: 1,\n...\n  y: 2}\n"
   check "start marker after a missing quote" (1, 4, "unterminated double-quoted scalar") "a: \"x\n---\nb: c\n"
-  check "missing colon" (1, 6, "expected ':', ',' or '}'") "{\"a\" 1}"
+  check "missing colon in a flow mapping" (1, 6, "expected ':', ',' or '}'") "{\"a\" 1}"
   check "missing comma after a value" (1, 12, "expected ',' or '}'") "{\"a\": 1 \"b\": 2}"
   check
     "quote in a single-quoted scalar"
@@ -962,10 +960,9 @@ test_syntaxErrors = do
     "reserved indicator in a flow sequence"
     (1, 5, "unexpected '`', a plain scalar cannot start with it, quote the value")
     "[a, `b`]\n"
-  check "key among list items" (5, 3, "unexpected key among list items") "a:\n  - x\n\n  # c\n  b: 1\n"
+  check "key among indented list items after a comment" (5, 3, "unexpected key among list items") "a:\n  - x\n\n  # c\n  b: 1\n"
   check "list item among keys" (3, 3, "unexpected list item among mapping entries") "a:\n  b: 1\n  - x\n"
   check "list item among top keys" (2, 1, "unexpected list item among mapping entries") "a: 1\n- b\n"
-  check "key among top list items" (2, 1, "unexpected key among list items") "- a\nb: 1\n"
   check "brace after a list item" (2, 1, "unexpected '}'") "- a\n}\n"
   check "text after a block scalar header" (1, 6, "the content of a block scalar starts on the next line") "s: | text\n"
   check

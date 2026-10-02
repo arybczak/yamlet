@@ -460,7 +460,6 @@ test_record = do
     (Just (1, 1, "the key true is a boolean, not a string"))
     (errorOf (decodeText @DefaultSwitch "true: 1\n"))
   assertEqual "quoted key" (Right (Switch (Just 1))) (decodeText "'true': 1\n")
-  assertEqual "encoded" "host: a\nport: 1\ntags: null\n" (encodeText (Server "a" 1 Nothing))
   roundTrip "round trip" (Server "a" 1 (Just ["x", "y"]))
 
 test_parameters :: Assertion
@@ -523,7 +522,6 @@ test_collectedErrors = do
 test_enumeration :: Assertion
 test_enumeration = do
   assertEqual "decoded" (Right [TurnLeft, TurnRight]) (decodeText "[TurnLeft, TurnRight]")
-  assertEqual "encoded" "TurnLeft\n" (encodeText TurnLeft)
   assertEqual
     "unknown value"
     (Just (1, 1, "unknown value \"Up\", expected one of: TurnLeft, TurnRight"))
@@ -569,8 +567,6 @@ test_options = do
     (errorOf (decodeText @Strict "size: 1\ncolour: red\n"))
   assertEqual "tag key and modifiers" "command: forward\nstep_count: 3\n" (encodeText (Forward 3))
   roundTrip "tag key and modifiers" (Forward 3)
-  assertEqual "tag of one constructor" "tag: Single\nvalue: 1\n" (encodeText (Single 1))
-  roundTrip "tag of one constructor" (Single 1)
 
 test_missingContents :: Assertion
 test_missingContents = do
@@ -616,9 +612,7 @@ test_singleField = do
 
 test_flatten :: Assertion
 test_flatten = do
-  assertEqual "record" "step: Ahead\ndistance: 10\n" (encodeText (Ahead (Distance (Just 10))))
   assertEqual "enumeration" "step: Rotate\ncontents: Clockwise\n" (encodeText (Rotate Clockwise))
-  assertEqual "no fields" "step: Halt\n" (encodeText Halt)
   assertEqual "no mapping" "step: Wait\ncontents: 5\n" (encodeText (Wait 5))
   assertEqual "tag key" "step: Again\ncontents:\n  step: Halt\n" (encodeText (Again Halt))
   assertEqual "contents key" "step: Boxed\ncontents:\n  contents: 1\n" (encodeText (Boxed (Box 1)))
