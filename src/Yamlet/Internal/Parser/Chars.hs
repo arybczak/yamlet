@@ -70,6 +70,8 @@ module Yamlet.Internal.Parser.Chars
   , skipWhites
   , breakEnd
   , isStartOfLine
+  , lineStartAt
+  , previousLineStart
   , markerLength
   , isMarker
   , startsPrefix
@@ -276,6 +278,23 @@ isStartOfLine e i
   | isBreak (byteBefore e i) = True
   | i - bomLength >= e.base && isBom e (i - bomLength) = isStartOfLine e (i - bomLength)
   | otherwise = False
+
+-- | The start of the line that contains the index.
+lineStartAt :: Env -> Int -> Int
+lineStartAt e i
+  | i > e.base && not (isBreak (byteBefore e i)) = lineStartAt e (i - 1)
+  | otherwise = i
+
+-- | The start of the line above the line that starts at the index, which is
+-- not the first line.
+previousLineStart :: Env -> Int -> Int
+previousLineStart e i = lineStartAt e (breakStart (i - 1))
+  where
+    -- The start of the line break that ends at the index, e.g. of CR LF.
+    breakStart :: Int -> Int
+    breakStart j
+      | j > e.base && byteBefore e j == CR && byteAt e j == LF = j - 1
+      | otherwise = j
 
 -- | The number of characters of a @---@ or @...@ marker.
 markerLength :: Int

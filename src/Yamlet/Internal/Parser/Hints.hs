@@ -68,7 +68,7 @@ unexpectedIn e i = case indentationTab (i - 1) Nothing of
           "unexpected ':', a mapping cannot start on the line of '---'"
       -- A colon on the first line of a key does not fail, so the scalar
       -- before this one started on a line above.
-      | w == COLON && firstColon && valueColon && isJust (lineAbove e (lineStart e i)) ->
+      | w == COLON && firstColon && valueColon && isJust (lineAbove e (lineStartAt e i)) ->
           "unexpected ':', this line continues the scalar from the line above, check the indentation and the line above"
       | w == COLON && valueColon ->
           "unexpected ':', quote the value if it contains \": \""
@@ -98,13 +98,13 @@ unexpectedIn e i = case indentationTab (i - 1) Nothing of
     -- the content above ends with a plain scalar.
     afterComment :: Bool
     afterComment =
-      i == skipSpaces e (lineStart e i)
+      i == skipSpaces e (lineStartAt e i)
         && isNsChar (byteAt e i)
         && not (isListItem e i)
         && not (any (isKeyColon e) [i .. lineEnd i - 1])
         && isNothing (mistake e False i)
-        && commentAbove (lineStart e i)
-        && maybe False endsPlain (lineAbove e (lineStart e i))
+        && commentAbove (lineStartAt e i)
+        && maybe False endsPlain (lineAbove e (lineStartAt e i))
       where
         -- The line with the content at the index ends with a plain scalar,
         -- not with a quoted scalar, a flow collection, an alias, an anchor,
@@ -145,14 +145,14 @@ unexpectedIn e i = case indentationTab (i - 1) Nothing of
         inBlockScalar k = go k
           where
             go :: Int -> Bool
-            go j = case lineAbove e (lineStart e j) of
+            go j = case lineAbove e (lineStartAt e j) of
               Nothing -> False
               Just above
                 | indentation above < indentation k -> blockHeader above
                 | otherwise -> go above
 
             indentation :: Int -> Int
-            indentation j = j - lineStart e j
+            indentation j = j - lineStartAt e j
 
         -- The line at the index ends with the header of a block scalar,
         -- e.g. "key: |-".
@@ -169,7 +169,7 @@ unexpectedIn e i = case indentationTab (i - 1) Nothing of
         commentAbove start
           | start <= e.base = False
           | otherwise =
-              let prev = lineStart e (start - 1)
+              let prev = lineStartAt e (start - 1)
                   k = skipWhites e prev
               in if isBreak (byteAt e k) then commentAbove prev else hasComment k
 
@@ -186,7 +186,7 @@ unexpectedIn e i = case indentationTab (i - 1) Nothing of
     -- tags, as in "&anchor".
     propertiesLine :: Maybe Int
     propertiesLine =
-      let start = skipSpaces e (lineStart e i)
+      let start = skipSpaces e (lineStartAt e i)
       in if onlyProperties start then Just start else Nothing
       where
         onlyProperties :: Int -> Bool
@@ -233,11 +233,11 @@ unexpectedIn e i = case indentationTab (i - 1) Nothing of
             c = byteAt e j
 
     onStartMarkerLine :: Bool
-    onStartMarkerLine = isMarker e (lineStart e i) && byteAt e (lineStart e i) == MINUS
+    onStartMarkerLine = isMarker e (lineStartAt e i) && byteAt e (lineStartAt e i) == MINUS
 
     -- The start of the entry on the line, after any "- ".
     entryStart :: Int
-    entryStart = skipListItems e (skipSpaces e (lineStart e i))
+    entryStart = skipListItems e (skipSpaces e (lineStartAt e i))
 
     -- No colon that ends a key precedes the index on its line, other than
     -- in a flow collection.
@@ -288,7 +288,7 @@ unexpectedIn e i = case indentationTab (i - 1) Nothing of
     -- "\tkey: value". A plain scalar can follow a tab, but a key cannot.
     tabBeforeContent :: Maybe Int
     tabBeforeContent =
-      let start = lineStart e i
+      let start = lineStartAt e i
       in L.find (\j -> byteAt e j == TAB) [start .. skipWhites e start - 1]
 
     -- The first tab in the indentation before the index, if only white space
@@ -356,18 +356,18 @@ mistakeIn e flow i
 -- mapping entries or the other way round, or a line of a block scalar with
 -- too little indentation.
 indentationMistake :: Env -> Int -> Maybe String
-indentationMistake e i = go (lineStart e i)
+indentationMistake e i = go (lineStartAt e i)
   where
     column :: Int
-    column = i - lineStart e i
+    column = i - lineStartAt e i
 
     -- Look at the lines above, up to the first line with less indentation.
     go :: Int -> Maybe String
     go start = do
       k <- lineAbove e start
-      let indent = k - lineStart e k
+      let indent = k - lineStartAt e k
       if
-        | indent > column -> go (lineStart e k)
+        | indent > column -> go (lineStartAt e k)
         | indent < column ->
             if endsWithHeader k
               then Just "unexpected indentation, the line has less indentation than the block scalar above it"
@@ -410,7 +410,7 @@ indentationMistake e i = go (lineStart e i)
 blockMistake :: Env -> Int -> Maybe (Int, String)
 blockMistake e at = do
   guard $ start < i
-  k <- entryAbove (lineStart e i)
+  k <- entryAbove (lineStartAt e i)
   if
     | isListItem e k && byteAt e start == MINUS && i == start + 1 ->
         Just (i, "expected a space after '-'")
@@ -438,23 +438,23 @@ blockMistake e at = do
     w = byteAt e i
 
     start :: Int
-    start = skipSpaces e (lineStart e i)
+    start = skipSpaces e (lineStartAt e i)
 
     column :: Int
-    column = start - lineStart e i
+    column = start - lineStartAt e i
 
     -- The closest entry above that starts at the column. An entry can follow
     -- "- " on its line, as in "- key: value".
     entryAbove :: Int -> Maybe Int
     entryAbove from = do
       k <- lineAbove e from
-      let indent = k - lineStart e k
+      let indent = k - lineStartAt e k
           entry = skipListItems e k
       if
         | indent == column -> Just k
-        | entry - lineStart e k == column -> Just entry
+        | entry - lineStartAt e k == column -> Just entry
         | indent < column -> Nothing
-        | otherwise -> entryAbove (lineStart e k)
+        | otherwise -> entryAbove (lineStartAt e k)
 
     -- A colon before a word, as in "key:value", but not in "http://".
     tightColon :: Int -> Bool
@@ -478,28 +478,16 @@ skipBackWhites e i = if isWhite (byteBefore e i) then skipBackWhites e (i - 1) e
 wordStart :: Env -> Int -> Int
 wordStart e i = if isAnchorChar (byteBefore e i) then wordStart e (i - 1) else i
 
--- | The start of the line that contains the index.
-lineStart :: Env -> Int -> Int
-lineStart e i
-  | i > e.base && not (isBreak (byteBefore e i)) = lineStart e (i - 1)
-  | otherwise = i
-
 -- | The first content of the closest line above the line that starts at the
 -- index. Blank lines and comment lines do not count.
 lineAbove :: Env -> Int -> Maybe Int
 lineAbove e start
   | start <= e.base = Nothing
   | otherwise =
-      let prev = lineStart e (breakStart (start - 1))
+      let prev = previousLineStart e start
           k = skipSpaces e prev
           b = byteAt e k
       in if isBreak b || b == HASH then lineAbove e prev else Just k
-  where
-    -- The start of the line break that ends at the index, e.g. of CR LF.
-    breakStart :: Int -> Int
-    breakStart j
-      | j > e.base && byteBefore e j == CR && byteAt e j == LF = j - 1
-      | otherwise = j
 
 -- | The index after the "- " indicators at the index, as in "- - key: value".
 skipListItems :: Env -> Int -> Int

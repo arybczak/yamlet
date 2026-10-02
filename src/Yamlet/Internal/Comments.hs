@@ -60,7 +60,7 @@ attachComments e first hasNext start marker rootEnd end doc
     -- separate it from nothing.
     items :: [Item]
     items =
-      (if isJust marker || not first then id else dropWhile (\i -> isEmptyLine i && i.at < offsetOf doc.root.offset)) $
+      (if isJust marker || not first then id else dropWhile (\i -> isEmptyLine i && i.at < rootStart)) $
         scanItems e start end (skipRanges e doc.root)
 
     (docItems, afterMarker) = case marker of
@@ -69,7 +69,7 @@ attachComments e first hasNext start marker rootEnd end doc
 
     rootStart, rootLine :: Int
     rootStart = offsetOf doc.root.offset
-    rootLine = lineOf e rootStart
+    rootLine = lineStartAt e (rootStart + e.base) - e.base
 
     -- The comment on the line of the marker, unless the root starts there.
     (markerComment, rest) = case (marker, afterMarker) of
@@ -370,15 +370,6 @@ comment :: Item -> Maybe T.Text
 comment i = case i.line of
   Comment t -> Just t
   EmptyLine -> Nothing
-
--- | The offset of the start of the line with the given offset.
-lineOf :: Env -> Int -> Int
-lineOf e o = go (o + e.base) - e.base
-  where
-    go :: Int -> Int
-    go i
-      | i > e.base && not (isBreak (A.unsafeIndex e.array (i - 1))) = go (i - 1)
-      | otherwise = i
 
 -- | The offset of the start of the line with the second offset. The walk stops
 -- at the first offset of the pair, and the pair gives the start of its line.

@@ -52,7 +52,7 @@ parseStream input@(T.Text arr off len) = case prescan e start of
     -- cause, unless a document without a marker can start on the line.
     parseError :: Int -> String -> Error
     parseError i msg
-      | let s = lineOf i
+      | let s = lineStartAt e i
       , bomBeforeContent e s
       , not (inPrefix s) =
           errorAt input (toOffset e s) "unexpected byte order mark"
@@ -65,19 +65,10 @@ parseStream input@(T.Text arr off len) = case prescan e start of
     inPrefix s
       | s <= off = True
       | otherwise =
-          let prev = lineOf (breakStart (s - 1))
+          let prev = previousLineStart e s
               j = skipBoms e prev
               b = byteAt e (skipWhites e j)
           in if isBreak b || b == HASH then inPrefix prev else isMarker e j && byteAt e j == DOT
-
-    -- The start of the line break that ends at the index, e.g. of CR LF.
-    breakStart :: Int -> Int
-    breakStart j
-      | j > off && byteBefore e j == CR && byteAt e j == LF = j - 1
-      | otherwise = j
-
-    lineOf :: Int -> Int
-    lineOf i = if i > off && not (isBreak (byteBefore e i)) then lineOf (i - 1) else i
 
     -- A byte order mark can start a line between documents, or be a
     -- character of a quoted scalar.
