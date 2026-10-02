@@ -1133,18 +1133,11 @@ instance FromYaml a => FromYaml (Maybe a) where
 -- 1 | 404: not found
 --   | ^
 instance (Ord k, FromYaml k, FromYaml v) => FromYaml (M.Map k v) where
-  -- The index of 'withMapping' would be of no use here.
-  parseYaml = parseNode $ \n -> case n.content of
-    S.MappingContent _ kvs ->
-      insertUnique fst mapEntry fst (\(k, v) -> M.alterF (\old -> (isJust old, old <|> Just v)) k) M.empty "duplicate key after conversion" "the first key" kvs
-    _ -> typeMismatch "a mapping" n
+  parseYaml = uniqueEntries M.alterF M.empty
 
 -- | Two keys that convert to the same key are an error.
 instance FromYaml v => FromYaml (IM.IntMap v) where
-  parseYaml = parseNode $ \n -> case n.content of
-    S.MappingContent _ kvs ->
-      insertUnique fst mapEntry fst (\(k, v) -> IM.alterF (\old -> (isJust old, old <|> Just v)) k) IM.empty "duplicate key after conversion" "the first key" kvs
-    _ -> typeMismatch "a mapping" n
+  parseYaml = uniqueEntries IM.alterF IM.empty
 
 -- | A list. Two elements that convert to the same value, e.g. @1@ and @1.0@
 -- for 'Double', are an error.
@@ -1159,9 +1152,19 @@ instance FromYaml IS.IntSet where
     withSequence $
       insertUnique id (parseNode parseYaml) id (IS.alterF (,True)) IS.empty "duplicate element" "the first element"
 
--- | The key and the value of a map entry.
-mapEntry :: (FromYaml k, FromYaml v) => (S.Node, S.Node) -> Parser (k, v)
-mapEntry (k, v) = (,) <$> parseNode parseYaml k <*> parseEntry (k, v)
+-- | A map from the entries of a mapping, with the alter function and the empty
+-- map of its type. Two keys that convert to the same key are an error.
+uniqueEntries
+  :: (Ord k, FromYaml k, FromYaml v)
+  => ((Maybe v -> (Bool, Maybe v)) -> k -> m -> (Bool, m)) -> m -> S.Node -> Parser m
+uniqueEntries alter none = parseNode $ \n -> case n.content of
+  -- The index of 'withMapping' would be of no use here.
+  S.MappingContent _ kvs ->
+    insertUnique fst entry fst (\(k, v) -> alter (\old -> (isJust old, old <|> Just v)) k) none "duplicate key after conversion" "the first key" kvs
+  _ -> typeMismatch "a mapping" n
+  where
+    entry :: (FromYaml k, FromYaml v) => (S.Node, S.Node) -> Parser (k, v)
+    entry (k, v) = (,) <$> parseNode parseYaml k <*> parseEntry (k, v)
 
 -- | Decode the items and insert them in their order, with the errors of all
 -- items. Each item that is already there is an error at its node, with the
