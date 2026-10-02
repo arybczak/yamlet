@@ -461,6 +461,21 @@ test_copies = do
   case decodeText @(M.Map T.Text Node) "key: value\nother: [a, &x b] # c\n" of
     Left err -> assertFailure (show err)
     Right m -> assertBool "texts of kept nodes are copies" $ all (all isCopy . texts) (M.elems m)
+  case decodeText @Value "a: !x [b, !y c]\n" of
+    Left err -> assertFailure (show err)
+    Right v -> assertBool "texts of values are copies" $ all isCopy (valueTexts v)
+  -- A lazy copy would keep the input alive until the program forces it.
+  case decodeText @[T.Text] "- a\n- b\n" of
+    Left err -> assertFailure (show err)
+    Right xs -> do
+      _ <- evaluate (length xs)
+      mapM thunks xs >>= assertEqual "items of a list are copies, not thunks" [] . concat
+  case S.parseDocumentsText "a: 1\nb: 2\n" of
+    Right [doc]
+      | Right keys <- runParser (withMapping (pure . objectKeys)) doc.root -> do
+          _ <- evaluate (length keys)
+          mapM thunks keys >>= assertEqual "keys of an object are copies, not thunks" [] . concat
+    _ -> assertFailure "expected the keys of the mapping"
   where
     -- A copy starts at the beginning of its own array.
     isCopy :: T.Text -> Bool
@@ -472,6 +487,14 @@ test_copies = do
       S.SequenceContent _ xs -> concatMap texts xs
       S.MappingContent _ kvs -> concatMap (\(k, v) -> texts k ++ texts v) kvs
       S.AliasContent name -> [name]
+
+    valueTexts :: Value -> [T.Text]
+    valueTexts = \case
+      String t -> [t]
+      Sequence xs -> concatMap valueTexts xs
+      Mapping kvs -> concatMap (\(k, v) -> valueTexts k ++ valueTexts v) kvs
+      Tagged tag v -> tag : valueTexts v
+      _ -> []
 
 -- | JSON is valid YAML, including the escapes that JSON encoders write.
 test_json :: Assertion

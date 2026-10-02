@@ -57,7 +57,6 @@ module Yamlet.Internal.FromYaml
   ) where
 
 import Control.Applicative
-import Control.DeepSeq
 import Control.Monad
 import Data.Containers.ListUtils
 import Data.Fixed
@@ -353,7 +352,7 @@ withScientific f = parseNode $ \n -> case view n of
 -- @3.10@, the error suggests quotes.
 withText :: (T.Text -> Parser a) -> S.Node -> Parser a
 withText f = parseNode $ \n -> case view n of
-  StringView t -> f (T.copy t)
+  StringView t -> f $! T.copy t
   _ -> failAt n (stringMismatch n)
 
 -- | A string that is one of the names, e.g. the tags of the constructors. For
@@ -500,7 +499,7 @@ objectEntries o = o.entries
 
 -- | The string keys of the mapping in the order of the input.
 objectKeys :: Object -> [T.Text]
-objectKeys o = [T.copy t | (k, _) <- o.entries, Just t <- [stringValue k]]
+objectKeys o = [c | (k, _) <- o.entries, Just t <- [stringValue k], let !c = T.copy t]
 
 -- | The value of a string key.
 lookupKey :: T.Text -> Object -> Maybe S.Node
@@ -898,10 +897,24 @@ entryComments k v = (S.Comments before inline v.comments.after, value)
 -- | The value of the node, with the tags resolved and the aliases replaced.
 instance FromYaml Value where
   parseYaml n = case represent n of
-    -- The value is built lazily. The walk of 'force' visits a node once per
-    -- alias of it, as the limit of 'represent' allows.
-    Right r -> pure $! force r
+    -- The value is built lazily. The copy visits a node once per alias of
+    -- it, as the limit of 'represent' allows.
+    Right r -> pure $! copy r
     Left ((off, msg) NE.:| notes) -> Parser $ \_ -> Result (OneError off msg notes) failed
+    where
+      -- The value in normal form, with copies of its texts.
+      copy :: Value -> Value
+      copy = \case
+        String t -> String (T.copy t)
+        Sequence xs -> Sequence $! strictMap copy xs
+        Mapping kvs -> Mapping $! strictMap (\(k, v) -> let !k' = copy k; !v' = copy v in (k', v')) kvs
+        Tagged tag v -> Tagged (T.copy tag) (copy v)
+        v -> v
+
+      strictMap :: (a -> b) -> [a] -> [b]
+      strictMap f = \case
+        [] -> []
+        x : xs -> let !y = f x; !ys = strictMap f xs in y : ys
 
 -- | An empty list, as a tuple without elements.
 instance FromYaml () where
