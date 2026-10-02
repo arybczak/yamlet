@@ -28,12 +28,14 @@ import Yamlet.Internal.Parser.Monad
 import Yamlet.Internal.Utils
 
 -- | The location and the message of the error for the furthest position at
--- which the parser failed.
-unexpected :: Env -> Int -> (Int, String)
-unexpected input i = case indentationTab (i - 1) Nothing of
+-- which the parser failed. The flag tells if a tab before the position on its
+-- line can be the cause.
+unexpected :: Bool -> Env -> Int -> (Int, String)
+unexpected tabs input i = case if tabs then indentationTab (i - 1) Nothing else Nothing of
   Just tab -> (tab, tabMessage)
   Nothing
-    | byteAt e i == COLON && firstColon
+    | tabs
+    , byteAt e i == COLON && firstColon
     , Just tab <- tabBeforeContent ->
         (tab, tabMessage)
   Nothing

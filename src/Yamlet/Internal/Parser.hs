@@ -53,24 +53,64 @@ parseStream input@(T.Text arr off len) = case prescan of
   Left i -> Left $ invalidCharacter i
   Right (markers, restricted) -> case runParser e start (lYamlStream markers) of
     Left (ParseError i msg) -> Left $ parseError restricted i msg
+    Left (UnexpectedParseError de i) -> Left $ uncurry (parseError restricted) (furthestError markers de i)
     Right (Just docs, _, _) ->
       let ranges = scalarRanges docs
       in case filter (not . allowed ranges) restricted of
            BomRestricted i _ : _ -> Left $ errorAt input (toOffset e i) "unexpected byte order mark"
            QuotedRestricted i : _ -> Left $ invalidCharacter i
            [] -> Right docs
-    Right (Nothing, _, fu) -> Left $ uncurry (parseError restricted) (unexpected e fu)
+    Right (Nothing, _, fu) -> Left $ uncurry (parseError restricted) (furthestError markers e fu)
   where
     invalidCharacter :: Int -> Error
     invalidCharacter i = errorAt input (toOffset e i) ("invalid character " ++ codePointName (T.head (slice e i e.end)))
 
+    -- The error for the furthest failure, with the environment of its
+    -- document. A tab before the failure on its line is the likely cause,
+    -- unless the parser fails there also with spaces in place of the tabs.
+    furthestError :: [Int] -> Env -> Int -> (Int, String)
+    furthestError markers de i
+      | snd withTabs == tabMessage && not tabCause = unexpected False de i
+      | otherwise = withTabs
+      where
+        withTabs :: (Int, String)
+        withTabs = unexpected True de i
+
+        tabCause :: Bool
+        tabCause = case runParser spaced (moved start) (lYamlStream (map moved markers)) of
+          Left (ParseError j _) -> j > moved i
+          Left (UnexpectedParseError _ j) -> j > moved i
+          Right (Nothing, _, j) -> j > moved i
+          Right (Just _, _, _) -> True
+
+        s :: Int
+        s = lineStartAt e i
+
+        T.Text spacedArr spacedOff _ =
+          T.copy $
+            T.concat
+              [ T.Text arr off (s - off)
+              , T.map (\c -> if c == '\t' then ' ' else c) (T.Text arr s (i - s))
+              , T.Text arr i (off + len - i)
+              ]
+
+        spaced :: Env
+        spaced = e {array = spacedArr, base = spacedOff, end = spacedOff + len, streamEnd = spacedOff + len}
+
+        -- The index in the input with spaces.
+        moved :: Int -> Int
+        moved j = j - off + spacedOff
+
     -- A byte order mark at the start of the line of an error is the likely
-    -- cause, unless a document without a marker can start on the line.
+    -- cause if the parser fails before the content of the line, unless a
+    -- document without a marker can start on the line. A failure after the
+    -- content shows that the mark is in a quoted scalar.
     parseError :: [Restricted] -> Int -> String -> Error
     parseError restricted i msg
       | any (\case QuotedRestricted j -> j == i; _ -> False) restricted = invalidCharacter i
       | let s = lineStartAt e i
       , bomBeforeContent e s
+      , i <= skipWhites e (skipBoms e s)
       , not (inPrefix s) =
           errorAt input (toOffset e s) "unexpected byte order mark"
       | otherwise = errorAt input (toOffset e i) msg
@@ -386,13 +426,6 @@ lYamlStream markers0 = do
     nextMarker e markers p = case dropWhile (<= p) markers of
       m : ms -> (m, m : ms)
       [] -> (e.end, [])
-
-    -- Stop with an error at the furthest failure.
-    throwUnexpected :: Int -> P a
-    throwUnexpected i = do
-      e <- env
-      let (j, msg) = unexpected e i
-      throwAt j msg
 
     finishDocument
       :: [Int] -> Maybe YamlVersion -> Int -> Maybe Int -> Int -> Node -> P [Document]

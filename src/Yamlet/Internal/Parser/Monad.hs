@@ -35,6 +35,7 @@ module Yamlet.Internal.Parser.Monad
   , failure
   , guardP
   , throwAt
+  , throwUnexpected
   , withEnd
   , withHandles
   , char
@@ -74,9 +75,12 @@ data Env = Env
   -- ^ The tag handles of the current document.
   }
 
--- | An error that no backtracking can recover from.
-data ParseError = ParseError !Int String
-  deriving stock (Show)
+-- | An error that no backtracking can recover from: an error at the index
+-- with the message, or a failure at the index in the environment, whose
+-- message the caller of the parser finds.
+data ParseError
+  = ParseError !Int String
+  | UnexpectedParseError !Env !Int
 
 -- | The result of a parser: a value with the new position, a failure, or an
 -- error. Both the value and the failure carry the furthest position at which
@@ -227,6 +231,11 @@ guardP b = unless b failure
 -- | Stop with an error at the given index.
 throwAt :: Int -> String -> P a
 throwAt i msg = P $ \_ _ _ -> Err# (ParseError i msg)
+
+-- | Stop at the index, with an error whose message the caller of the parser
+-- finds.
+throwUnexpected :: Int -> P a
+throwUnexpected i = P $ \e _ _ -> Err# (UnexpectedParseError e i)
 
 -- | Run a parser that cannot read past the given index.
 withEnd :: Int -> P a -> P a

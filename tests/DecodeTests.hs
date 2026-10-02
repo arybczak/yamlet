@@ -286,6 +286,7 @@ test_notFollowedBy = do
       e = P.Env {P.array = arr, P.base = off, P.end = off + len, P.streamEnd = off + len, P.handles = M.empty}
   case P.runParser e off (P.notFollowedBy (P.throwAt off "boom")) of
     Left (P.ParseError _ msg) -> assertEqual "message" "boom" msg
+    Left (P.UnexpectedParseError _ _) -> assertFailure "expected an error with a message"
     Right _ -> assertFailure "expected an error"
 
 test_values :: Assertion
@@ -777,6 +778,17 @@ test_byteOrderMarks = do
   bom "BOM in a flow sequence" (2, 1) "a: [x,\n\xFEFF y]\n"
   bom "BOM in a flow mapping" (2, 1) "a: {x: 1,\n\xFEFF\&y: 2}\n"
   bom "BOM before a closing bracket" (2, 1) "a: [x,\n\xFEFF]\n"
+  let errorAfter :: String -> (Int, Int, String) -> T.Text -> Assertion
+      errorAfter preface expected input = assertEqual preface (Just expected) (errorOf (decodeAllText @Value input))
+  errorAfter
+    "error after a BOM in a double-quoted scalar"
+    (2, 4, "unexpected '@', a plain scalar cannot start with it, quote the value")
+    "\"x\n\xFEFFy\" @\n"
+  errorAfter "error after a BOM in a single-quoted scalar" (2, 4, "unexpected 'z' after the end of a quoted scalar") "'x\n\xFEFFy' z\n"
+  errorAfter
+    "error after a BOM in a flow sequence"
+    (2, 5, "unexpected '@', a plain scalar cannot start with it, quote the value")
+    "[\"x\n\xFEFFy\", @]\n"
   assertEqual
     "BOM before a marker after an unterminated flow sequence"
     (Just (1, 4, "unterminated flow sequence"))
@@ -906,6 +918,11 @@ test_syntaxErrors = do
   check "alias without a name in a flow sequence" (1, 2, "expected an alias name after '*'") "[*, a]\n"
   check "tab indentation" (2, 1, "tabs cannot be used for indentation") "a:\n\tb: 1\n"
   check "tab after spaces before a key" (2, 3, "tabs cannot be used for indentation") "a:\n  \tb: c\n"
+  check "tab before a scalar continuation" (2, 1, "tabs cannot be used for indentation") "a: 1\n\t@\n"
+  -- With spaces in place of the tab, the parser fails at the same place.
+  check "tab before an indicator" (1, 2, "unexpected '@', a plain scalar cannot start with it, quote the value") "\t@\n"
+  check "tab before a bracket" (1, 2, "unexpected ']'") "\t]\n"
+  check "tab after an end marker" (3, 2, "unexpected '@', a plain scalar cannot start with it, quote the value") "a\n...\n\t@\n"
   check "unterminated string" (1, 6, "unterminated double-quoted scalar") "key: \"abc\n"
   check "flow sequence before a key" (1, 6, "unterminated flow sequence") "key: [a, b\nc: d\n"
   check "flow sequence at the end" (1, 6, "unterminated flow sequence") "key: [a, b\n"
