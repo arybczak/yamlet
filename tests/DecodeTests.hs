@@ -719,6 +719,13 @@ test_encodings = do
   column "error after a UTF-16 BOM" 1 "\xFF\xFE]\0"
   column "invalid UTF-8 after a BOM" 2 "\xEF\xBB\xBF\&b\xFF"
   column "error after a BOM between documents" 1 "a\n...\n\xEF\xBB\xBF]"
+  column "error after two BOMs" 1 "\xEF\xBB\xBF\xEF\xBB\xBF]"
+  column "error after two BOMs before a marker" 5 "a\n\xEF\xBB\xBF\xEF\xBB\xBF--- ]"
+  let errorAfterBom :: String -> (Int, Int, String) -> T.Text -> Assertion
+      errorAfterBom preface expected input = assertEqual preface (Just expected) (errorOf (decodeAllText @Value input))
+  errorAfterBom "error after a BOM after an end marker" (3, 5, "unexpected ':', quote the value if it contains \": \"") "a\n...\n\xFEFF\&b: x: y\n"
+  errorAfterBom "error after a BOM and a comment after an end marker" (4, 4, "unterminated flow sequence") "a\n...\n\xFEFF# c\n\xFEFF\&b: [\n"
+  errorAfterBom "error after a second BOM at the start" (1, 4, "unterminated flow sequence") "\xFEFF\xFEFF\&a: [\n"
   assertEqual
     "source line after a BOM"
     (Left "]")

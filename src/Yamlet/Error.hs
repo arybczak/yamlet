@@ -315,8 +315,8 @@ errorsAt input errs =
                   _ -> T.copy (lineAt input off)
             in (i, Error loc msg sourceLine []) : go s' (Just (loc.line, sourceLine)) rest
 
--- | Compute the line and the column of an offset. A byte order mark at the
--- start of a line is not a column, because it is not content. For
+-- | Compute the line and the column of an offset. The byte order marks at the
+-- start of a line are not columns, because they are not content. For
 -- 'noOffset', the line and the column are 0.
 locate :: T.Text -> Offset -> Location
 locate input off
@@ -331,7 +331,7 @@ startScan :: T.Text -> Scan
 startScan (T.Text arr base len) = Scan base 1 start start 1
   where
     start :: Int
-    start = skipBom arr (base + len) base
+    start = skipBomsIn arr (base + len) base
 
 -- | Locate an offset that is not before the index of the scan, and continue
 -- the scan from there.
@@ -358,7 +358,7 @@ locateFrom (T.Text arr base len) s0 (Offset off0) = go s0
           _ -> go (Scan (i + 1) ln start ci col)
       where
         newLine :: Int -> (Location, Scan)
-        newLine j = let start' = skipBom arr end j in go (Scan j (ln + 1) start' start' 1)
+        newLine j = let start' = skipBomsIn arr end j in go (Scan j (ln + 1) start' start' 1)
 
     location :: Int -> Int -> Location
     location ln col = Location {offset = Offset (off - base), line = ln, column = col}
@@ -368,12 +368,12 @@ locateFrom (T.Text arr base len) s0 (Offset off0) = go s0
       length
         [() | i <- [i0 .. i1 - 1], isCharStart (A.unsafeIndex arr i)]
 
--- | The index after a byte order mark at the index, or the index.
-skipBom :: A.Array -> Int -> Int -> Int
-skipBom arr end i = if isBomIn arr end i then i + bomLength else i
+-- | The index after the byte order marks at the index.
+skipBomsIn :: A.Array -> Int -> Int -> Int
+skipBomsIn arr end i = if isBomIn arr end i then skipBomsIn arr end (i + bomLength) else i
 
 -- | The line of the input that contains the offset, without the line break
--- and without a byte order mark at its start.
+-- and without the byte order marks at its start.
 lineAt :: T.Text -> Offset -> T.Text
 lineAt (T.Text arr base len) (Offset off0) = T.Text arr start (stop - start)
   where
@@ -386,7 +386,7 @@ lineAt (T.Text arr base len) (Offset off0) = T.Text arr start (stop - start)
     off
       | i0 > base && i0 < end && A.unsafeIndex arr i0 == LF && A.unsafeIndex arr (i0 - 1) == CR = i0 - 1
       | otherwise = i0
-    start = skipBom arr end (findStart off)
+    start = skipBomsIn arr end (findStart off)
     stop = max start (findStop off)
 
     findStart :: Int -> Int

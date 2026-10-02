@@ -49,22 +49,34 @@ parseStream input@(T.Text arr off len) = case prescan e start of
     Right (Nothing, _, fu) -> Left $ uncurry parseError (unexpected e fu)
   where
     -- A byte order mark at the start of the line of an error is the likely
-    -- cause, unless a document marker or a directive follows it.
+    -- cause, unless a document marker or a directive follows it, or a
+    -- document without a marker can start on the line.
     parseError :: Int -> String -> Error
-    parseError i msg = case bomAt (lineOf i) of
-      Just b
-        | let j = skipBoms e b
-        , not (isMarker e j || byteAt e j == PERCENT) ->
-            errorAt input (toOffset e b) "unexpected byte order mark"
-      _ -> errorAt input (toOffset e i) msg
+    parseError i msg
+      | let s = lineOf i
+      , isBom e s
+      , let j = skipBoms e s
+      , not (isMarker e j || byteAt e j == PERCENT || inPrefix s) =
+          errorAt input (toOffset e s) "unexpected byte order mark"
+      | otherwise = errorAt input (toOffset e i) msg
 
-    -- The byte order mark at the start of a line, other than the one at the
-    -- start of the input.
-    bomAt :: Int -> Maybe Int
-    bomAt s
-      | s == off && isBom e s = if isBom e (s + bomLength) then Just (s + bomLength) else Nothing
-      | isBom e s = Just s
-      | otherwise = Nothing
+    -- Only empty lines and comment lines are between the start of the line
+    -- and the start of the stream or a @...@ marker, so the line is in the
+    -- prefix of a document, which can start with a byte order mark.
+    inPrefix :: Int -> Bool
+    inPrefix s
+      | s <= off = True
+      | otherwise =
+          let prev = lineOf (breakStart (s - 1))
+              j = skipBoms e prev
+              b = byteAt e (skipWhites e j)
+          in if isBreak b || b == HASH then inPrefix prev else isMarker e j && byteAt e j == DOT
+
+    -- The start of the line break that ends at the index, e.g. of CR LF.
+    breakStart :: Int -> Int
+    breakStart j
+      | j > off && byteBefore e j == CR && byteAt e j == LF = j - 1
+      | otherwise = j
 
     lineOf :: Int -> Int
     lineOf i = if i > off && not (isBreak (byteBefore e i)) then lineOf (i - 1) else i
