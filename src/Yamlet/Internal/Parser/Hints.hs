@@ -10,6 +10,8 @@ module Yamlet.Internal.Parser.Hints
   ( unexpected
   , mistake
   , codePointName
+  , firstTab
+  , tabMessage
   ) where
 
 import Control.Monad
@@ -38,11 +40,11 @@ afterBoms e = e {base = skipBoms e e.base}
 
 unexpectedIn :: Env -> Int -> (Int, String)
 unexpectedIn e i = case indentationTab (i - 1) Nothing of
-  Just tab -> (tab, "tabs cannot be used for indentation")
+  Just tab -> (tab, tabMessage)
   Nothing
     | byteAt e i == COLON && firstColon
     , Just tab <- tabBeforeContent ->
-        (tab, "tabs cannot be used for indentation")
+        (tab, tabMessage)
   Nothing
     | Just start <- propertiesLine ->
         (start, "an anchor or a tag cannot be on a line of its own here, write it after the key or the '-'")
@@ -212,7 +214,7 @@ unexpectedIn e i = case indentationTab (i - 1) Nothing of
             c = byteAt e j
 
     onStartMarkerLine :: Bool
-    onStartMarkerLine = isMarker e (lineStartAt e i) && byteAt e (lineStartAt e i) == MINUS
+    onStartMarkerLine = isStartMarker e (lineStartAt e i)
 
     -- The start of the entry on the line, after any "- ".
     entryStart :: Int
@@ -268,7 +270,7 @@ unexpectedIn e i = case indentationTab (i - 1) Nothing of
     tabBeforeContent :: Maybe Int
     tabBeforeContent =
       let start = lineStartAt e i
-      in L.find (\j -> byteAt e j == TAB) [start .. skipWhites e start - 1]
+      in firstTab e start (skipWhites e start)
 
     -- The first tab in the indentation before the index, if only white space
     -- precedes the index on its line.
@@ -492,6 +494,13 @@ unexpectedChar e i
 
     c :: Char
     c = T.head (slice e i e.end)
+
+-- | The first tab from the first index to before the second.
+firstTab :: Env -> Int -> Int -> Maybe Int
+firstTab e i j = L.find (\k -> byteAt e k == TAB) [i .. j - 1]
+
+tabMessage :: String
+tabMessage = "tabs cannot be used for indentation"
 
 -- | The code point of a character, e.g. U+0007, for a character that an error
 -- cannot show.

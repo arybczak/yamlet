@@ -123,7 +123,7 @@ attachComments e first hasNext start marker rootEnd end doc
 -- a comment or a @...@ marker. The index is the start of a line.
 gapEnd :: Env -> Int -> Int
 gapEnd e i
-  | i < e.end && isMarker e b && byteAt e b == DOT = gapEnd e (nextLine b)
+  | i < e.end && isEndMarker e b = gapEnd e (nextLine b)
   | i < e.end && byteAt e (skipWhites e b) == HASH = gapEnd e (nextLine b)
   | otherwise = i
   where

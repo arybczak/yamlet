@@ -19,7 +19,6 @@ module Yamlet.Internal.Parser
 import Control.Monad
 import Data.ByteString qualified as BS
 import Data.Char
-import Data.List qualified as L
 import Data.Map.Strict qualified as M
 import Data.Maybe
 import Data.Set qualified as Set
@@ -68,7 +67,7 @@ parseStream input@(T.Text arr off len) = case prescan e start of
           let prev = previousLineStart e s
               j = skipBoms e prev
               b = byteAt e (skipWhites e j)
-          in if isBreak b || b == HASH then inPrefix prev else isMarker e j && byteAt e j == DOT
+          in if isBreak b || b == HASH then inPrefix prev else isEndMarker e j
 
     -- A byte order mark can start a line between documents, or be a
     -- character of a quoted scalar.
@@ -311,14 +310,14 @@ lYamlStream markers0 = do
       p <- pos
       if
         | p >= e.end -> pure []
-        | isMarker e p && byteAt e p == DOT -> do
+        | isEndMarker e p -> do
             lDocumentSuffix
             documents markers True prefix
         | isMarker e p -> document markers Nothing defaultHandles prefix
         | afterEnd && byteAt e p == PERCENT -> do
             (version, hs) <- directives
             q <- pos
-            unless (isMarker e q && byteAt e q == MINUS) $
+            unless (isStartMarker e q) $
               throwAt q "expected a document start marker (---) after the directives"
             document markers version hs prefix
         | afterEnd -> bareDocument markers prefix
@@ -363,7 +362,7 @@ lYamlStream markers0 = do
       when (p < limit && not (startsPrefix e p)) $ do
         fu <- furthest
         throwUnexpected (max fu p)
-      let explicitEnd = isMarker e p && byteAt e p == DOT
+      let explicitEnd = isEndMarker e p
       when explicitEnd lDocumentSuffix
       q <- pos
       -- The first empty line after the end marker ends the lines of the
@@ -818,8 +817,7 @@ cQuoted style n c props = withScan $ \e p ->
       badIndent i
         | nextContent i >= e.end = endOfDocument i
         | not (hasClosingQuote e quote (nextContent i)) = unterminated
-        | Just tab <- L.find (\j -> byteAt e j == TAB) [skipBlankLines e i .. nextContent i - 1] =
-            Failed tab "tabs cannot be used for indentation"
+        | Just tab <- firstTab e (skipBlankLines e i) (nextContent i) = Failed tab tabMessage
         | otherwise =
             Failed
               (nextContent i)
@@ -1118,8 +1116,7 @@ closing c start w kind msg = do
       | atLineEnd e p -> case nextContent e p of
           Just (lineStart, q)
             | bomBeforeContent e lineStart -> throwAt lineStart "unexpected byte order mark"
-            | Just tab <- L.find (\j -> byteAt e j == TAB) [lineStart .. q - 1] ->
-                throwAt tab "tabs cannot be used for indentation"
+            | Just tab <- firstTab e lineStart q -> throwAt tab tabMessage
             | byteAt e q == w ->
                 throwAt q ("'" ++ [chr (fromIntegral w)] ++ "' is indented too little to end the " ++ kind)
             | closedLater e q ->

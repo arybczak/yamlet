@@ -74,6 +74,8 @@ module Yamlet.Internal.Parser.Chars
   , previousLineStart
   , markerLength
   , isMarker
+  , isStartMarker
+  , isEndMarker
   , startsPrefix
   , bomBeforeContent
   , fitsKey
@@ -309,6 +311,14 @@ isMarker e i =
        && all (\j -> byteAt e (i + j) == w) [1 .. markerLength - 1]
        && (after == 0 || isWhite after || isBreak after)
        && isStartOfLine e i
+
+-- | A @---@ marker at the start of a line.
+isStartMarker :: Env -> Int -> Bool
+isStartMarker e i = isMarker e i && byteAt e i == MINUS
+
+-- | A @...@ marker at the start of a line.
+isEndMarker :: Env -> Int -> Bool
+isEndMarker e i = isMarker e i && byteAt e i == DOT
 
 -- | A byte order mark at the start of a line. Outside a quoted scalar, it
 -- starts the prefix of the next document, so the content of a document ends
