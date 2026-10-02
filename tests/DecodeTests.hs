@@ -31,6 +31,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck hiding (Fixed)
 
+import Helpers
 import Thunks
 import Yamlet
 import Yamlet.Internal.Parser.Monad qualified as P
@@ -782,13 +783,6 @@ test_encodings = do
     stripBom :: T.Text -> Either Error T.Text
     stripBom = Right . T.dropWhile (== '\xFEFF')
 
--- | The line, the column and the message of the only error.
-errorOf :: Either (NE.NonEmpty Error) a -> Maybe (Int, Int, String)
-errorOf = \case
-  Left (err NE.:| []) -> Just (err.location.line, err.location.column, err.message)
-  Left errs -> error $ "expected one error, but got " ++ show (map (.message) (NE.toList errs))
-  Right _ -> Nothing
-
 -- | The line, the column and the message of the only error and of its note.
 errorWithNote :: Either (NE.NonEmpty Error) a -> Maybe ((Int, Int, String), (Int, Int, String))
 errorWithNote = \case
@@ -798,12 +792,6 @@ errorWithNote = \case
   where
     place :: Error -> (Int, Int, String)
     place e = (e.location.line, e.location.column, e.message)
-
--- | The line, the column and the message of each error.
-errorsOf :: Either (NE.NonEmpty Error) a -> [(Int, Int, String)]
-errorsOf = \case
-  Left errs -> [(err.location.line, err.location.column, err.message) | err <- NE.toList errs]
-  Right _ -> []
 
 test_syntaxErrors :: Assertion
 test_syntaxErrors = do
@@ -1085,18 +1073,6 @@ newtype Size = Size Int
 
 instance FromYaml Size where
   parseYaml = oneOf [("small", Size 1), ("large", Size 2), ("10", Size 10)]
-
--- | A resolution of 1/40, which needs three places after the point.
-data Fortieths
-
-instance HasResolution Fortieths where
-  resolution _ = 40
-
--- | A resolution of 1/3, which has no exact decimal form.
-data Thirds
-
-instance HasResolution Thirds where
-  resolution _ = 3
 
 test_typeErrors :: Assertion
 test_typeErrors = do

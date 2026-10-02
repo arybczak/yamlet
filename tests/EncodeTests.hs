@@ -27,6 +27,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck hiding (Fixed)
 
+import Helpers
 import Yamlet
 import Yamlet.Syntax qualified as S
 
@@ -80,12 +81,12 @@ test_base = do
   roundTrip "unit" ()
   assertEqual
     "unit from null"
-    (Left "expected an empty list, but got null")
-    (either (Left . (.message) . NE.head) Right (decodeText @() "null"))
+    (Just (1, 1, "expected an empty list, but got null"))
+    (errorOf (decodeText @() "null"))
   assertEqual
     "unit from a list with items"
-    (Left "expected an empty list, but got a list")
-    (either (Left . (.message) . NE.head) Right (decodeText @() "[1]"))
+    (Just (1, 1, "expected an empty list, but got a list"))
+    (errorOf (decodeText @() "[1]"))
   assertEqual "ratio" "numerator: 1\ndenominator: 3\n" (encodeText (1 % 3 :: Rational))
   assertEqual "fixed" "1.25\n" (encodeText (1.25 :: Centi))
   assertEqual "fixed with a trailing zero" "1.5\n" (encodeText (1.5 :: Milli))
@@ -107,18 +108,6 @@ data Quarters
 
 instance HasResolution Quarters where
   resolution _ = 4
-
--- | A resolution of 1/40, which needs three places after the point.
-data Fortieths
-
-instance HasResolution Fortieths where
-  resolution _ = 40
-
--- | A resolution of 1/3, which has no exact decimal form.
-data Thirds
-
-instance HasResolution Thirds where
-  resolution _ = 3
 
 test_time :: Assertion
 test_time = do
@@ -176,10 +165,6 @@ test_time = do
     ( (\z -> (zonedTimeToLocalTime z, timeZoneMinutes (zonedTimeZone z)))
         <$> decodeText (encodeText (ZonedTime noon (minutesToTimeZone 900)))
     )
-
--- | Encoding a value and decoding the result gives the same value.
-roundTrip :: (Eq a, Show a, ToYaml a, FromYaml a) => String -> a -> Assertion
-roundTrip preface x = assertEqual preface (Right x) (decodeText (encodeText x))
 
 test_blockStyle :: Assertion
 test_blockStyle = assertEqual "output" expected (encodeText value)

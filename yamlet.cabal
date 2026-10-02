@@ -147,6 +147,7 @@ test-suite test
                     EncodeTests
                     Events
                     GenericTests
+                    Helpers
                     RenderTests
                     RetentionTests
                     TestSuite
