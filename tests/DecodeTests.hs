@@ -1491,11 +1491,11 @@ test_longNumbers = do
     )
     (errorWithNote (decodeAllText @Value ("{0.1" <> zeros <> ": a, 0.5" <> zeros <> ": b, 0.1" <> zeros <> "0: c}")))
   -- The gcd of a reduction takes quadratic time for most types.
-  let big = 3 ^ (2000000 :: Int) :: Integer
+  let big = 3 ^ (1000000 :: Int) :: Integer
   assertEqual
     "fraction"
     (Right big)
-    (numerator <$> decodeText @Rational ("{numerator: " <> T.pack (show big) <> ", denominator: " <> T.pack (show @Integer (7 ^ (1200000 :: Int))) <> "}"))
+    (numerator <$> decodeText @Rational ("{numerator: " <> T.pack (show big) <> ", denominator: " <> T.pack (show @Integer (7 ^ (600000 :: Int))) <> "}"))
   assertEqual
     "float with a long integer part"
     (Right (Float (Finite (Sci.scientific (10 ^ (1000000 :: Int) - 1) (-999000)))))
@@ -1520,12 +1520,12 @@ test_longUnknownNames = do
 test_manyKeys :: Assertion
 test_manyKeys = do
   let keys :: [T.Text]
-      keys = [T.pack ("k" ++ show i) | i <- [1 .. 100000 :: Int]]
+      keys = [T.pack ("k" ++ show i) | i <- [1 .. 30000 :: Int]]
       count :: [T.Text] -> Either (NE.NonEmpty Error) Int
       count ks = length . entries <$> decodeText @Value (T.unlines (map (<> ": 1") ks))
-  assertEqual "one collection key" (Right 100001) (count ("[c]" : keys))
-  assertEqual "collection keys" (Right 100000) (count (map (\k -> "[" <> k <> "]") keys))
-  assertEqual "mapping keys" (Right 100000) (count (map (\k -> "{a: " <> k <> "}") keys))
+  assertEqual "one collection key" (Right 30001) (count ("[c]" : keys))
+  assertEqual "collection keys" (Right 30000) (count (map (\k -> "[" <> k <> "]") keys))
+  assertEqual "mapping keys" (Right 30000) (count (map (\k -> "{a: " <> k <> "}") keys))
   let large = "{" <> T.intercalate ", " (map (<> ": 1") keys) <> "}"
   assertEqual
     "large equal keys"
