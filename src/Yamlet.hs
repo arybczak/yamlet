@@ -206,7 +206,7 @@ decodeWithDocument input =
     [] -> withDocument (S.document (S.Node (S.Offset 0) (S.Offset 0) S.noProps S.noComments (S.ScalarContent S.Plain "")))
     [doc] -> withDocument doc
     docs@(_ : doc : _) -> do
-      mapM_ (\d -> first (fmap (uncurry (decoderError input d.root))) (prepare d.root)) docs
+      mapM_ (\d -> first (decoderErrors input d) (prepare d.root)) docs
       single . Left $ errorAt input doc.root.offset "expected a single document, but got a second one"
   where
     withDocument :: FromYaml a => S.Document -> Either (NE.NonEmpty Error) (a, S.Document)
@@ -265,12 +265,11 @@ documentRoot doc
 
 convert :: FromYaml a => T.Text -> S.Document -> Either (NE.NonEmpty Error) a
 convert input doc =
-  first (NE.fromList . documentErrors input doc . NE.toList) (runParser parseYaml (documentRoot doc))
+  first (decoderErrors input doc) (runParser parseYaml (documentRoot doc))
 
--- | An error of the decoder in the document with the root, with the path to
--- the node at the offset.
-decoderError :: T.Text -> S.Node -> S.Offset -> String -> Error
-decoderError input root off msg = (errorAt input off msg) {path = nodePath off root}
+-- | The errors of the decoder in the document, with their paths.
+decoderErrors :: T.Text -> S.Document -> NE.NonEmpty (S.Offset, String) -> NE.NonEmpty Error
+decoderErrors input doc = NE.fromList . documentErrors input doc . NE.toList
 
 -- | Encode a value as a document.
 --
