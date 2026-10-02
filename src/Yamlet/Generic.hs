@@ -962,7 +962,6 @@ isNullDefault d = maybe False (isNullNode . toYaml) (defaultField d)
 
 instance ToYaml a => GToFields (S1 (MetaSel Nothing u s d) (Rec0 a)) where
   gToValue (M1 (K1 x)) = Just (toYaml x)
-  {-# INLINE gToValue #-}
 
   gToEntry k (M1 (K1 x)) = toYamlField k x
 
