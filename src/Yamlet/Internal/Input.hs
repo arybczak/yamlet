@@ -34,10 +34,6 @@ decodeInput bs = case map (BS.indexMaybe bs) [0 .. 3] of
   Just x : Just 0 : _ | x /= 0 -> utf16 T.decodeUtf16LEWith le16 bs
   _ -> utf8
   where
-    -- A copy for each reading function makes the loops fast.
-    {-# INLINE utf32 #-}
-    {-# INLINE utf16 #-}
-
     utf32
       :: (T.OnDecodeError -> BS.ByteString -> T.Text)
       -> (BS.ByteString -> Int -> Int)
@@ -53,6 +49,9 @@ decodeInput bs = case map (BS.indexMaybe bs) [0 .. 3] of
           where
             c :: Int
             c = unit input i
+    -- Inlining gives a loop for each reading function. Without it, the decode
+    -- of a large UTF-32 input was slower and allocated more.
+    {-# INLINE utf32 #-}
 
     utf16
       :: (T.OnDecodeError -> BS.ByteString -> T.Text)
@@ -71,6 +70,9 @@ decodeInput bs = case map (BS.indexMaybe bs) [0 .. 3] of
           where
             u :: Int
             u = unit input i
+    -- Inlining gives a loop for each reading function. Without it, the decode
+    -- of a large UTF-16 input was slower and allocated more.
+    {-# INLINE utf16 #-}
 
     -- The code unit at the index. The callers make sure that its bytes are in
     -- the input.

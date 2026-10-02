@@ -50,7 +50,8 @@ view n = case n.content of
   S.MappingContent _ kvs -> MappingView kvs
   S.AliasContent name -> AliasView name
 -- GHC does not inline it without the pragma. Inlined, a match on the view
--- allocates no view.
+-- allocates no view. Without it, the decode benchmarks and the parseYaml
+-- benchmarks of the derived instances allocated more.
 {-# INLINE view #-}
 
 -- | The value of a scalar with the tag and the style, without the tag.
