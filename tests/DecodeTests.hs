@@ -92,15 +92,15 @@ test_files = do
   (path, h) <- openTempFile dir "yamlet.yaml"
   hClose h
   flip finally (removeFile path) $ do
-    let value = M.fromList [("name" :: T.Text, "zażółć" :: T.Text)]
+    let value = M.fromList @T.Text @T.Text [("name", "zażółć")]
     encodeFile path value
     bytes <- BS.readFile path
     assertEqual "UTF-8" (T.encodeUtf8 "name: zażółć\n") bytes
     decoded <- decodeFile path
     assertEqual "document" (Right value) decoded
-    encodeAllFile path [1, 2 :: Int]
-    documents <- decodeAllFile path
-    assertEqual "documents" (Right [1, 2 :: Int]) documents
+    encodeAllFile @Int path [1, 2]
+    documents <- decodeAllFile @Int path
+    assertEqual "documents" (Right [1, 2]) documents
 
 -- | The decoders of the types that the library defines return values without
 -- thunks.
@@ -131,9 +131,7 @@ test_noThunks = do
 
 test_coreSchema :: Assertion
 test_coreSchema = do
-  let values :: Either (NE.NonEmpty Error) [Value]
-      values = decodeText "[null, ~, '', true, False, 12, -0, 0o17, 0x1f, 1.5, -.inf, .nan, 1e3, +12, .5, a, '1']"
-  case values of
+  case decodeText @[Value] "[null, ~, '', true, False, 12, -0, 0o17, 0x1f, 1.5, -.inf, .nan, 1e3, +12, .5, a, '1']" of
     Left err -> assertFailure (show err)
     Right ns ->
       assertEqual
@@ -186,7 +184,7 @@ prop_floats = forAll genDecimal $ \s ->
     genDecimal = do
       int <- digits
       frac <- digits
-      ex <- oneof [pure "", ("e" ++) . show <$> choose (-30 :: Int, 30)]
+      ex <- oneof [pure "", ("e" ++) . show <$> choose @Int (-30, 30)]
       pure $ int ++ "." ++ frac ++ ex
 
     digits :: Gen String
@@ -400,15 +398,15 @@ test_time = do
     "zoned time"
     (Right (noon, 120))
     ((\z -> (zonedTimeToLocalTime z, timeZoneMinutes (zonedTimeZone z))) <$> decodeText "2026-09-25T12:30:00+02:00")
-  assertEqual "duration" (Right (1.5 :: NominalDiffTime)) (decodeText "1.5")
-  assertEqual "whole duration" (Right (60 :: DiffTime)) (decodeText "60")
+  assertEqual "duration" (Right 1.5) (decodeText @NominalDiffTime "1.5")
+  assertEqual "whole duration" (Right 60) (decodeText @DiffTime "60")
   assertEqual "picosecond" (Right (picosecondsToDiffTime 1)) (decodeText "1e-12")
-  assertEqual "tiny duration" (Right (0 :: DiffTime)) (decodeText "1e-1000")
-  assertEqual "largest duration" (Right (10 ^ (1000 :: Int) :: NominalDiffTime)) (decodeText "1e1000")
+  assertEqual "tiny duration" (Right 0) (decodeText @DiffTime "1e-1000")
+  assertEqual "largest duration" (Right (10 ^ (1000 :: Int))) (decodeText @NominalDiffTime "1e1000")
   assertEqual
     "integer duration beyond the limit of floats"
-    (Right (10 ^ (1001 :: Int) :: NominalDiffTime))
-    (decodeText ("1" <> T.replicate 1001 "0"))
+    (Right (10 ^ (1001 :: Int)))
+    (decodeText @NominalDiffTime ("1" <> T.replicate 1001 "0"))
   forM_ [minBound, maxBound - 11, maxBound] $ \ex ->
     assertEqual
       ("duration with the exponent " ++ show ex)
@@ -416,8 +414,8 @@ test_time = do
       (first (snd . NE.head) (runParser (parseYaml @NominalDiffTime) (toYaml (Float (Finite (Sci.scientific 1 ex))))))
   assertEqual
     "zero duration with a large exponent"
-    (Right (0 :: DiffTime))
-    (runParser parseYaml (toYaml (Float (Finite (Sci.scientific 0 maxBound)))))
+    (Right 0)
+    (runParser (parseYaml @DiffTime) (toYaml (Float (Finite (Sci.scientific 0 maxBound)))))
 
 test_record :: Assertion
 test_record = do
@@ -527,7 +525,7 @@ test_aliases :: Assertion
 test_aliases = do
   assertEqual
     "map"
-    (Right (M.fromList [("a", [1, 2]), ("b", [1, 2 :: Int])]))
+    (Right (M.fromList [("a", [1, 2]), ("b", [1, 2])]))
     (decodeText @(M.Map T.Text [Int]) "a: &x [1, 2]\nb: *x\n")
   assertEqual
     "anchor before a string with a less-than sign"
@@ -657,7 +655,7 @@ test_located = do
     "comments of the key"
     (Right (Just (Offset 3, Just "c")))
     (fmap (\l -> (l.offset, l.value.comments.inline)) . M.lookup "a" <$> decodeText @(M.Map T.Text (Located (Commented T.Text))) "a: x # c\n")
-  assertEqual "encoded" "a: 1\n" (encodeText (M.fromList [("a" :: T.Text, Located (1 :: Int) (Offset 7))]))
+  assertEqual "encoded" "a: 1\n" (encodeText @(M.Map T.Text (Located Int)) (M.fromList [("a", Located 1 (Offset 7))]))
 
 test_syntaxTree :: Assertion
 test_syntaxTree = do
@@ -1185,7 +1183,7 @@ test_typeErrors = do
     "zero denominator"
     (Just (1, 1, "the denominator is 0"))
     (errorOf (decodeText @Rational "{numerator: 1, denominator: 0}"))
-  assertEqual "negative denominator" (Right (negate 1 % 2 :: Rational)) (decodeText "{numerator: 2, denominator: -4}")
+  assertEqual "negative denominator" (Right (negate 1 % 2)) (decodeText @Rational "{numerator: 2, denominator: -4}")
   assertEqual
     "negation of minBound"
     (Just (1, 1, "the fraction is out of the range of the type"))
@@ -1196,19 +1194,19 @@ test_typeErrors = do
     (errorOf (decodeText @(Ratio Int) "{numerator: 1, denominator: -9223372036854775808}"))
   assertEqual
     "minBound reduced"
-    (Right (negate 4611686018427387904 % 1 :: Ratio Int))
-    (decodeText "{numerator: -9223372036854775808, denominator: 2}")
-  assertEqual "fixed from an integer" (Right (3 :: Centi)) (decodeText "3")
-  assertEqual "fixed with fewer digits" (Right (1.5 :: Centi)) (decodeText "1.5")
-  assertEqual "fixed with an exponent" (Right (120 :: Centi)) (decodeText "1.2e2")
+    (Right (negate 4611686018427387904 % 1))
+    (decodeText @(Ratio Int) "{numerator: -9223372036854775808, denominator: 2}")
+  assertEqual "fixed from an integer" (Right 3) (decodeText @Centi "3")
+  assertEqual "fixed with fewer digits" (Right 1.5) (decodeText @Centi "1.5")
+  assertEqual "fixed with an exponent" (Right 120) (decodeText @Centi "1.2e2")
   assertEqual "fixed with too many digits" (Just (1, 1, "expected a multiple of 0.01")) (errorOf (decodeText @Centi "1.239"))
-  assertEqual "largest fixed" (Right (10 ^ (1000 :: Int) :: Centi)) (decodeText "1e1000")
-  assertEqual "resolution of 2s and 5s" (Right (MkFixed 7 :: Fixed Fortieths)) (decodeText "0.175")
+  assertEqual "largest fixed" (Right (10 ^ (1000 :: Int))) (decodeText @Centi "1e1000")
+  assertEqual "resolution of 2s and 5s" (Right (MkFixed 7)) (decodeText @(Fixed Fortieths) "0.175")
   assertEqual
     "step of a resolution of 2s and 5s"
     (Just (1, 1, "expected a multiple of 0.025"))
     (errorOf (decodeText @(Fixed Fortieths) "0.01"))
-  assertEqual "whole number for a resolution without a decimal form" (Right (MkFixed 6 :: Fixed Thirds)) (decodeText "2")
+  assertEqual "whole number for a resolution without a decimal form" (Right (MkFixed 6)) (decodeText @(Fixed Thirds) "2")
   assertEqual
     "step of a resolution without a decimal form"
     (Just (1, 1, "expected a multiple of 1/3"))
@@ -1219,14 +1217,14 @@ test_typeErrors = do
     (first (snd . NE.head) (runParser (parseYaml @Centi) (toYaml (Float (Finite (Sci.scientific 1 maxBound))))))
   assertEqual
     "zero fixed with a huge exponent"
-    (Right (0 :: Centi))
-    (runParser parseYaml (toYaml (Float (Finite (Sci.scientific 0 maxBound)))))
+    (Right 0)
+    (runParser (parseYaml @Centi) (toYaml (Float (Finite (Sci.scientific 0 maxBound)))))
 
 newtype Vowel = Vowel Char
 
 instance FromYaml Vowel where
   parseYaml = withText $ \t -> case T.unpack t of
-    [c] | c `elem` ("aeiou" :: String) -> pure (Vowel c)
+    [c] | elem @[] c "aeiou" -> pure (Vowel c)
     _ -> fail "not a vowel"
 
 -- | The applicative operators collect the errors of both parts, and '>>=' and
@@ -1341,7 +1339,7 @@ test_keyErrors = do
   assertEqual
     "key missing next to a merge key"
     (Right (Left (pure (Offset 0, "missing key \"x\", merge keys are not supported"))))
-    (runParser (withMapping (`parseField` "x")) <$> decodeText @Node "<<: {x: 1}\n" :: Either (NE.NonEmpty Error) (Either (NE.NonEmpty (Offset, String)) Int))
+    (runParser (withMapping (\o -> parseField @Int o "x")) <$> decodeText @Node "<<: {x: 1}\n")
   assertEqual
     "two merge keys"
     (Just ((4, 3, "duplicate key \"<<\", merge keys are not supported"), (3, 3, "the first key \"<<\"")))
@@ -1497,7 +1495,7 @@ test_longNumbers = do
   assertEqual
     "fraction"
     (Right big)
-    (numerator <$> decodeText @Rational ("{numerator: " <> T.pack (show big) <> ", denominator: " <> T.pack (show (7 ^ (1200000 :: Int) :: Integer)) <> "}"))
+    (numerator <$> decodeText @Rational ("{numerator: " <> T.pack (show big) <> ", denominator: " <> T.pack (show @Integer (7 ^ (1200000 :: Int))) <> "}"))
   assertEqual
     "float with a long integer part"
     (Right (Float (Finite (Sci.scientific (10 ^ (1000000 :: Int) - 1) (-999000)))))

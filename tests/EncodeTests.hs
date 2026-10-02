@@ -57,20 +57,20 @@ encodeTests =
 
 test_containers :: Assertion
 test_containers = do
-  assertEqual "set" "- 1\n- 2\n- 3\n" (encodeText (Set.fromList [3, 1, 2 :: Int]))
+  assertEqual "set" "- 1\n- 2\n- 3\n" (encodeText (Set.fromList @Int [3, 1, 2]))
   assertEqual "int set" "- 1\n- 2\n- 3\n" (encodeText (IS.fromList [3, 1, 2]))
   assertEqual "left" "Left: 1\n" (encodeText (Left @Int @T.Text 1))
   assertEqual "right" "Right: a\n" (encodeText (Right @Int @T.Text "a"))
-  roundTrip "int map" (IM.fromList [(1, "a"), (-2, "b" :: T.Text)])
-  roundTrip "sequence" (Seq.fromList [1, 2, 3 :: Int])
-  roundTrip "either" [Left 1, Right "a" :: Either Int T.Text]
+  roundTrip "int map" (IM.fromList @T.Text [(1, "a"), (-2, "b")])
+  roundTrip "sequence" (Seq.fromList @Int [1, 2, 3])
+  roundTrip @[Either Int T.Text] "either" [Left 1, Right "a"]
   let tree = Tree.Node 'a' [Tree.Node 'b' [], Tree.Node 'c' [Tree.Node 'd' []]]
   assertEqual "tree" "- a\n- - - b\n    - []\n  - - c\n    - - - d\n        - []\n" (encodeText tree)
   roundTrip "tree" tree
   let uuid = UUID.fromWords 0x123e4567 0xe89b12d3 0xa4564266 0x14174000
   assertEqual "UUID" "123e4567-e89b-12d3-a456-426614174000\n" (encodeText uuid)
   roundTrip "UUIDs" [uuid, UUID.nil]
-  roundTrip "tuple of 10" (1 :: Int, 'a', True, "b" :: T.Text, 2.5 :: Double, [1 :: Int], Just 'c', (), 'd', -1 :: Int)
+  roundTrip @(Int, Char, Bool, T.Text, Double, [Int], Maybe Char, (), Char, Int) "tuple of 10" (1, 'a', True, "b", 2.5, [1], Just 'c', (), 'd', -1)
 
 test_base :: Assertion
 test_base = do
@@ -78,21 +78,21 @@ test_base = do
   assertEqual "proxy" "null\n" (encodeText (Proxy @Int))
   assertEqual "unit" "[]\n" (encodeText ())
   roundTrip "unit" ()
-  assertEqual "ratio" "numerator: 1\ndenominator: 3\n" (encodeText (1 % 3 :: Rational))
-  assertEqual "fixed" "1.25\n" (encodeText (1.25 :: Centi))
-  assertEqual "fixed with a trailing zero" "1.5\n" (encodeText (1.5 :: Milli))
-  assertEqual "whole fixed" "3.0\n" (encodeText (3 :: Uni))
-  assertEqual "newtype" "- 1\n- 2\n" (encodeText (Identity [1, 2 :: Int]))
-  assertEqual "string in a newtype" "ab\n" (encodeText (Sem.Min ("ab" :: String)))
+  assertEqual "ratio" "numerator: 1\ndenominator: 3\n" (encodeText @Rational (1 % 3))
+  assertEqual "fixed" "1.25\n" (encodeText @Centi 1.25)
+  assertEqual "fixed with a trailing zero" "1.5\n" (encodeText @Milli 1.5)
+  assertEqual "whole fixed" "3.0\n" (encodeText @Uni 3)
+  assertEqual "newtype" "- 1\n- 2\n" (encodeText (Identity @[Int] [1, 2]))
+  assertEqual "string in a newtype" "ab\n" (encodeText (Sem.Min @String "ab"))
   roundTrip "ordering" [LT, EQ, GT]
-  roundTrip "negative ratio" (negate 7 % 4 :: Rational)
-  roundTrip "fixed" (-123.456 :: Milli)
-  roundTrip "nano" (0.000000001 :: Nano)
-  roundTrip "resolution of a power of 2" (MkFixed 3 :: Fixed Quarters)
-  assertEqual "resolution of 2s and 5s" "0.025\n" (encodeText (MkFixed 1 :: Fixed Fortieths))
-  roundTrip "resolution of 2s and 5s" (MkFixed 7 :: Fixed Fortieths)
-  assertEqual "resolution without a decimal form" "0.3\n" (encodeText (MkFixed 1 :: Fixed Thirds))
-  roundTrip "newtypes" (Down 'a', Sem.Max (1 :: Int), Mon.First (Just True), Sem.Sum (2.5 :: Double), Sem.All False, Const @Int @Bool 3)
+  roundTrip @Rational "negative ratio" (negate 7 % 4)
+  roundTrip @Milli "fixed" (-123.456)
+  roundTrip @Nano "nano" 0.000000001
+  roundTrip @(Fixed Quarters) "resolution of a power of 2" (MkFixed 3)
+  assertEqual "resolution of 2s and 5s" "0.025\n" (encodeText @(Fixed Fortieths) (MkFixed 1))
+  roundTrip @(Fixed Fortieths) "resolution of 2s and 5s" (MkFixed 7)
+  assertEqual "resolution without a decimal form" "0.3\n" (encodeText @(Fixed Thirds) (MkFixed 1))
+  roundTrip "newtypes" (Down 'a', Sem.Max @Int 1, Mon.First (Just True), Sem.Sum @Double 2.5, Sem.All False, Const @Int @Bool 3)
 
 -- | A resolution of 1/4, which has an exact decimal form.
 data Quarters
@@ -133,7 +133,7 @@ test_time = do
     "'2024-01-01T12:00:00+25:00'\n"
     (encodeText (ZonedTime (LocalTime (fromGregorian 2024 1 1) (TimeOfDay 12 0 0)) (hoursToTimeZone 25)))
   roundTrip "leap second" (UTCTime (fromGregorian 2016 12 31) 86400.5)
-  assertEqual "duration" "1.5\n" (encodeText (1.5 :: NominalDiffTime))
+  assertEqual "duration" "1.5\n" (encodeText @NominalDiffTime 1.5)
   roundTrip "local time" noon
   roundTrip "UTC time" (UTCTime (fromGregorian (-44) 3 15) 0.000000000001)
   roundTrip "diff time" (picosecondsToDiffTime 123456789)
@@ -259,13 +259,13 @@ test_quoting = do
 -- | A float reads back as a float, not as an integer.
 test_floats :: Assertion
 test_floats = do
-  assertEqual "integral double" "12.0\n" (encodeText (12 :: Double))
-  assertEqual "double" "0.1\n" (encodeText (0.1 :: Double))
-  assertEqual "small double" "0.01\n" (encodeText (0.01 :: Double))
-  assertEqual "smallest decimal notation" "0.000001\n" (encodeText (1e-6 :: Double))
-  assertEqual "below decimal notation" "1.0e-7\n" (encodeText (1e-7 :: Double))
-  assertEqual "largest decimal notation" "100000000000000000000.0\n" (encodeText (1e20 :: Double))
-  assertEqual "above decimal notation" "1.0e+21\n" (encodeText (1e21 :: Double))
+  assertEqual "integral double" "12.0\n" (encodeText @Double 12)
+  assertEqual "double" "0.1\n" (encodeText @Double 0.1)
+  assertEqual "small double" "0.01\n" (encodeText @Double 0.01)
+  assertEqual "smallest decimal notation" "0.000001\n" (encodeText @Double 1e-6)
+  assertEqual "below decimal notation" "1.0e-7\n" (encodeText @Double 1e-7)
+  assertEqual "largest decimal notation" "100000000000000000000.0\n" (encodeText @Double 1e20)
+  assertEqual "above decimal notation" "1.0e+21\n" (encodeText @Double 1e21)
   assertEqual "large scientific" "1.0e+30\n" (encodeText (Sci.scientific 1 30))
   assertEqual
     "exact scientific"
@@ -275,8 +275,8 @@ test_floats = do
   assertEqual "exponent beyond Int" "1.0e+9223372036854775808\n" (encodeText (Sci.scientific 10 maxBound))
   assertEqual "negative exponent beyond Int" "-1.23e+9223372036854775810\n" (encodeText (Sci.scientific (-1230) maxBound))
   assertEqual "zero with a large exponent" "0.0\n" (encodeText (Sci.scientific 0 maxBound))
-  assertEqual "infinity" "-.inf\n" (encodeText (-(1 / 0) :: Double))
-  assertEqual "not a number" ".nan\n" (encodeText (0 / 0 :: Double))
+  assertEqual "infinity" "-.inf\n" (encodeText @Double (-(1 / 0)))
+  assertEqual "not a number" ".nan\n" (encodeText @Double (0 / 0))
   assertEqual "float" "0.1\n" (encodeText @Float 0.1)
   assertEqual "float infinity" "-.inf\n" (encodeText @Float (-(1 / 0)))
   assertEqual "float not a number" ".nan\n" (encodeText @Float (0 / 0))
@@ -315,9 +315,9 @@ test_literal = do
   assertEqual "strip" "key: |-\n  a\n  b\n" (encodeText (mapping ["key" .= ("a\nb" :: T.Text)]))
   assertEqual "keep" "key: |+\n  a\n\n" (encodeText (mapping ["key" .= ("a\n\n" :: T.Text)]))
   assertEqual "only line breaks" "key: \"\\n\\n\"\n" (encodeText (mapping ["key" .= ("\n\n" :: T.Text)]))
-  assertEqual "indentation indicator" "- |2-\n    a\n  b\n" (encodeText ["  a\nb" :: T.Text])
-  assertEqual "indentation indicator for a tab" "- |2-\n  \ta\n  b\n" (encodeText ["\ta\nb" :: T.Text])
-  assertEqual "indentation indicator after empty lines" "- |2\n\n  \ta\n" (encodeText ["\n\ta\n" :: T.Text])
+  assertEqual "indentation indicator" "- |2-\n    a\n  b\n" (encodeText @[T.Text] ["  a\nb"])
+  assertEqual "indentation indicator for a tab" "- |2-\n  \ta\n  b\n" (encodeText @[T.Text] ["\ta\nb"])
+  assertEqual "indentation indicator after empty lines" "- |2\n\n  \ta\n" (encodeText @[T.Text] ["\n\ta\n"])
   assertEqual "no indentation indicator at the top level" "\" a\\nb\"\n" (encodeText @T.Text " a\nb")
   assertEqual "no indentation indicator for a tab at the top level" "\"\\ta\\nb\"\n" (encodeText @T.Text "\ta\nb")
   let keep = mapping ["key" .= ("a\n\n" :: T.Text), "next" .= ("b" :: T.Text)]
@@ -414,7 +414,7 @@ test_keptNodes = do
     (encodeText <$> decodeText @(M.Map T.Text (Commented Node)) "!!map # c1\na: 1\n")
   assertEqual
     "lines above the first key of a mapping"
-    (Right (M.fromList [("b" :: T.Text, [Comment "c2"])]))
+    (Right (M.fromList [("b", [Comment "c2"])]))
     (M.map (.comments.before) <$> decodeText @(M.Map T.Text (Commented Int)) "# c1\n\n# c2\nb: 1\n")
   assertEqual
     "comment after the tag of a list"
@@ -536,7 +536,7 @@ test_commentedKeys = do
     (encodeText <$> decodeText @(M.Map T.Text (Commented [Commented T.Text])) branches)
   let commentedRoot = "# c1\n1 # c2\n# c3\n"
   assertEqual "commented scalar root" (Right commentedRoot) (encodeText <$> decodeText @(Commented Int) commentedRoot)
-  let linesAfter = M.fromList [("a" :: T.Text, Commented (1 :: Int) noComments {after = [Comment "c"]}), ("b", Commented 2 noComments)]
+  let linesAfter = M.fromList @T.Text @(Commented Int) [("a", Commented 1 noComments {after = [Comment "c"]}), ("b", Commented 2 noComments)]
   assertEqual "lines after a commented scalar value" "a: 1\n  # c\nb: 2\n" (encodeText linesAfter)
   assertEqual
     "lines after a commented scalar value read back"
@@ -547,7 +547,7 @@ test_commentedKeys = do
     "lines after a text of several lines in double quotes"
     (Right quotedLinesAfter)
     (encodeText <$> decodeText @(M.Map T.Text (Commented T.Text)) quotedLinesAfter)
-  let linesAbove = [Commented [1, 2 :: Int] noComments {before = [Comment "above"], inline = Just "inline"}]
+  let linesAbove = [Commented @[Int] [1, 2] noComments {before = [Comment "above"], inline = Just "inline"}]
   assertEqual "lines above a commented list item" "- # inline\n  # above\n\n  - 1\n  - 2\n" (encodeText linesAbove)
   assertEqual
     "lines above a commented list item read back"

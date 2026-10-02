@@ -909,7 +909,7 @@ prop_roundTrip (Tree doc) =
 
     -- The first line where two texts differ, with the line before it.
     firstDifference :: T.Text -> T.Text -> String
-    firstDifference a b = go (1 :: Int) "" (T.lines a) (T.lines b)
+    firstDifference a b = go 1 "" (T.lines a) (T.lines b)
       where
         go :: Int -> T.Text -> [T.Text] -> [T.Text] -> String
         go n prev xs ys = case (xs, ys) of
