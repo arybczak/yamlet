@@ -487,7 +487,11 @@ instance Exception RequiredField where
 
 -- | The field of a default, or 'Nothing' for 'requiredField'.
 defaultField :: a -> Maybe a
-defaultField x = case unsafeDupablePerformIO (try (evaluate x)) of
+-- An asynchronous exception in the handler of 'try' would be thrown again as
+-- a synchronous one, and the shared result of the check would throw it to
+-- every later decoder. With the mask, it arrives after the handler, where the
+-- evaluation can resume.
+defaultField x = case unsafeDupablePerformIO (uninterruptibleMask_ (try (evaluate x))) of
   Left RequiredField -> Nothing
   Right _ -> Just x
 

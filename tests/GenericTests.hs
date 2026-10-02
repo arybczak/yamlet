@@ -1,11 +1,14 @@
 module GenericTests (genericTests) where
 
+import Control.Concurrent
 import Control.Exception
 import Data.Aeson qualified as A
 import Data.Bifunctor
 import Data.Char
 import Data.List.NonEmpty qualified as NE
 import Data.Text qualified as T
+import GHC.Conc
+import System.IO.Unsafe
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
@@ -29,6 +32,7 @@ genericTests =
     , testCase "single field" test_singleField
     , testCase "default" test_default
     , testCase "required field" test_requiredField
+    , testCase "interrupted check of a default" test_interruptedDefault
     , testCase "modifiers" test_modifiers
     , testCase "commented fields" test_commentedFields
     , testCase "commented values" test_commentedValues
@@ -264,6 +268,27 @@ data Login = Login {user :: !T.Text, shell :: T.Text}
 
 instance GenericYamlOptions Login where
   yamlDefault = Just (Login requiredField "/bin/sh")
+
+-- | A default with a field that waits for a gate, so that a test can
+-- interrupt the decoder while it checks the field.
+data Gated = Gated {gated :: Int, other :: Int}
+  deriving stock (Eq, Show, Generic)
+  deriving (FromYaml) via GenericYaml Gated
+
+instance GenericYamlOptions Gated where
+  yamlDefault = Just (Gated gatedDefault requiredField)
+
+gatedDefault :: Int
+gatedDefault = unsafePerformIO (putMVar gateEntered () >> takeMVar gate >> pure 1)
+-- Without the pragma, each use could evaluate the action again.
+{-# NOINLINE gatedDefault #-}
+
+gateEntered, gate :: MVar ()
+gateEntered = unsafePerformIO newEmptyMVar
+-- Without the pragmas, each use could get its own variable.
+{-# NOINLINE gateEntered #-}
+gate = unsafePerformIO newEmptyMVar
+{-# NOINLINE gate #-}
 
 -- | Records that keep the comments of their keys.
 data Pipeline = Pipeline {name :: Commented T.Text, lint :: Commented Lint}
@@ -706,6 +731,28 @@ test_requiredField = do
     -- The equality of 'ErrorCall' also compares the location of the call.
     message :: ErrorCall -> String
     message (ErrorCall m) = m
+
+-- | A thread killed while the decoder checks a field of the default for
+-- 'requiredField' does not break the decoder for other threads.
+test_interruptedDefault :: Assertion
+test_interruptedDefault = do
+  done <- newEmptyMVar
+  worker <- forkIO (try @SomeException (evaluate (decodeText @Gated "other: 2\n")) >>= putMVar done)
+  takeMVar gateEntered
+  killer <- forkIO (killThread worker)
+  waitBlockedOrDone killer
+  putMVar gate ()
+  _ <- takeMVar done
+  assertEqual "decode after the interrupted one" (Right (Gated 1 2)) (decodeText "other: 2\n")
+  where
+    -- The exception is on its way once the thread that throws it waits or
+    -- has thrown it.
+    waitBlockedOrDone :: ThreadId -> IO ()
+    waitBlockedOrDone t =
+      threadStatus t >>= \case
+        ThreadBlocked _ -> pure ()
+        ThreadFinished -> pure ()
+        _ -> yield >> waitBlockedOrDone t
 
 test_modifiers :: Assertion
 test_modifiers = do
