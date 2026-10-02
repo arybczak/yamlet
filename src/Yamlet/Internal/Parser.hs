@@ -104,12 +104,13 @@ streamStart e = if isBom e e.base then e.base + bomLength else e.base
 
 -- | Check that the input has only characters that YAML allows, and find the
 -- lines that start with a document marker, and the byte order marks. A
--- document cannot contain such a line. The index of a marker after a byte
--- order mark is the index of the mark. Each byte order mark comes with a
--- flag that is true if the mark is at the start of a line, as
--- 'isStartOfLine' tells. Return the index of an invalid character on error.
+-- document cannot contain such a line. A marker after a byte order mark does
+-- not count: a quoted scalar can contain the line, and other nodes end at the
+-- mark anyway. Each byte order mark comes with a flag that is true if the
+-- mark is at the start of a line, as 'isStartOfLine' tells. Return the index
+-- of an invalid character on error.
 prescan :: Env -> Int -> Either Int ([Int], [(Int, Bool)])
-prescan e start = go start start [start | isMarker e (skipBoms e start)] []
+prescan e start = go start start [start | isMarker e start] []
   where
     -- A byte order mark at index ls is at the start of a line.
     go :: Int -> Int -> [Int] -> [(Int, Bool)] -> Either Int ([Int], [(Int, Bool)])
@@ -121,8 +122,7 @@ prescan e start = go start start [start | isMarker e (skipBoms e start)] []
                | w >= SPACE && w < DEL -> go (i + 1) ls acc boms
                | w == LF || (w == CR && byteAt e (i + 1) /= LF) ->
                    let s = i + 1
-                       marker = isMarker e (skipBoms e s)
-                   in go s s (if marker then s : acc else acc) boms
+                   in go s s (if isMarker e s then s : acc else acc) boms
                | w == CR || w == TAB -> go (i + 1) ls acc boms
                | w < SPACE || w == DEL -> Left i
                -- C1 control characters except NEL.

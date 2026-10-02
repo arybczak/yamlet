@@ -28,7 +28,16 @@ import Yamlet.Internal.Utils
 -- | The location and the message of the error for the furthest position at
 -- which the parser failed.
 unexpected :: Env -> Int -> (Int, String)
-unexpected e i = case indentationTab (i - 1) Nothing of
+unexpected = unexpectedIn . afterBoms
+
+-- | The input without the byte order marks at its start. The hints look at
+-- the content of the lines around an error, and the marks are not content
+-- of the first line. The indices stay those of the input.
+afterBoms :: Env -> Env
+afterBoms e = e {base = skipBoms e e.base}
+
+unexpectedIn :: Env -> Int -> (Int, String)
+unexpectedIn e i = case indentationTab (i - 1) Nothing of
   Just tab -> (tab, "tabs cannot be used for indentation")
   Nothing
     | byteAt e i == COLON && firstColon
@@ -85,7 +94,8 @@ unexpected e i = case indentationTab (i - 1) Nothing of
         b = byteBefore e j
 
     -- The index starts a line that looks like the continuation of a plain
-    -- scalar, and the closest line above that is not blank has a comment.
+    -- scalar, the closest line above that is not blank has a comment, and
+    -- the content above ends with a plain scalar.
     afterComment :: Bool
     afterComment =
       i == skipSpaces e (lineStart e i)
@@ -94,7 +104,60 @@ unexpected e i = case indentationTab (i - 1) Nothing of
         && not (any (isKeyColon e) [i .. lineEnd i - 1])
         && isNothing (mistake e False i)
         && commentAbove (lineStart e i)
+        && maybe False endsPlain (lineAbove e (lineStart e i))
       where
+        -- The line with the content at the index ends with a plain scalar,
+        -- not with a quoted scalar, a flow collection, an alias or the
+        -- header of a block scalar, and it is not a line of a block scalar.
+        endsPlain :: Int -> Bool
+        endsPlain k =
+          let end = contentEnd k
+              b = byteBefore e end
+          in end > k
+               && b /= SQUOTE
+               && b /= DQUOTE
+               && b /= RBRACKET
+               && b /= RBRACE
+               && byteAt e (wordStart e end) /= STAR
+               && not (blockHeader k)
+               && not (inBlockScalar k)
+
+        -- The index after the content of the line at the index, before its
+        -- comment.
+        contentEnd :: Int -> Int
+        contentEnd k = skipBackWhites e (go k)
+          where
+            go :: Int -> Int
+            go j
+              | byteAt e j == 0 || isBreak (byteAt e j) || comment j = j
+              | otherwise = go (j + 1)
+
+        -- The closest line above that is indented less starts a block
+        -- scalar.
+        inBlockScalar :: Int -> Bool
+        inBlockScalar k = go k
+          where
+            go :: Int -> Bool
+            go j = case lineAbove e (lineStart e j) of
+              Nothing -> False
+              Just above
+                | indentation above < indentation k -> blockHeader above
+                | otherwise -> go above
+
+            indentation :: Int -> Int
+            indentation j = j - lineStart e j
+
+        -- The line at the index ends with the header of a block scalar,
+        -- e.g. "key: |-".
+        blockHeader :: Int -> Bool
+        blockHeader k =
+          let end = contentEnd k
+              start = wordStart e end
+              b = byteAt e start
+          in end > start
+               && (b == PIPE || b == GREATER)
+               && all (\j -> let w = byteAt e j in w == PLUS || w == MINUS || isDecDigit w) [start + 1 .. end - 1]
+
         commentAbove :: Int -> Bool
         commentAbove start
           | start <= e.base = False
@@ -227,7 +290,10 @@ unexpected e i = case indentationTab (i - 1) Nothing of
 -- | The error for a common mistake at the index, if the character there shows
 -- one. The flag tells if the index is inside a flow collection.
 mistake :: Env -> Bool -> Int -> Maybe String
-mistake e flow i
+mistake = mistakeIn . afterBoms
+
+mistakeIn :: Env -> Bool -> Int -> Maybe String
+mistakeIn e flow i
   -- Inside a plain scalar, a '#' after other content does not stop the
   -- parser, so here it follows the end of another node, e.g. "x"#c.
   | w == HASH && isNsChar (byteBefore e i) =

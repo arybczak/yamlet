@@ -759,6 +759,8 @@ test_encodings = do
     "BOM before a marker after an unterminated flow sequence"
     (Just (1, 4, "unterminated flow sequence"))
     (errorOf (decodeAllText @Value "a: [x,\n\xFEFF---\nb\n"))
+  documents "BOM before a start marker in a double-quoted scalar" ["a \xFEFF--- "] "\"a\n\xFEFF---\n\"\n"
+  documents "BOM before an end marker in a single-quoted scalar" ["a \xFEFF... b"] "'a\n\xFEFF... b'\n"
   documents "two BOMs before a marker" ["a", "b"] "a\n\xFEFF\xFEFF--- b\n"
   documents "two BOMs before a marker after an end marker" ["a", "b"] "--- a\n...\n\xFEFF\xFEFF--- b\n"
   documents "two BOMs before a marker after a block scalar" ["x\n", "b"] "--- |\n x\n\xFEFF\xFEFF--- b\n"
@@ -797,6 +799,34 @@ test_syntaxErrors = do
   let check :: String -> (Int, Int, String) -> T.Text -> Assertion
       check preface expected input = assertEqual preface (Just expected) (errorOf (decodeAllText @Value input))
   check "bad indentation" (3, 2, "unexpected indentation") "a:\n  b: 1\n c: 2\n"
+  -- The BOM at the start of the input is not content of the first line.
+  forM_
+    [ ("colon in an alias", (1, 3, "the name of the alias includes the ':', write a space before ':' if the alias is a key"), "*x: 1")
+    , ("properties on their own line", (1, 1, "an anchor or a tag cannot be on a line of its own here, write it after the key or the '-'"), "&a &b")
+    , ("tab before a key", (1, 1, "tabs cannot be used for indentation"), "\tx: y")
+    , ("mapping on the start marker line", (1, 6, "unexpected ':', a mapping cannot start on the line of '---'"), "--- a: b")
+    , ("key among list items", (2, 1, "unexpected key among list items"), "- a\nb: 1")
+    , ("list item without a space", (2, 2, "expected a space after '-'"), "- a\n-b")
+    ]
+    $ \(preface, expected, input) -> do
+      check preface expected input
+      check (preface ++ " after a BOM") expected ("\xFEFF" <> input)
+  check
+    "line after a comment below a plain scalar"
+    (3, 3, "a comment ends a plain scalar, so this line cannot continue it")
+    "a: x\n# c\n  y\n"
+  forM_
+    [ ("literal scalar", 4, "a: |\n  x\n# c\n  y\n")
+    , ("single-quoted scalar", 3, "a: 'x'\n# c\n  y\n")
+    , ("flow sequence", 3, "a: [x]\n# c\n  y\n")
+    , ("alias", 3, "a: *x\n# c\n  y\n")
+    ]
+    $ \(node, line, input) ->
+      check ("line after a comment below a " ++ node) (line, 3, "unexpected indentation") input
+  check
+    "line after a comment below the header of a block scalar"
+    (3, 3, "unexpected indentation, the line has less indentation than the block scalar above it")
+    "a: |\n# c\n  y\n"
   check
     "mapping in a plain scalar"
     (1, 11, "unexpected ':', quote the value if it contains \": \"")
