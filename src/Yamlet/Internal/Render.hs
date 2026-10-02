@@ -108,7 +108,38 @@ renderSyntax opts = emptyLines . B.runBuilder . go True
         let nextLines = case docs of
               next : _ -> not (null next.docComments.before)
               [] -> False
-        in document opts afterEnd nextLines (validAnchors doc) <> go (writesEnd opts doc) docs
+            prepared = validAnchors doc {root = commentedBlocks doc.root}
+        in document opts afterEnd nextLines prepared <> go (writesEnd opts prepared) docs
+
+-- | The node with every flow collection that has a comment inside
+-- in the block style, so that every comment has a line. The comments of a
+-- collection in its lines above and in its inline comment fit outside a flow
+-- collection.
+commentedBlocks :: Node -> Node
+commentedBlocks = fst . go
+  where
+    -- The node, and whether it or a node inside it has a comment that does
+    -- not fit outside a flow collection.
+    go :: Node -> (Node, Bool)
+    go n = case n.content of
+      SequenceContent style xs ->
+        let ys = map go xs
+            has = linesAfter || any inner ys
+        in (n {content = SequenceContent (styleOf has style) (map fst ys)}, has)
+      MappingContent style kvs ->
+        let ys = map (bimap go go) kvs
+            has = linesAfter || any (\(k, v) -> inner k || inner v) ys
+        in (n {content = MappingContent (styleOf has style) (map (bimap fst fst) ys)}, has)
+      _ -> (n, linesAfter)
+      where
+        linesAfter :: Bool
+        linesAfter = any (/= EmptyLine) n.comments.after
+
+    inner :: (Node, Bool) -> Bool
+    inner (x, has) = any (/= EmptyLine) x.comments.before || isJust x.comments.inline || has
+
+    styleOf :: Bool -> CollectionStyle -> CollectionStyle
+    styleOf has style = if has then Block else style
 
 -- | The document with anchor names that read back. A name that an anchor
 -- cannot have becomes a name that no other anchor of the document has, in
@@ -611,24 +642,9 @@ implicitKey opts k
 -- | The node is a collection that the renderer writes in the block style.
 isBlock :: RenderOptions -> Node -> Bool
 isBlock opts n = case n.content of
-  SequenceContent style (_ : _) -> style == Block || opts.forceBlock || hasComments n
-  MappingContent style (_ : _) -> style == Block || opts.forceBlock || hasComments n
+  SequenceContent style (_ : _) -> style == Block || opts.forceBlock
+  MappingContent style (_ : _) -> style == Block || opts.forceBlock
   _ -> False
-
--- | The node or a node inside it has a comment, other than the lines above
--- the node and its inline comment, which fit outside a flow collection.
-hasComments :: Node -> Bool
-hasComments n =
-  not (null (commentLines n.comments.after)) || case n.content of
-    SequenceContent _ xs -> any inner xs
-    MappingContent _ kvs -> any (\(k, v) -> inner k || inner v) kvs
-    _ -> False
-  where
-    inner :: Node -> Bool
-    inner x = not (null (commentLines x.comments.before)) || isJust x.comments.inline || hasComments x
-
-    commentLines :: [Line] -> [Line]
-    commentLines = filter (/= EmptyLine)
 
 -- | The node has comments at its end, which go between the brackets of an
 -- empty collection and below a scalar or an alias.

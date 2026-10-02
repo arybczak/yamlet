@@ -23,6 +23,7 @@ renderTests =
     , testCase "documents" test_documents
     , testCase "lines of scalars" test_scalarLines
     , localOption (mkTimeout 10000000) $ testCase "many invalid anchor names" test_manyAnchors
+    , localOption (mkTimeout 10000000) $ testCase "deep comment" test_deepComment
     , testGroup
         "comments"
         [ testCase "attachment" test_attachment
@@ -267,6 +268,21 @@ test_manyAnchors = do
         first : rest -> first : take 1 (reverse rest)
         [] -> []
     )
+
+-- | The time to render nested flow collections with a comment inside is
+-- linear in the depth.
+test_deepComment :: Assertion
+test_deepComment =
+  assertEqual
+    "output"
+    (Right (T.replicate (depth - 1) "- " <> "[\n" <> indent <> "# c\n" <> indent <> "]\n"))
+    (renderSyntax defaultRenderOptions <$> parseDocumentsText (T.replicate depth "[" <> " # c\n" <> T.replicate depth "]\n"))
+  where
+    depth :: Int
+    depth = 100000
+
+    indent :: T.Text
+    indent = T.replicate (2 * (depth - 1)) " "
 
 test_forceBlock :: Assertion
 test_forceBlock = do
