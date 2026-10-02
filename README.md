@@ -48,7 +48,7 @@ A YAML 1.2.2 library written in Haskell.
   constructor without fields is its name too, which aeson writes as
   `{Dot: []}`. With `omitNullFields`, the encoder leaves out a field of
   type `Maybe (Maybe a)` with the value `Just Nothing`, while aeson writes
-  `null`.
+  `null`. It keeps a field of type `()` as `[]`, which aeson leaves out.
 - The syntax tree keeps the comments and the empty lines, so a program can
   read a file, change it and write it back with its comments.
 - A decoded type can keep a part of a document as a `Node`. The encoder
@@ -65,7 +65,15 @@ A YAML 1.2.2 library written in Haskell.
 ## Modules
 
 - `Yamlet`: decoding with the `FromYaml` class and encoding with the `ToYaml`
-  class. The instances read and write the nodes of the syntax tree.
+  class. The instances read and write the nodes of the syntax tree. The
+  module also exports the contents of `Yamlet.Value` and of the four modules
+  below.
+  - `Yamlet.Decode`: the `FromYaml` class and the functions to write its
+    instances.
+  - `Yamlet.Encode`: the `ToYaml` class and the functions to write its
+    instances.
+  - `Yamlet.Generic`: the generic instances and their options.
+  - `Yamlet.Error`: the errors, with the line, the column and the path.
 - `Yamlet.Value`: the values of documents, with resolved tags and aliases,
   e.g. for a document whose structure a program does not know.
 - `Yamlet.Syntax`: the syntax tree, with styles, anchors and unresolved tags.

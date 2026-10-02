@@ -19,6 +19,10 @@
 -- host: localhost
 -- port: 80
 --
+-- Besides GHC2021, the examples need the extensions DataKinds,
+-- DeriveAnyClass, DerivingStrategies, DerivingVia, OverloadedStrings and
+-- TypeFamilies.
+--
 -- A type with other options defines 'yamlOptions' in its instance of
 -- 'GenericYamlOptions':
 --
