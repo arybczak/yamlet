@@ -1,5 +1,6 @@
 module RenderTests (renderTests) where
 
+import Control.Monad
 import Data.List qualified as L
 import Data.Maybe
 import Data.Text qualified as T
@@ -391,6 +392,25 @@ test_documents = do
     "comment above a document with directives"
     "a\n...\n\n# c\n%YAML 1.2\n---\nb\n"
     (renderSyntax defaultRenderOptions [document (plainNode "a"), commented (document (plainNode "b")) {version = Just (YamlVersion 1 2)}])
+  -- A block scalar without content would take the comment in.
+  forM_ [Literal, Folded] $ \style ->
+    assertEqual
+      ("comment above a document below an empty " ++ show style ++ " root")
+      "\"\"\n\n# c\n---\nb\n"
+      (renderSyntax defaultRenderOptions [document (scalarNode style ""), commented (document (plainNode "b"))])
+  let keyComment :: Document
+      keyComment = document (mappingNode [((plainNode "k") {comments = noComments {before = [Comment "c"]}}, plainNode "v")])
+      afterEnd :: T.Text
+      afterEnd = renderSyntax defaultRenderOptions [(document (plainNode "a")) {explicitEnd = True}, keyComment]
+      firstKeyLines :: Document -> [Line]
+      firstKeyLines d = case d.root.content of
+        MappingContent _ ((k, _) : _) -> k.comments.before
+        _ -> []
+  assertEqual "comment above the first key after an end marker" "a\n...\n\n# c\nk: v\n" afterEnd
+  assertEqual
+    "comment above the first key after an end marker, read back"
+    (Right [[], [Comment "c"]])
+    (map firstKeyLines <$> parseDocumentsText afterEnd)
   let rootWithGap :: Bool -> Document
       rootWithGap end =
         (document (contentNode (SequenceContent Block [plainNode "a"])) {comments = noComments {after = [Comment "c", EmptyLine]}})

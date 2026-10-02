@@ -104,7 +104,11 @@ renderSyntax opts = emptyLines . B.runBuilder . go True
     go :: Bool -> [Document] -> B.Builder
     go afterEnd = \case
       [] -> mempty
-      doc : docs -> document opts afterEnd (validAnchors doc) <> go (writesEnd opts doc) docs
+      doc : docs ->
+        let nextLines = case docs of
+              next : _ -> not (null next.docComments.before)
+              [] -> False
+        in document opts afterEnd nextLines (validAnchors doc) <> go (writesEnd opts doc) docs
 
 -- | The document with anchor names that read back. A name that an anchor
 -- cannot have becomes a name that no other anchor of the document has, in
@@ -187,10 +191,10 @@ writesEnd opts doc =
       MappingContent {} -> isBlock opts doc.root
       _ -> True
 
--- | A document. The flag tells if it starts the stream or follows a document
--- end marker.
-document :: RenderOptions -> Bool -> Document -> B.Builder
-document opts afterEnd doc =
+-- | A document. The flags tell if it starts the stream or follows a document
+-- end marker, and if the next document has lines above its start marker.
+document :: RenderOptions -> Bool -> Bool -> Document -> B.Builder
+document opts afterEnd nextLines doc =
   mconcat
     [ if needsEnd then "...\n" else mempty
     , gap
@@ -208,18 +212,19 @@ document opts afterEnd doc =
     ]
   where
     -- A block scalar without content at the top level would take the lines
-    -- below it in.
+    -- below it in, also those of the next document.
     r :: Node
     r = case doc.root.content of
       ScalarLinesContent style t starts
         | style == Literal || style == Folded
-        , needsIndentIndicator t || T.all (== '\n') t && not (null doc.root.comments.after) ->
+        , needsIndentIndicator t || T.all (== '\n') t && (not (null doc.root.comments.after) || nextLines) ->
             doc.root {content = ScalarLinesContent DoubleQuoted t starts}
       _ -> doc.root
 
-    -- The end of the document above takes the comments right below it.
+    -- The end of the document above takes the comments right below it. The
+    -- lines above the first entry of a block root come first too.
     gap :: B.Builder
-    gap = case if null doc.docComments.before && not marker then r.comments.before else doc.docComments.before of
+    gap = case if null doc.docComments.before && not marker then aboveIndicator opts r else doc.docComments.before of
       Comment _ : _ -> lines_ 0 [EmptyLine]
       _ -> mempty
 
