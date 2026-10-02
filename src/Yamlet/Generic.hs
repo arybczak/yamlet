@@ -408,6 +408,11 @@ data SumEncodingKind
     -- 'TaggedObject'. Thus the field of a type with the same tag key stays
     -- under the contents key.
     --
+    -- Only the entries of the mapping go next to the tag. The tag, the
+    -- anchor and the comments of the mapping are lost, e.g. the tag
+    -- of a v'Yamlet.Value.Tagged' value or the comments of a
+    -- t'Yamlet.Commented' value. 'TaggedObject' keeps them.
+    --
     -- The decoder reads a mapping with the contents key as with
     -- 'TaggedObject', and the other keys are unknown keys. If the flat form
     -- fails and a key is close to the contents key, e.g. @contnets@, the
