@@ -342,6 +342,21 @@ test_tags = do
   exact "tag:example.com,2000:a%41,[b]"
   exact "tag:example.com,2000:a b>%"
   exact "foo"
+  exact "!point#2d"
+  exact "http://example.com/a#b"
+  exact "tag:example.com,2000:a%20b"
+  -- libyaml, PyYAML and go-yaml reject a # in a tag, and they decode the
+  -- escapes of a verbatim tag.
+  assertEqual "hash in a local tag" "!point%232d x\n" (encodeText (Tagged "!point#2d" (String "x")))
+  assertEqual
+    "hash in a global tag"
+    "%TAG !t68! %68\n---\n!t68!ttp://example.com/a%23b x\n"
+    (encodeText (Tagged "http://example.com/a#b" (String "x")))
+  assertEqual
+    "percent in a global tag"
+    "%TAG !t74! %74\n---\n!t74!ag:example.com%2C2000:a%2520b x\n"
+    (encodeText (Tagged "tag:example.com,2000:a%20b" (String "x")))
+  assertEqual "verbatim tag" "!<http://example.com/a> x\n" (encodeText (Tagged "http://example.com/a" (String "x")))
   assertEqual
     "directives after a document"
     (Right [strTag, "foo"])

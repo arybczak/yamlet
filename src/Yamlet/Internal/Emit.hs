@@ -413,9 +413,10 @@ tagText tag
   | otherwise = "!<" <> B.fromText tag <> ">"
   where
     -- The text of a tag suffix. A character that the form does not allow gets
-    -- a %XX escape, which the parser decodes.
+    -- a %XX escape, which the parser decodes. So does #, which YAML allows,
+    -- but libyaml, PyYAML and go-yaml reject.
     shorthand :: T.Text -> B.Builder
-    shorthand = T.foldr (\x b -> (if asciiChar isTagChar x then B.fromChar x else percentEscape x) <> b) mempty
+    shorthand = T.foldr (\x b -> (if x /= '#' && asciiChar isTagChar x then B.fromChar x else percentEscape x) <> b) mempty
 
 -- | The handles for the tags of the node and the nodes in it that are not
 -- valid URIs, each once.
@@ -450,9 +451,11 @@ handleText :: Char -> B.Builder
 handleText c = "!t" <> B.fromText (T.pack (showHex (ord c) "")) <> "!"
 
 -- | A global tag that a verbatim tag holds as it is. The parser does not
--- decode the escapes of a verbatim tag.
+-- decode the escapes of a verbatim tag, but libyaml, PyYAML and go-yaml do,
+-- and they reject a #. A tag with a % or a # goes in a shorthand tag, with
+-- escapes.
 isVerbatim :: T.Text -> Bool
-isVerbatim tag = hasScheme && uriChars (T.unpack tag)
+isVerbatim tag = hasScheme && T.all (\c -> c /= '%' && c /= '#' && asciiChar isUriChar c) tag
   where
     hasScheme :: Bool
     hasScheme = case T.break (== ':') tag of
@@ -460,12 +463,6 @@ isVerbatim tag = hasScheme && uriChars (T.unpack tag)
         Just (c, cs) ->
           isAscii c && isAlpha c && T.all (\x -> isAscii x && (isAlphaNum x || elem @[] x "+-.")) cs && not (T.null rest)
         Nothing -> False
-
-    uriChars :: String -> Bool
-    uriChars = \case
-      '%' : a : b : rest -> isHexDigit a && isHexDigit b && uriChars rest
-      c : rest -> asciiChar isUriChar c && uriChars rest
-      [] -> True
 
 -- | The %XX escapes of the UTF-8 bytes of a character.
 percentEscape :: Char -> B.Builder
