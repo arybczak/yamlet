@@ -128,7 +128,7 @@ import Yamlet.Value
 newtype Parser a = Parser (S.Offset -> Result a)
 
 -- | The errors of a parser and its value. The value of a parser with errors
--- is 'failed'.
+-- is 'failed', so the field of the value is lazy.
 --
 -- '<*>' applies the values without a branch on the errors, and it joins the
 -- errors apart from them. The optimizer can then combine the values of a
@@ -142,8 +142,8 @@ data Errors
   = NoErrors
   | -- | An error with the notes that go right after it, e.g. the first key of
     -- a duplicate key.
-    OneError !S.Offset String [(S.Offset, String)]
-  | BothErrors Errors Errors
+    OneError !S.Offset !String ![(S.Offset, String)]
+  | BothErrors !Errors !Errors
 
 bothErrors :: Errors -> Errors -> Errors
 bothErrors e1 e2 = case (e1, e2) of
@@ -503,10 +503,17 @@ data Object = Object
   , entries :: [(S.Node, S.Node)]
   , index :: M.Map T.Text (S.Node, S.Node)
   , otherKeys :: [(S.Node, Value)]
-  -- ^ The keys that are not strings, for the error of a lookup.
+  -- ^ The keys that are not strings, for the error of a lookup. The field is
+  -- lazy, because only an error needs it, and its weak head normal form
+  -- would already resolve the keys up to the first one that is not a
+  -- string.
   , duplicates :: !Bool
   -- ^ Two string keys have the same text.
   }
+
+-- The fields entries and index are lazy. With either of them strict, a
+-- generic decoder evaluates the field again, and the derive.*.parseYaml.generic
+-- benchmarks allocate more.
 
 -- | The node of the mapping.
 objectNode :: Object -> S.Node
@@ -921,8 +928,8 @@ instance FromYaml Value where
       copy :: Value -> Value
       copy = \case
         String t -> String (T.copy t)
-        Sequence xs -> Sequence $! strictMap copy xs
-        Mapping kvs -> Mapping $! strictMap (\(k, v) -> let !k' = copy k; !v' = copy v in (k', v')) kvs
+        Sequence xs -> Sequence (strictMap copy xs)
+        Mapping kvs -> Mapping (strictMap (\(k, v) -> let !k' = copy k; !v' = copy v in (k', v')) kvs)
         Tagged tag v -> Tagged (T.copy tag) (copy v)
         v -> v
 

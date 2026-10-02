@@ -346,12 +346,12 @@ instance
 -- mapping or two constructors the same text encode values that do not read
 -- back, as the fields below describe.
 data YamlOptions = YamlOptions
-  { fieldLabelModifier :: String -> String
+  { fieldLabelModifier :: !(String -> String)
   -- ^ The key of a field from the name of the field. If two fields of a
   -- constructor get the same key, e.g. @fooBar@ and @foo_bar@ with
   -- 'snakeCase', the constructor encodes as a mapping with two equal keys,
   -- which does not read back.
-  , constructorTagModifier :: String -> String
+  , constructorTagModifier :: !(String -> String)
   -- ^ The tag of a constructor from the name of the constructor. If two
   -- constructors get the same tag, e.g. @FooBar@ and @Foo_bar@ with
   -- 'snakeCase', the decoder reads the tag as the first of them.
@@ -362,20 +362,24 @@ data YamlOptions = YamlOptions
   -- ^ The key of the fields of a tagged constructor without field names,
   -- @contents@ by default. If it is the same as 'tagKey', such a constructor
   -- encodes as a mapping with two equal keys, which does not read back.
-  , tagSingleConstructors :: Bool
+  , tagSingleConstructors :: !Bool
   -- ^ Give a type with one constructor a tag too, unless the constructor has
   -- no fields. Off by default.
-  , omitNullFields :: Bool
+  , omitNullFields :: !Bool
   -- ^ Leave out a field whose value is null, e.g. 'Nothing'. Off by default.
   --
   -- With 'yamlDefault', a null field stays if its default is not null.
   -- Otherwise the value would not read back: the decoder fills a missing key
   -- from the default, so e.g. a field 'Nothing' with the default @Just 1@
   -- would read back as @Just 1@.
-  , rejectUnknownFields :: Bool
+  , rejectUnknownFields :: !Bool
   -- ^ Reject a key that is not a field of the constructor. Off by default.
   }
   deriving stock (Generic)
+
+-- The fields tagKey and contentsKey are lazy. With strict keys, GHC keeps the
+-- generic representation in the encoder of a sum type, as the inspection test
+-- of encodeShape shows.
 
 -- | The options with the defaults that the fields of t'YamlOptions' name.
 defaultYamlOptions :: YamlOptions

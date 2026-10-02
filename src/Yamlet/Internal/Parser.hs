@@ -960,7 +960,7 @@ markerInside e node =
 -- the length of the pieces.
 data Lines
   = FirstLine
-  | Lines [T.Text] [Int] !Int
+  | Lines ![T.Text] ![Int] !Int
 
 -- | The positions where the lines start, from the length of the first line
 -- and the separators and the texts of the next lines.

@@ -228,10 +228,7 @@ linesAbove ls = \case
 -- | Comments with their lists evaluated. The parser returns a document
 -- without thunks, and a lazy list would keep the items of the input alive.
 strictComments :: [Line] -> Maybe T.Text -> [Line] -> Comments
-strictComments before inline after =
-  let !before' = force before
-      !after' = force after
-  in Comments before' inline after'
+strictComments before inline after = Comments (force before) inline (force after)
 
 isEmptyLine :: Item -> Bool
 isEmptyLine i = case i.line of

@@ -437,8 +437,8 @@ data Numbering = Numbering
 -- is small, so it stays a value.
 data Shape
   = ScalarShape !Value
-  | SequenceShape !T.Text [Int]
-  | MappingShape !T.Text [(Int, Int)]
+  | SequenceShape !T.Text ![Int]
+  | MappingShape !T.Text ![(Int, Int)]
   deriving stock (Eq, Ord)
 
 -- | The node has an alias or a collection key inside it.

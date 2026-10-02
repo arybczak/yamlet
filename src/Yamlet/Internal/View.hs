@@ -30,8 +30,8 @@ data View
   | IntView !Integer
   | FloatView !FloatValue
   | StringView !T.Text
-  | SequenceView [S.Node]
-  | MappingView [(S.Node, S.Node)]
+  | SequenceView ![S.Node]
+  | MappingView ![(S.Node, S.Node)]
   | -- | 'Yamlet.Decode.runParser' replaces the aliases, so only a node that a
     -- program builds can have one.
     AliasView !T.Text

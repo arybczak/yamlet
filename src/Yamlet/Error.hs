@@ -45,7 +45,7 @@ data Error = Error
   , sourceIndex :: !Int
   -- ^ The index of the location in the UTF-8 bytes of 'sourceLine'. It
   -- lets 'prettyError' find the column without a scan of the whole line.
-  , path :: [PathElement]
+  , path :: ![PathElement]
   -- ^ The keys and the indices from the root of the document to the node of
   -- a decoder error. An error at a key has the path of its mapping. The path
   -- is empty for an error of the parser and for a node that a program built.

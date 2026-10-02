@@ -51,11 +51,11 @@ data Value
   | Int !Integer
   | Float !FloatValue
   | String !T.Text
-  | Sequence [Value]
+  | Sequence ![Value]
   | -- | The entries of a mapping in the order of the input. The keys are
     -- unique. The encoder does not check this for a mapping that a program
     -- builds, and a mapping with two equal keys does not read back.
-    Mapping [(Value, Value)]
+    Mapping ![(Value, Value)]
   | -- | A value with a tag that is not the tag of the core schema for it,
     -- e.g. @!point {x: 1}@. A scalar with a tag that the schema does not
     -- know is a v'String' inside, e.g. @!secret abc@.

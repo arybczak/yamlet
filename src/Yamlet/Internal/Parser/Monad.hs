@@ -79,7 +79,7 @@ data Env = Env
 -- with the message, or a failure at the index in the environment, whose
 -- message the caller of the parser finds.
 data ParseError
-  = ParseError !Int String
+  = ParseError !Int !String
   | UnexpectedParseError !Env !Int
 
 -- | The result of a parser: a value with the new position, a failure, or an
@@ -262,7 +262,7 @@ data Scanned a
   | -- | The input does not match. The index is the location of the mismatch.
     NoMatch !Int
   | -- | An error at the index.
-    Failed !Int String
+    Failed !Int !String
 
 -- | Run a pure loop over the input from the current position.
 withScan :: (Env -> Int -> Scanned a) -> P a

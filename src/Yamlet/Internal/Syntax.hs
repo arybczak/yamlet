@@ -92,8 +92,8 @@ data Content
     -- renderer ignores a position where the style of the output cannot start
     -- a new line and keep the text.
     ScalarLinesContent !ScalarStyle !T.Text ![Int]
-  | SequenceContent !CollectionStyle [Node]
-  | MappingContent !CollectionStyle [(Node, Node)]
+  | SequenceContent !CollectionStyle ![Node]
+  | MappingContent !CollectionStyle ![(Node, Node)]
   | -- | An alias has no properties.
     AliasContent !T.Text
   deriving stock (Eq, Show, Generic)
@@ -173,13 +173,13 @@ instance NFData CollectionStyle where
 
 -- | The comments and the empty lines that belong to a node.
 data Comments = Comments
-  { before :: [Line]
+  { before :: ![Line]
   -- ^ The lines above the node.
   , inline :: !(Maybe T.Text)
   -- ^ The comment at the end of the first line of the node. The renderer
   -- writes a line break in it as a space, the same line breaks as in a
   -- 'Comment'.
-  , after :: [Line]
+  , after :: ![Line]
   -- ^ The lines after the last entry of a collection, between the brackets
   -- of an empty collection, or below a scalar or an alias root. The parser
   -- gives no such lines to other scalars and aliases, but the renderer
@@ -281,7 +281,7 @@ withComments c n = Node n.offset n.endOffset n.props c n.content
 -- # The port.
 -- port: 81 # the default
 data Commented a = Commented
-  { value :: a
+  { value :: !a
   , comments :: !Comments
   }
   -- The derived order compares the fields in this order.
@@ -324,7 +324,7 @@ data Commented a = Commented
 -- and then the offsets. To compare only the values, e.g. in a test, use the
 -- field @value@.
 data Located a = Located
-  { value :: a
+  { value :: !a
   , offset :: !Offset
   }
   -- The derived order compares the fields in this order.
@@ -409,8 +409,8 @@ copyNode n =
         c -> copyComments c
     , content = case n.content of
         ScalarLinesContent style t ls -> ScalarLinesContent style (T.copy t) ls
-        SequenceContent style xs -> SequenceContent style $! strictMap copyNode xs
-        MappingContent style kvs -> MappingContent style $! strictMap copyEntry kvs
+        SequenceContent style xs -> SequenceContent style (strictMap copyNode xs)
+        MappingContent style kvs -> MappingContent style (strictMap copyEntry kvs)
         AliasContent name -> AliasContent (T.copy name)
     }
   where
@@ -423,10 +423,7 @@ copyNode n =
 copyComments :: Comments -> Comments
 copyComments c = case c of
   Comments [] Nothing [] -> c
-  _ ->
-    let !before = strictMap copyLine c.before
-        !after = strictMap copyLine c.after
-    in Comments {before = before, inline = copyMaybe c.inline, after = after}
+  _ -> Comments {before = strictMap copyLine c.before, inline = copyMaybe c.inline, after = strictMap copyLine c.after}
   where
     copyLine :: Line -> Line
     copyLine = \case
