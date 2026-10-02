@@ -33,51 +33,51 @@ derived =
     [ format "contents" G.mkX M.mkX
     , format "flat" G.mkF M.mkF
     ]
-
-format
-  :: forall g m
-   . (NFData g, FromYaml g, ToYaml g, NFData m, FromYaml m, ToYaml m)
-  => String
-  -> (Int -> g)
-  -> (Int -> m)
-  -> Benchmark
-format name mkG mkM =
-  bgroup
-    name
-    [ bgroup
-        "toYaml"
-        [ bench "generic" $ nf toYaml gs
-        , bench "manual" $ nf toYaml ms
-        ]
-    , bgroup
-        "parseYaml"
-        [ bench "generic" $ nf (runParser (parseYaml @[g])) yaml
-        , bench "manual" $ nf (runParser (parseYaml @[m])) yaml
-        ]
-    , bgroup
-        "encode"
-        [ bench "generic" $ nf encode gs
-        , bench "manual" $ nf encode ms
-        ]
-    , bgroup
-        "decode"
-        [ bench "generic" $ nf (either (error . show) id . decode @[g]) bs
-        , bench "manual" $ nf (either (error . show) id . decode @[m]) bs
-        ]
-    ]
   where
-    gs :: [g]
-    gs = map mkG values
+    format
+      :: forall g m
+       . (NFData g, FromYaml g, ToYaml g, NFData m, FromYaml m, ToYaml m)
+      => String
+      -> (Int -> g)
+      -> (Int -> m)
+      -> Benchmark
+    format name mkG mkM =
+      bgroup
+        name
+        [ bgroup
+            "toYaml"
+            [ bench "generic" $ nf toYaml gs
+            , bench "manual" $ nf toYaml ms
+            ]
+        , bgroup
+            "parseYaml"
+            [ bench "generic" $ nf (runParser (parseYaml @[g])) yaml
+            , bench "manual" $ nf (runParser (parseYaml @[m])) yaml
+            ]
+        , bgroup
+            "encode"
+            [ bench "generic" $ nf encode gs
+            , bench "manual" $ nf encode ms
+            ]
+        , bgroup
+            "decode"
+            [ bench "generic" $ nf (either (error . show) id . decode @[g]) bs
+            , bench "manual" $ nf (either (error . show) id . decode @[m]) bs
+            ]
+        ]
+      where
+        gs :: [g]
+        gs = map mkG values
 
-    ms :: [m]
-    ms = map mkM values
+        ms :: [m]
+        ms = map mkM values
 
-    -- Both versions give the same YAML, see 'checkDerived'.
-    yaml :: Node
-    yaml = toYaml gs
+        -- Both versions give the same YAML, see 'checkDerived'.
+        yaml :: Node
+        yaml = toYaml gs
 
-    bs :: BS.ByteString
-    bs = encode gs
+        bs :: BS.ByteString
+        bs = encode gs
 
 values :: [Int]
 values = [1 .. 1000]

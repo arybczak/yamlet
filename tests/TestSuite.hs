@@ -163,67 +163,67 @@ runTest path = do
       ScalarEvent props _ t -> ScalarEvent props Plain t
       e -> e
 
--- | The JSON form of a value. The keys of the mappings in the tests with JSON
--- are strings.
-toJson :: Y.Value -> J.Value
-toJson = \case
-  Y.Null -> J.Null
-  Y.Bool b -> J.Bool b
-  Y.Int i -> J.Number (fromInteger i)
-  Y.Float (Y.Finite s) -> J.Number s
-  Y.Float _ -> J.Null
-  Y.String t -> J.String t
-  Y.Sequence xs -> J.Array . V.fromList $ map toJson xs
-  Y.Mapping kvs -> J.Object $ KM.fromList [(key k, toJson v) | (k, v) <- kvs]
-  Y.Tagged _ v -> toJson v
-  where
-    key :: Y.Value -> K.Key
-    key = \case
-      Y.String t -> K.fromText t
-      Y.Null -> K.fromText ""
-      Y.Tagged _ v -> key v
-      v -> K.fromString (show v)
+    -- The JSON form of a value. The keys of the mappings in the tests with
+    -- JSON are strings.
+    toJson :: Y.Value -> J.Value
+    toJson = \case
+      Y.Null -> J.Null
+      Y.Bool b -> J.Bool b
+      Y.Int i -> J.Number (fromInteger i)
+      Y.Float (Y.Finite s) -> J.Number s
+      Y.Float _ -> J.Null
+      Y.String t -> J.String t
+      Y.Sequence xs -> J.Array . V.fromList $ map toJson xs
+      Y.Mapping kvs -> J.Object $ KM.fromList [(key k, toJson v) | (k, v) <- kvs]
+      Y.Tagged _ v -> toJson v
+      where
+        key :: Y.Value -> K.Key
+        key = \case
+          Y.String t -> K.fromText t
+          Y.Null -> K.fromText ""
+          Y.Tagged _ v -> key v
+          v -> K.fromString (show v)
 
--- | Render an event in the format of the test suite.
-renderEvent :: Event -> String
-renderEvent = \case
-  StreamStart -> "+STR"
-  StreamEnd -> "-STR"
-  DocumentStart explicit -> "+DOC" ++ if explicit then " ---" else ""
-  DocumentEnd explicit -> "-DOC" ++ if explicit then " ..." else ""
-  SequenceStart props style -> "+SEQ" ++ flow style "[]" ++ renderProps props
-  SequenceEnd -> "-SEQ"
-  MappingStart props style -> "+MAP" ++ flow style "{}" ++ renderProps props
-  MappingEnd -> "-MAP"
-  ScalarEvent props style t ->
-    "=VAL" ++ renderProps props ++ " " ++ styleChar style : escape (T.unpack t)
-  AliasEvent name -> "=ALI *" ++ T.unpack name
-  where
-    flow :: CollectionStyle -> String -> String
-    flow style s = case style of
-      Flow -> ' ' : s
-      Block -> ""
+    -- An event in the format of the test suite.
+    renderEvent :: Event -> String
+    renderEvent = \case
+      StreamStart -> "+STR"
+      StreamEnd -> "-STR"
+      DocumentStart explicit -> "+DOC" ++ if explicit then " ---" else ""
+      DocumentEnd explicit -> "-DOC" ++ if explicit then " ..." else ""
+      SequenceStart props style -> "+SEQ" ++ flow style "[]" ++ renderProps props
+      SequenceEnd -> "-SEQ"
+      MappingStart props style -> "+MAP" ++ flow style "{}" ++ renderProps props
+      MappingEnd -> "-MAP"
+      ScalarEvent props style t ->
+        "=VAL" ++ renderProps props ++ " " ++ styleChar style : escape (T.unpack t)
+      AliasEvent name -> "=ALI *" ++ T.unpack name
+      where
+        flow :: CollectionStyle -> String -> String
+        flow style s = case style of
+          Flow -> ' ' : s
+          Block -> ""
 
-    renderProps :: Props -> String
-    renderProps props =
-      maybe "" (\a -> " &" ++ T.unpack a) props.anchor ++ case props.tag of
-        NoTag -> ""
-        NonSpecificTag -> " <!>"
-        Tag t -> " <" ++ T.unpack t ++ ">"
+        renderProps :: Props -> String
+        renderProps props =
+          maybe "" (\a -> " &" ++ T.unpack a) props.anchor ++ case props.tag of
+            NoTag -> ""
+            NonSpecificTag -> " <!>"
+            Tag t -> " <" ++ T.unpack t ++ ">"
 
-    styleChar :: ScalarStyle -> Char
-    styleChar = \case
-      Plain -> ':'
-      SingleQuoted -> '\''
-      DoubleQuoted -> '"'
-      Literal -> '|'
-      Folded -> '>'
+        styleChar :: ScalarStyle -> Char
+        styleChar = \case
+          Plain -> ':'
+          SingleQuoted -> '\''
+          DoubleQuoted -> '"'
+          Literal -> '|'
+          Folded -> '>'
 
-    escape :: String -> String
-    escape = concatMap $ \case
-      '\\' -> "\\\\"
-      '\n' -> "\\n"
-      '\t' -> "\\t"
-      '\b' -> "\\b"
-      '\r' -> "\\r"
-      c -> [c]
+        escape :: String -> String
+        escape = concatMap $ \case
+          '\\' -> "\\\\"
+          '\n' -> "\\n"
+          '\t' -> "\\t"
+          '\b' -> "\\b"
+          '\r' -> "\\r"
+          c -> [c]

@@ -626,83 +626,83 @@ genValue size
       String _ -> Tagged "!custom" v
       _ -> v
 
-genScalar :: Gen Value
-genScalar =
-  oneof
-    [ pure Null
-    , Bool <$> arbitrary
-    , Int <$> arbitrary
-    , Float . Finite <$> (Sci.scientific <$> arbitrary <*> chooseInt (-30, 30))
-    , Float <$> elements [NegativeZero, Infinity, NegativeInfinity, NaN]
-    , String <$> genText
-    ]
-
-genText :: Gen T.Text
-genText =
-  oneof
-    [ elements tricky
-    , T.pack <$> listOf genChar
-    , T.intercalate "\n" <$> listOf (T.pack <$> listOf genChar)
-    ]
-  where
-    tricky :: [T.Text]
-    tricky =
-      [ ""
-      , " "
-      , "-"
-      , "- a"
-      , "? a"
-      , ": a"
-      , "a: b"
-      , "a:b"
-      , "#"
-      , "a #b"
-      , "true"
-      , "null"
-      , "1"
-      , "0x1F"
-      , "0o7"
-      , ".5"
-      , "~"
-      , "---"
-      , "..."
-      , "@x"
-      , "`x"
-      , "foo\n"
-      , "\nfoo"
-      , "  lead"
-      , "trail  "
-      , "a\n\nb\n\n"
-      , "\t"
-      , "é"
-      , "\x85"
-      , "\x2028"
-      , "\xFEFF"
-      , "\n"
-      , "\n\n"
-      , " \n"
-      , "a\n "
-      , "|"
-      , ">"
-      , "%x"
-      , "&a"
-      , "*a"
-      , "!a"
-      , "{}"
-      , "[]"
-      , "a, b"
-      , "key:"
-      , "'quoted'"
-      , "\"dq\""
-      , "\r\n"
-      , "\\"
-      , "a\tb"
-      ]
-
-    genChar :: Gen Char
-    genChar =
-      frequency
-        [ (10, elements "abc xyz-:#,[]{}'\"!&*?|>%@`\\")
-        , (2, elements "\t\r\x85\xA0\x2028\xFEFF\x01\x7F")
-        , (1, arbitrary)
+    genScalar :: Gen Value
+    genScalar =
+      oneof
+        [ pure Null
+        , Bool <$> arbitrary
+        , Int <$> arbitrary
+        , Float . Finite <$> (Sci.scientific <$> arbitrary <*> chooseInt (-30, 30))
+        , Float <$> elements [NegativeZero, Infinity, NegativeInfinity, NaN]
+        , String <$> genText
         ]
+
+    genText :: Gen T.Text
+    genText =
+      oneof
+        [ elements tricky
+        , T.pack <$> listOf genChar
+        , T.intercalate "\n" <$> listOf (T.pack <$> listOf genChar)
+        ]
+      where
+        tricky :: [T.Text]
+        tricky =
+          [ ""
+          , " "
+          , "-"
+          , "- a"
+          , "? a"
+          , ": a"
+          , "a: b"
+          , "a:b"
+          , "#"
+          , "a #b"
+          , "true"
+          , "null"
+          , "1"
+          , "0x1F"
+          , "0o7"
+          , ".5"
+          , "~"
+          , "---"
+          , "..."
+          , "@x"
+          , "`x"
+          , "foo\n"
+          , "\nfoo"
+          , "  lead"
+          , "trail  "
+          , "a\n\nb\n\n"
+          , "\t"
+          , "é"
+          , "\x85"
+          , "\x2028"
+          , "\xFEFF"
+          , "\n"
+          , "\n\n"
+          , " \n"
+          , "a\n "
+          , "|"
+          , ">"
+          , "%x"
+          , "&a"
+          , "*a"
+          , "!a"
+          , "{}"
+          , "[]"
+          , "a, b"
+          , "key:"
+          , "'quoted'"
+          , "\"dq\""
+          , "\r\n"
+          , "\\"
+          , "a\tb"
+          ]
+
+        genChar :: Gen Char
+        genChar =
+          frequency
+            [ (10, elements "abc xyz-:#,[]{}'\"!&*?|>%@`\\")
+            , (2, elements "\t\r\x85\xA0\x2028\xFEFF\x01\x7F")
+            , (1, arbitrary)
+            ]

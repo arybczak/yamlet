@@ -907,6 +907,23 @@ prop_roundTrip (Tree doc) =
         { props = n.props
         }
 
+    -- The first line where two texts differ, with the line before it.
+    firstDifference :: T.Text -> T.Text -> String
+    firstDifference a b = go (1 :: Int) "" (T.lines a) (T.lines b)
+      where
+        go :: Int -> T.Text -> [T.Text] -> [T.Text] -> String
+        go n prev xs ys = case (xs, ys) of
+          (x : xs', y : ys') | x == y -> go (n + 1) x xs' ys'
+          _ ->
+            "line "
+              ++ show n
+              ++ " after "
+              ++ show prev
+              ++ ": "
+              ++ show (take 1 xs)
+              ++ " /= "
+              ++ show (take 1 ys)
+
     allComments :: Document -> [T.Text]
     allComments d = [t | (_, _, t) <- commentsOf d]
 
@@ -995,6 +1012,84 @@ genNode size = do
       MappingContent _ (_ : _) -> True
       _ -> False
 
+    -- A scalar, often with positions of new lines. Some positions are not
+    -- valid, e.g. outside the text or twice the same.
+    genScalar :: Gen Node
+    genScalar = do
+      style <- elements [minBound .. maxBound]
+      t <- genText
+      starts <- frequency [(1, pure []), (2, L.sort <$> listOf (choose (0, T.length t + 1)))]
+      pure (contentNode (ScalarLinesContent style t starts))
+
+    genProps :: Gen Props
+    genProps =
+      Props
+        <$> oneof [pure Nothing, Just <$> genAnchor]
+        <*> elements
+          [ NoTag
+          , NoTag
+          , NonSpecificTag
+          , Tag "tag:yaml.org,2002:str"
+          , Tag "!local"
+          , Tag "tag:example.com,2000:x"
+          ]
+
+    genAnchor :: Gen T.Text
+    genAnchor = elements ["a", "b", "anchor"]
+
+    genText :: Gen T.Text
+    genText =
+      oneof
+        [ elements tricky
+        , T.pack <$> listOf genChar
+        , T.intercalate "\n" <$> listOf (T.pack <$> listOf genChar)
+        ]
+      where
+        tricky :: [T.Text]
+        tricky =
+          [ ""
+          , " "
+          , "-"
+          , "- a"
+          , "? a"
+          , ": a"
+          , "a: b"
+          , "a:b"
+          , "#"
+          , "a #b"
+          , "true"
+          , "12"
+          , "---"
+          , "..."
+          , "foo\n"
+          , "\nfoo"
+          , "  lead"
+          , "trail  "
+          , "a\n\nb\n\n"
+          , "\n"
+          , "\n\n"
+          , " \n"
+          , "a\n "
+          , "|"
+          , ">"
+          , "[a]"
+          , "{a: b}"
+          , "a, b"
+          , "key:"
+          , "\r\n"
+          , "a\n  b\nc"
+          , "  a\nb"
+          , "a\n\n  b\n\nc\n"
+          ]
+
+        genChar :: Gen Char
+        genChar =
+          frequency
+            [ (10, elements "abc xyz-:#,[]{}'\"!&*?|>%@`\\")
+            , (2, elements "\t\r\x85\xA0\x2028\xFEFF\x01")
+            , (1, arbitrary)
+            ]
+
 -- | Comments for a node. Only a non-empty collection has lines after it.
 genComments :: Bool -> Gen Comments
 genComments collection =
@@ -1014,100 +1109,5 @@ genComments collection =
       k <- choose (0, 2)
       vectorOf k (frequency [(3, CommentLine <$> elements [1, 1, 2, 3] <*> genCommentText), (1, pure EmptyLine)])
 
-genCommentText :: Gen T.Text
-genCommentText = elements ["a comment", "", "x", "# hash", "key: value", "- item", "'quoted'"]
-
--- | A scalar, often with positions of new lines. Some positions are not
--- valid, e.g. outside the text or twice the same.
-genScalar :: Gen Node
-genScalar = do
-  style <- elements [minBound .. maxBound]
-  t <- genText
-  starts <- frequency [(1, pure []), (2, L.sort <$> listOf (choose (0, T.length t + 1)))]
-  pure (contentNode (ScalarLinesContent style t starts))
-
-genProps :: Gen Props
-genProps =
-  Props
-    <$> oneof [pure Nothing, Just <$> genAnchor]
-    <*> elements
-      [ NoTag
-      , NoTag
-      , NonSpecificTag
-      , Tag "tag:yaml.org,2002:str"
-      , Tag "!local"
-      , Tag "tag:example.com,2000:x"
-      ]
-
-genAnchor :: Gen T.Text
-genAnchor = elements ["a", "b", "anchor"]
-
-genText :: Gen T.Text
-genText =
-  oneof
-    [ elements tricky
-    , T.pack <$> listOf genChar
-    , T.intercalate "\n" <$> listOf (T.pack <$> listOf genChar)
-    ]
-  where
-    tricky :: [T.Text]
-    tricky =
-      [ ""
-      , " "
-      , "-"
-      , "- a"
-      , "? a"
-      , ": a"
-      , "a: b"
-      , "a:b"
-      , "#"
-      , "a #b"
-      , "true"
-      , "12"
-      , "---"
-      , "..."
-      , "foo\n"
-      , "\nfoo"
-      , "  lead"
-      , "trail  "
-      , "a\n\nb\n\n"
-      , "\n"
-      , "\n\n"
-      , " \n"
-      , "a\n "
-      , "|"
-      , ">"
-      , "[a]"
-      , "{a: b}"
-      , "a, b"
-      , "key:"
-      , "\r\n"
-      , "a\n  b\nc"
-      , "  a\nb"
-      , "a\n\n  b\n\nc\n"
-      ]
-
-    genChar :: Gen Char
-    genChar =
-      frequency
-        [ (10, elements "abc xyz-:#,[]{}'\"!&*?|>%@`\\")
-        , (2, elements "\t\r\x85\xA0\x2028\xFEFF\x01")
-        , (1, arbitrary)
-        ]
-
--- | The first line where two texts differ, with the line before it.
-firstDifference :: T.Text -> T.Text -> String
-firstDifference a b = go (1 :: Int) "" (T.lines a) (T.lines b)
-  where
-    go :: Int -> T.Text -> [T.Text] -> [T.Text] -> String
-    go n prev xs ys = case (xs, ys) of
-      (x : xs', y : ys') | x == y -> go (n + 1) x xs' ys'
-      _ ->
-        "line "
-          ++ show n
-          ++ " after "
-          ++ show prev
-          ++ ": "
-          ++ show (take 1 xs)
-          ++ " /= "
-          ++ show (take 1 ys)
+    genCommentText :: Gen T.Text
+    genCommentText = elements ["a comment", "", "x", "# hash", "key: value", "- item", "'quoted'"]

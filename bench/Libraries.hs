@@ -46,6 +46,20 @@ parsing name bs =
     lazy :: BL.ByteString
     lazy = BL.fromStrict bs
 
+    -- HsYAML has no NFData instance for nodes.
+    forceNode :: H.Node loc -> ()
+    forceNode = \case
+      H.Scalar _ s -> case s of
+        H.SNull -> ()
+        H.SBool b -> b `seq` ()
+        H.SFloat d -> d `seq` ()
+        H.SInt i -> i `seq` ()
+        H.SStr t -> t `seq` ()
+        H.SUnknown tag t -> tag `seq` t `seq` ()
+      H.Mapping _ _ m -> foldMap (\(k, v) -> forceNode k `seq` forceNode v) (M.toList m)
+      H.Sequence _ _ xs -> foldMap forceNode xs
+      H.Anchor _ _ n -> forceNode n
+
 -- | The benchmark that renders the syntax tree of an input.
 rendering :: String -> BS.ByteString -> Benchmark
 rendering name bs = bgroup name [bench "yamlet" $ nf (S.renderSyntax S.defaultRenderOptions) trees]
@@ -100,17 +114,3 @@ aesonEncoding bs = bench "aeson" $ nf J.encode value
   where
     value :: a
     value = either (error . show) id $ decode bs
-
--- | HsYAML has no NFData instance for nodes.
-forceNode :: H.Node loc -> ()
-forceNode = \case
-  H.Scalar _ s -> case s of
-    H.SNull -> ()
-    H.SBool b -> b `seq` ()
-    H.SFloat d -> d `seq` ()
-    H.SInt i -> i `seq` ()
-    H.SStr t -> t `seq` ()
-    H.SUnknown tag t -> tag `seq` t `seq` ()
-  H.Mapping _ _ m -> foldMap (\(k, v) -> forceNode k `seq` forceNode v) (M.toList m)
-  H.Sequence _ _ xs -> foldMap forceNode xs
-  H.Anchor _ _ n -> forceNode n
