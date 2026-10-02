@@ -1144,6 +1144,8 @@ closing c start w kind msg = do
                 throwAt tab "tabs cannot be used for indentation"
             | byteAt e q == w ->
                 throwAt q ("'" ++ [chr (fromIntegral w)] ++ "' is indented too little to end the " ++ kind)
+            | closedLater e q ->
+                throwAt q ("the line is indented too little to continue the " ++ kind)
           Nothing | Just m <- cutByMarker e w -> throwAt m (markerInside e kind)
           _ -> throwAt start ("unterminated " ++ kind)
       | dash e p ->
@@ -1178,6 +1180,24 @@ closing c start w kind msg = do
                | q >= e.end || isMarker e s -> Nothing
                | isBreak b || b == HASH -> nextContent e q
                | otherwise -> Just (s, q)
+
+    -- A closing bracket without an opening bracket of its own follows in the
+    -- document, so the collection likely continues there.
+    closedLater :: Env -> Int -> Bool
+    closedLater e = go (0 :: Int)
+      where
+        go :: Int -> Int -> Bool
+        go depth i
+          | i >= e.end = False
+          | b == w = depth == 0 || go (depth - 1) (i + 1)
+          | b == opening = go (depth + 1) (i + 1)
+          | otherwise = go depth (i + 1)
+          where
+            b :: Word8
+            b = byteAt e i
+
+        opening :: Word8
+        opening = if w == RBRACKET then LBRACKET else LBRACE
 
     -- A '-' that cannot start a plain scalar, e.g. "- " as in a block
     -- sequence.

@@ -907,6 +907,9 @@ test_syntaxErrors = do
   check "flow sequence before a key" (1, 6, "unterminated flow sequence") "key: [a, b\nc: d\n"
   check "flow sequence at the end" (1, 6, "unterminated flow sequence") "key: [a, b\n"
   check "flow sequence before a comment" (1, 6, "unterminated flow sequence") "key: [a, b # c\nd: e\n"
+  check "flow sequence before a key with a flow sequence" (1, 6, "unterminated flow sequence") "key: [a, b\nc: [d]\n"
+  check "flow sequence on a line indented too little" (2, 1, "the line is indented too little to continue the flow sequence") "a: [b,\nc]\n"
+  check "flow mapping on lines indented too little" (2, 1, "the line is indented too little to continue the flow mapping") "a: {x: 1,\ny: 2,\n  z: 3}\n"
   check
     "closing bracket indented too little"
     (4, 1, "']' is indented too little to end the flow sequence")

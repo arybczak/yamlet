@@ -37,7 +37,7 @@
 # 8XDJ: Comment in plain multiline value
 3:3: a comment ends a plain scalar, so this line cannot continue it
 # 9C9N: Wrong indented flow sequence
-2:7: unterminated flow sequence
+3:1: the line is indented too little to continue the flow sequence
 # 9CWY: Invalid scalar at the end of mapping
 4:8: expected ':' after the key
 # 9HCY: Need document footer before directives
@@ -155,7 +155,7 @@
 # U99R: Invalid comma in tag
 1:8: unexpected ','
 # VJP3/00: Flow collections over many lines
-1:4: unterminated flow mapping
+2:1: the line is indented too little to continue the flow mapping
 # W9L4: Literal block scalar with more spaces in first line
 3:6: a leading empty line of a block scalar has more spaces than the first non-empty line
 # X4QW: Comment without whitespace after block scalar indicator
