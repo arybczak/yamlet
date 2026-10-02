@@ -38,21 +38,37 @@ import Yamlet.Internal.Parser.Monad
 import Yamlet.Internal.Syntax
 import Yamlet.Internal.Utils
 
+-- | A character that only some places of a stream can contain, with its
+-- index.
+data Restricted
+  = -- | A byte order mark, with a flag that is true if the mark is at the
+    -- start of a line, as 'isStartOfLine' tells.
+    BomRestricted !Int !Bool
+  | -- | A character that only a quoted scalar can contain.
+    QuotedRestricted !Int
+
 -- | Parse all documents of a stream.
 parseStream :: T.Text -> Either Error [Document]
 parseStream input@(T.Text arr off len) = case prescan of
-  Left i -> Left $ errorAt input (toOffset e i) ("invalid character " ++ codePointName (T.head (slice e i e.end)))
-  Right (markers, boms) -> case runParser e start (lYamlStream markers) of
-    Left (ParseError i msg) -> Left $ parseError i msg
-    Right (Just docs, _, _) -> case filter (not . allowedBom docs) boms of
-      (i, _) : _ -> Left $ errorAt input (toOffset e i) "unexpected byte order mark"
-      [] -> Right docs
-    Right (Nothing, _, fu) -> Left $ uncurry parseError (unexpected e fu)
+  Left i -> Left $ invalidCharacter i
+  Right (markers, restricted) -> case runParser e start (lYamlStream markers) of
+    Left (ParseError i msg) -> Left $ parseError restricted i msg
+    Right (Just docs, _, _) ->
+      let ranges = scalarRanges docs
+      in case filter (not . allowed ranges) restricted of
+           BomRestricted i _ : _ -> Left $ errorAt input (toOffset e i) "unexpected byte order mark"
+           QuotedRestricted i : _ -> Left $ invalidCharacter i
+           [] -> Right docs
+    Right (Nothing, _, fu) -> Left $ uncurry (parseError restricted) (unexpected e fu)
   where
+    invalidCharacter :: Int -> Error
+    invalidCharacter i = errorAt input (toOffset e i) ("invalid character " ++ codePointName (T.head (slice e i e.end)))
+
     -- A byte order mark at the start of the line of an error is the likely
     -- cause, unless a document without a marker can start on the line.
-    parseError :: Int -> String -> Error
-    parseError i msg
+    parseError :: [Restricted] -> Int -> String -> Error
+    parseError restricted i msg
+      | any (\case QuotedRestricted j -> j == i; _ -> False) restricted = invalidCharacter i
       | let s = lineStartAt e i
       , bomBeforeContent e s
       , not (inPrefix s) =
@@ -72,11 +88,19 @@ parseStream input@(T.Text arr off len) = case prescan of
           in if isBreak b || b == HASH then inPrefix prev else isEndMarker e j
 
     -- A byte order mark can start a line between documents, or be a
-    -- character of a quoted scalar.
-    allowedBom :: [Document] -> (Int, Bool) -> Bool
-    allowedBom docs (i, lineStart) = case M.lookupLE (toOffset e i) (scalarRanges docs) of
-      Just (_, (end, quoted)) | toOffset e i < end -> quoted
-      _ -> lineStart
+    -- character of a quoted scalar. The other restricted characters can only
+    -- be characters of a quoted scalar.
+    allowed :: M.Map Offset (Offset, Bool) -> Restricted -> Bool
+    allowed ranges = \case
+      BomRestricted i lineStart -> fromMaybe lineStart (inScalar i)
+      QuotedRestricted i -> inScalar i == Just True
+      where
+        -- Whether the scalar that contains the index is quoted, if a scalar
+        -- contains it.
+        inScalar :: Int -> Maybe Bool
+        inScalar i = case M.lookupLE (toOffset e i) ranges of
+          Just (_, (end, quoted)) | toOffset e i < end -> Just quoted
+          _ -> Nothing
 
     scalarRanges :: [Document] -> M.Map Offset (Offset, Bool)
     scalarRanges docs = M.fromList (foldr (\d -> ranges d.root) [] docs)
@@ -102,43 +126,43 @@ parseStream input@(T.Text arr off len) = case prescan of
     start = streamStart e
 
     -- Check that the input has only characters that YAML allows, and find
-    -- the lines that start with a document marker, and the byte order marks.
-    -- A document cannot contain such a line. A marker after a byte order mark
-    -- does not count: a quoted scalar can contain the line, and other nodes
-    -- end at the mark anyway. Each byte order mark comes with a flag that is
-    -- true if the mark is at the start of a line, as 'isStartOfLine' tells.
-    -- Return the index of an invalid character on error.
-    prescan :: Either Int ([Int], [(Int, Bool)])
+    -- the lines that start with a document marker, and the restricted
+    -- characters. A document cannot contain such a line. A marker after a
+    -- byte order mark does not count: a quoted scalar can contain the line,
+    -- and other nodes end at the mark anyway. Return the index of an invalid
+    -- character on error.
+    prescan :: Either Int ([Int], [Restricted])
     prescan = go start start [start | isMarker e start] []
       where
         -- A byte order mark at index ls is at the start of a line.
-        go :: Int -> Int -> [Int] -> [(Int, Bool)] -> Either Int ([Int], [(Int, Bool)])
-        go i ls acc boms
-          | i >= e.end = Right (reverse acc, reverse boms)
+        go :: Int -> Int -> [Int] -> [Restricted] -> Either Int ([Int], [Restricted])
+        go i ls acc rs
+          | i >= e.end = Right (reverse acc, reverse rs)
           | otherwise =
               let w = A.unsafeIndex e.array i
               in if
-                   | w >= SPACE && w < DEL -> go (i + 1) ls acc boms
+                   | w >= SPACE && w < DEL -> go (i + 1) ls acc rs
                    | w == LF || (w == CR && byteAt e (i + 1) /= LF) ->
                        let s = i + 1
-                       in go s s (if isMarker e s then s : acc else acc) boms
-                   | w == CR || w == TAB -> go (i + 1) ls acc boms
-                   | w < SPACE || w == DEL -> Left i
+                       in go s s (if isMarker e s then s : acc else acc) rs
+                   | w == CR || w == TAB -> go (i + 1) ls acc rs
+                   | w < SPACE -> Left i
+                   | w == DEL -> go (i + 1) ls acc (QuotedRestricted i : rs)
                    -- C1 control characters except NEL.
                    | w == 0xC2 && i + 1 < e.end
                    , let w1 = A.unsafeIndex e.array (i + 1)
                    , w1 >= 0x80 && w1 <= 0x9F && w1 /= 0x85 ->
-                       Left i
+                       go (i + 1) ls acc (QuotedRestricted i : rs)
                    -- U+FFFE and U+FFFF.
                    | w == 0xEF && i + 2 < e.end
                    , A.unsafeIndex e.array (i + 1) == 0xBF
                    , let w2 = A.unsafeIndex e.array (i + 2)
                    , w2 == 0xBE || w2 == 0xBF ->
-                       Left i
+                       go (i + 1) ls acc (QuotedRestricted i : rs)
                    | w == 0xEF && isBom e i ->
                        let next = i + bomLength
-                       in go next (if i == ls then next else ls) acc ((i, i == ls) : boms)
-                   | otherwise -> go (i + 1) ls acc boms
+                       in go next (if i == ls then next else ls) acc (BomRestricted i (i == ls) : rs)
+                   | otherwise -> go (i + 1) ls acc rs
 
 -- | The index after the byte order mark at the start of the input.
 streamStart :: Env -> Int

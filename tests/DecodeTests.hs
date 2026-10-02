@@ -509,6 +509,10 @@ test_json = do
     (Right (M.fromList [("a", [1.5, -2e3]), ("b\tc", [])]))
     (decodeText @(M.Map T.Text [Double]) "{\"a\":[1.5,-2E3],\n\t\"b\\tc\": []}")
   assertEqual
+    "characters beyond C0 that only quoted scalars can contain"
+    (Right (M.fromList [("k\x9F", ["x\DEL", "\x80", "\xFFFE\xFFFF", "'\DEL'"])]))
+    (decodeText @(M.Map T.Text [T.Text]) "{\"k\x9F\": [\"x\DEL\", \"\x80\", \"\xFFFE\xFFFF\", '''\DEL''']}")
+  assertEqual
     "surrogate pair"
     (Right ["\x1F600", "a\x10000z"])
     (decodeText @[T.Text] "[\"\\ud83d\\ude00\", \"a\\uD800\\uDC00z\"]")
@@ -1015,6 +1019,13 @@ test_syntaxErrors = do
   check "backslash at the end of a key" (1, 2, "unterminated double-quoted scalar") "[\"a\\"
   check "noncharacter U+FFFE" (1, 4, "invalid character U+FFFE") "a: \xFFFE\n"
   check "noncharacter U+FFFF" (1, 5, "invalid character U+FFFF") "a: b\xFFFF\n"
+  check "delete in a plain scalar" (1, 5, "invalid character U+007F") "a: x\DELy\n"
+  check "delete at the start of a line" (1, 1, "invalid character U+007F") "\DEL\n"
+  check "C1 control character in a comment" (1, 9, "invalid character U+0080") "a: b # c\x80\n"
+  check "C1 control character in a tag" (1, 6, "invalid character U+0080") "a: !x\x80 1\n"
+  check "noncharacter in a block scalar" (2, 4, "invalid character U+FFFF") "a: |\n  x\xFFFF\n"
+  check "C1 control character after a quoted one" (2, 4, "invalid character U+0080") "- \"\x80\"\n- b\x80\n"
+  check "byte order mark before a C1 control character" (1, 5, "unexpected byte order mark") "a: x\xFEFF\x80\n"
 
 test_directiveErrors :: Assertion
 test_directiveErrors = do

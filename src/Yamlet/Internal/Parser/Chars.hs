@@ -190,7 +190,8 @@ isCharStart :: Word8 -> Bool
 isCharStart w = isAsciiByte w || w >= 0xC0
 
 -- | ns-char. Every byte of a multibyte character counts, because the input
--- contains printable characters only.
+-- contains printable characters only, except in quoted scalars, which the
+-- parser checks after it parses the stream.
 isNsChar :: Word8 -> Bool
 isNsChar w = w > SPACE && w /= DEL
 
