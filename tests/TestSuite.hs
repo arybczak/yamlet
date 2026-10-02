@@ -133,9 +133,9 @@ runTest path = do
           hasJson <- doesFileExist (path </> "in.json")
           case Y.decodeAllText @Y.Value input of
             Left err
-              | hasJson -> assertFailure $ preface ++ "\nunexpected error: " ++ prettyError "in.yaml" (NE.head err)
               -- The decoder rejects duplicate keys, which the syntax allows.
-              | otherwise -> pure ()
+              | not hasJson && "duplicate key" `L.isPrefixOf` (NE.head err).message -> pure ()
+              | otherwise -> assertFailure $ preface ++ "\nunexpected error: " ++ prettyError "in.yaml" (NE.head err)
             Right nodes -> do
               when hasJson $ do
                 json <- BS.readFile (path </> "in.json")
