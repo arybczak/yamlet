@@ -475,15 +475,18 @@ isScalarLike n = case n.content of
 -- lines after the value go too.
 value :: RenderOptions -> Int -> Node -> Maybe T.Text -> [Line] -> B.Builder
 value opts indent v lineComment extra
-  | isBlock opts v = case v.content of
-      -- A sequence without indentation has no column of its own for the lines
-      -- after its last item: a block collection or a block scalar as the last
-      -- item takes in every line that is deeper than the key.
-      SequenceContent _ xs
-        | not (hasCommentLine v.comments.after) || not (endsWithBlock xs) ->
-            header <> lines_ indent below <> block opts indent (indent + indentStep) True False rest v
-        | otherwise -> header <> lines_ (indent + indentStep) below <> block opts (indent + indentStep) (indent + indentStep) True False rest v
-      _ -> header <> lines_ (indent + indentStep) below <> block opts (indent + indentStep) (indent + indentStep) True False rest v
+  | isBlock opts v =
+      -- Without the bang, the render benchmark of the config input allocates
+      -- more.
+      let !column = case v.content of
+            -- A sequence without indentation has no column of its own for the
+            -- lines after its last item: a block collection or a block scalar
+            -- as the last item takes in every line that is deeper than the
+            -- key.
+            SequenceContent _ xs
+              | not (hasCommentLine v.comments.after) || not (endsWithBlock xs) -> indent
+            _ -> indent + indentStep
+      in header <> lines_ column below <> block opts column (indent + indentStep) True False rest v
   | isEmpty v = comment lineComment <> "\n" <> entryBelow
   | otherwise = " " <> inline opts InValue (indent + indentStep) v lineComment <> "\n" <> entryBelow
   where
