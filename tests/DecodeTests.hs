@@ -830,6 +830,13 @@ test_syntaxErrors = do
     ]
     $ \(node, line, input) ->
       check ("line after a comment below a " ++ node) (line, 3, "unexpected indentation") input
+  forM_
+    [ ("list item", "- # c\nfoo\n")
+    , ("list item with an anchor", "- &x # c\nfoo\n")
+    , ("list item with a tag", "- !t # c\nfoo\n")
+    ]
+    $ \(node, input) ->
+      check ("line after a comment on an empty " ++ node) (2, 1, "unexpected key among list items") input
   check
     "line after a comment below the header of a block scalar"
     (3, 3, "unexpected indentation, the line has less indentation than the block scalar above it")

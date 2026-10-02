@@ -107,18 +107,25 @@ unexpectedIn e i = case indentationTab (i - 1) Nothing of
         && maybe False endsPlain (lineAbove e (lineStart e i))
       where
         -- The line with the content at the index ends with a plain scalar,
-        -- not with a quoted scalar, a flow collection, an alias or the
-        -- header of a block scalar, and it is not a line of a block scalar.
+        -- not with a quoted scalar, a flow collection, an alias, an anchor,
+        -- a tag, an indicator or the header of a block scalar, and it is not
+        -- a line of a block scalar.
         endsPlain :: Int -> Bool
         endsPlain k =
           let end = contentEnd k
+              start = wordStart e end
               b = byteBefore e end
+              w = byteAt e start
           in end > k
                && b /= SQUOTE
                && b /= DQUOTE
                && b /= RBRACKET
                && b /= RBRACE
-               && byteAt e (wordStart e end) /= STAR
+               && b /= COLON
+               && w /= STAR
+               && w /= AMP
+               && w /= EXCL
+               && not (end - start == 1 && (w == MINUS || w == QUESTION))
                && not (blockHeader k)
                && not (inBlockScalar k)
 
