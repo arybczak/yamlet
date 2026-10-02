@@ -356,15 +356,40 @@ collectionTag off props def = case props.tag of
             ++ T.unpack (T.drop (T.length coreTagPrefix) tag)
             ++ " cannot be used on a "
             ++ (if def == seqTag then "sequence" else "mapping")
-
-isCoreTag :: T.Text -> Bool
-isCoreTag tag = tag `elem` [nullTag, boolTag, intTag, floatTag, strTag, seqTag, mapTag]
+  where
+    isCoreTag :: T.Text -> Bool
+    isCoreTag tag = tag `elem` [nullTag, boolTag, intTag, floatTag, strTag, seqTag, mapTag]
 
 -- | The keys come with their nodes.
 checkUniqueKeys :: [(S.Node, Value)] -> Either Failure ()
-checkUniqueKeys keys = case duplicate keys of
+checkUniqueKeys keys = case duplicate of
   Just (k, first) -> Left $ duplicateKey k first
   Nothing -> Right ()
+  where
+    -- The first scalar key that is equal to an earlier one, and the earlier
+    -- one. A document with a collection key gets numbers for its keys instead.
+    duplicate :: Maybe ((S.Node, Value), (S.Node, Value))
+    duplicate = case drop maxPairwise keys of
+      _ : _ -> viaMap M.empty keys
+      [] -> pairwise [] keys
+
+    -- Comparing all pairs is faster for 16 keys or fewer, by a measurement.
+    maxPairwise :: Int
+    maxPairwise = 16
+
+    viaMap :: M.Map Value S.Node -> [(S.Node, Value)] -> Maybe ((S.Node, Value), (S.Node, Value))
+    viaMap seen = \case
+      [] -> Nothing
+      k@(n, v) : ks -> case M.lookup v seen of
+        Just first -> Just (k, (first, v))
+        Nothing -> viaMap (M.insert v n seen) ks
+
+    pairwise :: [(S.Node, Value)] -> [(S.Node, Value)] -> Maybe ((S.Node, Value), (S.Node, Value))
+    pairwise seen = \case
+      [] -> Nothing
+      k@(_, v) : ks -> case L.find ((== v) . snd) seen of
+        Just first -> Just (k, first)
+        Nothing -> pairwise (k : seen) ks
 
 -- | The error at a key, with a note at the first key that is equal to it.
 duplicateKey :: (S.Node, Value) -> (S.Node, Value) -> Failure
@@ -380,19 +405,19 @@ duplicateKey (kn, k) (firstNode, first) = (kn.offset, message) NE.:| [(firstNode
     note :: String
     note = "the first key" ++ maybe "" (' ' :) (keyText firstNode first)
 
+    -- The key as the input writes it, a string in quotes. A collection and an
+    -- empty scalar have no text.
+    keyText :: S.Node -> Value -> Maybe String
+    keyText n v = case (n.content, v) of
+      (S.AliasContent name, _) -> Just ('*' : T.unpack name)
+      (S.ScalarContent {}, String t) -> Just (show t)
+      (S.ScalarContent _ t, _) | not (T.null t) -> Just (T.unpack t)
+      _ -> Nothing
+
 -- | The hint after the message of an error at a key @<<@. YAML 1.1 used it to
 -- merge mappings, and some tools still do, but in YAML 1.2 it is a string.
 noMergeKeys :: String
 noMergeKeys = ", merge keys are not supported"
-
--- | The key as the input writes it, a string in quotes. A collection and an
--- empty scalar have no text.
-keyText :: S.Node -> Value -> Maybe String
-keyText n v = case (n.content, v) of
-  (S.AliasContent name, _) -> Just ('*' : T.unpack name)
-  (S.ScalarContent {}, String t) -> Just (show t)
-  (S.ScalarContent _ t, _) | not (T.null t) -> Just (T.unpack t)
-  _ -> Nothing
 
 -- | The state of the composition of a document with aliases or collection
 -- keys. Equal values get the same number, so that keys compare in constant
@@ -429,28 +454,3 @@ needsNumbering n = case n.content of
       S.SequenceContent {} -> True
       S.MappingContent {} -> True
       _ -> False
-
--- | The first scalar key that is equal to an earlier one, and the earlier
--- one. A document with a collection key gets numbers for its keys instead.
-duplicate :: [(S.Node, Value)] -> Maybe ((S.Node, Value), (S.Node, Value))
-duplicate keys = case drop maxPairwise keys of
-  _ : _ -> viaMap M.empty keys
-  [] -> pairwise [] keys
-  where
-    -- Comparing all pairs is faster for 16 keys or fewer, by a measurement.
-    maxPairwise :: Int
-    maxPairwise = 16
-
-    viaMap :: M.Map Value S.Node -> [(S.Node, Value)] -> Maybe ((S.Node, Value), (S.Node, Value))
-    viaMap seen = \case
-      [] -> Nothing
-      k@(n, v) : ks -> case M.lookup v seen of
-        Just first -> Just (k, (first, v))
-        Nothing -> viaMap (M.insert v n seen) ks
-
-    pairwise :: [(S.Node, Value)] -> [(S.Node, Value)] -> Maybe ((S.Node, Value), (S.Node, Value))
-    pairwise seen = \case
-      [] -> Nothing
-      k@(_, v) : ks -> case L.find ((== v) . snd) seen of
-        Just first -> Just (k, first)
-        Nothing -> pairwise (k : seen) ks

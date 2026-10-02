@@ -84,36 +84,36 @@ plainSyntax inFlow t = case T.uncons t of
           Nothing -> False
       | otherwise = not (asciiChar isWhite c) && not (asciiChar isIndicator c)
 
--- | The text reads back as the same text on a line of a plain scalar after
--- the first line. Such a line can start with an indicator, but not with a
--- comment.
-plainNextLine :: Bool -> T.Text -> Bool
-plainNextLine inFlow t = case (T.uncons t, T.unsnoc t) of
-  (Just (first, _), Just (_, lastChar)) ->
-    first /= '#'
-      && not (asciiChar isWhite first)
-      && not (asciiChar isWhite lastChar)
-      && lastChar /= ':'
-      && T.all isPlainChar t
-      && not (T.isInfixOf ": " t)
-      && not (T.isInfixOf " #" t)
-  _ -> False
-  where
-    isPlainChar :: Char -> Bool
-    isPlainChar c =
-      (c == ' ' || (isScalarChar c && c /= '\t'))
-        && not (inFlow && asciiChar isFlowIndicator c)
-
 -- | A plain scalar on the lines that start at the positions, with the lines
 -- after the first one at the given indentation, if the text can be plain. It
 -- is in a flow collection if the flag is set.
 plainLines :: Bool -> Int -> [Int] -> T.Text -> Maybe B.Builder
 plainLines inFlow indent starts t
-  | plainSyntax inFlow first && all (plainNextLine inFlow . snd) rest =
+  | plainSyntax inFlow first && all (plainNextLine . snd) rest =
       Just (onLines indent B.fromText ls)
   | otherwise = Nothing
   where
     ls@(first, rest) = flowLines False False (asciiChar isWhite) starts t
+
+    -- The text reads back as the same text on a line of a plain scalar after
+    -- the first line. Such a line can start with an indicator, but not with a
+    -- comment.
+    plainNextLine :: T.Text -> Bool
+    plainNextLine l = case (T.uncons l, T.unsnoc l) of
+      (Just (c, _), Just (_, lastChar)) ->
+        c /= '#'
+          && not (asciiChar isWhite c)
+          && not (asciiChar isWhite lastChar)
+          && lastChar /= ':'
+          && T.all isPlainChar l
+          && not (T.isInfixOf ": " l)
+          && not (T.isInfixOf " #" l)
+      _ -> False
+
+    isPlainChar :: Char -> Bool
+    isPlainChar c =
+      (c == ' ' || (isScalarChar c && c /= '\t'))
+        && not (inFlow && asciiChar isFlowIndicator c)
 
 -- | A single-quoted scalar on one line, if the text has no line breaks.
 singleQuoted :: T.Text -> Maybe B.Builder
@@ -399,6 +399,11 @@ tagText tag
   , not (isVerbatim tag) =
       if T.null suffix then "!" else handleText c <> shorthand suffix
   | otherwise = "!<" <> B.fromText tag <> ">"
+  where
+    -- The text of a tag suffix. A character that the form does not allow gets
+    -- a %XX escape, which the parser decodes.
+    shorthand :: T.Text -> B.Builder
+    shorthand = T.foldr (\x b -> (if asciiChar isTagChar x then B.fromChar x else percentEscape x) <> b) mempty
 
 -- | The handles for the tags of the node and the nodes in it that are not
 -- valid URIs, each once.
@@ -449,11 +454,6 @@ isVerbatim tag = hasScheme && uriChars (T.unpack tag)
       '%' : a : b : rest -> isHexDigit a && isHexDigit b && uriChars rest
       c : rest -> asciiChar isUriChar c && uriChars rest
       [] -> True
-
--- | The text of a tag suffix or a tag prefix. A character that the form does
--- not allow gets a %XX escape, which the parser decodes.
-shorthand :: T.Text -> B.Builder
-shorthand = T.foldr (\c b -> (if asciiChar isTagChar c then B.fromChar c else percentEscape c) <> b) mempty
 
 -- | The %XX escapes of the UTF-8 bytes of a character.
 percentEscape :: Char -> B.Builder

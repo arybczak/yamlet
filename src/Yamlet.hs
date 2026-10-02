@@ -211,12 +211,12 @@ decodeWithDocument input =
   where
     withDocument :: FromYaml a => S.Document -> Either (NE.NonEmpty Error) (a, S.Document)
     withDocument doc = do
-      a <- convert input doc
+      a <- decodeDocument input doc
       pure (a, doc)
 
 -- | Decode every document of a stream. The errors are as for 'decodeAll'.
 decodeAllText :: FromYaml a => T.Text -> Either (NE.NonEmpty Error) [a]
-decodeAllText input = single (parseStream input) >>= mapM (convert input)
+decodeAllText input = single (parseStream input) >>= mapM (decodeDocument input)
 
 single :: Either Error a -> Either (NE.NonEmpty Error) a
 single = first (NE.:| [])
@@ -238,17 +238,18 @@ single = first (NE.:| [])
 -- text. For a document that the program built, the text can be empty. The
 -- errors are as for 'decode'.
 decodeDocument :: FromYaml a => T.Text -> S.Document -> Either (NE.NonEmpty Error) a
-decodeDocument = convert
-
--- | The root of a document with the lines of the document, e.g. the lines
--- above a @---@ marker and below a @...@ marker, so that a decoder
--- can keep them. The renderer writes them at the same places. The comment on
--- the line of the marker becomes a line above the root.
-documentRoot :: S.Document -> S.Node
-documentRoot doc
-  | null dc.before && isNothing dc.inline && null dc.after = r
-  | otherwise = S.withComments comments r
+decodeDocument input doc =
+  first (decoderErrors input doc) (runParser parseYaml root)
   where
+    -- The root with the lines of the document, e.g. the lines above a @---@
+    -- marker and below a @...@ marker, so that a decoder can keep them. The
+    -- renderer writes them at the same places. The comment on the line of the
+    -- marker becomes a line above the root.
+    root :: S.Node
+    root
+      | null dc.before && isNothing dc.inline && null dc.after = r
+      | otherwise = S.withComments comments r
+
     dc :: S.Comments
     dc = doc.docComments
 
@@ -262,10 +263,6 @@ documentRoot doc
         , S.inline = r.comments.inline
         , S.after = r.comments.after ++ dc.after
         }
-
-convert :: FromYaml a => T.Text -> S.Document -> Either (NE.NonEmpty Error) a
-convert input doc =
-  first (decoderErrors input doc) (runParser parseYaml (documentRoot doc))
 
 -- | The errors of the decoder in the document, with their paths.
 decoderErrors :: T.Text -> S.Document -> NE.NonEmpty (S.Offset, String) -> NE.NonEmpty Error

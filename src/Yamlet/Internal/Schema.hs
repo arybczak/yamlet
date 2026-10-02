@@ -351,22 +351,6 @@ digitsValue radix t0 = go (T.length t0) t0
     maxFoldDigits :: Int
     maxFoldDigits = 20
 
--- | The decimal digits times a power of 10, with the exponent that the text
--- of the float has. A value beyond the limit of 'maxExponent' gives infinity
--- or zero, which are not exact.
-decimal :: T.Text -> Integer -> Either FloatValue FloatValue
-decimal ds e
-  | c == 0 = Right (Finite 0)
-  | abs leading > maxExponent = Left (if leading > 0 then Infinity else Finite 0)
-  | otherwise = Right $ Finite (Sci.scientific c (fromInteger e))
-  where
-    -- The exponent of the first digit that is not zero.
-    leading :: Integer
-    leading = e + toInteger (T.length (T.dropWhile (== '0') ds)) - 1
-
-    c :: Integer
-    c = digitsValue 10 ds
-
 -- | The limit of the exponent of a float in scientific notation, i.e. the
 -- exponent of its first digit that is not zero. The limit applies to the
 -- value, not to the text, so every value that the decoder gives reads back
@@ -388,16 +372,6 @@ exponentOutOfRange =
     ++ show (negate maxExponent)
     ++ " to "
     ++ show maxExponent
-
-negateFloat :: FloatValue -> FloatValue
-negateFloat = \case
-  Finite s
-    | s == 0 -> NegativeZero
-    | otherwise -> Finite (negate s)
-  NegativeZero -> Finite 0
-  Infinity -> NegativeInfinity
-  NegativeInfinity -> Infinity
-  NaN -> NaN
 
 -- | [-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?, [-+]?\.inf or \.nan
 -- in one of three capitalizations. The value is 'Left' if it is not exact.
@@ -426,6 +400,32 @@ readFloat t0 = case t0 of
                    ex <- exponent_ rest'
                    Just $ decimal (int <> frac) (ex - toInteger (T.length frac))
                | otherwise -> Nothing
+
+    -- The decimal digits times a power of 10, with the exponent that the text
+    -- of the float has. A value beyond the limit of 'maxExponent' gives
+    -- infinity or zero, which are not exact.
+    decimal :: T.Text -> Integer -> Either FloatValue FloatValue
+    decimal ds e
+      | c == 0 = Right (Finite 0)
+      | abs leading > maxExponent = Left (if leading > 0 then Infinity else Finite 0)
+      | otherwise = Right $ Finite (Sci.scientific c (fromInteger e))
+      where
+        -- The exponent of the first digit that is not zero.
+        leading :: Integer
+        leading = e + toInteger (T.length (T.dropWhile (== '0') ds)) - 1
+
+        c :: Integer
+        c = digitsValue 10 ds
+
+    negateFloat :: FloatValue -> FloatValue
+    negateFloat = \case
+      Finite s
+        | s == 0 -> NegativeZero
+        | otherwise -> Finite (negate s)
+      NegativeZero -> Finite 0
+      Infinity -> NegativeInfinity
+      NegativeInfinity -> Infinity
+      NaN -> NaN
 
     exponent_ :: T.Text -> Maybe Integer
     exponent_ t = case T.uncons t of

@@ -30,16 +30,7 @@ import Yamlet.Internal.Utils
 -- | The location and the message of the error for the furthest position at
 -- which the parser failed.
 unexpected :: Env -> Int -> (Int, String)
-unexpected = unexpectedIn . afterBoms
-
--- | The input without the byte order marks at its start. The hints look at
--- the content of the lines around an error, and the marks are not content
--- of the first line. The indices stay those of the input.
-afterBoms :: Env -> Env
-afterBoms e = e {base = skipBoms e e.base}
-
-unexpectedIn :: Env -> Int -> (Int, String)
-unexpectedIn e i = case indentationTab (i - 1) Nothing of
+unexpected input i = case indentationTab (i - 1) Nothing of
   Just tab -> (tab, tabMessage)
   Nothing
     | byteAt e i == COLON && firstColon
@@ -76,10 +67,13 @@ unexpectedIn e i = case indentationTab (i - 1) Nothing of
           "unexpected ':', quote the value if it contains \": \""
       | itemAfterKey -> "unexpected '-', a list cannot start on the line of its key"
       | itemAfterProperty -> "unexpected '-', a list cannot start on the line of its anchor or tag"
-      | Just msg <- mistake e False i -> msg
+      | Just msg <- mistakeIn e False i -> msg
       | Just node <- endBefore -> unexpectedChar e i ++ " after the end of " ++ node
       | otherwise -> unexpectedChar e i
   where
+    e :: Env
+    e = afterBoms input
+
     -- The node that ends before the index on its line, as in
     -- "key: "value" more".
     endBefore :: Maybe String
@@ -104,7 +98,7 @@ unexpectedIn e i = case indentationTab (i - 1) Nothing of
         && isNsChar (byteAt e i)
         && not (isListItem e i)
         && not (any (isKeyColon e) [i .. lineEnd i - 1])
-        && isNothing (mistake e False i)
+        && isNothing (mistakeIn e False i)
         && commentAbove (lineStartAt e i)
         && maybe False endsPlain (lineAbove e (lineStartAt e i))
       where
@@ -291,6 +285,12 @@ unexpectedIn e i = case indentationTab (i - 1) Nothing of
 -- one. The flag tells if the index is inside a flow collection.
 mistake :: Env -> Bool -> Int -> Maybe String
 mistake = mistakeIn . afterBoms
+
+-- | The input without the byte order marks at its start. The hints look at
+-- the content of the lines around an error, and the marks are not content
+-- of the first line. The indices stay those of the input.
+afterBoms :: Env -> Env
+afterBoms e = e {base = skipBoms e e.base}
 
 mistakeIn :: Env -> Bool -> Int -> Maybe String
 mistakeIn e flow i

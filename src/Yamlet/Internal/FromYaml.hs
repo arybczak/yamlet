@@ -164,19 +164,6 @@ failed = errorWithoutStackTrace "Yamlet.Decode: the value of a failed parser"
 failure :: S.Offset -> String -> Result a
 failure off msg = Result (OneError off msg []) failed
 
--- | The errors in the order of their offsets, each with its notes after it.
--- Errors at the same offset keep their order. An error comes only once: the
--- nodes inside an alias have the offset of the alias, so the same error in
--- several of them repeats at that offset.
-sortedErrors :: Errors -> [(S.Offset, String)]
-sortedErrors = concatMap (\(off, msg, notes) -> (off, msg) : notes) . nubOrd . L.sortOn (\(off, _, _) -> off) . flip go []
-  where
-    go :: Errors -> [(S.Offset, String, [(S.Offset, String)])] -> [(S.Offset, String, [(S.Offset, String)])]
-    go = \case
-      NoErrors -> id
-      OneError off msg notes -> ((off, msg, notes) :)
-      BothErrors e1 e2 -> go e1 . go e2
-
 instance Functor Parser where
   fmap f (Parser g) = Parser $ \off -> case g off of
     Result e a -> Result e (f a)
@@ -216,6 +203,19 @@ runParser f n0 = case prepare n0 of
     Result NoErrors a -> Right a
     Result e _ -> Left (NE.fromList (map (withMergeHint (mergeValues n)) (sortedErrors e)))
   where
+    -- The errors in the order of their offsets, each with its notes after it.
+    -- Errors at the same offset keep their order. An error comes only once:
+    -- the nodes inside an alias have the offset of the alias, so the same
+    -- error in several of them repeats at that offset.
+    sortedErrors :: Errors -> [(S.Offset, String)]
+    sortedErrors = concatMap (\(off, msg, notes) -> (off, msg) : notes) . nubOrd . L.sortOn (\(off, _, _) -> off) . flip go []
+      where
+        go :: Errors -> [(S.Offset, String, [(S.Offset, String)])] -> [(S.Offset, String, [(S.Offset, String)])]
+        go = \case
+          NoErrors -> id
+          OneError off msg notes -> ((off, msg, notes) :)
+          BothErrors e1 e2 -> go e1 . go e2
+
     -- An error at the value of a key << that is a collection, e.g. an alias of
     -- a mapping, is likely from a merge key of YAML 1.1.
     withMergeHint :: Set.Set S.Offset -> (S.Offset, String) -> (S.Offset, String)

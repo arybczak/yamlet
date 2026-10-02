@@ -361,6 +361,13 @@ lYamlStream markers0 = do
       m : ms -> (m, m : ms)
       [] -> (e.end, [])
 
+    -- Stop with an error at the furthest failure.
+    throwUnexpected :: Int -> P a
+    throwUnexpected i = do
+      e <- env
+      let (j, msg) = unexpected e i
+      throwAt j msg
+
     finishDocument
       :: [Int] -> Maybe YamlVersion -> Int -> Maybe Int -> Int -> Node -> P [Document]
     finishDocument markers version prefix marker limit root = do
@@ -397,13 +404,6 @@ lYamlStream markers0 = do
                 }
           !rest' = linesAbove next rest
       pure (doc : rest')
-
--- | Stop with an error at the furthest failure.
-throwUnexpected :: Int -> P a
-throwUnexpected i = do
-  e <- env
-  let (j, msg) = unexpected e i
-  throwAt j msg
 
 -- | l-document-prefix, repeated.
 lDocumentPrefix :: P ()
@@ -574,13 +574,6 @@ uriChars e i
   | isPercentEscape e i = uriChars e (i + percentEscapeLength)
   | otherwise = i
 
--- | Skip ns-tag-char*.
-tagChars :: Env -> Int -> Int
-tagChars e i
-  | isTagChar (byteAt e i) = tagChars e (i + 1)
-  | isPercentEscape e i = tagChars e (i + percentEscapeLength)
-  | otherwise = i
-
 percentEscapeLength :: Int
 percentEscapeLength = 1 + percentDigits
 
@@ -594,25 +587,6 @@ invalidEscape i = do
   e <- env
   when (byteAt e i == PERCENT) $
     throwAt i "invalid escape in the tag, write '%' and two hexadecimal digits"
-
--- | Decode the %XX escapes of a tag, or 'Nothing' if the bytes are not valid
--- UTF-8.
-percentDecode :: T.Text -> Maybe T.Text
-percentDecode t
-  | T.any (== '%') t = either (const Nothing) Just . T.decodeUtf8' . BS.pack $ go (T.unpack t)
-  | otherwise = Just t
-  where
-    go :: String -> [Word8]
-    go = \case
-      '%' : a : b : rest ->
-        fromIntegral (digitToInt a * 16 + digitToInt b) : go rest
-      c : rest -> encodeChar c ++ go rest
-      [] -> []
-
-    encodeChar :: Char -> [Word8]
-    encodeChar c = A.toList arr 0 len
-      where
-        !(T.Text arr _ len) = T.singleton c
 
 -- | l-bare-document
 lBareDocument :: P Node
@@ -725,6 +699,31 @@ cNsTagProperty = do
           Just t -> pure (Tag t)
           Nothing -> throwAt p "the escapes of the tag are not valid UTF-8"
         Nothing -> throwAt p $ "undefined tag handle " ++ T.unpack handle
+
+    -- Skip ns-tag-char*.
+    tagChars :: Env -> Int -> Int
+    tagChars e i
+      | isTagChar (byteAt e i) = tagChars e (i + 1)
+      | isPercentEscape e i = tagChars e (i + percentEscapeLength)
+      | otherwise = i
+
+    -- Decode the %XX escapes of a tag, or 'Nothing' if the bytes are not valid
+    -- UTF-8.
+    percentDecode :: T.Text -> Maybe T.Text
+    percentDecode t
+      | T.any (== '%') t = either (const Nothing) Just . T.decodeUtf8' . BS.pack $ go (T.unpack t)
+      | otherwise = Just t
+      where
+        go :: String -> [Word8]
+        go = \case
+          '%' : a : b : rest ->
+            fromIntegral (digitToInt a * 16 + digitToInt b) : go rest
+          c : rest -> encodeChar c ++ go rest
+          [] -> []
+
+        encodeChar :: Char -> [Word8]
+        encodeChar c = case T.singleton c of
+          T.Text arr _ len -> A.toList arr 0 len
 
     nonSpecific :: P Tag
     nonSpecific = do
