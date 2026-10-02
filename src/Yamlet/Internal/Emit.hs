@@ -21,7 +21,7 @@ module Yamlet.Internal.Emit
     -- * Other
   , indentStep
   , tagText
-  , tagHandle
+  , tagHandles
   , tagDirective
   , isPrintable
   , spaces
@@ -29,6 +29,7 @@ module Yamlet.Internal.Emit
 
 import Data.ByteString qualified as BS
 import Data.Char
+import Data.Containers.ListUtils
 import Data.Maybe
 import Data.Text qualified as T
 import Data.Text.Builder.Linear qualified as B
@@ -37,6 +38,7 @@ import Data.Word
 import Numeric
 
 import Yamlet.Internal.Parser.Chars
+import Yamlet.Internal.Syntax
 import Yamlet.Internal.Utils
 
 -- | The number of spaces that the content of a block collection or a block
@@ -386,6 +388,18 @@ tagText tag
   , not (isVerbatim tag) =
       if T.null suffix then "!" else handleText c <> shorthand suffix
   | otherwise = "!<" <> B.fromText tag <> ">"
+
+-- | The handles for the tags of the node and the nodes in it that are not
+-- valid URIs, each once.
+tagHandles :: Node -> [Char]
+tagHandles n0 = nubOrd (go n0 [])
+  where
+    go :: Node -> [Char] -> [Char]
+    go n acc =
+      (case n.props.tag of Tag t -> maybe id (:) (tagHandle t); _ -> id) $ case n.content of
+        SequenceContent _ xs -> foldr go acc xs
+        MappingContent _ kvs -> foldr (\(k, v) -> go k . go v) acc kvs
+        _ -> acc
 
 -- | The character whose handle a tag needs, if the tag needs a directive.
 tagHandle :: T.Text -> Maybe Char

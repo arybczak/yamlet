@@ -12,7 +12,6 @@ module Yamlet.Internal.Render
 
 import Control.Applicative
 import Data.Bifunctor
-import Data.Containers.ListUtils
 import Data.List qualified as L
 import Data.Map.Strict qualified as M
 import Data.Maybe
@@ -261,16 +260,8 @@ document opts afterEnd nextLines doc =
       Comment _ : _ -> lines_ 0 [EmptyLine]
       _ -> mempty
 
-    -- The handles for the tags that are not valid URIs.
     handles :: [Char]
-    handles = nubOrd . mapMaybe tagHandle $ tags r []
-
-    tags :: Node -> [T.Text] -> [T.Text]
-    tags n acc =
-      (case n.props.tag of Tag t -> (t :); _ -> id) $ case n.content of
-        SequenceContent _ xs -> foldr tags acc xs
-        MappingContent _ kvs -> foldr (\(k, v) -> tags k . tags v) acc kvs
-        _ -> acc
+    handles = tagHandles r
 
     -- The parser rejects the other versions.
     version :: Maybe YamlVersion

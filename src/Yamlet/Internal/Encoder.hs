@@ -8,7 +8,6 @@ module Yamlet.Internal.Encoder
   ( renderDocuments
   ) where
 
-import Data.Containers.ListUtils
 import Data.Maybe
 import Data.Text qualified as T
 import Data.Text.Builder.Linear qualified as B
@@ -35,16 +34,8 @@ renderDocuments docs
       | null handles = (if i > 0 then "---\n" else mempty) <> topLevel n
       | otherwise = (if i > 0 then "...\n" else mempty) <> foldMap tagDirective handles <> "---\n" <> topLevel n
       where
-        -- The handles for the tags that are not valid URIs.
         handles :: [Char]
-        handles = nubOrd $ tagHandles n []
-
-    tagHandles :: S.Node -> [Char] -> [Char]
-    tagHandles n acc =
-      (case n.props.tag of S.Tag t -> maybe id (:) (tagHandle t); _ -> id) $ case n.content of
-        S.SequenceContent _ xs -> foldr tagHandles acc xs
-        S.MappingContent _ kvs -> foldr (\(k, v) -> tagHandles k . tagHandles v) acc kvs
-        _ -> acc
+        handles = tagHandles n
 
     topLevel :: S.Node -> B.Builder
     topLevel n = case n.content of
