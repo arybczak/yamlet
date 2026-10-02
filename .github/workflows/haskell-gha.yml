@@ -130,7 +130,12 @@ jobs:
       if: contains(fromJSON('["9.8","9.10","9.12","9.14"]'), matrix.ghc)
       working-directory: ${{ runner.temp }}/haskell-gha
       run: |
-        echo 'semaphore: True' >> cabal.project.local
+        cat >> cabal.project.local <<'EOF'
+        semaphore: True
+
+        package yamlet
+          ghc-options: -Wwarn=unrecognised-warning-flags -Wwarn=semaphore-open-failure
+        EOF
 
     - name: Make the build plan
       id: plan
@@ -213,4 +218,4 @@ jobs:
     - name: Build the documentation
       working-directory: ${{ runner.temp }}/haskell-gha
       run: |
-        cabal haddock all --disable-documentation --haddock-all --haddock-for-hackage
+        cabal haddock all --disable-documentation --haddock-for-hackage
