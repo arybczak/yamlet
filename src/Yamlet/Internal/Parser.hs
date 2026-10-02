@@ -49,14 +49,12 @@ parseStream input@(T.Text arr off len) = case prescan e start of
     Right (Nothing, _, fu) -> Left $ uncurry parseError (unexpected e fu)
   where
     -- A byte order mark at the start of the line of an error is the likely
-    -- cause, unless a document marker or a directive follows it, or a
-    -- document without a marker can start on the line.
+    -- cause, unless a document without a marker can start on the line.
     parseError :: Int -> String -> Error
     parseError i msg
       | let s = lineOf i
-      , isBom e s
-      , let j = skipBoms e s
-      , not (isMarker e j || byteAt e j == PERCENT || inPrefix s) =
+      , bomBeforeContent e s
+      , not (inPrefix s) =
           errorAt input (toOffset e s) "unexpected byte order mark"
       | otherwise = errorAt input (toOffset e i) msg
 
@@ -373,9 +371,7 @@ lYamlStream markers0 = do
       withEnd limit $ many_ lComment
       e <- env
       p <- pos
-      -- A byte order mark at the start of a line starts the prefix of the
-      -- next document.
-      when (p < limit && not (isBom e p && isStartOfLine e p)) $ do
+      when (p < limit && not (startsPrefix e p)) $ do
         fu <- furthest
         throwUnexpected (max fu p)
       let explicitEnd = isMarker e p && byteAt e p == DOT
@@ -986,10 +982,8 @@ escape e i = case chr (fromIntegral (byteAt e i)) of
 nsPlain :: Int -> Ctx -> Props -> P Node
 nsPlain n c props = withScan $ \e p ->
   let w0 = byteAt e p
-      -- A byte order mark at the start of a line starts the prefix of a
-      -- document.
       firstOk =
-        not (isBom e p && isStartOfLine e p)
+        not (startsPrefix e p)
           && ( (isNsChar w0 && not (isIndicator w0))
                  || ( (w0 == QUESTION || w0 == COLON || w0 == MINUS)
                         && isPlainSafe (isFlowCtx c) (byteAt e (p + 1))
@@ -1051,13 +1045,11 @@ plainNextLines e n c = go
                    in (foldText k : slice e t q' : ts, r)
              _ -> ([], q)
 
-    -- A byte order mark at the start of a line ends the document, as in
-    -- 'nsPlain'.
     startsPlain :: Int -> Bool
     startsPlain t =
       let w = byteAt e t
       in w /= HASH
-           && not (isBom e t && isStartOfLine e t)
+           && not (startsPrefix e t)
            && isPlainSafe flow w
            && (w /= COLON || isPlainSafe flow (byteAt e (t + 1)))
 
@@ -1136,12 +1128,7 @@ closing c start w kind msg = do
       | c == FlowKey -> failure
       | atLineEnd e p -> case nextContent e p of
           Just (lineStart, q)
-            -- A byte order mark can start a line only before a document
-            -- marker or a directive.
-            | isBom e lineStart
-            , let r = skipBoms e lineStart
-            , not (isMarker e r || byteAt e r == PERCENT) ->
-                throwAt lineStart "unexpected byte order mark"
+            | bomBeforeContent e lineStart -> throwAt lineStart "unexpected byte order mark"
             | Just tab <- L.find (\j -> byteAt e j == TAB) [lineStart .. q - 1] ->
                 throwAt tab "tabs cannot be used for indentation"
             | byteAt e q == w ->
@@ -1512,11 +1499,10 @@ blockLines e indent = go 0 []
                -- Spaces at the end of the input are an empty line, as in the
                -- test JEF9/02 of the YAML test suite.
                | s >= e.end -> (reverse acc, empties + 1, s)
-               -- A byte order mark at the start of a line starts the prefix
-               -- of a document, as in 'nsPlain'. Only a block scalar at the
-               -- top level has content at the start of a line.
+               -- Only a block scalar at the top level has content at the
+               -- start of a line.
                | s - i == indent
-               , not (isBom e s && isStartOfLine e s) ->
+               , not (startsPrefix e s) ->
                    let t = lineEnd s
                        acc' = BlockLine empties (slice e s t) : acc
                    in if t >= e.end

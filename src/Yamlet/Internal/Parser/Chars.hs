@@ -72,6 +72,8 @@ module Yamlet.Internal.Parser.Chars
   , isStartOfLine
   , markerLength
   , isMarker
+  , startsPrefix
+  , bomBeforeContent
   , fitsKey
   ) where
 
@@ -288,6 +290,19 @@ isMarker e i =
        && all (\j -> byteAt e (i + j) == w) [1 .. markerLength - 1]
        && (after == 0 || isWhite after || isBreak after)
        && isStartOfLine e i
+
+-- | A byte order mark at the start of a line. Outside a quoted scalar, it
+-- starts the prefix of the next document, so the content of a document ends
+-- before it.
+startsPrefix :: Env -> Int -> Bool
+startsPrefix e i = isBom e i && isStartOfLine e i
+
+-- | Byte order marks at the index before something other than a document
+-- marker or a directive. Such marks at the start of a line inside a document
+-- are an error.
+bomBeforeContent :: Env -> Int -> Bool
+bomBeforeContent e i =
+  isBom e i && let j = skipBoms e i in not (isMarker e j || byteAt e j == PERCENT)
 
 -- | The input between the indices fits in an implicit key.
 fitsKey :: Env -> Int -> Int -> Bool
