@@ -95,39 +95,6 @@ newtype Name = Name T.Text
   deriving anyclass (GenericYamlOptions)
   deriving (FromYaml, ToYaml) via GenericYaml Name
 
--- The types of the table of shapes that no other test uses.
-
-data Unit = Unit
-  deriving stock (Eq, Show, Generic)
-  deriving anyclass (GenericYamlOptions)
-  deriving (FromYaml, ToYaml) via GenericYaml Unit
-
-data UnitTagged = UnitTagged
-  deriving stock (Eq, Show, Generic)
-  deriving (FromYaml, ToYaml) via GenericYaml UnitTagged
-
-instance GenericYamlOptions UnitTagged where
-  yamlOptions = defaultYamlOptions {tagSingleConstructors = True}
-
-newtype NameTagged = NameTagged T.Text
-  deriving stock (Eq, Show, Generic)
-  deriving (FromYaml, ToYaml) via GenericYaml NameTagged
-
-instance GenericYamlOptions NameTagged where
-  yamlOptions = defaultYamlOptions {tagSingleConstructors = True}
-
-data Literal = Whole Int | Words T.Text
-  deriving stock (Eq, Show, Generic)
-  deriving anyclass (GenericYamlOptions)
-  deriving (FromYaml, ToYaml) via GenericYaml Literal
-
-data Motion = Go Distance | Hurry Speed
-  deriving stock (Eq, Show, Generic)
-  deriving (FromYaml, ToYaml) via GenericYaml Motion
-
-instance GenericYamlOptions Motion where
-  type SumEncoding Motion = TaggedFlat
-
 -- | The constructors of the single-field encoding can mix their fields.
 data Figure = Round {radius :: Double} | Named T.Text | Point
   deriving stock (Eq, Show, Generic)
@@ -135,28 +102,6 @@ data Figure = Round {radius :: Double} | Named T.Text | Point
 
 instance GenericYamlOptions Figure where
   type SumEncoding Figure = SingleField
-
-newtype Bare = Bare {size :: Int}
-  deriving stock (Eq, Show, Generic)
-  deriving (FromYaml, ToYaml) via GenericYaml Bare
-
-instance GenericYamlOptions Bare where
-  type SumEncoding Bare = SingleField
-
-newtype Wrapped = Wrapped {size :: Int}
-  deriving stock (Eq, Show, Generic)
-  deriving (FromYaml, ToYaml) via GenericYaml Wrapped
-
-instance GenericYamlOptions Wrapped where
-  type SumEncoding Wrapped = SingleField
-  yamlOptions = defaultYamlOptions {tagSingleConstructors = True}
-
-data Light = Red | Green
-  deriving stock (Eq, Show, Generic)
-  deriving (FromYaml, ToYaml) via GenericYaml Light
-
-instance GenericYamlOptions Light where
-  type SumEncoding Light = SingleField
 
 data Gauge = Gauge {level :: Int} | Off
   deriving stock (Eq, Show, Generic)
@@ -204,13 +149,6 @@ instance GenericYamlOptions Command where
       , constructorTagModifier = map toLower
       , fieldLabelModifier = concatMap (\c -> if isUpper c then ['_', toLower c] else [c])
       }
-
-newtype Single = Single {value :: Int}
-  deriving stock (Eq, Show, Generic)
-  deriving (FromYaml, ToYaml) via GenericYaml Single
-
-instance GenericYamlOptions Single where
-  yamlOptions = defaultYamlOptions {tagSingleConstructors = True}
 
 data Reply = Answer (Maybe Int) | Silence
   deriving stock (Eq, Show, Generic)
@@ -408,6 +346,68 @@ test_commentedValues = do
         , "  # trailing"
         , "name: x # c"
         ]
+
+-- The types that only the table of shapes uses.
+
+data Unit = Unit
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Unit
+
+data UnitTagged = UnitTagged
+  deriving stock (Eq, Show, Generic)
+  deriving (FromYaml, ToYaml) via GenericYaml UnitTagged
+
+instance GenericYamlOptions UnitTagged where
+  yamlOptions = defaultYamlOptions {tagSingleConstructors = True}
+
+newtype NameTagged = NameTagged T.Text
+  deriving stock (Eq, Show, Generic)
+  deriving (FromYaml, ToYaml) via GenericYaml NameTagged
+
+instance GenericYamlOptions NameTagged where
+  yamlOptions = defaultYamlOptions {tagSingleConstructors = True}
+
+newtype Single = Single {value :: Int}
+  deriving stock (Eq, Show, Generic)
+  deriving (FromYaml, ToYaml) via GenericYaml Single
+
+instance GenericYamlOptions Single where
+  yamlOptions = defaultYamlOptions {tagSingleConstructors = True}
+
+data Literal = Whole Int | Words T.Text
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Literal
+
+data Motion = Go Distance | Hurry Speed
+  deriving stock (Eq, Show, Generic)
+  deriving (FromYaml, ToYaml) via GenericYaml Motion
+
+instance GenericYamlOptions Motion where
+  type SumEncoding Motion = TaggedFlat
+
+newtype Bare = Bare {size :: Int}
+  deriving stock (Eq, Show, Generic)
+  deriving (FromYaml, ToYaml) via GenericYaml Bare
+
+instance GenericYamlOptions Bare where
+  type SumEncoding Bare = SingleField
+
+newtype Wrapped = Wrapped {size :: Int}
+  deriving stock (Eq, Show, Generic)
+  deriving (FromYaml, ToYaml) via GenericYaml Wrapped
+
+instance GenericYamlOptions Wrapped where
+  type SumEncoding Wrapped = SingleField
+  yamlOptions = defaultYamlOptions {tagSingleConstructors = True}
+
+data Light = Red | Green
+  deriving stock (Eq, Show, Generic)
+  deriving (FromYaml, ToYaml) via GenericYaml Light
+
+instance GenericYamlOptions Light where
+  type SumEncoding Light = SingleField
 
 -- | Each supported shape of constructors, with the options that change its
 -- encoding.

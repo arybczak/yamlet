@@ -747,7 +747,6 @@ test_hashes = do
   assertEqual "rendered" (Right "## a\n### b ###\n####\n# #c\nk: 1 # #d\n  ## e\n") (renderSyntax defaultRenderOptions <$> parseDocumentsText input)
   assertEqual "count below 1" "# a\n---\nk: 1\n" (renderSyntax defaultRenderOptions [(document (mappingNode [(plainNode "k", plainNode "1")])) {docComments = noComments {before = [CommentLine (-1) "a"]}}])
 
--- | A comment without a place at its node moves to one that has it.
 -- | The lines after a list under a key stay at the end of the list. Without
 -- indentation, a block collection as the last item would take them in.
 test_linesAfterList :: Assertion
@@ -796,6 +795,7 @@ test_linesBelowIndicator = do
     (Right [[("/k", "before", "a")]])
     (map commentsOf <$> parseDocumentsText (render (mappingNode [(plainNode "k", withAbove list)])))
 
+-- | A comment without a place at its node moves to one that has it.
 test_movedComments :: Assertion
 test_movedComments = do
   let render :: Node -> T.Text
