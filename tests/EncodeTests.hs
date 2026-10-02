@@ -22,7 +22,6 @@ import Data.Time.Calendar.Month
 import Data.Time.Calendar.Quarter
 import Data.Tree qualified as Tree
 import Data.UUID.Types qualified as UUID
-import Test.QuickCheck hiding (Fixed)
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck hiding (Fixed)

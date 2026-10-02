@@ -4,7 +4,6 @@ import Control.Monad
 import Data.List qualified as L
 import Data.Maybe
 import Data.Text qualified as T
-import Test.QuickCheck
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
