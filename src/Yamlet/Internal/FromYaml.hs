@@ -476,6 +476,8 @@ data Object = Object
   , index :: M.Map T.Text (S.Node, S.Node)
   , otherKeys :: [(S.Node, Value)]
   -- ^ The keys that are not strings, for the error of a lookup.
+  , duplicates :: !Bool
+  -- ^ Two string keys have the same text.
   }
 
 -- | The object and the errors of its duplicate keys. The index has the first
@@ -492,6 +494,9 @@ mkObject n kvs =
          , entries = kvs
          , index = index
          , otherKeys = [(k, v) | (k@S.Node {S.content = S.ScalarContent style t}, _) <- kvs, let v = scalarValue k.props.tag style t, case v of String _ -> False; _ -> True]
+         , duplicates = case errs of
+             NoErrors -> False
+             _ -> True
          }
      )
   where

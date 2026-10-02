@@ -1152,8 +1152,12 @@ fromObject opts flat keys def o
             _ -> S.Block
       in gFromValue (S.Node n.offset n.endOffset n.props S.noComments (S.MappingContent style others))
 
+    -- The duplicates of a key go too. The mapping has their errors, and a
+    -- field of a recursive type would give them again at each level.
     others :: [(S.Node, S.Node)]
-    others = foldr removeKey (objectEntries o) keys
+    others
+      | o.duplicates = filter (\(k, _) -> not (any (`isKey` k) keys)) (objectEntries o)
+      | otherwise = foldr removeKey (objectEntries o) keys
 
     -- The keys are unique, so the entries after the match stay shared.
     removeKey :: T.Text -> [(S.Node, S.Node)] -> [(S.Node, S.Node)]

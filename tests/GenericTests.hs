@@ -659,6 +659,16 @@ test_flatten = do
     "other key next to the contents key with unknown keys rejected"
     [(3, 1, "unknown key \"extra\", expected one of: tag, contents")]
     (errorsOf (decodeText @Order "tag: Hold\ncontents: 5\nextra: 1\n"))
+  -- The flat field of the recursive type reads the mapping again.
+  assertEqual
+    "duplicate tag keys reported once"
+    [ (1, 1, "missing key \"step\"")
+    , (2, 4, "duplicate key \"step\"")
+    , (1, 1, "the first key \"step\"")
+    , (3, 4, "duplicate key \"step\"")
+    , (1, 1, "the first key \"step\"")
+    ]
+    (errorsOf (decodeText @Step "step: Again\n!a step: Again\n!b step: Halt\n"))
 
 test_default :: Assertion
 test_default = do
