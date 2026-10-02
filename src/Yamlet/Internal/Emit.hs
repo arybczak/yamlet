@@ -1,3 +1,4 @@
+{-# LANGUAGE LinearTypes #-}
 {-# OPTIONS_HADDOCK not-home #-}
 
 -- | Building blocks of the YAML output.
@@ -33,6 +34,7 @@ import Data.Containers.ListUtils
 import Data.Maybe
 import Data.Text qualified as T
 import Data.Text.Builder.Linear qualified as B
+import Data.Text.Builder.Linear.Buffer qualified as B
 import Data.Text.Encoding qualified as T
 import Numeric
 
@@ -158,28 +160,38 @@ doubleQuotedLines indent starts t
 -- | The text of a double-quoted scalar, with escapes for the characters that
 -- need them.
 doubleQuotedText :: T.Text -> B.Builder
-doubleQuotedText = T.foldr (\c b -> escape c <> b) mempty
+-- The loop writes to the buffer, and copies each run of characters without
+-- escapes at once. A fold of builders over the characters allocates a
+-- closure for each character since text 2.1.4, whose 'T.foldr' no longer
+-- fuses, and the encode benchmark of the config input allocated more. A
+-- fold of builders over the runs allocated more in the render benchmark of
+-- the JSON input.
+doubleQuotedText t0 = B.Builder (\b -> go b t0)
   where
-    escape :: Char -> B.Builder
-    escape = \case
-      '"' -> "\\\""
-      '\\' -> "\\\\"
-      '\n' -> "\\n"
-      '\t' -> "\\t"
-      '\r' -> "\\r"
-      '\0' -> "\\0"
-      c
-        | isScalarChar c -> B.fromChar c
-        | ord c < 16 ^ xEscapeDigits -> "\\x" <> hex xEscapeDigits (ord c)
-        | ord c < 16 ^ uEscapeDigits -> "\\u" <> hex uEscapeDigits (ord c)
-        | otherwise -> "\\U" <> hex bigUEscapeDigits (ord c)
+    go :: B.Buffer %1 -> T.Text -> B.Buffer
+    go b t = case T.break needsEscape t of
+      (run, rest) -> case T.uncons rest of
+        Just (c, rest') -> go (escape (b B.|> run) c) rest'
+        Nothing -> b B.|> run
 
-    hex :: Int -> Int -> B.Builder
-    hex k i = B.fromText (T.pack (upperHex k i))
--- Inlining lets the builder write each character to the buffer. Without it,
--- the builder allocates a closure for each character, and the render
--- benchmark of the JSON input allocated 64 MB instead of 43 MB.
-{-# INLINE doubleQuotedText #-}
+    needsEscape :: Char -> Bool
+    needsEscape c = c == '"' || c == '\\' || not (isScalarChar c)
+
+    escape :: B.Buffer %1 -> Char -> B.Buffer
+    escape b = \case
+      '"' -> b B.|> "\\\""
+      '\\' -> b B.|> "\\\\"
+      '\n' -> b B.|> "\\n"
+      '\t' -> b B.|> "\\t"
+      '\r' -> b B.|> "\\r"
+      '\0' -> b B.|> "\\0"
+      c
+        | ord c < 16 ^ xEscapeDigits -> b B.|> "\\x" B.|> hex xEscapeDigits (ord c)
+        | ord c < 16 ^ uEscapeDigits -> b B.|> "\\u" B.|> hex uEscapeDigits (ord c)
+        | otherwise -> b B.|> "\\U" B.|> hex bigUEscapeDigits (ord c)
+
+    hex :: Int -> Int -> T.Text
+    hex k i = T.pack (upperHex k i)
 
 -- | The lines of a flow scalar that start at the positions: the first line,
 -- and each next line with the number of empty lines above it, or 'Nothing'
