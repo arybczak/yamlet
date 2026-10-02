@@ -323,7 +323,7 @@ instance
   -- where the type is not known, and the derived instance only calls the
   -- result. Each value would then go through the generic representation,
   -- and the benchmark derive.contents.parseYaml.generic would be slower.
-  parseYamlList = coerce (withSequence (mapM (parseNode (parseYaml @a))))
+  parseYamlList = coerce (withSequence (parseItems (parseYaml @a)))
   -- The derived method applies this one to the dictionaries of the instance.
   -- The pragma inlines it there, so only the dictionary of 'FromYaml a'
   -- remains. Without the pragma, GHC 9.14 keeps the call with all the

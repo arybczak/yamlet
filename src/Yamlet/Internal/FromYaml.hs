@@ -47,6 +47,7 @@ module Yamlet.Internal.FromYaml
   , rejectUnknownKeys
 
     -- * Parts of the generic instances
+  , parseItems
   , parseEntry
   , findKey
   , missingKey
@@ -427,6 +428,22 @@ withSequence :: ([S.Node] -> Parser a) -> S.Node -> Parser a
 withSequence f = parseNode $ \n -> case n.content of
   S.SequenceContent _ xs -> f xs
   _ -> typeMismatch "a list" n
+
+-- | The values of the items, with the errors of all items, as with 'mapM'.
+-- Unlike 'mapM', the stack does not grow with the number of items, because
+-- the errors and the values are in accumulators until the end.
+parseItems :: forall a. (S.Node -> Parser a) -> [S.Node] -> Parser [a]
+parseItems p xs0 = Parser $ \off -> go off NoErrors [] xs0
+  where
+    go :: S.Offset -> Errors -> [a] -> [S.Node] -> Result [a]
+    go off !errs acc = \case
+      [] -> case errs of
+        NoErrors -> Result NoErrors (reverse acc)
+        _ -> Result errs failed
+      x : xs ->
+        let Parser g = parseNode p x
+        in case g off of
+             Result e a -> go off (bothErrors errs e) (a : acc) xs
 
 -- | The node without its comments.
 withoutComments :: S.Node -> S.Node
@@ -827,7 +844,7 @@ class FromYaml a where
 
   -- | Parse a list. The instance for 'Char' parses a string instead.
   parseYamlList :: S.Node -> Parser [a]
-  parseYamlList = withSequence (mapM (parseNode parseYaml))
+  parseYamlList = withSequence (parseItems parseYaml)
 
   -- | Parse the value of a mapping entry, with its key, e.g. to keep the
   -- comments of the key as 'Yamlet.Commented' does. 'parseField' and the
@@ -911,10 +928,15 @@ instance FromYaml Value where
         Tagged tag v -> Tagged (T.copy tag) (copy v)
         v -> v
 
-      strictMap :: (a -> b) -> [a] -> [b]
-      strictMap f = \case
-        [] -> []
-        x : xs -> let !y = f x; !ys = strictMap f xs in y : ys
+      -- The results are in reverse until the end, so that the stack does not
+      -- grow with the length of the list.
+      strictMap :: forall a b. (a -> b) -> [a] -> [b]
+      strictMap f = go []
+        where
+          go :: [b] -> [a] -> [b]
+          go acc = \case
+            [] -> reverse acc
+            x : xs -> let !y = f x in go (y : acc) xs
 
 -- | An empty list, as a tuple without elements.
 instance FromYaml () where
@@ -1074,7 +1096,7 @@ instance FromYaml a => FromYaml [a] where
 instance FromYaml a => FromYaml (NE.NonEmpty a) where
   parseYaml = withSequence $ \case
     [] -> fail "expected a non-empty list"
-    x : xs -> (NE.:|) <$> parseNode parseYaml x <*> mapM (parseNode parseYaml) xs
+    x : xs -> (NE.:|) <$> parseNode parseYaml x <*> parseItems parseYaml xs
 
 -- | Null is 'Nothing'. The key of an entry goes to the value inside, e.g. for
 -- a 'Yamlet.Commented' value.

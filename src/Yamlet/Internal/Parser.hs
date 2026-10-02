@@ -1073,15 +1073,16 @@ cFlowMapping n c props = do
 flowEntries :: forall a. Int -> Ctx -> P a -> P [a]
 flowEntries n c entry = go []
   where
+    -- Each choice ends before the next entry, so that the stack does not
+    -- grow with the number of entries.
     go :: [a] -> P [a]
-    go acc = next <|> (pure $! reverse acc)
-      where
-        next :: P [a]
-        next = do
-          x <- entry
+    go acc =
+      optional entry >>= \case
+        Nothing -> pure $! reverse acc
+        Just x -> do
           optional_ $ sSeparate n c
-          (char COMMA >> optional_ (sSeparate n c) >> go (x : acc))
-            <|> (pure $! reverse (x : acc))
+          more <- (True <$ (char COMMA >> optional_ (sSeparate n c))) <|> pure False
+          if more then go (x : acc) else pure $! reverse (x : acc)
 
 -- | The closing bracket of a flow collection that starts at the index. Its
 -- absence is an error unless the collection is an implicit key, which the

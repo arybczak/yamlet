@@ -77,11 +77,11 @@ represent root
            S.ScalarContent style t -> scalar off props style t
            S.SequenceContent _ xs -> do
              tag <- collectionTag off props seqTag
-             vs <- mapM plain xs
+             vs <- mapEither plain xs
              Right $ withTag tag (Sequence vs)
            S.MappingContent _ kvs -> do
              tag <- collectionTag off props mapTag
-             entries <- mapM (\(k, v) -> (,) <$> plain k <*> plain v) kvs
+             entries <- mapEither (\(k, v) -> (,) <$> plain k <*> plain v) kvs
              checkUniqueKeys (zip (map fst kvs) (map fst entries))
              Right $ withTag tag (Mapping entries)
            S.AliasContent _ -> Left $ failure off "unexpected alias"
@@ -123,26 +123,38 @@ represent root
                  shape = MappingShape tag (L.sort [(i, j) | (_, (_, i), (_, j)) <- entries])
              Right $ number props v shape 1 (st'.visits - st.visits + 1) st'
 
+    -- The values are in reverse until the end, so that the stack does not
+    -- grow with the number of items.
     goList :: Numbering -> [S.Node] -> Either Failure ([(Value, Int)], Numbering)
-    goList st = \case
-      [] -> Right ([], st)
-      x : xs -> do
-        (v, st') <- go st x
-        (vs, st'') <- goList st' xs
-        Right (v : vs, st'')
+    goList = loop []
+      where
+        loop :: [(Value, Int)] -> Numbering -> [S.Node] -> Either Failure ([(Value, Int)], Numbering)
+        loop acc st = \case
+          [] -> Right (reverse acc, st)
+          x : xs -> case go st x of
+            Left err -> Left err
+            Right (v, st') -> loop (v : acc) st' xs
 
-    -- The entries come with the nodes of their keys.
+    -- The entries come with the nodes of their keys, in reverse as in
+    -- 'goList'.
     goPairs
       :: Numbering
       -> [(S.Node, S.Node)]
       -> Either Failure ([(S.Node, (Value, Int), (Value, Int))], Numbering)
-    goPairs st = \case
-      [] -> Right ([], st)
-      (k, v) : kvs -> do
-        (kv, st') <- go st k
-        (vv, st'') <- go st' v
-        (rest, st''') <- goPairs st'' kvs
-        Right ((k, kv, vv) : rest, st''')
+    goPairs = loop []
+      where
+        loop
+          :: [(S.Node, (Value, Int), (Value, Int))]
+          -> Numbering
+          -> [(S.Node, S.Node)]
+          -> Either Failure ([(S.Node, (Value, Int), (Value, Int))], Numbering)
+        loop acc st = \case
+          [] -> Right (reverse acc, st)
+          (k, v) : kvs -> case go st k of
+            Left err -> Left err
+            Right (kv, st') -> case go st' v of
+              Left err -> Left err
+              Right (vv, st'') -> loop ((k, kv, vv) : acc) st'' kvs
 
     open :: S.Props -> Numbering -> Numbering
     open props st = case props.anchor of
@@ -178,6 +190,18 @@ represent root
             Just first -> Left $ duplicateKey (kn, k) first
             Nothing -> loop (IM.insert i (kn, k) seen) rest
 
+-- | 'mapM' for 'Either', with a stack that does not grow with the length of
+-- the list.
+mapEither :: forall a e b. (a -> Either e b) -> [a] -> Either e [b]
+mapEither f = go []
+  where
+    go :: [b] -> [a] -> Either e [b]
+    go acc = \case
+      [] -> Right (reverse acc)
+      x : xs -> case f x of
+        Left err -> Left err
+        Right y -> go (y : acc) xs
+
 -- | The offset of the node that caused an error and the message, and the
 -- notes that go after it, e.g. the first key of a duplicate key.
 type Failure = NE.NonEmpty (S.Offset, String)
@@ -200,7 +224,7 @@ check sn =
        S.SequenceContent _ xs -> collectionTag off props seqTag *> traverse_ check xs
        S.MappingContent _ kvs -> do
          _ <- collectionTag off props mapTag
-         keys <- traverse (\(k, v) -> key k <* check v) kvs
+         keys <- mapEither (\(k, v) -> key k <* check v) kvs
          checkUniqueKeys keys
        S.AliasContent _ -> Left $ failure off "unexpected alias"
   where
