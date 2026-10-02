@@ -108,14 +108,25 @@ renderSyntax opts = emptyLines . B.runBuilder . go True
         let nextLines = case docs of
               next : _ -> not (null next.docComments.before)
               [] -> False
-            prepared = validAnchors doc {root = commentedBlocks doc.root}
-        in document afterEnd nextLines prepared <> go (writesEnd opts prepared) docs
+            prepared = validAnchors doc {root = topLevel nextLines (commentedBlocks doc.root)}
+            ends = writesEnd opts (not (null docs)) nextLines prepared
+        in document afterEnd ends prepared <> go ends docs
+
+    -- A block scalar without content at the top level would take the lines
+    -- below it in, also those of the next document if the flag tells that it
+    -- has lines above its start marker.
+    topLevel :: Bool -> Node -> Node
+    topLevel nextLines n = case n.content of
+      ScalarLinesContent style t starts
+        | isBlockScalar style
+        , needsIndentIndicator t || T.all (== '\n') t && (not (null n.comments.after) || nextLines) ->
+            n {content = ScalarLinesContent DoubleQuoted t starts}
+      _ -> n
 
     -- A document. The flags tell if it starts the stream or follows a
-    -- document end marker, and if the next document has lines above its
-    -- start marker.
+    -- document end marker, and if it ends with a document end marker.
     document :: Bool -> Bool -> Document -> B.Builder
-    document afterEnd nextLines doc =
+    document afterEnd ends doc =
       mconcat
         [ if needsEnd then "...\n" else mempty
         , gap
@@ -128,19 +139,19 @@ renderSyntax opts = emptyLines . B.runBuilder . go True
                 <> foldMap tagDirective handles
             else mempty
         , body
-        , if writesEnd opts doc then "...\n" else mempty
-        , lines_ 0 doc.docComments.after
+        , if linesAboveEnd then lines_ 0 doc.docComments.after else mempty
+        , if ends then "...\n" else mempty
+        , if linesAboveEnd then mempty else lines_ 0 doc.docComments.after
         ]
       where
-        -- A block scalar without content at the top level would take the
-        -- lines below it in, also those of the next document.
         r :: Node
-        r = case doc.root.content of
-          ScalarLinesContent style t starts
-            | isBlockScalar style
-            , needsIndentIndicator t || T.all (== '\n') t && (not (null doc.root.comments.after) || nextLines) ->
-                doc.root {content = ScalarLinesContent DoubleQuoted t starts}
-          _ -> doc.root
+        r = doc.root
+
+        -- The lines between a flow collection root and the end marker belong
+        -- to the document, as do the lines below the marker. Below the
+        -- marker, an empty line would end them.
+        linesAboveEnd :: Bool
+        linesAboveEnd = isFlowCollection opts r && commentBelowEmptyLine doc.docComments.after
 
         -- The end of the document above takes the comments right below it.
         -- The lines above the first entry of a block root come first too.
@@ -195,9 +206,7 @@ renderSyntax opts = emptyLines . B.runBuilder . go True
 
         scalarBody :: B.Builder
         scalarBody
-          | isEmpty r = case (doc.docComments.inline, r.comments.inline) of
-              (Just dc, Just rc) -> "---" <> comment (Just dc) <> "\n" <> lines_ 0 (r.comments.before ++ [Comment rc])
-              (dc, rc) -> "---" <> comment (dc <|> rc) <> "\n" <> lines_ 0 r.comments.before
+          | isEmpty r = let (c, ls) = emptyRootLines doc in "---" <> comment c <> "\n" <> lines_ 0 ls
           | marker =
               "---"
                 <> comment doc.docComments.inline
@@ -308,16 +317,70 @@ validAnchors doc
     isAnchorChar :: Char -> Bool
     isAnchorChar c = isPrintable c && c /= ' ' && c /= '\x2028' && c /= '\x2029' && not (asciiChar isFlowIndicator c)
 
--- | The document ends with a @...@ marker. Without the marker, the lines at
--- the end of the document read back as the root's, unless the root is a flow
--- collection.
-writesEnd :: RenderOptions -> Document -> Bool
-writesEnd opts doc =
+-- | The document ends with a @...@ marker. The flags tell if another
+-- document follows and if it has lines above its start marker.
+--
+-- Without the marker, the lines at the end of the document read back as the
+-- root's, unless the root is a flow collection. Before the next document,
+-- an empty line at the end of the root would end the lines of the root, and
+-- a literal block scalar with the keep indicator at the end would take the
+-- empty line above the lines of the next document in.
+writesEnd :: RenderOptions -> Bool -> Bool -> Document -> Bool
+writesEnd opts next nextLines doc =
   doc.explicitEnd
-    || not (null doc.docComments.after) && case doc.root.content of
-      SequenceContent {} -> isBlock opts doc.root
-      MappingContent {} -> isBlock opts doc.root
-      _ -> True
+    || not (null doc.docComments.after) && not (isFlowCollection opts doc.root)
+    || next && commentBelowEmptyLine endLines
+    || nextLines && endsWithKeep doc.root
+  where
+    -- The lines at the end of the root, which read back as its last lines.
+    -- The lines of an empty root are all below its start marker.
+    endLines :: [Line]
+    endLines
+      | isEmpty doc.root = snd (emptyRootLines doc) ++ doc.root.comments.after
+      | isFlowCollection opts doc.root = []
+      | otherwise = linesAtEnd doc.root
+
+    -- The lines at the end of the node and of the nodes that end it.
+    linesAtEnd :: Node -> [Line]
+    linesAtEnd n = inner ++ n.comments.after
+      where
+        inner :: [Line]
+        inner = case n.content of
+          SequenceContent _ xs | isBlock opts n, x : _ <- reverse xs -> linesAtEnd x
+          MappingContent _ kvs | isBlock opts n, (_, v) : _ <- reverse kvs -> linesAtEnd v
+          _ -> []
+
+    -- A comment line below the scalar ends its content.
+    endsWithKeep :: Node -> Bool
+    endsWithKeep n
+      | hasCommentLine n.comments.after = False
+      | otherwise = case n.content of
+          ScalarContent Literal t -> isJust (literalBlock True 0 t) && hasKeepIndicator t
+          SequenceContent _ xs | isBlock opts n, x : _ <- reverse xs -> endsWithKeep x
+          MappingContent _ kvs | isBlock opts n, (_, v) : _ <- reverse kvs -> endsWithKeep v
+          _ -> False
+
+-- | The comment on the start marker line of a document with an empty root,
+-- and the lines below the marker, without the lines at the end of the root.
+-- The marker line holds one comment, so the comment of the root goes below
+-- it if the document has one too.
+emptyRootLines :: Document -> (Maybe T.Text, [Line])
+emptyRootLines doc = case (doc.docComments.inline, doc.root.comments.inline) of
+  (Just dc, Just rc) -> (Just dc, doc.root.comments.before ++ [Comment rc])
+  (dc, rc) -> (dc <|> rc, doc.root.comments.before)
+
+-- | The lines have a comment below an empty line.
+commentBelowEmptyLine :: [Line] -> Bool
+commentBelowEmptyLine ls = case dropWhile (/= EmptyLine) ls of
+  _ : rest -> hasCommentLine rest
+  [] -> False
+
+-- | A collection that the renderer writes in the flow style.
+isFlowCollection :: RenderOptions -> Node -> Bool
+isFlowCollection opts n = case n.content of
+  SequenceContent {} -> not (isBlock opts n)
+  MappingContent {} -> not (isBlock opts n)
+  _ -> False
 
 -- | The entries of a block collection at the given indentation, and the lines
 -- after them at the given column. The first entry does not start with

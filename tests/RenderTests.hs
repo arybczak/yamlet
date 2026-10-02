@@ -464,6 +464,43 @@ test_documents = do
     "empty line at the end of a block root before a document"
     "- a\n# c\n\n---\nb\n"
     (renderSyntax defaultRenderOptions [rootWithGap False, document (plainNode "b")])
+  -- The end marker keeps the lines of a document from the next document.
+  rendersBack "empty line below a flow root above an end marker" "[a]\n\n# c\n...\n---\nx\n"
+  rendersAs "empty line at the end of a flow root in the block style" "key: value\n\n# c\n...\n---\nx\n" "{\n key: value\n\n# c\n}\n---\nx\n"
+  let boundary :: String -> T.Text -> [[(String, String, T.Text)]] -> [Document] -> Assertion
+      boundary preface expected comments docs = do
+        let rendered = renderSyntax defaultRenderOptions docs
+        assertEqual preface expected rendered
+        assertEqual (preface ++ ", read back") (Right comments) (map commentsOf <$> parseDocumentsText rendered)
+      withLines :: Comments -> Node -> Node
+      withLines c n = n {comments = c}
+  boundary
+    "empty line at the end of a block root before a document"
+    "k: v\n\n# c\n...\nb\n"
+    [[("", "after", "c")], []]
+    [document (withLines noComments {after = [EmptyLine, Comment "c"]} (mappingNode [(plainNode "k", plainNode "v")])), document (plainNode "b")]
+  boundary
+    "empty line at the end of the last value of a block root before a document"
+    "k: v\n\n# c\n...\nb\n"
+    [[("", "after", "c")], []]
+    [ document (withLines noComments {after = [Comment "c"]} (mappingNode [(plainNode "k", withLines noComments {after = [EmptyLine]} (plainNode "v"))]))
+    , document (plainNode "b")
+    ]
+  boundary
+    "empty line above the comment of an empty root before a document"
+    "a\n---\n\n# c\n...\nb\n"
+    [[], [("", "after", "c")], []]
+    [document (plainNode "a"), document (withLines noComments {before = [EmptyLine, Comment "c"]} (plainNode "")), document (plainNode "b")]
+  boundary
+    "keep literal root above a comment of the next document"
+    "|+\n  a\n\n...\n\n# c\n---\nb\n"
+    [[], [("document", "before", "c")]]
+    [document (scalarNode Literal "a\n\n"), commented (document (plainNode "b"))]
+  boundary
+    "keep literal at the end of a root above a comment of the next document"
+    "k: |+\n  a\n\n...\n\n# c\n---\nb\n"
+    [[], [("document", "before", "c")]]
+    [document (mappingNode [(plainNode "k", scalarNode Literal "a\n\n")]), commented (document (plainNode "b"))]
   let versioned :: YamlVersion -> T.Text
       versioned v = renderSyntax defaultRenderOptions [(document (plainNode "a")) {version = Just v}]
   assertEqual "supported version" "%YAML 1.3\n---\na\n" (versioned (YamlVersion 1 3))

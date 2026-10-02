@@ -17,6 +17,7 @@ module Yamlet.Internal.Emit
   , doubleQuotedLines
   , literalBlock
   , foldedBlock
+  , hasKeepIndicator
   , needsIndentIndicator
 
     -- * Other
@@ -338,6 +339,18 @@ foldedBlock indent starts t = do
       Just (c, _) -> c == ' ' || c == '\t'
       Nothing -> False
 
+-- | A block scalar with the text has the keep indicator, so the empty lines at
+-- its end are its content. Without content, the clip indicator drops the
+-- line breaks too.
+hasKeepIndicator :: T.Text -> Bool
+hasKeepIndicator t = trailing > 1 || T.null body && trailing > 0
+  where
+    body :: T.Text
+    body = T.dropWhileEnd (== '\n') t
+
+    trailing :: Int
+    trailing = T.length t - T.length body
+
 -- | The header of a block scalar, its content without the trailing line breaks
 -- and the number of these line breaks.
 blockParts :: Bool -> T.Text -> Maybe (B.Builder, T.Text, Int)
@@ -346,9 +359,8 @@ blockParts allowKeep t
   | keep && not allowKeep = Nothing
   | otherwise = Just (indicator <> chomping, body, trailing)
   where
-    -- Without content, the clip indicator drops the line breaks too.
     keep :: Bool
-    keep = trailing > 1 || T.null body && trailing > 0
+    keep = hasKeepIndicator t
 
     body :: T.Text
     body = T.dropWhileEnd (== '\n') t
