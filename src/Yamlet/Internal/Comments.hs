@@ -233,7 +233,7 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
     -- The comment on the line of a block scalar header.
     (header, items2) = case (n.content, items1) of
       (ScalarContent style _, i : is)
-        | style == Literal || style == Folded
+        | isBlockScalar style
         , not i.own
         , i.lineStart == lineStart ->
             (comment i, is)
@@ -352,7 +352,7 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
     linesBelow lim x is = case x.content of
       SequenceContent {} -> (x, is)
       MappingContent {} -> (x, is)
-      ScalarContent style _ | style == Literal || style == Folded -> (x, is)
+      ScalarContent style _ | isBlockScalar style -> (x, is)
       _ ->
         let ok i = i.at < lim && i.own && (isEmptyLine i || i.at - i.lineStart > column)
             (taken, rest) = span ok is
@@ -406,7 +406,7 @@ skipRanges e root = go root []
     go :: Node -> [(Int, Int)] -> [(Int, Int)]
     go n acc = case n.content of
       ScalarContent style _
-        | style == Literal || style == Folded ->
+        | isBlockScalar style ->
             let s = nextLine (offsetOf n.offset + e.base)
             in if s < en then (s, en) : acc else acc
         | offsetOf n.offset + e.base < en -> (offsetOf n.offset + e.base, en) : acc

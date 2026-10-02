@@ -134,10 +134,10 @@ commentedBlocks = fst . go
       _ -> (n, linesAfter)
       where
         linesAfter :: Bool
-        linesAfter = any (/= EmptyLine) n.comments.after
+        linesAfter = hasCommentLine n.comments.after
 
     inner :: (Node, Bool) -> Bool
-    inner (x, has) = any (/= EmptyLine) x.comments.before || isJust x.comments.inline || has
+    inner (x, has) = hasCommentLine x.comments.before || isJust x.comments.inline || has
 
     styleOf :: Bool -> CollectionStyle -> CollectionStyle
     styleOf has style = if has then Block else style
@@ -249,7 +249,7 @@ document opts afterEnd nextLines doc =
     r :: Node
     r = case doc.root.content of
       ScalarLinesContent style t starts
-        | style == Literal || style == Folded
+        | isBlockScalar style
         , needsIndentIndicator t || T.all (== '\n') t && (not (null doc.root.comments.after) || nextLines) ->
             doc.root {content = ScalarLinesContent DoubleQuoted t starts}
       _ -> doc.root
@@ -489,7 +489,7 @@ value opts indent v lineComment extra
       -- after its last item: a block collection or a block scalar as the last
       -- item takes in every line that is deeper than the key.
       SequenceContent _ xs
-        | null [() | Comment _ <- v.comments.after] || not (endsWithBlock xs) ->
+        | not (hasCommentLine v.comments.after) || not (endsWithBlock xs) ->
             header <> lines_ indent below <> block opts indent (indent + indentStep) True False rest v
         | otherwise -> header <> lines_ (indent + indentStep) below <> block opts (indent + indentStep) (indent + indentStep) True False rest v
       _ -> header <> lines_ (indent + indentStep) below <> block opts (indent + indentStep) (indent + indentStep) True False rest v
@@ -609,9 +609,6 @@ inline opts pos indent n lineComment = case n.content of
       [] -> mempty
       b : bs -> b <> mconcat (map (", " <>) bs)
 
-isBlockScalar :: ScalarStyle -> Bool
-isBlockScalar s = s == Literal || s == Folded
-
 -- | A scalar in its style, or in a style that can hold its text, on the lines
 -- that start at the positions. The lines after the first one are at the
 -- given indentation.
@@ -656,10 +653,11 @@ hasEndLines :: Node -> Bool
 hasEndLines n = case n.content of
   SequenceContent _ (_ : _) -> False
   MappingContent _ (_ : _) -> False
-  _ -> hasComment
-  where
-    hasComment :: Bool
-    hasComment = not (null [() | Comment _ <- n.comments.after])
+  _ -> hasCommentLine n.comments.after
+
+-- | The lines have a comment, not only empty lines.
+hasCommentLine :: [Line] -> Bool
+hasCommentLine = any (/= EmptyLine)
 
 -- | The lines at the end of a scalar or an alias at the given indentation.
 -- They cannot be deeper, because a block scalar would take them in.

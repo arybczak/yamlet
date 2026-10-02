@@ -17,6 +17,7 @@ module Yamlet.Internal.Syntax
   , noProps
   , Tag (..)
   , ScalarStyle (..)
+  , isBlockScalar
   , CollectionStyle (..)
 
     -- * Comments
@@ -154,6 +155,10 @@ data ScalarStyle
 
 instance NFData ScalarStyle where
   rnf = rwhnf
+
+-- | The literal or the folded style.
+isBlockScalar :: ScalarStyle -> Bool
+isBlockScalar s = s == Literal || s == Folded
 
 -- | The style of a collection: with indentation, or with brackets and commas.
 data CollectionStyle
