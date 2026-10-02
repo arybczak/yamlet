@@ -354,22 +354,12 @@ digitsValue radix t0 = go (T.length t0) t0
 -- | The decimal digits times a power of 10, with the exponent that the text
 -- of the float has. A value beyond the limit of 'maxExponent' gives infinity
 -- or zero, which are not exact.
---
--- The coefficient has no trailing zeros. The comparison of two
--- t'Data.Scientific.Scientific' values removes them one digit at a time, which
--- takes quadratic time in their number.
 decimal :: T.Text -> Integer -> Either FloatValue FloatValue
-decimal ds0 e0
+decimal ds e
   | c == 0 = Right (Finite 0)
   | abs leading > maxExponent = Left (if leading > 0 then Infinity else Finite 0)
   | otherwise = Right $ Finite (Sci.scientific c (fromInteger e))
   where
-    ds :: T.Text
-    ds = T.dropWhileEnd (== '0') ds0
-
-    e :: Integer
-    e = e0 + toInteger (T.length ds0 - T.length ds)
-
     -- The exponent of the first digit that is not zero.
     leading :: Integer
     leading = e + toInteger (T.length (T.dropWhile (== '0') ds)) - 1

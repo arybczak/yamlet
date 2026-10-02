@@ -543,8 +543,8 @@ plainText = \case
     -- Decimal notation for the exponents from 'minDecimal' to 'maxDecimal',
     -- and exponential notation for other numbers. The text always has a dot,
     -- so the number reads back as a float, not as an integer.
-    -- Sci.formatScientific takes quadratic time in the number of digits, and
-    -- its exponent overflows close to the upper limit of Int.
+    -- The exponent of Sci.formatScientific overflows close to the upper limit
+    -- of Int.
     finite :: Sci.Scientific -> T.Text
     finite s = case T.uncons digits of
       Nothing -> "0.0"
