@@ -201,6 +201,14 @@ startOfLine = do
   p <- pos
   guardP $ isStartOfLine e p
 
+-- | The indicator of a block collection entry, which a character of a plain
+-- scalar cannot follow, as in "- a" but not "-a".
+blockIndicator :: Word8 -> P ()
+blockIndicator w = do
+  char w
+  next <- peek
+  guardP . not $ isNsChar next
+
 -- | s-indent(n)
 sIndent :: Int -> P ()
 sIndent n = do
@@ -1578,9 +1586,7 @@ lBlockSequence n props = do
 -- | c-l-block-seq-entry(n)
 cLBlockSeqEntry :: Int -> P Node
 cLBlockSeqEntry n = do
-  char MINUS
-  w <- peek
-  guardP . not $ isNsChar w
+  blockIndicator MINUS
   sLBlockIndented n BlockIn
 
 -- | s-l+block-indented(n,c)
@@ -1637,9 +1643,7 @@ nsLBlockMapEntry n = cLBlockMapExplicitEntry n <|> nsLBlockMapImplicitEntry n
 -- | c-l-block-map-explicit-entry(n)
 cLBlockMapExplicitEntry :: Int -> P (Node, Node)
 cLBlockMapExplicitEntry n = do
-  char QUESTION
-  w <- peek
-  guardP . not $ isNsChar w
+  blockIndicator QUESTION
   k <- sLBlockIndented n BlockOut
   e <- env
   v <- lBlockMapExplicitValue <|> (pure $! missingValue e k)
@@ -1653,9 +1657,7 @@ cLBlockMapExplicitEntry n = do
     lBlockMapExplicitValue :: P Node
     lBlockMapExplicitValue = do
       sIndent n
-      char COLON
-      w <- peek
-      guardP . not $ isNsChar w
+      blockIndicator COLON
       sLBlockIndented n BlockOut
 
 -- | ns-l-block-map-implicit-entry(n)
@@ -1671,9 +1673,7 @@ nsLBlockMapImplicitEntry n = do
 -- | c-l-block-map-implicit-value(n)
 cLBlockMapImplicitValue :: Int -> P Node
 cLBlockMapImplicitValue n = do
-  char COLON
-  w <- peek
-  guardP . not $ isNsChar w
+  blockIndicator COLON
   sLBlockNode n BlockOut <|> (eNode <* sLComments)
 
 -- | ns-l-compact-mapping(n), with the properties of the node.
