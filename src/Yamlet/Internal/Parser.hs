@@ -308,7 +308,6 @@ defaultHandles = M.fromList [("!", "!"), ("!!", coreTagPrefix)]
 lYamlStream :: [Int] -> P [Document]
 lYamlStream markers0 = do
   s <- pos
-  lDocumentPrefix
   documents markers0 True s
   where
     -- The last argument is the index where the comments of the next
@@ -323,7 +322,6 @@ lYamlStream markers0 = do
         | p >= e.end -> pure []
         | isMarker e p && byteAt e p == DOT -> do
             lDocumentSuffix
-            lDocumentPrefix
             documents markers True prefix
         | isMarker e p -> document markers Nothing defaultHandles prefix
         | afterEnd && byteAt e p == PERCENT -> do
