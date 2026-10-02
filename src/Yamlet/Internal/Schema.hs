@@ -90,8 +90,9 @@ isPlainString t = case resolvePlain t of
   _ -> False
 
 -- | The string reads back as the same string if it is a plain scalar in the
--- block style, as a value or as a key. In a flow collection the characters
--- @,[]{}@ need quotes too, so the check does not apply there.
+-- block style, as a value or as a key. A key without @?@ can also have at
+-- most 1024 characters, which the check does not count. In a flow collection
+-- the characters @,[]{}@ need quotes too, so the check does not apply there.
 --
 -- >>> map isPlainSafe ["a:b", "a: b", "- a", "a #b", "9.10"]
 -- [True,False,False,False,False]
