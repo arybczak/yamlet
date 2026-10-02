@@ -284,9 +284,13 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
     -- The lines after the last entry, indented deep enough, and the empty
     -- lines between them.
     blockAfter :: [Item] -> ([Line], [Item])
-    blockAfter is =
-      let ok i = i.at < limit && i.own && (isEmptyLine i || i.at - i.lineStart >= max column minColumn)
-          (taken, rest) = span ok is
+    blockAfter = takeLines (\i -> i.at < limit && i.own && (isEmptyLine i || i.at - i.lineStart >= max column minColumn))
+
+    -- The lines of the items from the start that pass the check, without the
+    -- empty lines at their end, which stay with the next items.
+    takeLines :: (Item -> Bool) -> [Item] -> ([Line], [Item])
+    takeLines ok is =
+      let (taken, rest) = span ok is
           (empties, taken') = span isEmptyLine (reverse taken)
       in (map (.line) (reverse taken'), reverse empties ++ rest)
 
@@ -305,7 +309,7 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
         go :: [Node] -> [Node] -> [Item] -> ([Node], [Item])
         go acc [] is = let !xs = reverse acc in (xs, is)
         go acc (x : rest) is =
-          let !(x', is') = attachNode e (nextStart rest) itemColumn (s, lineStart) x is
+          let !(x', is') = attachNode e (nextStart rest) (entryColumn style) (s, lineStart) x is
               !(x'', is'')
                 -- A list without indentation has no column of its own for the
                 -- lines after its last item, so they stay with the list.
@@ -318,9 +322,6 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
           y : _ -> offsetOf y.offset
           [] -> if style == Flow then en else limit
 
-        itemColumn :: Int
-        itemColumn = if style == Flow then 0 else column + 1
-
     mappingEntries :: CollectionStyle -> [(Node, Node)] -> [Item] -> ([(Node, Node)], [Item])
     mappingEntries style = go []
       where
@@ -328,8 +329,8 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
         go :: [(Node, Node)] -> [(Node, Node)] -> [Item] -> ([(Node, Node)], [Item])
         go acc [] is = let !kvs = reverse acc in (kvs, is)
         go acc ((k, v) : rest) is =
-          let !(k', is') = attachNode e (offsetOf v.offset) entryColumn (s, lineStart) k is
-              !(v', is'') = attachNode e (nextStart rest) entryColumn (s, lineStart) v is'
+          let !(k', is') = attachNode e (offsetOf v.offset) (entryColumn style) (s, lineStart) k is
+              !(v', is'') = attachNode e (nextStart rest) (entryColumn style) (s, lineStart) v is'
               !(v'', is''')
                 | style == Block = linesBelow (nextStart rest) v' is''
                 | otherwise = (v', is'')
@@ -340,8 +341,9 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
           (k, _) : _ -> offsetOf k.offset
           [] -> if style == Flow then en else limit
 
-        entryColumn :: Int
-        entryColumn = if style == Flow then 0 else column + 1
+    -- The column of 'attachNode' for an entry of a collection in the style.
+    entryColumn :: CollectionStyle -> Int
+    entryColumn style = if style == Flow then 0 else column + 1
 
     -- The lines below a scalar or an alias in a block collection, before the
     -- limit, that are indented deeper than its entry, and the empty lines
@@ -353,15 +355,11 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
       SequenceContent {} -> (x, is)
       MappingContent {} -> (x, is)
       ScalarContent style _ | isBlockScalar style -> (x, is)
-      _ ->
-        let ok i = i.at < lim && i.own && (isEmptyLine i || i.at - i.lineStart > column)
-            (taken, rest) = span ok is
-            (empties, taken') = span isEmptyLine (reverse taken)
-        in case taken' of
-             [] -> (x, is)
-             _ ->
-               let !x' = withComments (strictComments x.comments.before x.comments.inline (map (.line) (reverse taken'))) x
-               in (x', reverse empties ++ rest)
+      _ -> case takeLines (\i -> i.at < lim && i.own && (isEmptyLine i || i.at - i.lineStart > column)) is of
+        ([], _) -> (x, is)
+        (ls, rest) ->
+          let !x' = withComments (strictComments x.comments.before x.comments.inline ls) x
+          in (x', rest)
 
     between :: Int -> Int -> T.Text
     between i j = slice e (i + e.base) (j + e.base)
