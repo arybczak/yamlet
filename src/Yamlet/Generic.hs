@@ -947,9 +947,18 @@ instance
       -- The decoder fills a missing key from the default.
       nullDefault :: Bool
       nullDefault = case def of
-        Just (M1 (K1 d)) -> maybe False (isNullNode . toYaml) (defaultField d)
+        Just (M1 (K1 d)) -> isNullDefault d
         Nothing -> True
   {-# INLINE gToEntries #-}
+
+-- | The field of a default is null, and not 'requiredField'.
+isNullDefault :: ToYaml a => a -> Bool
+isNullDefault d = maybe False (isNullNode . toYaml) (defaultField d)
+-- Not inlined, the call has only constant arguments, so GHC computes it once
+-- for each field of a default. Inlined in the encoder, as in the @where@
+-- clause of its caller, it ran on each encode, and the encode of records with
+-- a default and 'omitNullFields' was slower and allocated more.
+{-# NOINLINE isNullDefault #-}
 
 instance ToYaml a => GToFields (S1 (MetaSel Nothing u s d) (Rec0 a)) where
   gToValue (M1 (K1 x)) = Just (toYaml x)
