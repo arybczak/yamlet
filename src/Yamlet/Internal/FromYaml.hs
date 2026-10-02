@@ -52,7 +52,7 @@ module Yamlet.Internal.FromYaml
   , findKey
   , missingKey
   , closeName
-  , alternatives
+  , unknownName
   , succeeds
   , nullNode
   ) where
@@ -386,13 +386,10 @@ withName names f = parseNode $ \n -> case (view n, n.content) of
 -- 1 | lage
 --   | ^
 oneOf :: [(T.Text, a)] -> S.Node -> Parser a
-oneOf choices n = withName names (\t -> maybe (unknown t) pure (lookup t choices)) n
+oneOf choices n = withName names (\t -> maybe (unknownName "value" names n t) pure (lookup t choices)) n
   where
     names :: [T.Text]
     names = map fst choices
-
-    unknown :: T.Text -> Parser a
-    unknown t = failAt n $ "unknown value " ++ show t ++ alternatives names t
 
 -- | The message for a node that is not a string, with the hint to quote a
 -- plain number, boolean or written null.
@@ -757,10 +754,12 @@ rejectUnknownKeys known o = go True o.entries
     unknown :: S.Node -> T.Text -> String -> Parser ()
     unknown k t hint = failAt k $ "unknown key " ++ show t ++ hint
 
--- | The end of the error for an unknown name: the known name that is close to
--- it, or else all known names.
-alternatives :: [T.Text] -> T.Text -> String
-alternatives known t = maybe (expectedOneOf known) didYouMean (closeName known t)
+-- | The error at the node for a name that is none of the known names, e.g.
+-- an unknown value, with the known name that is close to it, or else all
+-- known names.
+unknownName :: String -> [T.Text] -> S.Node -> T.Text -> Parser a
+unknownName what known n t =
+  failAt n $ "unknown " ++ what ++ " " ++ show t ++ maybe (expectedOneOf known) didYouMean (closeName known t)
 
 didYouMean :: T.Text -> String
 didYouMean s = ", did you mean " ++ show s ++ "?"

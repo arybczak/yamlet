@@ -701,6 +701,32 @@ isTagged opts = opts.tagSingleConstructors || gConstructorCount @f > 1
 constructorTag :: YamlOptions -> String -> T.Text
 constructorTag opts = T.pack . opts.constructorTagModifier
 
+-- | The tag of the constructor with the name.
+constructorTagOf :: forall name. KnownSymbol name => YamlOptions -> T.Text
+constructorTagOf opts = constructorTag opts (symbolVal (Proxy @name))
+
+-- | The default of the first constructor of a sum, if it is the default.
+leftDefault :: Maybe ((f :+: g) p) -> Maybe (f p)
+leftDefault def =
+  def >>= \case
+    L1 x -> Just x
+    R1 _ -> Nothing
+
+-- | The default of the second constructor of a sum, if it is the default.
+rightDefault :: Maybe ((f :+: g) p) -> Maybe (g p)
+rightDefault def =
+  def >>= \case
+    R1 x -> Just x
+    L1 _ -> Nothing
+
+-- | The first fields of the default of a product.
+firstDefault :: Maybe ((f :*: g) p) -> Maybe (f p)
+firstDefault = fmap (\(a :*: _) -> a)
+
+-- | The second fields of the default of a product.
+secondDefault :: Maybe ((f :*: g) p) -> Maybe (g p)
+secondDefault = fmap (\(_ :*: b) -> b)
+
 ----------------------------------------
 -- Fields
 
@@ -828,8 +854,8 @@ instance (GToConstructor f, GToConstructor g) => GToConstructor (f :+: g) where
   {-# INLINE gTag #-}
 
   gToConstructor opts flat def = \case
-    L1 x -> gToConstructor opts flat (def >>= \case L1 d -> Just d; R1 _ -> Nothing) x
-    R1 x -> gToConstructor opts flat (def >>= \case R1 d -> Just d; L1 _ -> Nothing) x
+    L1 x -> gToConstructor opts flat (leftDefault def) x
+    R1 x -> gToConstructor opts flat (rightDefault def) x
   {-# INLINE gToConstructor #-}
 
 instance
@@ -839,7 +865,7 @@ instance
   )
   => GToConstructor (C1 (MetaCons name fixity isRecord) f)
   where
-  gTag opts _ = constructorTag opts (symbolVal (Proxy @name))
+  gTag opts _ = constructorTagOf @name opts
   {-# INLINE gTag #-}
 
   gToConstructor opts tagging def c@(M1 x) = case tagging of
@@ -898,7 +924,7 @@ instance GToFields U1
 
 instance (GToFields f, GToFields g) => GToFields (f :*: g) where
   gToEntries opts def (a :*: b) =
-    gToEntries opts ((\(d :*: _) -> d) <$> def) a ++ gToEntries opts ((\(_ :*: d) -> d) <$> def) b
+    gToEntries opts (firstDefault def) a ++ gToEntries opts (secondDefault def) b
   {-# INLINE gToEntries #-}
 
 instance
@@ -1030,7 +1056,7 @@ gParseYaml opts enc def k n
       | otherwise = unknown n "constructor" t
 
     unknown :: S.Node -> String -> T.Text -> Parser a
-    unknown node what t = failAt node $ "unknown " ++ what ++ " " ++ show t ++ alternatives tags t
+    unknown node what = unknownName what tags node
 
     tags :: [T.Text]
     tags = map (constructorTag opts) (gConstructorNames @f)
@@ -1066,13 +1092,13 @@ instance (GFromConstructor f, GFromConstructor g) => GFromConstructor (f :+: g) 
   {-# INLINE gFromTag #-}
 
   gFromTagged opts flat def k t o =
-    gFromTagged opts flat (def >>= \case L1 x -> Just x; R1 _ -> Nothing) (k . L1) t o
-      `mplus` gFromTagged opts flat (def >>= \case R1 x -> Just x; L1 _ -> Nothing) (k . R1) t o
+    gFromTagged opts flat (leftDefault def) (k . L1) t o
+      `mplus` gFromTagged opts flat (rightDefault def) (k . R1) t o
   {-# INLINE gFromTagged #-}
 
   gFromSingle opts def k t entry =
-    gFromSingle opts (def >>= \case L1 x -> Just x; R1 _ -> Nothing) (k . L1) t entry
-      `mplus` gFromSingle opts (def >>= \case R1 x -> Just x; L1 _ -> Nothing) (k . R1) t entry
+    gFromSingle opts (leftDefault def) (k . L1) t entry
+      `mplus` gFromSingle opts (rightDefault def) (k . R1) t entry
   {-# INLINE gFromSingle #-}
 
   -- A type with several constructors always has a tag.
@@ -1090,16 +1116,16 @@ instance
     | otherwise = Nothing
     where
       tag :: T.Text
-      tag = constructorTag opts (symbolVal (Proxy @name))
+      tag = constructorTagOf @name opts
   {-# INLINE gFromTag #-}
 
   gFromTagged opts flat def k t o
-    | t == constructorTag opts (symbolVal (Proxy @name)) = Just (k . M1 <$> fromObject opts flat [opts.tagKey] (unM1 <$> def) o)
+    | t == constructorTagOf @name opts = Just (k . M1 <$> fromObject opts flat [opts.tagKey] (unM1 <$> def) o)
     | otherwise = Nothing
   {-# INLINE gFromTagged #-}
 
   gFromSingle opts def k t entry@(kn, v)
-    | t /= constructorTag opts (symbolVal (Proxy @name)) = Nothing
+    | t /= constructorTagOf @name opts = Nothing
     | gNamed @f = Just (withMapping (fmap (k . M1) . fromObject opts False [] (unM1 <$> def)) v)
     | gArity @f == 0 = Just (failAt kn $ "expected the string " ++ show t ++ ", because the constructor has no fields")
     | otherwise = Just (k . M1 <$> gFromEntry entry)
@@ -1205,8 +1231,8 @@ instance GFromFields U1 where
 instance (GFromFields f, GFromFields g) => GFromFields (f :*: g) where
   gFromObject opts def o =
     (:*:)
-      <$> gFromObject opts ((\(a :*: _) -> a) <$> def) o
-      <*> gFromObject opts ((\(_ :*: b) -> b) <$> def) o
+      <$> gFromObject opts (firstDefault def) o
+      <*> gFromObject opts (secondDefault def) o
   {-# INLINE gFromObject #-}
 
 instance
