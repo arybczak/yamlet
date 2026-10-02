@@ -450,7 +450,8 @@ entryComments opts k v
   | isBlock opts v = case (k.comments.inline, v.comments.inline) of
       (Just kc, Just vc) -> (k.comments.before, Just kc, keyAfter ++ [Comment vc])
       (kc, vc) -> (k.comments.before, kc <|> vc, keyAfter)
-  | isBlockScalarNode v || not (isScalarLike v) = case (k.comments.inline, v.comments.inline) of
+  -- For a scalar value, only the place of the lines after the key differs.
+  | not (isScalarLike v) || not (null keyAfter) && isBlockScalarNode v = case (k.comments.inline, v.comments.inline) of
       (Just kc, Just vc) -> (k.comments.before ++ keyAfter ++ v.comments.before ++ [Comment kc], Just vc, [])
       (kc, vc) -> (k.comments.before ++ keyAfter ++ v.comments.before, vc <|> kc, [])
   | otherwise = case (k.comments.inline, v.comments.inline) of
@@ -462,10 +463,12 @@ entryComments opts k v
       | isScalarLike k = k.comments.after
       | otherwise = []
 
--- | A scalar in the literal or the folded style.
+-- | A scalar that the renderer writes in the literal or the folded style. A
+-- text that a block scalar cannot hold goes in double quotes.
 isBlockScalarNode :: Node -> Bool
 isBlockScalarNode n = case n.content of
-  ScalarContent style _ -> isBlockScalar style
+  ScalarContent Literal t -> isJust (literalBlock True 0 t)
+  ScalarContent Folded t -> isJust (foldedBlock 0 [] t)
   _ -> False
 
 -- | A scalar or an alias.
@@ -514,9 +517,7 @@ value opts indent v lineComment extra
 
     endsWithBlock :: [Node] -> Bool
     endsWithBlock xs = case reverse xs of
-      Node {content = ScalarContent Literal t} : _ -> isJust (literalBlock True 0 t)
-      Node {content = ScalarContent Folded t} : _ -> isJust (foldedBlock 0 [] t)
-      x : _ -> isBlock opts x
+      x : _ -> isBlockScalarNode x || isBlock opts x
       [] -> False
 
 -- | A node after the indicator of a sequence item or an explicit entry, with
@@ -535,8 +536,9 @@ after opts indent column below rest n
             <> block opts (indent + indentStep) (indent + indentStep) True True rest n
         else " " <> block opts (indent + indentStep) (indent + indentStep) False True [] n
   | isEmpty n = comment n.comments.inline <> "\n" <> linesBelow column n
-  | isBlockScalarNode n = " " <> inline opts InValue (indent + indentStep) n n.comments.inline <> "\n" <> linesBelow indent n
-  | otherwise = " " <> inline opts InValue (indent + indentStep) n n.comments.inline <> "\n" <> linesBelow column n
+  | otherwise =
+      let column' = if isBlockScalarNode n then indent else column
+      in " " <> inline opts InValue (indent + indentStep) n n.comments.inline <> "\n" <> linesBelow column' n
 
 -- | Where an inline node is. A scalar in a key is on one line.
 data Position = InValue | InKey | InFlow | InFlowKey

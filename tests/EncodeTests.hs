@@ -463,6 +463,11 @@ test_keptNodes = do
     "lines after a commented scalar value read back"
     (Right (M.map (.comments) linesAfter))
     (M.map (.comments) <$> decodeText @(M.Map T.Text (Commented Int)) (encodeText linesAfter))
+  let quotedLinesAfter = "a: \"x\\r\\ny\"\n  # c\nb: d\n"
+  assertEqual
+    "lines after a text of several lines in double quotes"
+    (Right quotedLinesAfter)
+    (encodeText <$> decodeText @(M.Map T.Text (Commented T.Text)) quotedLinesAfter)
   let linesAbove = [Commented [1, 2 :: Int] noComments {before = [Comment "above"], inline = Just "inline"}]
   assertEqual "lines above a commented list item" "- # inline\n  # above\n\n  - 1\n  - 2\n" (encodeText linesAbove)
   assertEqual

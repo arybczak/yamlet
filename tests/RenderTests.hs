@@ -171,6 +171,22 @@ test_fallbacks = do
   assertEqual "literal with a line below in a list" "- |-\n# c\n" (render (sequenceNode [withLineBelow (scalarNode Literal "")]))
   assertEqual "literal with an indicator in a list" "- |2-\n   a\n  b\n" (render (sequenceNode [scalarNode Literal " a\nb"]))
   assertEqual "folded with a tab in a list" "- >2-\n  \ta\n  b\n" (render (sequenceNode [scalarNode Folded "\ta\nb"]))
+  -- A block scalar cannot hold the character, so the lines below it stay
+  -- deeper than the key, as below any quoted scalar.
+  let quotedBlocks =
+        mappingNode
+          [ (plainNode "a", withLineBelow (scalarNode Literal "x\DEL"))
+          , (plainNode "b", sequenceNode [withLineBelow (scalarNode Folded "x\DEL"), plainNode "y"])
+          , (sequenceNode [plainNode "k"], withLineBelow (scalarNode Literal "x\DEL"))
+          ]
+  assertEqual
+    "lines below a block scalar in double quotes"
+    "a: \"x\\x7F\"\n  # c\nb:\n- \"x\\x7F\"\n  # c\n- y\n? - k\n: \"x\\x7F\"\n  # c\n"
+    (render quotedBlocks)
+  assertEqual
+    "lines below a block scalar in double quotes read back"
+    (Right [[("/a", "after", "c"), ("/b/0", "after", "c"), ("/?", "after", "c")]])
+    (map commentsOf <$> parseDocumentsText (render quotedBlocks))
   assertEqual
     "keep indicator"
     "- |+\n  a\n\n- b\n"
