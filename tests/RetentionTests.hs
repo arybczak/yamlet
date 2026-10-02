@@ -8,11 +8,13 @@
 module RetentionTests (retentionTests) where
 
 import Control.Exception
+import Control.Monad
 import Data.Functor.Const
 import Data.Functor.Identity
 import Data.IORef
 import Data.IntMap.Strict qualified as IM
 import Data.IntSet qualified as IS
+import Data.List
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
 import Data.Maybe
@@ -37,6 +39,7 @@ import System.Mem
 import Test.Tasty
 import Test.Tasty.HUnit
 
+import Thunks
 import Yamlet
 
 -- | A decoded value does not keep the input alive, for every instance of the
@@ -125,8 +128,9 @@ retains name doc = testCase name $ do
       ref <- newIORef v
       performMajorGC
       kept <- isJust <$> deRefWeak weak
+      when kept $ assertFailure =<< keptAlive "the value" weak =<< readIORef ref
       _ <- evaluate =<< readIORef ref
-      assertBool "the value keeps the input alive" (not kept)
+      pure ()
 
 -- | The array of the input is garbage while the errors of a failed decode
 -- are alive.
@@ -140,9 +144,27 @@ errorRetains name doc = testCase name $ do
       ref <- newIORef errs
       performMajorGC
       kept <- isJust <$> deRefWeak weak
+      when kept $ assertFailure =<< keptAlive "the errors" weak =<< readIORef ref
       _ <- evaluate =<< readIORef ref
-      assertBool "the errors keep the input alive" (not kept)
+      pure ()
     Right _ -> assertFailure "the decode succeeded"
+
+-- | The message for a value that keeps the input alive, with what tells a
+-- leak from the state of the runtime: whether a second collection frees the
+-- input while the value is still alive, and the thunks in the value. The
+-- failure is rare, so the message has to tell all there is.
+keptAlive :: String -> Weak () -> a -> IO String
+keptAlive what weak x = do
+  ts <- thunks x
+  performMajorGC
+  still <- isJust <$> deRefWeak weak
+  _ <- evaluate x
+  pure $
+    what
+      ++ " keeps the input alive; after a second collection, the input is "
+      ++ (if still then "still alive" else "gone")
+      ++ "; thunks in the value: "
+      ++ (if null ts then "none" else intercalate ", " ts)
 
 -- | A weak pointer to the array of the text. A slice of the text shares the
 -- array, so the weak pointer is empty only if no text of the array is alive.
