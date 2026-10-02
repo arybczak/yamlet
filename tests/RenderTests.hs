@@ -119,9 +119,8 @@ test_workflow = do
         , "    ghc: '9.10'"
         ]
 
--- | Parsing and rendering gives back the input.
 test_styles :: Assertion
-test_styles = assertEqual "output" (Right input) (renderSyntax defaultRenderOptions <$> parseDocumentsText input)
+test_styles = rendersBack "output" input
   where
     input :: T.Text
     input =
@@ -150,10 +149,22 @@ test_styles = assertEqual "output" (Right input) (renderSyntax defaultRenderOpti
         , "[complex, key]: value"
         ]
 
+-- | The text of a document with the node as its root.
+render :: Node -> T.Text
+render n = renderSyntax defaultRenderOptions [document n]
+
+-- | Parsing and rendering gives back the input.
+rendersBack :: String -> T.Text -> Assertion
+rendersBack preface input = assertEqual preface (Right input) (renderSyntax defaultRenderOptions <$> parseDocumentsText input)
+
+-- | Parsing and rendering gives the expected text, which gives itself back.
+rendersAs :: String -> T.Text -> T.Text -> Assertion
+rendersAs preface expected input = do
+  assertEqual preface (Right expected) (renderSyntax defaultRenderOptions <$> parseDocumentsText input)
+  rendersBack (preface ++ ", rendered again") expected
+
 test_fallbacks :: Assertion
 test_fallbacks = do
-  let render :: Node -> T.Text
-      render n = renderSyntax defaultRenderOptions [document n]
   assertEqual "plain with a colon" "'a: b'\n" (render (plainNode "a: b"))
   assertEqual "plain number stays plain" "12\n" (render (plainNode "12"))
   assertEqual "single-quoted line break" "\"a\\nb\"\n" (render (scalarNode SingleQuoted "a\nb"))
@@ -293,7 +304,7 @@ test_manyAnchors = do
   assertEqual
     "first and last names"
     ["- &______ x", "- &_______" <> T.pack (show (length names)) <> " x"]
-    ( case T.lines (renderSyntax defaultRenderOptions [document tree]) of
+    ( case T.lines (render tree) of
         first : rest -> first : take 1 (reverse rest)
         [] -> []
     )
@@ -343,35 +354,29 @@ test_forceBlock = do
 -- where the text has a space in place of a line break.
 test_scalarLines :: Assertion
 test_scalarLines = do
-  let check :: String -> T.Text -> Assertion
-      check preface input = assertEqual preface (Right input) (renderSyntax defaultRenderOptions <$> parseDocumentsText input)
-      changes :: String -> T.Text -> T.Text -> Assertion
-      changes preface expected input = do
-        assertEqual preface (Right expected) (renderSyntax defaultRenderOptions <$> parseDocumentsText input)
-        check (preface ++ ", rendered again") expected
-  check "folded" "options: >-\n  --health-cmd pg_isready\n  --health-interval 5s\n  --health-retries 10\n"
-  check "folded with paragraphs" "a: >\n  one\n  two\n\n  three\n  four\n"
-  check "folded with more indented lines" "a: >\n  one\n    two\n  three\n  four\n"
-  check "folded with a space at the end of a line" "a: >-\n  one \n  two\n"
-  check "empty block scalars" "a: |-\nb: >-\nc:\n- |-\n"
-  changes "empty block scalars with clip" "a: |-\nb: >-\n" "a: |\nb: >\n"
-  check "block scalars of only line breaks" "a: |+\n\nb:\n  c: |+\n\n\n  d: 1\n"
-  check "block scalar of only line breaks at the top level" "|+\n\n"
-  check "plain" "a: one\n  two\n  three\n"
-  check "plain with an empty line" "a: one\n\n  two\n"
-  check "plain in a sequence" "- one\n  two\n"
-  check "plain root" "one\n  two\n"
-  check "plain in a flow sequence" "a: [one\n  two, three]\n"
-  check "single-quoted" "a: 'one\n  two'\n"
-  check "double-quoted" "a: \"one\n  two\"\n"
-  check "double-quoted with an escaped line break" "a: \"one\\\n  two\"\n"
-  check "double-quoted with an empty line" "a: \"one\n\n  two\"\n"
-  check "comment after the last line" "a: one\n  two # c\n"
-  changes "key" "one two: a\n" "? one\n  two\n: a\n"
-  changes "indentation" "a: one\n  two\n" "a:   one\n      two\n"
+  rendersBack "folded" "options: >-\n  --health-cmd pg_isready\n  --health-interval 5s\n  --health-retries 10\n"
+  rendersBack "folded with paragraphs" "a: >\n  one\n  two\n\n  three\n  four\n"
+  rendersBack "folded with more indented lines" "a: >\n  one\n    two\n  three\n  four\n"
+  rendersBack "folded with a space at the end of a line" "a: >-\n  one \n  two\n"
+  rendersBack "empty block scalars" "a: |-\nb: >-\nc:\n- |-\n"
+  rendersAs "empty block scalars with clip" "a: |-\nb: >-\n" "a: |\nb: >\n"
+  rendersBack "block scalars of only line breaks" "a: |+\n\nb:\n  c: |+\n\n\n  d: 1\n"
+  rendersBack "block scalar of only line breaks at the top level" "|+\n\n"
+  rendersBack "plain" "a: one\n  two\n  three\n"
+  rendersBack "plain with an empty line" "a: one\n\n  two\n"
+  rendersBack "plain in a sequence" "- one\n  two\n"
+  rendersBack "plain root" "one\n  two\n"
+  rendersBack "plain in a flow sequence" "a: [one\n  two, three]\n"
+  rendersBack "single-quoted" "a: 'one\n  two'\n"
+  rendersBack "double-quoted" "a: \"one\n  two\"\n"
+  rendersBack "double-quoted with an escaped line break" "a: \"one\\\n  two\"\n"
+  rendersBack "double-quoted with an empty line" "a: \"one\n\n  two\"\n"
+  rendersBack "comment after the last line" "a: one\n  two # c\n"
+  rendersAs "key" "one two: a\n" "? one\n  two\n: a\n"
+  rendersAs "indentation" "a: one\n  two\n" "a:   one\n      two\n"
   let folded :: String -> [T.Text] -> Assertion
       folded preface ls = do
-        let out = renderSyntax defaultRenderOptions [document (mappingNode [(plainNode "a", foldedNode ls)])]
+        let out = render (mappingNode [(plainNode "a", foldedNode ls)])
         assertEqual preface ("a: >-\n" <> T.concat [if T.null l then "\n" else "  " <> l <> "\n" | l <- ls]) out
         assertEqual
           (preface ++ ", read back")
@@ -390,9 +395,7 @@ test_scalarLines = do
 
 test_documents :: Assertion
 test_documents = do
-  let check :: String -> T.Text -> Assertion
-      check preface input = assertEqual preface (Right input) (renderSyntax defaultRenderOptions <$> parseDocumentsText input)
-  check "markers" $
+  rendersBack "markers" $
     T.unlines
       [ "first"
       , "---"
@@ -403,23 +406,19 @@ test_documents = do
       , "a: b"
       , "---"
       ]
-  check "comment after the end marker" "a: b\n...\n# c\nd: e\n"
-  check "comment before the directives" "a\n...\n# b\n%YAML 1.2\n---\nc\n"
-  check "comments at the end of a root collection and a document" "a: 1\n# b\n\n# c\n...\n"
-  check "comments around an end marker between documents" "a\n# b\n...\n# c\n---\nd\n"
-  let emptyLineBefore :: String -> T.Text -> T.Text -> Assertion
-      emptyLineBefore preface expected input = do
-        assertEqual preface (Right expected) (renderSyntax defaultRenderOptions <$> parseDocumentsText input)
-        check (preface ++ ", rendered again") expected
-  emptyLineBefore
+  rendersBack "comment after the end marker" "a: b\n...\n# c\nd: e\n"
+  rendersBack "comment before the directives" "a\n...\n# b\n%YAML 1.2\n---\nc\n"
+  rendersBack "comments at the end of a root collection and a document" "a: 1\n# b\n\n# c\n...\n"
+  rendersBack "comments around an end marker between documents" "a\n# b\n...\n# c\n---\nd\n"
+  rendersAs
     "empty line before the bracket of a flow root"
     "key: value\n# zq\n...\n"
     "{\n key: value\n # zq\n\n}\n...\n"
-  emptyLineBefore
+  rendersAs
     "empty line before the bracket of a flow value"
     "a:\n  key: value\n  # zq\n\nb: 1\n"
     "a: {\n key: value\n # zq\n\n }\nb: 1\n"
-  emptyLineBefore
+  rendersAs
     "empty line before the bracket and a comment after it"
     "a: {key: value} # c\n\nb: 1\n"
     "a: {\n key: value\n\n } # c\nb: 1\n"
@@ -751,13 +750,11 @@ test_hashes = do
 -- indentation, a block collection as the last item would take them in.
 test_linesAfterList :: Assertion
 test_linesAfterList = do
-  let check :: String -> T.Text -> Assertion
-      check preface input = assertEqual preface (Right input) (renderSyntax defaultRenderOptions <$> parseDocumentsText input)
-  check "mapping as the last item" "a:\n  - b: 1\n  # c\n"
-  check "list as the last item" "a:\n  - - b\n  # c\n"
-  check "block scalar as the last item" "a:\n  - |\n    b\n  # c\n"
-  check "scalar as the last item" "a:\n- b\n  # c\n"
-  check "no lines after the list" "a:\n- b: 1\n"
+  rendersBack "mapping as the last item" "a:\n  - b: 1\n  # c\n"
+  rendersBack "list as the last item" "a:\n  - - b\n  # c\n"
+  rendersBack "block scalar as the last item" "a:\n  - |\n    b\n  # c\n"
+  rendersBack "scalar as the last item" "a:\n- b\n  # c\n"
+  rendersBack "no lines after the list" "a:\n- b: 1\n"
 
 -- | The lines above and below the indicator of a block collection with
 -- properties stay with their nodes. Above the indicator of a first entry,
@@ -779,9 +776,7 @@ test_linesBelowIndicator = do
   check "explicit key" "- ? &x\n    # a\n\n    b: 1\n  : c\n"
   check "nested first items" "- &x\n  - &y\n    # a\n\n    b: 1\n"
   check "second item" "k:\n- a\n- !!map\n  # b\n  c: 1\n"
-  let render :: Node -> T.Text
-      render n = renderSyntax defaultRenderOptions [document n]
-      withAbove :: Node -> Node
+  let withAbove :: Node -> Node
       withAbove n = n {comments = noComments {before = [Comment "a"]}}
       list :: Node
       list = sequenceNode [plainNode "1"]
@@ -798,9 +793,7 @@ test_linesBelowIndicator = do
 -- | A comment without a place at its node moves to one that has it.
 test_movedComments :: Assertion
 test_movedComments = do
-  let render :: Node -> T.Text
-      render n = renderSyntax defaultRenderOptions [document n]
-      withInline :: T.Text -> Node -> Node
+  let withInline :: T.Text -> Node -> Node
       withInline t n = n {comments = n.comments {inline = Just t}}
       withBefore :: T.Text -> Node -> Node
       withBefore t n = n {comments = n.comments {before = [Comment t]}}
