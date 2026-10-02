@@ -17,6 +17,7 @@ genericTests =
   testGroup
     "Generic"
     [ testCase "record" test_record
+    , testCase "types with a parameter" test_parameters
     , testCase "collected errors" test_collectedErrors
     , testCase "enumeration" test_enumeration
     , testCase "sum" test_sum
@@ -42,6 +43,25 @@ data Server = Server {host :: T.Text, port :: Int, tags :: Maybe [T.Text]}
   deriving stock (Eq, Show, Generic)
   deriving anyclass (GenericYamlOptions)
   deriving (FromYaml, ToYaml) via GenericYaml Server
+
+-- | A type with a parameter. Its instances get the instances of the fields
+-- as arguments, so GHC cannot inline them where it derives the instances.
+data Pair a = Pair {left :: a, right :: a}
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml (Pair a)
+
+data Sparse a = Sparse {name :: T.Text, extra :: a}
+  deriving stock (Eq, Show, Generic)
+  deriving (FromYaml, ToYaml) via GenericYaml (Sparse a)
+
+instance GenericYamlOptions (Sparse a) where
+  yamlOptions = defaultYamlOptions {omitNullFields = True}
+
+data Slot a = Filled a | Vacant
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml (Slot a)
 
 data Turn = TurnLeft | TurnRight
   deriving stock (Eq, Show, Generic)
@@ -441,6 +461,27 @@ test_record = do
   assertEqual "quoted key" (Right (Switch (Just 1))) (decodeText "'true': 1\n")
   assertEqual "encoded" "host: a\nport: 1\ntags: null\n" (encodeText (Server "a" 1 Nothing))
   roundTrip "round trip" (Server "a" 1 (Just ["x", "y"]))
+
+test_parameters :: Assertion
+test_parameters = do
+  assertEqual "encoded" "left: 1\nright: 2\n" (encodeText (Pair @Int 1 2))
+  roundTrip "round trip" (Pair @Int 1 2)
+  roundTrip "round trip of lists" (Pair @[Int] [1, 2] [])
+  roundTrip "round trip of nested types" (Pair (Pair @T.Text "a" "b") (Pair "c" "d"))
+  assertEqual
+    "missing key of an optional field"
+    (Right (Pair Nothing (Just 1)))
+    (decodeText @(Pair (Maybe Int)) "right: 1\n")
+  assertEqual "missing key of a required field" (Just (1, 1, "missing key \"left\"")) (errorOf (decodeText @(Pair Int) "right: 1\n"))
+  assertEqual
+    "path of an error"
+    (Left ["right"])
+    (first (map (renderPath . (.path)) . NE.toList) (decodeText @(Pair Int) "left: 1\nright: x\n"))
+  assertEqual "null field left out" "name: a\n" (encodeText (Sparse @(Maybe Int) "a" Nothing))
+  assertEqual "field that is not null" "name: a\nextra: 1\n" (encodeText (Sparse @(Maybe Int) "a" (Just 1)))
+  roundTrip "round trip with a null field left out" (Sparse @(Maybe Int) "a" Nothing)
+  assertEqual "encoded sum" "- tag: Filled\n  contents: 1\n- tag: Vacant\n" (encodeText [Filled @Int 1, Vacant])
+  roundTrip "round trip of a sum" [Filled @Int 1, Vacant]
 
 -- | A derived decoder reports the errors of all its fields.
 test_collectedErrors :: Assertion
