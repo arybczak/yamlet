@@ -323,12 +323,12 @@ locate input off
   | off == noOffset = Location {offset = off, line = 0, column = 0}
   | otherwise = fst (locateFrom input (startScan input) off)
 
--- | A scan of the input: the index, the line, the index where the columns of
--- the line start, and an index on the line with its column.
-data Scan = Scan !Int !Int !Int !Int !Int
+-- | A scan of the input: the index, the line, and an index on the line with
+-- its column. The columns of a line start after its byte order marks.
+data Scan = Scan !Int !Int !Int !Int
 
 startScan :: T.Text -> Scan
-startScan (T.Text arr base len) = Scan base 1 start start 1
+startScan (T.Text arr base len) = Scan base 1 start 1
   where
     start :: Int
     start = skipBomsIn arr (base + len) base
@@ -343,22 +343,22 @@ locateFrom (T.Text arr base len) s0 (Offset off0) = go s0
     off = base + max 0 (min len off0)
 
     go :: Scan -> (Location, Scan)
-    go s@(Scan i ln start ci col)
+    go s@(Scan i ln ci col)
       | i >= off =
           if off <= ci
             -- An offset before the start of the columns is in a byte order
             -- mark.
             then (location ln (if off == ci then col else 1), s)
-            else let col' = col + countChars ci off in (location ln col', Scan i ln start off col')
+            else let col' = col + countChars ci off in (location ln col', Scan i ln off col')
       | otherwise = case A.unsafeIndex arr i of
           LF -> newLine (i + 1)
           CR
-            | i + 1 < end && A.unsafeIndex arr (i + 1) == LF -> go (Scan (i + 1) ln start ci col)
+            | i + 1 < end && A.unsafeIndex arr (i + 1) == LF -> go (Scan (i + 1) ln ci col)
             | otherwise -> newLine (i + 1)
-          _ -> go (Scan (i + 1) ln start ci col)
+          _ -> go (Scan (i + 1) ln ci col)
       where
         newLine :: Int -> (Location, Scan)
-        newLine j = let start' = skipBomsIn arr end j in go (Scan j (ln + 1) start' start' 1)
+        newLine j = let start' = skipBomsIn arr end j in go (Scan j (ln + 1) start' 1)
 
     location :: Int -> Int -> Location
     location ln col = Location {offset = Offset (off - base), line = ln, column = col}
