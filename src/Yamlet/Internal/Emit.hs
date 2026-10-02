@@ -166,12 +166,12 @@ doubleQuotedText :: T.Text -> B.Builder
 -- fuses, and the encode benchmark of the config input allocated more. A
 -- fold of builders over the runs allocated more in the render benchmark of
 -- the JSON input.
-doubleQuotedText t0 = B.Builder (\b -> go b t0)
+doubleQuotedText = B.Builder . go
   where
-    go :: B.Buffer %1 -> T.Text -> B.Buffer
-    go b t = case T.break needsEscape t of
+    go :: T.Text -> B.Buffer %1 -> B.Buffer
+    go t b = case T.break needsEscape t of
       (run, rest) -> case T.uncons rest of
-        Just (c, rest') -> go (escape (b B.|> run) c) rest'
+        Just (c, rest') -> go rest' (escape (b B.|> run) c)
         Nothing -> b B.|> run
 
     needsEscape :: Char -> Bool
