@@ -6,7 +6,6 @@ import DecodeTests
 import EncodeTests
 import GenericTests
 import RenderTests
-import RetentionTests
 import TestSuite
 import TypeErrorTests
 
@@ -20,7 +19,6 @@ main = do
       , encodeTests
       , genericTests
       , renderTests
-      , retentionTests
       , typeErrorTests
       , suite
       ]

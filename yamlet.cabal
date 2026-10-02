@@ -148,10 +148,29 @@ test-suite test
                     GenericTests
                     Helpers
                     RenderTests
-                    RetentionTests
                     TestSuite
                     Thunks
                     TypeErrorTests
+
+test-suite retention
+    import:         language
+
+    ghc-options:    -threaded -rtsopts
+
+    build-depends:    base
+                    , containers
+                    , ghc-heap
+                    , yamlet
+                    , text
+                    , time
+
+    -- The checks share the thunk walk of the tests.
+    hs-source-dirs: retention tests
+
+    type:           exitcode-stdio-1.0
+    main-is:        Main.hs
+
+    other-modules:  Thunks
 
 test-suite inspection
     import:         language
