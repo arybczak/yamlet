@@ -100,8 +100,9 @@ library limits both:
 
 The library also applies these rules:
 
-- Integers and floats can have any number of digits. The time to read and
-  write them is close to linear in the number of digits.
+- Integers can have any number of digits, and floats any number of digits
+  within the limit above. The time to read and write them is close to
+  linear in the number of digits.
 - The check for duplicate keys takes close to linear time, also for keys
   that are large collections or aliases.
 - Deeply nested collections, e.g. 100000 levels of flow sequences, take

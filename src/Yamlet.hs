@@ -303,8 +303,8 @@ encodeAllText :: ToYaml a => [a] -> T.Text
 encodeAllText = renderDocuments . map toYaml
 
 -- | Decode the file as 'decode' does. The file is read as bytes, so the
--- encoding does not depend on the locale. It is UTF-8, unless a byte order
--- mark shows UTF-16 or UTF-32.
+-- encoding does not depend on the locale. It is UTF-8, UTF-16 or UTF-32,
+-- detected as the YAML specification describes.
 --
 -- For the errors, give the path to 'prettyError':
 --
