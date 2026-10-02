@@ -926,16 +926,6 @@ instance FromYaml Value where
         Tagged tag v -> Tagged (T.copy tag) (copy v)
         v -> v
 
-      -- The results are in reverse until the end, so that the stack does not
-      -- grow with the length of the list.
-      strictMap :: forall a b. (a -> b) -> [a] -> [b]
-      strictMap f = go []
-        where
-          go :: [b] -> [a] -> [b]
-          go acc = \case
-            [] -> reverse acc
-            x : xs -> let !y = f x in go (y : acc) xs
-
 -- | An empty list, as a tuple without elements.
 instance FromYaml () where
   parseYaml = parseNode $ \n -> case view n of

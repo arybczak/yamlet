@@ -21,6 +21,7 @@ module Yamlet.Internal.Utils
   , uEscapeDigits
   , bigUEscapeDigits
   , percentDigits
+  , strictMap
   ) where
 
 import Data.Char
@@ -133,3 +134,14 @@ bigUEscapeDigits = 8
 -- | The number of hex digits of a @%XX@ escape in a tag.
 percentDigits :: Int
 percentDigits = 2
+
+-- | 'map' with the spine and the elements of the result evaluated. The
+-- results are in reverse until the end, so that the stack does not grow with
+-- the length of the list.
+strictMap :: forall a b. (a -> b) -> [a] -> [b]
+strictMap f = go []
+  where
+    go :: [b] -> [a] -> [b]
+    go acc = \case
+      [] -> reverse acc
+      x : xs -> let !y = f x in go (y : acc) xs

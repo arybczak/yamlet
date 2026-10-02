@@ -42,6 +42,8 @@ import Control.DeepSeq
 import Data.Text qualified as T
 import GHC.Generics
 
+import Yamlet.Internal.Utils
+
 -- | A document of a YAML stream.
 data Document = Document
   { version :: !(Maybe YamlVersion)
@@ -407,8 +409,8 @@ copyNode n =
         c -> copyComments c
     , content = case n.content of
         ScalarLinesContent style t ls -> ScalarLinesContent style (T.copy t) ls
-        SequenceContent style xs -> SequenceContent style $! evaluated (map copyNode xs)
-        MappingContent style kvs -> MappingContent style $! evaluated (map copyEntry kvs)
+        SequenceContent style xs -> SequenceContent style $! strictMap copyNode xs
+        MappingContent style kvs -> MappingContent style $! strictMap copyEntry kvs
         AliasContent name -> AliasContent (T.copy name)
     }
   where
@@ -422,8 +424,8 @@ copyComments :: Comments -> Comments
 copyComments c = case c of
   Comments [] Nothing [] -> c
   _ ->
-    let !before = evaluated (map copyLine c.before)
-        !after = evaluated (map copyLine c.after)
+    let !before = strictMap copyLine c.before
+        !after = strictMap copyLine c.after
     in Comments {before = before, inline = copyMaybe c.inline, after = after}
   where
     copyLine :: Line -> Line
@@ -436,10 +438,6 @@ copyMaybe :: Maybe T.Text -> Maybe T.Text
 copyMaybe = \case
   Just t -> Just $! T.copy t
   Nothing -> Nothing
-
--- | The list with its spine and its elements evaluated.
-evaluated :: [a] -> [a]
-evaluated xs = foldr seq () xs `seq` xs
 
 -- $setup
 -- >>> import Data.Map.Strict qualified as M
