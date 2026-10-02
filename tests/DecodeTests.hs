@@ -67,11 +67,13 @@ decodeTests =
     , testCase "syntax tree" test_syntaxTree
     , testCase "empty stream" test_emptyStream
     , testCase "encodings" test_encodings
+    , testCase "byte order marks" test_byteOrderMarks
     , testCase "files" test_files
     , testCase "no thunks" test_noThunks
     , testGroup
         "errors"
         [ testCase "syntax" test_syntaxErrors
+        , testCase "directives and tags" test_directiveErrors
         , testCase "types" test_typeErrors
         , testCase "keys" test_keyErrors
         , testCase "collected" test_collectedErrors
@@ -735,6 +737,12 @@ test_encodings = do
     "source line at the line feed of a CRLF"
     "a: 1"
     (errorAt "a: 1\r\nb: 2\n" (Offset 5) "message").sourceLine
+  where
+    stripBom :: T.Text -> Either Error T.Text
+    stripBom = Right . T.dropWhile (== '\xFEFF')
+
+test_byteOrderMarks :: Assertion
+test_byteOrderMarks = do
   let documents :: String -> [T.Text] -> T.Text -> Assertion
       documents preface expected input = assertEqual preface (Right expected) (decodeAllText input)
   documents "BOM before a marker after a scalar" ["a", "b"] "a\n\xFEFF--- b\n"
@@ -779,9 +787,6 @@ test_encodings = do
   -- The time to check a run of BOMs is linear in its length.
   documents "many BOMs at the start" ["a"] (T.replicate 400000 "\xFEFF" <> "a\n")
   documents "many BOMs after an end marker" ["a", "b"] ("a\n...\n" <> T.replicate 400000 "\xFEFF" <> "b\n")
-  where
-    stripBom :: T.Text -> Either Error T.Text
-    stripBom = Right . T.dropWhile (== '\xFEFF')
 
 -- | The line, the column and the message of the only error and of its note.
 errorWithNote :: Either (NE.NonEmpty Error) a -> Maybe ((Int, Int, String), (Int, Int, String))
@@ -1003,22 +1008,17 @@ test_syntaxErrors = do
     (1, 10, "invalid escape sequence, write \\\\ for a backslash or use single quotes")
     "path: \"C:\\Users\\me\"\n"
   check "undefined alias" (2, 4, "undefined alias *x") "a: 1\nb: *x\n"
-  assertEqual
-    "duplicate key"
-    (Just ((3, 1, "duplicate key \"a\""), (1, 1, "the first key \"a\"")))
-    (errorWithNote (decodeAllText @Value "a: 1\nb: 2\na: 3\n"))
-  assertEqual
-    "duplicate key with another text"
-    (Just ((2, 1, "duplicate key ~, the same value as the first key"), (1, 1, "the first key null")))
-    (errorWithNote (decodeAllText @Value "null: 1\n~: 2\n"))
-  assertEqual
-    "two merge keys"
-    (Just ((4, 3, "duplicate key \"<<\", merge keys are not supported"), (3, 3, "the first key \"<<\"")))
-    (errorWithNote (decodeAllText @Value "a: &a {x: 1}\nb:\n  <<: *a\n  <<: *a\n"))
-  check "undefined tag handle" (1, 1, "undefined tag handle !e!") "!e!foo bar\n"
   check "invalid character" (1, 4, "invalid character U+0001") "a: \x01\n"
   check "backslash at the end of the input" (1, 4, "unterminated double-quoted scalar") "a: \"b\\"
   check "backslash at the end of a key" (1, 2, "unterminated double-quoted scalar") "[\"a\\"
+  check "noncharacter U+FFFE" (1, 4, "invalid character U+FFFE") "a: \xFFFE\n"
+  check "noncharacter U+FFFF" (1, 5, "invalid character U+FFFF") "a: b\xFFFF\n"
+
+test_directiveErrors :: Assertion
+test_directiveErrors = do
+  let check :: String -> (Int, Int, String) -> T.Text -> Assertion
+      check preface expected input = assertEqual preface (Just expected) (errorOf (decodeAllText @Value input))
+  check "undefined tag handle" (1, 1, "undefined tag handle !e!") "!e!foo bar\n"
   check "unsupported version" (1, 1, "unsupported YAML version 2.0") "%YAML 2.0\n--- a\n"
   check "version without a minor number" (1, 7, "expected a version such as 1.2 after %YAML") "%YAML 1\n--- a\n"
   check "content after the version" (1, 11, "unexpected content after the %YAML version") "%YAML 1.2 x\n--- a\n"
@@ -1056,8 +1056,6 @@ test_syntaxErrors = do
     "valid verbatim tags"
     (Right ["!bar", "tag:yaml.org,2002:str"])
     (map valueTag <$> decodeText @[Value] "[!<!bar> a, !<tag:yaml.org,2002:str> b]")
-  check "noncharacter U+FFFE" (1, 4, "invalid character U+FFFE") "a: \xFFFE\n"
-  check "noncharacter U+FFFF" (1, 5, "invalid character U+FFFF") "a: b\xFFFF\n"
 
 newtype IntOrText = IntOrText (Either Integer T.Text)
   deriving stock (Eq, Show)
@@ -1104,6 +1102,14 @@ test_typeErrors = do
     "triple"
     (Just (1, 1, "expected a list of 3 elements, but got 4"))
     (errorOf (decodeText @(Int, Int, Int) "[1, 2, 3, 4]"))
+  assertEqual
+    "unit from null"
+    (Just (1, 1, "expected an empty list, but got null"))
+    (errorOf (decodeText @() "null"))
+  assertEqual
+    "unit from a list with items"
+    (Just (1, 1, "expected an empty list, but got a list"))
+    (errorOf (decodeText @() "[1]"))
   assertEqual
     "second document"
     (Just (3, 1, "expected a single document, but got a second one"))
@@ -1337,6 +1343,10 @@ test_keyErrors = do
     (Right (Left (pure (Offset 0, "missing key \"x\", merge keys are not supported"))))
     (runParser (withMapping (`parseField` "x")) <$> decodeText @Node "<<: {x: 1}\n" :: Either (NE.NonEmpty Error) (Either (NE.NonEmpty (Offset, String)) Int))
   assertEqual
+    "two merge keys"
+    (Just ((4, 3, "duplicate key \"<<\", merge keys are not supported"), (3, 3, "the first key \"<<\"")))
+    (errorWithNote (decodeAllText @Value "a: &a {x: 1}\nb:\n  <<: *a\n  <<: *a\n"))
+  assertEqual
     "missing key"
     (Just (1, 1, "missing key \"name\""))
     (errorOf (decodeText @Config "jobs: 1\n"))
@@ -1370,6 +1380,14 @@ test_keyErrors = do
     (lookupError "a" "b: 1\n")
   let withKeys :: [T.Text] -> T.Text
       withKeys ks = T.unlines $ map (<> ": 1") ks
+  assertEqual
+    "duplicate key"
+    (Just ((3, 1, "duplicate key \"a\""), (1, 1, "the first key \"a\"")))
+    (errorWithNote (decodeAllText @Value "a: 1\nb: 2\na: 3\n"))
+  assertEqual
+    "duplicate key with another text"
+    (Just ((2, 1, "duplicate key ~, the same value as the first key"), (1, 1, "the first key null")))
+    (errorWithNote (decodeAllText @Value "null: 1\n~: 2\n"))
   assertEqual
     "duplicate among many scalar keys"
     (Just ((21, 1, "duplicate key \"k1\""), (1, 1, "the first key \"k1\"")))

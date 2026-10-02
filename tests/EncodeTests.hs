@@ -79,14 +79,6 @@ test_base = do
   assertEqual "proxy" "null\n" (encodeText (Proxy @Int))
   assertEqual "unit" "[]\n" (encodeText ())
   roundTrip "unit" ()
-  assertEqual
-    "unit from null"
-    (Just (1, 1, "expected an empty list, but got null"))
-    (errorOf (decodeText @() "null"))
-  assertEqual
-    "unit from a list with items"
-    (Just (1, 1, "expected an empty list, but got a list"))
-    (errorOf (decodeText @() "[1]"))
   assertEqual "ratio" "numerator: 1\ndenominator: 3\n" (encodeText (1 % 3 :: Rational))
   assertEqual "fixed" "1.25\n" (encodeText (1.25 :: Centi))
   assertEqual "fixed with a trailing zero" "1.5\n" (encodeText (1.5 :: Milli))
@@ -440,25 +432,6 @@ test_keptNodes = do
     "lines above the first item of a value without a commented list"
     (Right "# c1\nk:\n# c3\n- 1\n")
     (encodeText <$> decodeText @(M.Map T.Text (Commented [Commented Int])) valueLines)
-  let commentedRoot = "# c1\n1 # c2\n# c3\n"
-  assertEqual "commented scalar root" (Right commentedRoot) (encodeText <$> decodeText @(Commented Int) commentedRoot)
-  let linesAfter = M.fromList [("a" :: T.Text, Commented (1 :: Int) noComments {after = [Comment "c"]}), ("b", Commented 2 noComments)]
-  assertEqual "lines after a commented scalar value" "a: 1\n  # c\nb: 2\n" (encodeText linesAfter)
-  assertEqual
-    "lines after a commented scalar value read back"
-    (Right (M.map (.comments) linesAfter))
-    (M.map (.comments) <$> decodeText @(M.Map T.Text (Commented Int)) (encodeText linesAfter))
-  let quotedLinesAfter = "a: \"x\\r\\ny\"\n  # c\nb: d\n"
-  assertEqual
-    "lines after a text of several lines in double quotes"
-    (Right quotedLinesAfter)
-    (encodeText <$> decodeText @(M.Map T.Text (Commented T.Text)) quotedLinesAfter)
-  let linesAbove = [Commented [1, 2 :: Int] noComments {before = [Comment "above"], inline = Just "inline"}]
-  assertEqual "lines above a commented list item" "- # inline\n  # above\n\n  - 1\n  - 2\n" (encodeText linesAbove)
-  assertEqual
-    "lines above a commented list item read back"
-    (Right [noComments {before = [Comment "above", EmptyLine], inline = Just "inline"}])
-    (map (.comments) <$> decodeText @[Commented [Int]] (encodeText linesAbove))
   let scalarRoot = "|\n  text\n# end\n"
   assertEqual "lines at the end of a scalar root" (Right scalarRoot) (encodeText <$> decodeText @Node scalarRoot)
   assertEqual
@@ -562,6 +535,25 @@ test_commentedKeys = do
     "commented items"
     (Right branches)
     (encodeText <$> decodeText @(M.Map T.Text (Commented [Commented T.Text])) branches)
+  let commentedRoot = "# c1\n1 # c2\n# c3\n"
+  assertEqual "commented scalar root" (Right commentedRoot) (encodeText <$> decodeText @(Commented Int) commentedRoot)
+  let linesAfter = M.fromList [("a" :: T.Text, Commented (1 :: Int) noComments {after = [Comment "c"]}), ("b", Commented 2 noComments)]
+  assertEqual "lines after a commented scalar value" "a: 1\n  # c\nb: 2\n" (encodeText linesAfter)
+  assertEqual
+    "lines after a commented scalar value read back"
+    (Right (M.map (.comments) linesAfter))
+    (M.map (.comments) <$> decodeText @(M.Map T.Text (Commented Int)) (encodeText linesAfter))
+  let quotedLinesAfter = "a: \"x\\r\\ny\"\n  # c\nb: d\n"
+  assertEqual
+    "lines after a text of several lines in double quotes"
+    (Right quotedLinesAfter)
+    (encodeText <$> decodeText @(M.Map T.Text (Commented T.Text)) quotedLinesAfter)
+  let linesAbove = [Commented [1, 2 :: Int] noComments {before = [Comment "above"], inline = Just "inline"}]
+  assertEqual "lines above a commented list item" "- # inline\n  # above\n\n  - 1\n  - 2\n" (encodeText linesAbove)
+  assertEqual
+    "lines above a commented list item read back"
+    (Right [noComments {before = [Comment "above", EmptyLine], inline = Just "inline"}])
+    (map (.comments) <$> decodeText @[Commented [Int]] (encodeText linesAbove))
 
 -- | The faster renderer of the encoder gives the same output as the renderer
 -- of syntax trees.
