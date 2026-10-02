@@ -3,15 +3,25 @@ module Helpers
   ( errorOf
   , errorsOf
   , roundTrip
+  , slow
   , Fortieths
   , Thirds
   ) where
 
 import Data.Fixed
 import Data.List.NonEmpty qualified as NE
+import Test.Tasty
 import Test.Tasty.HUnit
 
 import Yamlet
+
+-- | The time limit of a test on a large input, so that a regression to
+-- quadratic time fails the test instead of stalling the suite. No
+-- measurement gave the limit. It is far above the run times, which were at
+-- most 4.2 s for the test of many keys and below 2.5 s for the others, with
+-- GHC 9.10.3.
+slow :: TestTree -> TestTree
+slow = localOption (mkTimeout 10000000)
 
 -- | The line, the column and the message of the only error.
 errorOf :: Either (NE.NonEmpty Error) a -> Maybe (Int, Int, String)

@@ -51,15 +51,15 @@ decodeTests =
     , testCase "notFollowedBy" test_notFollowedBy
     , testCase "block scalars" test_blockScalars
     , testCase "containers" test_containers
-    , localOption (mkTimeout 10000000) $ testCase "time" test_time
+    , slow $ testCase "time" test_time
     , testCase "copies" test_copies
     , testCase "JSON" test_json
     , testCase "aliases" test_aliases
-    , localOption (mkTimeout 10000000) $ testCase "nesting" test_nesting
-    , localOption (mkTimeout 10000000) $ testCase "many keys" test_manyKeys
-    , localOption (mkTimeout 10000000) $ testCase "alias keys" test_aliasKeys
-    , localOption (mkTimeout 10000000) $ testCase "alias limit" test_aliasLimit
-    , localOption (mkTimeout 10000000) $ testCase "long numbers" test_longNumbers
+    , slow $ testCase "nesting" test_nesting
+    , slow $ testCase "many keys" test_manyKeys
+    , slow $ testCase "alias keys" test_aliasKeys
+    , slow $ testCase "alias limit" test_aliasLimit
+    , slow $ testCase "long numbers" test_longNumbers
     , -- 0.2 s with the check of the lengths, 8 s without it.
       localOption (mkTimeout 2000000) $ testCase "long unknown names" test_longUnknownNames
     , testCase "optional keys" test_optionalKeys
@@ -79,7 +79,7 @@ decodeTests =
         , testCase "paths" test_errorPaths
         , testProperty "locations of several errors" prop_errorsAt
         , testCase "paths of several errors" test_nodePaths
-        , localOption (mkTimeout 10000000) $ testCase "many errors" test_manyErrors
+        , slow $ testCase "many errors" test_manyErrors
         ]
     ]
 

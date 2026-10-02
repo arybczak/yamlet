@@ -39,7 +39,7 @@ encodeTests =
     , testCase "quoting" test_quoting
     , testCase "floats" test_floats
     , testProperty "float format" prop_floatFormat
-    , localOption (mkTimeout 10000000) $ testCase "long floats" test_longFloats
+    , slow $ testCase "long floats" test_longFloats
     , testCase "literal block scalars" test_literal
     , testCase "tags" test_tags
     , testCase "syntax tree" test_syntax

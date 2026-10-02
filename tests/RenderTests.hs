@@ -9,6 +9,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 
+import Helpers
 import Thunks
 import Yamlet.Syntax
 
@@ -22,8 +23,8 @@ renderTests =
     , testCase "force block" test_forceBlock
     , testCase "documents" test_documents
     , testCase "lines of scalars" test_scalarLines
-    , localOption (mkTimeout 10000000) $ testCase "many invalid anchor names" test_manyAnchors
-    , localOption (mkTimeout 10000000) $ testCase "deep comment" test_deepComment
+    , slow $ testCase "many invalid anchor names" test_manyAnchors
+    , slow $ testCase "deep comment" test_deepComment
     , testGroup
         "comments"
         [ testCase "attachment" test_attachment
