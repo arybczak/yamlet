@@ -816,7 +816,7 @@ cQuoted style n c props = withScan $ \e p ->
       -- expression, e.g. "C:\Users" or "\d+".
       badEscape :: Int -> String
       badEscape i
-        | chr (fromIntegral (byteAt e (i + 1))) `elem` ("xuU" :: String)
+        | elem @[] (chr (fromIntegral (byteAt e (i + 1)))) "xuU"
         , isHexDigit (chr (fromIntegral (byteAt e (i + 2)))) =
             "invalid escape sequence"
         | otherwise = "invalid escape sequence, write \\\\ for a backslash or use single quotes"
@@ -1167,7 +1167,7 @@ closing c start w kind msg = do
     -- A closing bracket without an opening bracket of its own follows in the
     -- document, so the collection likely continues there.
     closedLater :: Env -> Int -> Bool
-    closedLater e = go (0 :: Int)
+    closedLater e = go 0
       where
         go :: Int -> Int -> Bool
         go depth i

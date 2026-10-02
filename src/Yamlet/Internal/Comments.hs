@@ -277,7 +277,7 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
         , i.at >= en
         , i.at < limit
         , i.lineStart < en || s == en
-        , T.all (`elem` (" \t,:" :: String)) (between en i.at) ->
+        , T.all (\c -> elem @[] c " \t,:") (between en i.at) ->
             (comment i, is)
       is -> (Nothing, is)
 

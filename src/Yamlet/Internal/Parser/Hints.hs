@@ -201,7 +201,7 @@ unexpectedIn e i = case indentationTab (i - 1) Nothing of
     multiLineCollection :: Bool
     multiLineCollection =
       let b = byteBefore e i
-      in (b == RBRACKET || b == RBRACE) && go (i - 2) (1 :: Int) False
+      in (b == RBRACKET || b == RBRACE) && go (i - 2) 1 False
       where
         go :: Int -> Int -> Bool -> Bool
         go j depth crossed
@@ -223,7 +223,7 @@ unexpectedIn e i = case indentationTab (i - 1) Nothing of
     -- No colon that ends a key precedes the index on its line, other than
     -- in a flow collection.
     firstColon :: Bool
-    firstColon = go entryStart (0 :: Int)
+    firstColon = go entryStart 0
       where
         go :: Int -> Int -> Bool
         go j depth

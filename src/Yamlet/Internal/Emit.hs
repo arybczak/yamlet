@@ -79,7 +79,7 @@ plainSyntax inFlow t = case T.uncons t of
 
     firstOk :: Char -> T.Text -> Bool
     firstOk c rest
-      | c `elem` ("-?:" :: String) = case T.uncons rest of
+      | elem @[] c "-?:" = case T.uncons rest of
           Just (c', _) -> not (asciiChar isWhite c')
           Nothing -> False
       | otherwise = not (asciiChar isWhite c) && not (asciiChar isIndicator c)
@@ -441,7 +441,7 @@ isVerbatim tag = hasScheme && uriChars (T.unpack tag)
     hasScheme = case T.break (== ':') tag of
       (scheme, rest) -> case T.uncons scheme of
         Just (c, cs) ->
-          isAscii c && isAlpha c && T.all (\x -> isAscii x && (isAlphaNum x || x `elem` ("+-." :: String))) cs && not (T.null rest)
+          isAscii c && isAlpha c && T.all (\x -> isAscii x && (isAlphaNum x || elem @[] x "+-.")) cs && not (T.null rest)
         Nothing -> False
 
     uriChars :: String -> Bool

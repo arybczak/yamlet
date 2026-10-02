@@ -206,7 +206,7 @@ isIndicator :: Word8 -> Bool
 isIndicator w = isAsciiByte w && testBit indicators (fromIntegral w)
   where
     indicators :: Integer
-    indicators = foldr (\c acc -> setBit acc (ord c)) 0 ("-?:,[]{}#&*!|>'\"%@`" :: String)
+    indicators = foldr @[] (\c acc -> setBit acc (ord c)) 0 "-?:,[]{}#&*!|>'\"%@`"
 
 isDecDigit :: Word8 -> Bool
 isDecDigit w = w >= DIGIT_0 && w <= DIGIT_9

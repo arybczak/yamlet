@@ -194,7 +194,7 @@ renderPath = \case
       | otherwise = "\"" ++ concatMap escape (T.unpack k) ++ "\""
       where
         plain :: Char -> Bool
-        plain c = c `notElem` (".[]\"\\" :: String) && isPrint c && not (isSpace c)
+        plain c = notElem @[] c ".[]\"\\" && isPrint c && not (isSpace c)
 
         -- The escapes of a double-quoted scalar, so that the path stays on
         -- the line of the error.
