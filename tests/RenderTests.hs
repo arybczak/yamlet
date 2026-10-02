@@ -254,6 +254,18 @@ test_fallbacks = do
     "taken anchor name"
     "- &a_b x\n- &a_b_2 y\n- *a_b_2\n"
     (render (sequenceNode [anchored "a_b" (plainNode "x"), anchored "a b" (plainNode "y"), contentNode (AliasContent "a b")]))
+  assertEqual
+    "anchor names with line separators"
+    "- &a_b x\n- &c_d y\n- *a_b\n- *c_d\n"
+    ( render
+        ( sequenceNode
+            [ anchored "a\x2028\&b" (plainNode "x")
+            , anchored "c\x2029\&d" (plainNode "y")
+            , contentNode (AliasContent "a\x2028\&b")
+            , contentNode (AliasContent "c\x2029\&d")
+            ]
+        )
+    )
 
 -- | The new names of many invalid anchor names with one base take linear
 -- time, not quadratic.

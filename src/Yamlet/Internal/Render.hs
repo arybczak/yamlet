@@ -57,7 +57,8 @@ defaultRenderOptions =
 -- on the line of the key.
 --
 -- An anchor name with a character that YAML does not allow in it, e.g. a
--- space, becomes a new name in the anchor and in its aliases. A version that
+-- space, or that YAML 1.1 reads as a line break, e.g. U+2028, becomes a new
+-- name in the anchor and in its aliases. A version that
 -- the parser does not support, e.g. 2.0, has no @%YAML@ directive.
 --
 -- With 'forceBlock', the flow collections become block collections:
@@ -208,8 +209,9 @@ validAnchors doc
     isAnchorName :: T.Text -> Bool
     isAnchorName a = not (T.null a) && T.all isAnchorChar a
 
+    -- YAML 1.1 reads U+2028 and U+2029 as line breaks.
     isAnchorChar :: Char -> Bool
-    isAnchorChar c = isPrintable c && c /= ' ' && not (asciiChar isFlowIndicator c)
+    isAnchorChar c = isPrintable c && c /= ' ' && c /= '\x2028' && c /= '\x2029' && not (asciiChar isFlowIndicator c)
 
 -- | The document ends with a @...@ marker. Without the marker, the lines at
 -- the end of the document read back as the root's, unless the root is a flow
