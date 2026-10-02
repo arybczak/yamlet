@@ -138,17 +138,20 @@ instance ToYaml () where toYaml _ = S.sequenceNode []
 
 instance ToYaml Bool where toYaml = scalar . Bool
 instance ToYaml Integer where toYaml = scalar . Int
-instance ToYaml Natural where toYaml = scalar . Int . toInteger
-instance ToYaml Int where toYaml = scalar . Int . toInteger
-instance ToYaml Int8 where toYaml = scalar . Int . toInteger
-instance ToYaml Int16 where toYaml = scalar . Int . toInteger
-instance ToYaml Int32 where toYaml = scalar . Int . toInteger
-instance ToYaml Int64 where toYaml = scalar . Int . toInteger
-instance ToYaml Word where toYaml = scalar . Int . toInteger
-instance ToYaml Word8 where toYaml = scalar . Int . toInteger
-instance ToYaml Word16 where toYaml = scalar . Int . toInteger
-instance ToYaml Word32 where toYaml = scalar . Int . toInteger
-instance ToYaml Word64 where toYaml = scalar . Int . toInteger
+instance ToYaml Natural where toYaml = integral
+instance ToYaml Int where toYaml = integral
+instance ToYaml Int8 where toYaml = integral
+instance ToYaml Int16 where toYaml = integral
+instance ToYaml Int32 where toYaml = integral
+instance ToYaml Int64 where toYaml = integral
+instance ToYaml Word where toYaml = integral
+instance ToYaml Word8 where toYaml = integral
+instance ToYaml Word16 where toYaml = integral
+instance ToYaml Word32 where toYaml = integral
+instance ToYaml Word64 where toYaml = integral
+
+integral :: Integral a => a -> S.Node
+integral = scalar . Int . toInteger
 
 -- | Decimal notation from 10^-6 up to 10^21, as JavaScript writes numbers,
 -- and exponential notation otherwise. The text always has a dot, so that it
@@ -194,13 +197,17 @@ localTime (LocalTime d t) = buildDay d <> "T" <> timeOfDay t
 -- beyond the range from -1000 to 1000, e.g. @10^1001@ seconds, does not read
 -- back, see 'Finite'.
 instance ToYaml NominalDiffTime where
-  toYaml d = let MkFixed ps = nominalDiffTimeToSeconds d in scalar (Float (Finite (Sci.scientific ps (negate picoDecimals))))
+  toYaml d = let MkFixed ps = nominalDiffTimeToSeconds d in seconds ps
 
 -- | A number of seconds. A value whose exponent in scientific notation is
 -- beyond the range from -1000 to 1000, e.g. @10^1001@ seconds, does not read
 -- back, see 'Finite'.
 instance ToYaml DiffTime where
-  toYaml d = scalar (Float (Finite (Sci.scientific (diffTimeToPicoseconds d) (negate picoDecimals))))
+  toYaml = seconds . diffTimeToPicoseconds
+
+-- | The seconds of a number of picoseconds.
+seconds :: Integer -> S.Node
+seconds ps = scalar (Float (Finite (Sci.scientific ps (negate picoDecimals))))
 
 -- | The text form with hyphens, e.g. @123e4567-e89b-12d3-a456-426614174000@.
 instance ToYaml UUID.UUID where toYaml = scalar . String . UUID.toText
