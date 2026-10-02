@@ -239,9 +239,21 @@ unexpectedIn e i = case indentationTab (i - 1) Nothing of
     entryStart :: Int
     entryStart = skipListItems e (skipSpaces e (lineStart e i))
 
-    -- No colon that ends a key precedes the index on its line.
+    -- No colon that ends a key precedes the index on its line, other than
+    -- in a flow collection.
     firstColon :: Bool
-    firstColon = not (any (isKeyColon e) [entryStart .. i - 1])
+    firstColon = go entryStart (0 :: Int)
+      where
+        go :: Int -> Int -> Bool
+        go j depth
+          | j >= i = True
+          | b == LBRACKET || b == LBRACE = go (j + 1) (depth + 1)
+          | b == RBRACKET || b == RBRACE = go (j + 1) (max 0 (depth - 1))
+          | depth == 0 && isKeyColon e j = False
+          | otherwise = go (j + 1) depth
+          where
+            b :: Word8
+            b = byteAt e j
 
     -- A list item right after a key, as in "a: - b".
     itemAfterKey :: Bool

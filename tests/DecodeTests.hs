@@ -981,6 +981,10 @@ test_syntaxErrors = do
     (1, 1103, "a key can be at most 1024 characters long, write a longer key after '? '")
     ("\"" <> T.replicate 1100 "k" <> "\": 1\n")
   check
+    "long flow mapping as a key"
+    (1, 1106, "a key can be at most 1024 characters long, write a longer key after '? '")
+    ("{a: " <> T.replicate 1100 "k" <> "}: 1\n")
+  check
     "spaces after a key count toward its length"
     (1, 1026, "a key can be at most 1024 characters long, write a longer key after '? '")
     ("a" <> T.replicate 1024 " " <> ": 1\n")
