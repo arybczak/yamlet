@@ -37,6 +37,9 @@ data Error = Error
   , message :: !String
   , sourceLine :: !T.Text
   -- ^ The line of the input that contains the location.
+  , sourceIndex :: !Int
+  -- ^ The index of the location in the UTF-8 bytes of 'sourceLine'. It
+  -- lets 'prettyError' find the column without a scan of the whole line.
   , path :: [PathElement]
   -- ^ The keys and the indices from the root of the document to the node of
   -- a decoder error. An error at a key has the path of its mapping. The path
@@ -127,27 +130,75 @@ prettyError file err
     width :: Int
     width = 80
 
-    full :: String
-    full = T.unpack err.sourceLine
+    -- The characters of the line before and from the location. Each count
+    -- stops one past the width, so that a long line takes no longer.
+    back, ahead :: Int
+    back = fst (stepBack (width + 1))
+    ahead = fst (stepAhead (width + 1))
 
-    start :: Int
-    start = max 0 (min (err.location.column - 1 - width `div` 2) (length full - width))
+    short :: Bool
+    short = back + ahead <= width
+
+    -- The characters of the excerpt before the location.
+    inExcerpt :: Int
+    inExcerpt = min back (max (width `div` 2) (width - ahead))
+
+    cutBefore, cutAfter :: Bool
+    cutBefore = back > inExcerpt
+    cutAfter = ahead > width - inExcerpt
 
     shown :: String
     shown
-      | length full <= width = full
+      | short = T.unpack err.sourceLine
       | otherwise =
-          (if start > 0 then ellipsis else "")
-            ++ take width (drop start full)
-            ++ (if start + width < length full then ellipsis else "")
+          (if cutBefore then ellipsis else "")
+            ++ T.unpack (T.Text arr excerptStart (excerptEnd - excerptStart))
+            ++ (if cutAfter then ellipsis else "")
+      where
+        excerptStart, excerptEnd :: Int
+        excerptStart = snd (stepBack inExcerpt)
+        excerptEnd = snd (stepAhead (width - inExcerpt))
 
     ellipsis :: String
     ellipsis = "..."
 
     before :: Int
     before
-      | length full <= width = err.location.column - 1
-      | otherwise = (if start > 0 then length ellipsis else 0) + err.location.column - 1 - start
+      | short = back
+      | otherwise = (if cutBefore then length ellipsis else 0) + inExcerpt
+
+    T.Text arr lineStart lineLen = err.sourceLine
+
+    lineEnd :: Int
+    lineEnd = lineStart + lineLen
+
+    -- The index of the location in the array, at the start of a character.
+    index :: Int
+    index = charStart (lineStart + max 0 (min lineLen err.sourceIndex))
+
+    charStart :: Int -> Int
+    charStart i
+      | i > lineStart && i < lineEnd && not (isCharStart (A.unsafeIndex arr i)) = charStart (i - 1)
+      | otherwise = i
+
+    -- Step over at most the given number of characters before or from the
+    -- location. Give the number of steps and the index in the array.
+    stepBack, stepAhead :: Int -> (Int, Int)
+    stepBack = go index 0
+      where
+        go :: Int -> Int -> Int -> (Int, Int)
+        go i !k n
+          | n == 0 || i <= lineStart = (k, i)
+          | otherwise = go (charStart (i - 1)) (k + 1) (n - 1)
+    stepAhead = go index 0
+      where
+        go :: Int -> Int -> Int -> (Int, Int)
+        go i !k n
+          | n == 0 || i >= lineEnd = (k, i)
+          | otherwise = go (charEnd (i + 1)) (k + 1) (n - 1)
+
+        charEnd :: Int -> Int
+        charEnd i = if i < lineEnd && not (isCharStart (A.unsafeIndex arr i)) then charEnd (i + 1) else i
 
     -- A tab before the column keeps the caret aligned in a terminal.
     caret :: String
@@ -277,16 +328,12 @@ nodePaths offs root = map (\off -> M.findWithDefault [] off found) offs
 
 -- | Create an error at the given offset of the input.
 errorAt :: T.Text -> Offset -> String -> Error
-errorAt input off msg =
-  Error
-    { location = loc
-    , message = msg
-    , sourceLine = if off == noOffset then T.empty else T.copy (lineAt input off)
-    , path = []
-    }
-  where
-    loc :: Location
-    loc = locate input off
+errorAt input off msg
+  | off == noOffset = Error (locate input off) msg T.empty 0 []
+  | otherwise =
+      let (loc, index, _) = locateFrom input (startScan input) off
+          sourceLine = T.copy (lineAt input off)
+      in Error loc msg sourceLine (min (lengthWord8 sourceLine) index) []
 
 -- | Create errors at the given offsets of a document, with their paths, in the
 -- order of the list. The text is the input of the document, e.g. for the
@@ -307,13 +354,13 @@ errorsAt input errs =
     go s prev = \case
       [] -> []
       (i, (off, msg)) : rest
-        | off == noOffset -> (i, Error (locate input off) msg T.empty []) : go s prev rest
+        | off == noOffset -> (i, Error (locate input off) msg T.empty 0 []) : go s prev rest
         | otherwise ->
-            let (loc, s') = locateFrom input s off
+            let (loc, index, s') = locateFrom input s off
                 sourceLine = case prev of
                   Just (ln, t) | ln == loc.line -> t
                   _ -> T.copy (lineAt input off)
-            in (i, Error loc msg sourceLine []) : go s' (Just (loc.line, sourceLine)) rest
+            in (i, Error loc msg sourceLine (min (lengthWord8 sourceLine) index) []) : go s' (Just (loc.line, sourceLine)) rest
 
 -- | Compute the line and the column of an offset. The byte order marks at the
 -- start of a line are not columns, because they are not content. For
@@ -321,44 +368,50 @@ errorsAt input errs =
 locate :: T.Text -> Offset -> Location
 locate input off
   | off == noOffset = Location {offset = off, line = 0, column = 0}
-  | otherwise = fst (locateFrom input (startScan input) off)
+  | otherwise = let (loc, _, _) = locateFrom input (startScan input) off in loc
 
--- | A scan of the input: the index, the line, and an index on the line with
--- its column. The columns of a line start after its byte order marks.
-data Scan = Scan !Int !Int !Int !Int
+lengthWord8 :: T.Text -> Int
+lengthWord8 (T.Text _ _ len) = len
+
+-- | A scan of the input: the index, the line, the start of the columns of
+-- the line, and an index on the line with its column. The columns of a line
+-- start after its byte order marks.
+data Scan = Scan !Int !Int !Int !Int !Int
 
 startScan :: T.Text -> Scan
-startScan (T.Text arr base len) = Scan base 1 start 1
+startScan (T.Text arr base len) = Scan base 1 start start 1
   where
     start :: Int
     start = skipBomsIn arr (base + len) base
 
 -- | Locate an offset that is not before the index of the scan, and continue
--- the scan from there.
-locateFrom :: T.Text -> Scan -> Offset -> (Location, Scan)
+-- the scan from there. Also give the index of the offset in the bytes of the
+-- line from the start of its columns, or 0 for an offset in a byte order mark
+-- at the start of the line.
+locateFrom :: T.Text -> Scan -> Offset -> (Location, Int, Scan)
 locateFrom (T.Text arr base len) s0 (Offset off0) = go s0
   where
     end, off :: Int
     end = base + len
     off = base + max 0 (min len off0)
 
-    go :: Scan -> (Location, Scan)
-    go s@(Scan i ln ci col)
+    go :: Scan -> (Location, Int, Scan)
+    go s@(Scan i ln ls ci col)
       | i >= off =
           if off <= ci
             -- An offset before the start of the columns is in a byte order
             -- mark.
-            then (location ln (if off == ci then col else 1), s)
-            else let col' = col + countChars ci off in (location ln col', Scan i ln off col')
+            then (location ln (if off == ci then col else 1), max 0 (off - ls), s)
+            else let col' = col + countChars ci off in (location ln col', off - ls, Scan i ln ls off col')
       | otherwise = case A.unsafeIndex arr i of
           LF -> newLine (i + 1)
           CR
-            | i + 1 < end && A.unsafeIndex arr (i + 1) == LF -> go (Scan (i + 1) ln ci col)
+            | i + 1 < end && A.unsafeIndex arr (i + 1) == LF -> go (Scan (i + 1) ln ls ci col)
             | otherwise -> newLine (i + 1)
-          _ -> go (Scan (i + 1) ln ci col)
+          _ -> go (Scan (i + 1) ln ls ci col)
       where
-        newLine :: Int -> (Location, Scan)
-        newLine j = let start' = skipBomsIn arr end j in go (Scan j (ln + 1) start' 1)
+        newLine :: Int -> (Location, Int, Scan)
+        newLine j = let start' = skipBomsIn arr end j in go (Scan j (ln + 1) start' start' 1)
 
     location :: Int -> Int -> Location
     location ln col = Location {offset = Offset (off - base), line = ln, column = col}

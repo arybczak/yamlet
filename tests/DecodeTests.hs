@@ -1630,10 +1630,11 @@ test_manyErrors = do
       Right [doc] -> do
         let n = length (items doc.root)
             offs = [Offset (offset i) | i <- [0 .. n - 1]]
-        assertEqual
-          (preface ++ ", locations")
-          [location i | i <- [0 .. n - 1]]
-          [(err.location.line, err.location.column) | err <- errorsAt input [(o, "e") | o <- offs]]
+            errs = errorsAt input [(o, "e") | o <- offs]
+        assertEqual (preface ++ ", locations") [location i | i <- [0 .. n - 1]] [(err.location.line, err.location.column) | err <- errs]
+        -- The time to render an error does not depend on the length of its
+        -- line.
+        assertEqual (preface ++ ", rendered") n (length (filter (elem '^') (map (prettyError "f") errs)))
         assertEqual (preface ++ ", paths") [[Index i] | i <- [0 .. n - 1]] (nodePaths offs doc.root)
       _ -> assertFailure "expected one document"
 
@@ -1650,7 +1651,36 @@ test_prettyError = do
   case decodeAllText @Value ("a: " <> T.replicate 100 "x" <> ": " <> T.replicate 100 "y" <> "\n") of
     Left errs -> assertEqual "long line" [expectedLong] (map (prettyError "long.yaml") (NE.toList errs))
     Right _ -> assertFailure "expected an error"
+  forM_ ([0 .. 90] ++ [160, 161, 170]) $ \n -> do
+    let input = "\xFEFFk\n\xFEFF" <> T.pack (take n (cycle "aé\t€\x1F600")) <> "\r\nz"
+        starts = [i | (i, w) <- zip [0 ..] (BS.unpack (T.encodeUtf8 input)), w < 0x80 || w >= 0xC0]
+    forM_ starts $ \i -> do
+      let err = errorAt input (Offset i) "m"
+      assertEqual ("excerpt of a line of " ++ show n ++ " characters at " ++ show i) (excerpt err) (drop 1 (lines (prettyError "f" err)))
   where
+    -- The excerpt and the caret from a scan of the whole line.
+    excerpt :: Error -> [String]
+    excerpt err = ["  |", show err.location.line ++ " | " ++ shown, "  | " ++ map (\c -> if c == '\t' then '\t' else ' ') (take before shown) ++ "^"]
+      where
+        full :: String
+        full = T.unpack err.sourceLine
+
+        start :: Int
+        start = max 0 (min (err.location.column - 1 - 40) (length full - 80))
+
+        shown :: String
+        shown
+          | length full <= 80 = full
+          | otherwise =
+              (if start > 0 then "..." else "")
+                ++ take 80 (drop start full)
+                ++ (if start + 80 < length full then "..." else "")
+
+        before :: Int
+        before
+          | length full <= 80 = err.location.column - 1
+          | otherwise = (if start > 0 then 3 else 0) + err.location.column - 1 - start
+
     expectedLong :: String
     expectedLong =
       L.intercalate
