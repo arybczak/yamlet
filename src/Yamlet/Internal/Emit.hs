@@ -34,7 +34,6 @@ import Data.Maybe
 import Data.Text qualified as T
 import Data.Text.Builder.Linear qualified as B
 import Data.Text.Encoding qualified as T
-import Data.Word
 import Numeric
 
 import Yamlet.Internal.Parser.Chars
@@ -176,7 +175,7 @@ doubleQuotedText = T.foldr (\c b -> escape c <> b) mempty
         | otherwise -> "\\U" <> hex bigUEscapeDigits (ord c)
 
     hex :: Int -> Int -> B.Builder
-    hex k i = let s = map toUpper (showHex i "") in B.fromText (T.pack (replicate (k - length s) '0' ++ s))
+    hex k i = B.fromText (T.pack (upperHex k i))
 -- Inlining lets the builder write each character to the buffer. Without it,
 -- the builder allocates a closure for each character, and the render
 -- benchmark of the JSON input allocated 64 MB instead of 43 MB.
@@ -446,10 +445,12 @@ shorthand = T.foldr (\c b -> (if asciiChar isTagChar c then B.fromChar c else pe
 
 -- | The %XX escapes of the UTF-8 bytes of a character.
 percentEscape :: Char -> B.Builder
-percentEscape c = mconcat [B.fromText (T.pack ('%' : hex w)) | w <- BS.unpack (T.encodeUtf8 (T.singleton c))]
-  where
-    hex :: Word8 -> String
-    hex w = let s = map toUpper (showHex w "") in replicate (percentDigits - length s) '0' ++ s
+percentEscape c = mconcat [B.fromText (T.pack ('%' : upperHex percentDigits (fromIntegral w))) | w <- BS.unpack (T.encodeUtf8 (T.singleton c))]
+
+-- | The number in uppercase hex digits, with zeros in front up to the given
+-- number of digits.
+upperHex :: Int -> Int -> String
+upperHex k i = let s = map toUpper (showHex i "") in replicate (k - length s) '0' ++ s
 
 -- | c-printable without the line breaks and the byte order mark.
 isPrintable :: Char -> Bool
