@@ -360,7 +360,7 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
         in case taken' of
              [] -> (x, is)
              _ ->
-               let !x' = Node x.offset x.endOffset x.props (strictComments x.comments.before x.comments.inline (map (.line) (reverse taken'))) x.content
+               let !x' = withComments (strictComments x.comments.before x.comments.inline (map (.line) (reverse taken'))) x
                in (x', reverse empties ++ rest)
 
     between :: Int -> Int -> T.Text

@@ -114,16 +114,11 @@ instance ToYaml a => ToYaml (S.Commented a) where
   toYaml c =
     let v = withLinesAfter c.comments.after (toYaml c.value)
         vc = v.comments
-    in S.Node
-         v.offset
-         v.endOffset
-         v.props
-         vc {S.before = c.comments.before ++ vc.before, S.inline = c.comments.inline <|> vc.inline}
-         v.content
+    in S.withComments vc {S.before = c.comments.before ++ vc.before, S.inline = c.comments.inline <|> vc.inline} v
   toYamlField k c = (key, withLinesAfter c.comments.after (toYaml c.value))
     where
       key :: S.Node
-      key = S.Node k.offset k.endOffset k.props (S.Comments c.comments.before c.comments.inline k.comments.after) k.content
+      key = S.withComments (S.Comments c.comments.before c.comments.inline k.comments.after) k
 
 -- | The value alone. The key of an entry goes to the value inside, e.g. for a
 -- 'Yamlet.Commented' value.
@@ -136,7 +131,7 @@ instance ToYaml a => ToYaml (S.Located a) where
 withLinesAfter :: [S.Line] -> S.Node -> S.Node
 withLinesAfter ls v
   | null ls = v
-  | otherwise = S.Node v.offset v.endOffset v.props (v.comments {S.after = ls}) v.content
+  | otherwise = S.withComments v.comments {S.after = ls} v
 
 -- | An empty list, as a tuple without elements.
 instance ToYaml () where toYaml _ = S.sequenceNode []

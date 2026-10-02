@@ -247,7 +247,7 @@ decodeDocument = convert
 documentRoot :: S.Document -> S.Node
 documentRoot doc
   | null dc.before && isNothing dc.inline && null dc.after = r
-  | otherwise = S.Node r.offset r.endOffset r.props comments r.content
+  | otherwise = S.withComments comments r
   where
     dc :: S.Comments
     dc = doc.docComments

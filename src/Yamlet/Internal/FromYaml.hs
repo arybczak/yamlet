@@ -445,10 +445,6 @@ parseItems p xs0 = Parser $ \off -> go off NoErrors [] xs0
         in case g off of
              Result e a -> go off (bothErrors errs e) (a : acc) xs
 
--- | The node without its comments.
-withoutComments :: S.Node -> S.Node
-withoutComments n = S.Node n.offset n.endOffset n.props S.noComments n.content
-
 -- | The entries of a mapping. As for 'withText', the tag of a string key does
 -- not matter, so two string keys with the same text are an error, e.g. @a@
 -- and @!foo a@.
@@ -873,7 +869,7 @@ instance FromYaml S.Node where
 instance FromYaml a => FromYaml (S.Commented a) where
   parseYaml v =
     flip S.Commented (S.copyComments v.comments)
-      <$!> parseYaml (withoutComments v)
+      <$!> parseYaml (S.withComments S.noComments v)
   parseYamlField k v = flip S.Commented (S.copyComments c) <$!> parseYaml v'
     where
       c :: S.Comments
@@ -914,7 +910,7 @@ entryComments k v = (S.Comments before inline v.comments.after, value)
     value :: S.Node
     value =
       let rest = S.Comments (if block then v.comments.before else []) Nothing []
-      in S.Node v.offset v.endOffset v.props rest v.content
+      in S.withComments rest v
 
 -- | The value of the node, with the tags resolved and the aliases replaced.
 instance FromYaml Value where
