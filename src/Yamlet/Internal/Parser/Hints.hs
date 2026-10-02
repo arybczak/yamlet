@@ -112,7 +112,7 @@ unexpectedIn e i = case indentationTab (i - 1) Nothing of
         -- a line of a block scalar.
         endsPlain :: Int -> Bool
         endsPlain k =
-          let end = contentEnd k
+          let end = lineContentEnd e k
               start = wordStart e end
               b = byteBefore e end
               w = byteAt e start
@@ -126,18 +126,8 @@ unexpectedIn e i = case indentationTab (i - 1) Nothing of
                && w /= AMP
                && w /= EXCL
                && not (end - start == 1 && (w == MINUS || w == QUESTION))
-               && not (blockHeader k)
+               && not (endsWithBlockHeader e k)
                && not (inBlockScalar k)
-
-        -- The index after the content of the line at the index, before its
-        -- comment.
-        contentEnd :: Int -> Int
-        contentEnd k = skipBackWhites e (go k)
-          where
-            go :: Int -> Int
-            go j
-              | byteAt e j == 0 || isBreak (byteAt e j) || comment j = j
-              | otherwise = go (j + 1)
 
         -- The closest line above that is indented less starts a block
         -- scalar.
@@ -148,22 +138,11 @@ unexpectedIn e i = case indentationTab (i - 1) Nothing of
             go j = case lineAbove e (lineStartAt e j) of
               Nothing -> False
               Just above
-                | indentation above < indentation k -> blockHeader above
+                | indentation above < indentation k -> endsWithBlockHeader e above
                 | otherwise -> go above
 
             indentation :: Int -> Int
             indentation j = j - lineStartAt e j
-
-        -- The line at the index ends with the header of a block scalar,
-        -- e.g. "key: |-".
-        blockHeader :: Int -> Bool
-        blockHeader k =
-          let end = contentEnd k
-              start = wordStart e end
-              b = byteAt e start
-          in end > start
-               && (b == PIPE || b == GREATER)
-               && all (\j -> let w = byteAt e j in w == PLUS || w == MINUS || isDecDigit w) [start + 1 .. end - 1]
 
         commentAbove :: Int -> Bool
         commentAbove start
@@ -369,7 +348,7 @@ indentationMistake e i = go (lineStartAt e i)
       if
         | indent > column -> go (lineStartAt e k)
         | indent < column ->
-            if endsWithHeader k
+            if endsWithBlockHeader e k
               then Just "unexpected indentation, the line has less indentation than the block scalar above it"
               else Nothing
         | isListItem e k && not (isListItem e i) && not (isFlowIndicator (byteAt e i)) ->
@@ -377,32 +356,33 @@ indentationMistake e i = go (lineStartAt e i)
         | not (isListItem e k) && isListItem e i -> Just "unexpected list item among mapping entries"
         | otherwise -> Nothing
 
-    -- The line from the index ends with a block scalar header, e.g. "key: |-".
-    endsWithHeader :: Int -> Bool
-    endsWithHeader j =
-      let end = trimEnd j (contentEnd j)
-          h = skipIndicators end
-      in h > j
-           && (let b = byteAt e (h - 1) in b == PIPE || b == GREATER)
-           && (h - 1 == j || isWhite (byteAt e (h - 2)))
-
-    -- The end of the line before a comment.
-    contentEnd :: Int -> Int
-    contentEnd j
-      | b == 0 || isBreak b = j
-      | b == HASH && isWhite (byteBefore e j) = j
-      | otherwise = contentEnd (j + 1)
-      where
-        b :: Word8
-        b = byteAt e j
-
-    trimEnd :: Int -> Int -> Int
-    trimEnd start j = if j > start && isWhite (byteBefore e j) then trimEnd start (j - 1) else j
-
+-- | The line from the content at the index ends with the header of a block
+-- scalar, e.g. "key: |-".
+endsWithBlockHeader :: Env -> Int -> Bool
+endsWithBlockHeader e k =
+  let h = skipIndicators (lineContentEnd e k)
+  in h > k
+       && (let b = byteAt e (h - 1) in b == PIPE || b == GREATER)
+       && (h - 1 == k || isWhite (byteAt e (h - 2)))
+  where
     skipIndicators :: Int -> Int
     skipIndicators j =
       let b = byteBefore e j
       in if b == MINUS || b == PLUS || isDecDigit b then skipIndicators (j - 1) else j
+
+-- | The index after the content of the line from the content at the index,
+-- before its comment.
+lineContentEnd :: Env -> Int -> Int
+lineContentEnd e = skipBackWhites e . go
+  where
+    go :: Int -> Int
+    go j
+      | b == 0 || isBreak b = j
+      | b == HASH && isWhite (byteBefore e j) = j
+      | otherwise = go (j + 1)
+      where
+        b :: Word8
+        b = byteAt e j
 
 -- | The error for a line of a block collection that lacks the space after
 -- "-" or the ":" after a key, if the entries above it at the same position
