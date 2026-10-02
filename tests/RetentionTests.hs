@@ -40,8 +40,9 @@ import Test.Tasty.HUnit
 import Yamlet
 
 -- | A decoded value does not keep the input alive, for every instance of the
--- library. A text that refers to the input keeps all of it, e.g. a slice of
--- it, or a thunk that would copy a slice.
+-- library, and neither do the errors of a failed decode. A text that refers
+-- to the input keeps all of it, e.g. a slice of it, or a thunk that would
+-- copy a slice.
 retentionTests :: TestTree
 retentionTests =
   testGroup
@@ -106,6 +107,8 @@ retentionTests =
     , retains @[Step] "flat contents" "- tag: Ahead\n  name: a"
     , retains @[Figure] "single field record" "- Round:\n    label: a"
     , retains @[Figure] "single field contents" "- Sign: a"
+    , errorRetains @(M.Map T.Text T.Text) "error with a key in the path" "k: [1]"
+    , errorRetains @(T.Text, M.Map T.Text T.Text) "error with an alias in the path" "- &a k\n- *a : [1]"
     ]
 
 -- | The array of the input is garbage while the value is alive. A weak
@@ -124,6 +127,22 @@ retains name doc = testCase name $ do
       kept <- isJust <$> deRefWeak weak
       _ <- evaluate =<< readIORef ref
       assertBool "the value keeps the input alive" (not kept)
+
+-- | The array of the input is garbage while the errors of a failed decode
+-- are alive.
+errorRetains :: forall a. FromYaml a => String -> T.Text -> TestTree
+errorRetains name doc = testCase name $ do
+  input <- evaluate (T.copy doc)
+  weak <- weakArray input
+  case decodeText @a input of
+    Left errs -> do
+      _ <- evaluate (length (show errs))
+      ref <- newIORef errs
+      performMajorGC
+      kept <- isJust <$> deRefWeak weak
+      _ <- evaluate =<< readIORef ref
+      assertBool "the errors keep the input alive" (not kept)
+    Right _ -> assertFailure "the decode succeeded"
 
 -- | A weak pointer to the array of the text. A slice of the text shares the
 -- array, so the weak pointer is empty only if no text of the array is alive.

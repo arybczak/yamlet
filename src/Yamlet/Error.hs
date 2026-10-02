@@ -267,10 +267,12 @@ nodePaths offs root = map (\off -> M.findWithDefault [] off found) offs
     within :: Node -> Set.Set Offset -> Set.Set Offset
     within n = Set.takeWhileAntitone (<= n.endOffset) . Set.dropWhileAntitone (< n.offset)
 
+    -- The texts of a parsed tree are slices of the input, which an error
+    -- would keep alive.
     keyElement :: Node -> PathElement
     keyElement k = case k.content of
-      ScalarContent _ t -> Key t
-      AliasContent name -> AliasKey name
+      ScalarContent _ t -> Key (T.copy t)
+      AliasContent name -> AliasKey (T.copy name)
       _ -> CollectionKey
 
 -- | Create an error at the given offset of the input.
