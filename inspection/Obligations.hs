@@ -21,7 +21,8 @@ import Yamlet
 -- | The code uses no function and no constructor of the generic
 -- representation. 'hasNoGenerics' checks the types instead, but the types
 -- appear in coercions and in the types of join points after the optimizer
--- removed the representation.
+-- removed the representation. The constructors of the newtypes 'G.K1' and
+-- 'G.M1' are casts in Core, so the list cannot name them.
 hasNoGenericRep :: Name -> Obligation
 hasNoGenericRep name =
   mkObligation name $
@@ -29,9 +30,7 @@ hasNoGenericRep name =
       [ 'G.from
       , 'G.to
       , '(G.:*:)
-      , 'G.K1
       , 'G.L1
-      , 'G.M1
       , 'G.R1
       , 'G.U1
       ]
