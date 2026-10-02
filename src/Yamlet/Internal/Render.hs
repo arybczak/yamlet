@@ -340,7 +340,7 @@ block opts indent afterColumn atLineStart hoisted carried n = case n.content of
     item :: Int -> Node -> B.Builder
     item i x
       | startsBelow opts x =
-          let (above, below, rest) = indicatorLines opts (i == 0) (if i == 0 then carried else []) x
+          let (above, below, rest) = indicatorLines (i == 0) (if i == 0 then carried else []) x
           in start i above <> "-" <> after opts indent (indent + indentStep) below rest x
       | otherwise = start i (aboveIndicator opts x) <> "-" <> after opts indent (indent + indentStep) [] [] x
 
@@ -348,10 +348,10 @@ block opts indent afterColumn atLineStart hoisted carried n = case n.content of
     entry i (k, v) = case implicitKey opts k of
       Just key ->
         let (above, lineComment, below) = entryComments opts k v
-        in start i above <> key <> ":" <> value opts indent v lineComment below
+        in start i above <> key <> ":" <> value v lineComment below
       Nothing ->
-        let (keyAbove, keyBelow, keyRest) = indicatorLines opts (i == 0) (if i == 0 then carried else []) k
-            (valueAbove, valueBelow, valueRest) = indicatorLines opts False [] v
+        let (keyAbove, keyBelow, keyRest) = indicatorLines (i == 0) (if i == 0 then carried else []) k
+            (valueAbove, valueBelow, valueRest) = indicatorLines False [] v
         in start i keyAbove
              <> "?"
              <> after opts indent indent keyBelow keyRest k
@@ -360,26 +360,95 @@ block opts indent afterColumn atLineStart hoisted carried n = case n.content of
              <> ":"
              <> after opts indent (indent + indentStep) valueBelow valueRest v
 
--- | The lines above the indicator of a sequence item or an explicit entry,
--- the lines below it, and the lines for the first entry of a block
--- collection that starts below its indicator. The flag is set for the first
--- entry of a collection, and the given lines come first.
---
--- The parser gives the lines above and below the indicator of a block
--- collection that starts below it to the collection up to the last empty
--- line, and the rest to its first entry. Above the indicator of a first
--- entry, the collection around it takes the lines up to the last empty
--- line, so the lines of a first entry go below its indicator.
-indicatorLines :: RenderOptions -> Bool -> [Line] -> Node -> ([Line], [Line], [Line])
-indicatorLines opts isFirst carried x
-  | startsBelow opts x =
-      let ls = carried ++ x.comments.before
-          (own, rest)
-            | firstStartsBelow opts x = splitAtLastEmptyLine ls
-            | isFirst = (separated ls ++ firstLines opts x, [])
-            | otherwise = (ls ++ firstLines opts x, [])
-      in if isFirst then ([], own, rest) else (own, [], rest)
-  | otherwise = (aboveIndicator opts x, [], [])
+    -- The lines above the indicator of a sequence item or an explicit entry,
+    -- the lines below it, and the lines for the first entry of a block
+    -- collection that starts below its indicator. The flag is set for the
+    -- first entry of a collection, and the given lines come first.
+    --
+    -- The parser gives the lines above and below the indicator of a block
+    -- collection that starts below it to the collection up to the last empty
+    -- line, and the rest to its first entry. Above the indicator of a first
+    -- entry, the collection around it takes the lines up to the last empty
+    -- line, so the lines of a first entry go below its indicator.
+    indicatorLines :: Bool -> [Line] -> Node -> ([Line], [Line], [Line])
+    indicatorLines isFirst given x
+      | startsBelow opts x =
+          let ls = given ++ x.comments.before
+              (own, rest)
+                | firstStartsBelow opts x = splitAtLastEmptyLine ls
+                | isFirst = (separated ls ++ firstLines opts x, [])
+                | otherwise = (ls ++ firstLines opts x, [])
+          in if isFirst then ([], own, rest) else (own, [], rest)
+      | otherwise = (aboveIndicator opts x, [], [])
+
+    -- The value of a mapping entry after the colon with the comment of the
+    -- line, and the line break. The lines go between the key and a block
+    -- collection, or below the entry, indented deeper than the key, where
+    -- the lines after the value go too.
+    value :: Node -> Maybe T.Text -> [Line] -> B.Builder
+    value v lineComment extra
+      | isBlock opts v =
+          -- Without the bang, the render benchmark of the config input
+          -- allocates more.
+          let !column = case v.content of
+                -- A sequence without indentation has no column of its own for
+                -- the lines after its last item: a block collection or a block
+                -- scalar as the last item takes in every line that is deeper
+                -- than the key.
+                SequenceContent _ xs
+                  | not (hasCommentLine v.comments.after) || not (endsWithBlock xs) -> indent
+                _ -> indent + indentStep
+          in header <> lines_ column below <> block opts column (indent + indentStep) True False rest v
+      | isEmpty v = comment lineComment <> "\n" <> entryBelow
+      | otherwise = " " <> inline opts InValue (indent + indentStep) v lineComment <> "\n" <> entryBelow
+      where
+        -- The lines after a block scalar end it at the column of the key.
+        -- Without the first case, the render benchmark of the config input
+        -- allocates more.
+        entryBelow :: B.Builder
+        entryBelow
+          | null extra && null v.comments.after = mempty
+          | otherwise =
+              let column = if isBlockScalarNode v then indent else indent + indentStep
+              in lines_ column extra <> linesBelow column v
+
+        header :: B.Builder
+        header = maybe mempty (" " <>) (props v) <> comment lineComment <> "\n"
+
+        -- The value takes the lines below the key as in 'indicatorLines'.
+        below, rest :: [Line]
+        (below, rest)
+          | firstStartsBelow opts v = splitAtLastEmptyLine (extra ++ v.comments.before)
+          | otherwise = (separated (extra ++ v.comments.before), [])
+
+        endsWithBlock :: [Node] -> Bool
+        endsWithBlock xs = case reverse xs of
+          x : _ -> isBlockScalarNode x || isBlock opts x
+          [] -> False
+
+-- 'after' stays at top level, although 'block' is its only caller. In the
+-- where clause of 'block', it made the render benchmark of the config input
+-- allocate more.
+
+-- | A node after the indicator of a sequence item or an explicit entry, with
+-- the line break, and the lines below the indicator and the lines for the
+-- first entry from 'indicatorLines'. A block collection starts on the same
+-- line if it can. The lines after a scalar go at the given column.
+after :: RenderOptions -> Int -> Int -> [Line] -> [Line] -> Node -> B.Builder
+after opts indent column below rest n
+  | isBlock opts n =
+      if startsBelow opts n
+        then
+          maybe mempty (" " <>) (props n)
+            <> comment n.comments.inline
+            <> "\n"
+            <> lines_ (indent + indentStep) below
+            <> block opts (indent + indentStep) (indent + indentStep) True True rest n
+        else " " <> block opts (indent + indentStep) (indent + indentStep) False True [] n
+  | isEmpty n = comment n.comments.inline <> "\n" <> linesBelow column n
+  | otherwise =
+      let column' = if isBlockScalarNode n then indent else column
+      in " " <> inline opts InValue (indent + indentStep) n n.comments.inline <> "\n" <> linesBelow column' n
 
 -- | The lines of a block collection that go directly above its first entry.
 -- The parser gives the lines there to the entry, so the lines of the
@@ -468,71 +537,6 @@ isScalarLike n = case n.content of
   SequenceContent {} -> False
   MappingContent {} -> False
   _ -> True
-
--- | The value of a mapping entry after the colon with the comment of the
--- line, and the line break. The lines go between the key and a block
--- collection, or below the entry, indented deeper than the key, where the
--- lines after the value go too.
-value :: RenderOptions -> Int -> Node -> Maybe T.Text -> [Line] -> B.Builder
-value opts indent v lineComment extra
-  | isBlock opts v =
-      -- Without the bang, the render benchmark of the config input allocates
-      -- more.
-      let !column = case v.content of
-            -- A sequence without indentation has no column of its own for the
-            -- lines after its last item: a block collection or a block scalar
-            -- as the last item takes in every line that is deeper than the
-            -- key.
-            SequenceContent _ xs
-              | not (hasCommentLine v.comments.after) || not (endsWithBlock xs) -> indent
-            _ -> indent + indentStep
-      in header <> lines_ column below <> block opts column (indent + indentStep) True False rest v
-  | isEmpty v = comment lineComment <> "\n" <> entryBelow
-  | otherwise = " " <> inline opts InValue (indent + indentStep) v lineComment <> "\n" <> entryBelow
-  where
-    -- The lines after a block scalar end it at the column of the key. Without
-    -- the first case, the render benchmark of the config input allocates
-    -- more.
-    entryBelow :: B.Builder
-    entryBelow
-      | null extra && null v.comments.after = mempty
-      | otherwise =
-          let column = if isBlockScalarNode v then indent else indent + indentStep
-          in lines_ column extra <> linesBelow column v
-
-    header :: B.Builder
-    header = maybe mempty (" " <>) (props v) <> comment lineComment <> "\n"
-
-    -- The value takes the lines below the key as in 'indicatorLines'.
-    below, rest :: [Line]
-    (below, rest)
-      | firstStartsBelow opts v = splitAtLastEmptyLine (extra ++ v.comments.before)
-      | otherwise = (separated (extra ++ v.comments.before), [])
-
-    endsWithBlock :: [Node] -> Bool
-    endsWithBlock xs = case reverse xs of
-      x : _ -> isBlockScalarNode x || isBlock opts x
-      [] -> False
-
--- | A node after the indicator of a sequence item or an explicit entry, with
--- the line break, and the lines below the indicator and the lines for the
--- first entry from 'indicatorLines'. A block collection starts on the same
--- line if it can. The lines after a scalar go at the given column.
-after :: RenderOptions -> Int -> Int -> [Line] -> [Line] -> Node -> B.Builder
-after opts indent column below rest n
-  | isBlock opts n =
-      if startsBelow opts n
-        then
-          maybe mempty (" " <>) (props n)
-            <> comment n.comments.inline
-            <> "\n"
-            <> lines_ (indent + indentStep) below
-            <> block opts (indent + indentStep) (indent + indentStep) True True rest n
-        else " " <> block opts (indent + indentStep) (indent + indentStep) False True [] n
-  | isEmpty n = comment n.comments.inline <> "\n" <> linesBelow column n
-  | otherwise =
-      let column' = if isBlockScalarNode n then indent else column
-      in " " <> inline opts InValue (indent + indentStep) n n.comments.inline <> "\n" <> linesBelow column' n
 
 -- | Where an inline node is. A scalar in a key is on one line.
 data Position = InValue | InKey | InFlow | InFlowKey

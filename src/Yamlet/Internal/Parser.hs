@@ -4,7 +4,9 @@
 --
 -- The functions follow the productions of the specification and keep their
 -- names, e.g. @nsFlowNode@ implements @ns-flow-node(n,c)@. A few productions
--- are fused into loops over the bytes of the input for speed.
+-- are fused into loops over the bytes of the input for speed. Each production
+-- is a top-level function, also if only one function uses it, so that the
+-- parser reads like the grammar of the specification.
 --
 -- This module is intended for internal use only, and may change without warning
 -- in subsequent releases.
@@ -771,7 +773,7 @@ cQuoted style n c props = withScan $ \e p ->
                 then go (i + 2) (i + 2) ("'" : slice e seg i : acc) ls
                 else Done (i + 1) $ case ls of
                   FirstLine -> ScalarLinesContent style (finish (slice e seg i : acc)) []
-                  Lines ps starts _ -> severalLines style (slice e seg i : acc) ps starts
+                  Lines ps starts _ -> severalLines (slice e seg i : acc) ps starts
           | w == BACKSLASH && double -> backslash seg i acc ls
           | isWhite w ->
               let j = skipWhites e i
@@ -823,15 +825,53 @@ cQuoted style n c props = withScan $ \e p ->
       badIndent :: Int -> Scanned Content
       badIndent i
         | nextContent i >= e.end = endOfDocument i
-        | not (hasClosingQuote e quote (nextContent i)) = unterminated
-        | Just tab <- firstTab e (skipBlankLines e i) (nextContent i) = Failed tab tabMessage
+        | not (hasClosingQuote (nextContent i)) = unterminated
+        | Just tab <- firstTab e (skipBlankLines i) (nextContent i) = Failed tab tabMessage
         | otherwise =
             Failed
               (nextContent i)
               ("invalid indentation of a line in a " ++ name ++ " scalar")
 
       nextContent :: Int -> Int
-      nextContent i = skipWhites e (skipBlankLines e i)
+      nextContent i = skipWhites e (skipBlankLines i)
+
+      -- Skip the line break at the index and the blank lines after it.
+      skipBlankLines :: Int -> Int
+      skipBlankLines i =
+        let j = skipWhites e (breakEnd e i)
+        in if isBreak (byteAt e j) then skipBlankLines j else breakEnd e i
+
+      -- The line from the index contains a closing quote. If it does not, a
+      -- line with a wrong indentation more likely follows a missing quote.
+      hasClosingQuote :: Int -> Bool
+      hasClosingQuote i = case byteAt e i of
+        w
+          | w == quote -> True
+          | w == BACKSLASH && double -> hasClosingQuote (i + 2)
+          | w == 0 || isBreak w -> False
+          | otherwise -> hasClosingQuote (i + 1)
+
+      -- Add the pieces of the current line, in reverse order, and start a new
+      -- line after them.
+      newLine :: [T.Text] -> Lines -> Lines
+      newLine acc = \case
+        FirstLine -> next [] [] 0
+        Lines ps ls len -> next ps ls len
+        where
+          next :: [T.Text] -> [Int] -> Int -> Lines
+          next ps ls len =
+            let len' = len + sum (map T.length acc)
+            in Lines (acc ++ ps) (len' : ls) len'
+
+      -- The scalar from the pieces of its last line, and the pieces and the
+      -- starts of the lines before it, all in reverse order.
+      severalLines :: [T.Text] -> [T.Text] -> [Int] -> Content
+      severalLines acc ps starts = ScalarLinesContent style (finish (acc ++ ps)) (reverse starts)
+
+      finish :: [T.Text] -> T.Text
+      finish = \case
+        [t] -> t
+        ts -> T.concat (reverse ts)
   in case go (p + 1) (p + 1) [] FirstLine of
        Done q content -> Done q (mkNode e p (toOffset e q) props content)
        NoMatch q -> NoMatch q
@@ -839,12 +879,6 @@ cQuoted style n c props = withScan $ \e p ->
 -- Inlining gives a loop for each style. Without it, the parse benchmark of
 -- the JSON input allocates more.
 {-# INLINE cQuoted #-}
-
--- | Skip the line break at the index and the blank lines after it.
-skipBlankLines :: Env -> Int -> Int
-skipBlankLines e i =
-  let j = skipWhites e (breakEnd e i)
-  in if isBreak (byteAt e j) then skipBlankLines e j else breakEnd e i
 
 -- | A document marker ends the document, and the byte is in the input after
 -- it, e.g. the closing quote of a scalar that the marker cuts. Return the
@@ -864,44 +898,12 @@ markerInside e node =
     ++ node
     ++ ", indent the line"
 
--- | The line from the index contains a closing quote. If it does not, a line
--- with a wrong indentation more likely follows a missing quote.
-hasClosingQuote :: Env -> Word8 -> Int -> Bool
-hasClosingQuote e quote i = case byteAt e i of
-  w
-    | w == quote -> True
-    | w == BACKSLASH && quote == DQUOTE -> hasClosingQuote e quote (i + 2)
-    | w == 0 || isBreak w -> False
-    | otherwise -> hasClosingQuote e quote (i + 1)
-
-finish :: [T.Text] -> T.Text
-finish = \case
-  [t] -> t
-  ts -> T.concat (reverse ts)
-
 -- | The lines of a scalar before its current line: the pieces of their text,
 -- in reverse order, the positions where they start, in reverse order, and
 -- the length of the pieces.
 data Lines
   = FirstLine
   | Lines [T.Text] [Int] !Int
-
--- | Add the pieces of the current line, in reverse order, and start a new
--- line after them.
-newLine :: [T.Text] -> Lines -> Lines
-newLine acc = \case
-  FirstLine -> next [] [] 0
-  Lines ps ls len -> next ps ls len
-  where
-    next :: [T.Text] -> [Int] -> Int -> Lines
-    next ps ls len =
-      let len' = len + sum (map T.length acc)
-      in Lines (acc ++ ps) (len' : ls) len'
-
--- | The scalar from the pieces of its last line, and the pieces and the
--- starts of the lines before it, all in reverse order.
-severalLines :: ScalarStyle -> [T.Text] -> [T.Text] -> [Int] -> Content
-severalLines style acc ps starts = ScalarLinesContent style (finish (acc ++ ps)) (reverse starts)
 
 -- | The positions where the lines start, from the length of the first line
 -- and the separators and the texts of the next lines.

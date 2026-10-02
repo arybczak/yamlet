@@ -461,6 +461,37 @@ withMapping f = parseNode $ \n -> case n.content of
       in Parser $ \off -> case g off of
            Result e _ -> Result (bothErrors errs e) failed
   _ -> typeMismatch "a mapping" n
+  where
+    -- The object and the errors of its duplicate keys. The index has the
+    -- first of equal keys.
+    --
+    -- A list with linear lookups is faster only for a few keys, and it saves
+    -- little of the time to decode a typical record.
+    mkObject :: S.Node -> [(S.Node, S.Node)] -> (Errors, Object)
+    mkObject n kvs =
+      let (index, errs) = L.foldl' insert (M.empty, NoErrors) kvs
+      in ( errs
+         , Object
+             { node = n
+             , entries = kvs
+             , index = index
+             , otherKeys = [(k, v) | (k@S.Node {S.content = S.ScalarContent style t}, _) <- kvs, let v = scalarValue k.props.tag style t, case v of String _ -> False; _ -> True]
+             , duplicates = case errs of
+                 NoErrors -> False
+                 _ -> True
+             }
+         )
+      where
+        insert
+          :: (M.Map T.Text (S.Node, S.Node), Errors)
+          -> (S.Node, S.Node)
+          -> (M.Map T.Text (S.Node, S.Node), Errors)
+        insert (!m, !errs) kv@(k, _) = case stringValue k of
+          Just t -> case M.insertLookupWithKey (\_ _ old -> old) t kv m of
+            (Just (first, _), _) ->
+              (m, bothErrors errs (OneError k.offset ("duplicate key " ++ show t) [(first.offset, "the first key " ++ show t)]))
+            (Nothing, m') -> (m', errs)
+          _ -> (m, errs)
 
 -- | A mapping with fast access to the values of string keys.
 data Object = Object
@@ -472,37 +503,6 @@ data Object = Object
   , duplicates :: !Bool
   -- ^ Two string keys have the same text.
   }
-
--- | The object and the errors of its duplicate keys. The index has the first
--- of equal keys.
---
--- A list with linear lookups is faster only for a few keys, and it saves
--- little of the time to decode a typical record.
-mkObject :: S.Node -> [(S.Node, S.Node)] -> (Errors, Object)
-mkObject n kvs =
-  let (index, errs) = L.foldl' insert (M.empty, NoErrors) kvs
-  in ( errs
-     , Object
-         { node = n
-         , entries = kvs
-         , index = index
-         , otherKeys = [(k, v) | (k@S.Node {S.content = S.ScalarContent style t}, _) <- kvs, let v = scalarValue k.props.tag style t, case v of String _ -> False; _ -> True]
-         , duplicates = case errs of
-             NoErrors -> False
-             _ -> True
-         }
-     )
-  where
-    insert
-      :: (M.Map T.Text (S.Node, S.Node), Errors)
-      -> (S.Node, S.Node)
-      -> (M.Map T.Text (S.Node, S.Node), Errors)
-    insert (!m, !errs) kv@(k, _) = case stringValue k of
-      Just t -> case M.insertLookupWithKey (\_ _ old -> old) t kv m of
-        (Just (first, _), _) ->
-          (m, bothErrors errs (OneError k.offset ("duplicate key " ++ show t) [(first.offset, "the first key " ++ show t)]))
-        (Nothing, m') -> (m', errs)
-      _ -> (m, errs)
 
 -- | The node of the mapping.
 objectNode :: Object -> S.Node
