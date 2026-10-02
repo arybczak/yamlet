@@ -108,8 +108,11 @@ The library also applies these rules:
   linear time to parse.
 - A fraction is reduced as an `Integer`, and its parts must fit in the
   target type.
-- The decoded values do not keep the input in memory, because the decoder
-  copies their texts. This holds for a kept `Node` too.
+- The decoded values do not keep the input in memory, because the decoders
+  of the library copy their texts. This holds for a kept `Node` too. A
+  value from a hand-written decoder can keep the input while it has
+  unevaluated parts, e.g. a lazy list. Evaluate such a value, e.g. with
+  `force`, to release the input.
 - With the instances of the library and the derived instances, the number
   of decoder errors grows at most linearly with the size of the document.
   The time to locate the errors in the input and to find their paths is
