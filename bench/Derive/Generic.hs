@@ -13,6 +13,7 @@ module Derive.Generic
 import Control.DeepSeq
 import Data.Text qualified as T
 
+import Derive.Fields
 import Yamlet
 
 data A = A
@@ -80,54 +81,12 @@ instance GenericYamlOptions F where
 
 mkX :: Int -> X
 mkX i = case i `mod` 3 of
-  0 -> X1 (mkA i)
-  1 -> X2 (mkB i)
-  _ -> X3 (mkC i)
+  0 -> X1 (fields A i)
+  1 -> X2 (fields B i)
+  _ -> X3 (fields C i)
 
 mkF :: Int -> F
 mkF i = case i `mod` 3 of
-  0 -> F1 (mkA i)
-  1 -> F2 (mkB i)
-  _ -> F3 (mkC i)
-
-mkA :: Int -> A
-mkA i =
-  A
-    (T.pack (show i))
-    (if even i then Nothing else Just 2)
-    (i + 3)
-    (T.pack (show (i * 4)))
-    (if even i then Nothing else Just 5)
-    (i + 6)
-    (T.pack (show (i * 7)))
-    (if even i then Nothing else Just 8)
-    (i + 9)
-    (T.pack (show (i * 10)))
-
-mkB :: Int -> B
-mkB i =
-  B
-    (T.pack (show i))
-    (if even i then Nothing else Just 2)
-    (i + 3)
-    (T.pack (show (i * 4)))
-    (if even i then Nothing else Just 5)
-    (i + 6)
-    (T.pack (show (i * 7)))
-    (if even i then Nothing else Just 8)
-    (i + 9)
-    (T.pack (show (i * 10)))
-
-mkC :: Int -> C
-mkC i =
-  C
-    (T.pack (show i))
-    (if even i then Nothing else Just 2)
-    (i + 3)
-    (T.pack (show (i * 4)))
-    (if even i then Nothing else Just 5)
-    (i + 6)
-    (T.pack (show (i * 7)))
-    (if even i then Nothing else Just 8)
-    (i + 9)
-    (T.pack (show (i * 10)))
+  0 -> F1 (fields A i)
+  1 -> F2 (fields B i)
+  _ -> F3 (fields C i)

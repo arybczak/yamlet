@@ -15,23 +15,11 @@ import Types
 -- libraries for one operation and input are next to each other.
 main :: IO ()
 main = do
-  printSize "config" configInput
-  printSize "json" jsonInput
-  printSize "text" textInput
+  mapM_ (uncurry printSize) inputs
   checkDerived
   defaultMain
-    [ bgroup
-        "parse"
-        [ parsing "config" configInput
-        , parsing "json" jsonInput
-        , parsing "text" textInput
-        ]
-    , bgroup
-        "render"
-        [ rendering "config" configInput
-        , rendering "json" jsonInput
-        , rendering "text" textInput
-        ]
+    [ bgroup "parse" (map (uncurry parsing) inputs)
+    , bgroup "render" (map (uncurry rendering) inputs)
     , bgroup
         "decode"
         [ decoding @[Config] "config" configInput []
@@ -49,6 +37,10 @@ main = do
   where
     printSize :: String -> BS.ByteString -> IO ()
     printSize name bs = putStrLn $ name ++ ": " ++ show (BS.length bs `div` 1024) ++ " KiB"
+
+    -- The inputs of the benchmarks that do not decode to a type.
+    inputs :: [(String, BS.ByteString)]
+    inputs = [("config", configInput), ("json", jsonInput), ("text", textInput)]
 
     configInput :: BS.ByteString
     configInput = T.encodeUtf8 $ config 5000
