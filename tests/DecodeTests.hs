@@ -282,7 +282,7 @@ test_blockScalars = do
 test_notFollowedBy :: Assertion
 test_notFollowedBy = do
   let T.Text arr off len = "a"
-      e = P.Env {P.array = arr, P.base = off, P.end = off + len, P.handles = M.empty}
+      e = P.Env {P.array = arr, P.base = off, P.end = off + len, P.streamEnd = off + len, P.handles = M.empty}
   case P.runParser e off (P.notFollowedBy (P.throwAt off "boom")) of
     Left (P.ParseError _ msg) -> assertEqual "message" "boom" msg
     Right _ -> assertFailure "expected an error"
@@ -934,6 +934,11 @@ test_syntaxErrors = do
   check "content after a flow sequence" (1, 14, "expected ',' or ']'") "key: [a, \"b\" c]\n"
   check "flow mapping at the end" (1, 1, "unterminated flow mapping") "{\"a\": 1,\n \"b\": 2\n"
   check "flow mapping before a marker" (1, 1, "unterminated flow mapping") "{a: 1\n---\nb\n"
+  check "start marker in a double-quoted scalar" (2, 1, "unexpected '---' in a double-quoted scalar, indent the line") "a: \"x\n---\n  y\"\n"
+  check "end marker in a single-quoted scalar" (2, 1, "unexpected '...' in a single-quoted scalar, indent the line") "a: 'x\n...\n  y'\n"
+  check "start marker in a flow sequence" (2, 1, "unexpected '---' in a flow sequence, indent the line") "a: [x,\n---\n  y]\n"
+  check "end marker in a flow mapping" (2, 1, "unexpected '...' in a flow mapping, indent the line") "a: {x: 1,\n...\n  y: 2}\n"
+  check "start marker after a missing quote" (1, 4, "unterminated double-quoted scalar") "a: \"x\n---\nb: c\n"
   check "missing colon" (1, 6, "expected ':', ',' or '}'") "{\"a\" 1}"
   check "missing comma after a value" (1, 12, "expected ',' or '}'") "{\"a\": 1 \"b\": 2}"
   check

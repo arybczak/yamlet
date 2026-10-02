@@ -67,6 +67,9 @@ data Env = Env
   -- ^ The index of the first byte of the input.
   , end :: !Int
   -- ^ The index past the last byte that the parser can read.
+  , streamEnd :: !Int
+  -- ^ The index past the last byte of the input. A document ends before it
+  -- at a document marker.
   , handles :: !(M.Map T.Text T.Text)
   -- ^ The tag handles of the current document.
   }

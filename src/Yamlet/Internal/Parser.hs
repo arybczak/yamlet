@@ -104,6 +104,7 @@ parseStream input@(T.Text arr off len) = case prescan e start of
         { array = arr
         , base = off
         , end = off + len
+        , streamEnd = off + len
         , handles = defaultHandles
         }
 
@@ -785,7 +786,7 @@ cQuoted style n c props = withScan $ \e p ->
               let j = skipWhites e i
               in if isBreak (byteAt e j) then fold i j acc else go seg j acc ls
           | isBreak w -> fold i i acc
-          | i >= e.end -> unterminated i
+          | i >= e.end -> endOfDocument i
           | otherwise -> go seg (i + 1) acc ls
         where
           fold :: Int -> Int -> [T.Text] -> Scanned Content
@@ -803,15 +804,20 @@ cQuoted style n c props = withScan $ \e p ->
               else case flowFold e n (breakEnd e (i + 1)) of
                 Just (k, j) -> go j j [] (newLine (T.replicate k "\n" : slice e seg i : acc) ls)
                 Nothing -> badIndent (i + 1)
-        | i + 1 >= e.end = unterminated i
+        | i + 1 >= e.end = endOfDocument i
         | otherwise = case escape e (i + 1) of
             Just (t, j) -> go j j (t : slice e seg i : acc) ls
             Nothing -> Failed i (badEscape i)
 
-      unterminated :: Int -> Scanned Content
-      unterminated i
+      -- The scalar reaches the end of the document at the index.
+      endOfDocument :: Int -> Scanned Content
+      endOfDocument i
         | isKeyCtx c = NoMatch i
-        | otherwise = Failed p ("unterminated " ++ name ++ " scalar")
+        | Just m <- cutByMarker e quote = Failed m (markerInside e (name ++ " scalar"))
+        | otherwise = unterminated
+
+      unterminated :: Scanned Content
+      unterminated = Failed p ("unterminated " ++ name ++ " scalar")
 
       -- A hex escape with digits fails only for a bad code point. Any other
       -- invalid escape likely comes from a Windows path or a regular
@@ -825,7 +831,8 @@ cQuoted style n c props = withScan $ \e p ->
 
       badIndent :: Int -> Scanned Content
       badIndent i
-        | nextContent i >= e.end || not (hasClosingQuote e quote (nextContent i)) = unterminated i
+        | nextContent i >= e.end = endOfDocument i
+        | not (hasClosingQuote e quote (nextContent i)) = unterminated
         | otherwise =
             Failed
               (nextContent i)
@@ -846,6 +853,24 @@ skipBlankLines :: Env -> Int -> Int
 skipBlankLines e i =
   let j = skipWhites e (breakEnd e i)
   in if isBreak (byteAt e j) then skipBlankLines e j else breakEnd e i
+
+-- | A document marker ends the document, and the byte is in the input after
+-- it, e.g. the closing quote of a scalar that the marker cuts. Return the
+-- index of the marker.
+cutByMarker :: Env -> Word8 -> Maybe Int
+cutByMarker e w
+  | e.end < e.streamEnd && any (\j -> A.unsafeIndex e.array j == w) [e.end .. e.streamEnd - 1] = Just e.end
+  | otherwise = Nothing
+
+-- | The error for the document marker that ends the document inside the
+-- node.
+markerInside :: Env -> String -> String
+markerInside e node =
+  "unexpected '"
+    ++ replicate markerLength (chr (fromIntegral (A.unsafeIndex e.array e.end)))
+    ++ "' in a "
+    ++ node
+    ++ ", indent the line"
 
 -- | The line from the index contains a closing quote. If it does not, a line
 -- with a wrong indentation more likely follows a missing quote.
@@ -1119,6 +1144,7 @@ closing c start w kind msg = do
                 throwAt tab "tabs cannot be used for indentation"
             | byteAt e q == w ->
                 throwAt q ("'" ++ [chr (fromIntegral w)] ++ "' is indented too little to end the " ++ kind)
+          Nothing | Just m <- cutByMarker e w -> throwAt m (markerInside e kind)
           _ -> throwAt start ("unterminated " ++ kind)
       | dash e p ->
           throwAt p "unexpected '-', a list item cannot be inside a flow collection, quote '-' if it is a string"

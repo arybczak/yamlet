@@ -21,7 +21,7 @@
 # 5LLU: Block scalar with wrong indented line after spaces only
 4:4: a leading empty line of a block scalar has more spaces than the first non-empty line
 # 5TRB: Invalid document-start marker in doublequoted tring
-2:1: unterminated double-quoted scalar
+3:1: unexpected '---' in a double-quoted scalar, indent the line
 # 5U3A: Sequence on same Line as Mapping Key
 1:6: unexpected '-', a list cannot start on the line of its key
 # 62EZ: Invalid block mapping key on same line as previous key
@@ -51,7 +51,7 @@
 # 9MMA: Directive by itself with no document
 2:1: expected a document start marker (---) after the directives
 # 9MQT/01: Scalar doc with '...' in content
-1:5: unterminated double-quoted scalar
+2:1: unexpected '...' in a double-quoted scalar, indent the line
 # B63P: Directive without document
 2:1: expected a document start marker (---) after the directives
 # BD7L: Invalid mapping after sequence
@@ -119,7 +119,7 @@
 # N4JP: Bad indentation in mapping
 3:2: unexpected indentation
 # N782: Invalid document markers in flow style
-1:1: unterminated flow sequence
+2:1: unexpected '---' in a flow sequence, indent the line
 # P2EQ: Invalid sequene item on same line as previous item
 2:11: unexpected '-' after the end of a flow collection
 # Q4CL: Trailing content after quoted value
@@ -131,7 +131,7 @@
 # RHX7: YAML directive without document end marker
 3:1: unexpected '%', a plain scalar cannot start with it, quote the value
 # RXY3: Invalid document-end marker in single quoted string
-2:1: unterminated single-quoted scalar
+3:1: unexpected '...' in a single-quoted scalar, indent the line
 # S4GJ: Invalid text after block scalar indicator
 2:11: the content of a block scalar starts on the next line
 # S98Z: Block scalar with more spaces than first content line
