@@ -869,47 +869,41 @@ instance FromYaml a => FromYaml (S.Commented a) where
   parseYaml v =
     flip S.Commented (S.copyComments v.comments)
       <$!> parseYaml (S.withComments S.noComments v)
-  parseYamlField k v = flip S.Commented (S.copyComments c) <$!> parseYaml v'
+  parseYamlField k v =
+    flip S.Commented (S.copyComments (S.Comments before inline v.comments.after)) <$!> parseYaml value
     where
-      c :: S.Comments
-      v' :: S.Node
-      (c, v') = entryComments k v
+      -- The lines above a value on the line of its key or in the flow style go
+      -- above the entry, as the renderer writes them. The lines above the
+      -- first entry of a block collection stay in the value, because the
+      -- renderer writes them below the key.
+      block :: Bool
+      block = case v.content of
+        S.SequenceContent S.Block (_ : _) -> True
+        S.MappingContent S.Block (_ : _) -> True
+        _ -> False
+
+      above :: [S.Line]
+      above = k.comments.before ++ if block then [] else v.comments.before
+
+      -- A line has one comment at its end. With an explicit key, both nodes
+      -- can have one, and the renderer writes the comment of the key above.
+      before :: [S.Line]
+      inline :: Maybe T.Text
+      (before, inline) = case (k.comments.inline, v.comments.inline) of
+        (Just kc, Just vc) -> (above ++ [S.Comment kc], Just vc)
+        (kc, vc) -> (above, vc <|> kc)
+
+      -- The value without the comments of the entry.
+      value :: S.Node
+      value =
+        let rest = S.Comments (if block then v.comments.before else []) Nothing []
+        in S.withComments rest v
 
 -- | The value with the offset of its node. The key of an entry goes to the
 -- value inside, e.g. for a 'Yamlet.Commented' value.
 instance FromYaml a => FromYaml (S.Located a) where
   parseYaml n = flip S.Located n.offset <$!> parseYaml n
   parseYamlField k n = flip S.Located n.offset <$!> parseYamlField k n
-
--- | The comments of a mapping entry, and the value without them. The lines
--- above a value on the line of its key or in the flow style go above the
--- entry, as the renderer writes them. The lines above the first entry of a
--- block collection stay in the value, because the renderer writes them below
--- the key.
-entryComments :: S.Node -> S.Node -> (S.Comments, S.Node)
-entryComments k v = (S.Comments before inline v.comments.after, value)
-  where
-    block :: Bool
-    block = case v.content of
-      S.SequenceContent S.Block (_ : _) -> True
-      S.MappingContent S.Block (_ : _) -> True
-      _ -> False
-
-    above :: [S.Line]
-    above = k.comments.before ++ if block then [] else v.comments.before
-
-    -- A line has one comment at its end. With an explicit key, both nodes can
-    -- have one, and the renderer writes the comment of the key above.
-    before :: [S.Line]
-    inline :: Maybe T.Text
-    (before, inline) = case (k.comments.inline, v.comments.inline) of
-      (Just kc, Just vc) -> (above ++ [S.Comment kc], Just vc)
-      (kc, vc) -> (above, vc <|> kc)
-
-    value :: S.Node
-    value =
-      let rest = S.Comments (if block then v.comments.before else []) Nothing []
-      in S.withComments rest v
 
 -- | The value of the node, with the tags resolved and the aliases replaced.
 instance FromYaml Value where

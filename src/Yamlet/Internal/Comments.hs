@@ -42,7 +42,7 @@ data Item = Item
 -- end.
 attachComments :: Env -> Bool -> Bool -> Int -> Maybe Int -> Int -> Int -> Document -> (Document, [Line])
 attachComments e first hasNext start marker rootEnd end doc
-  | not (mayHaveItems e start end) = (doc, [])
+  | not mayHaveItems = (doc, [])
   | null items = (doc, [])
   | otherwise =
       ( doc
@@ -61,7 +61,7 @@ attachComments e first hasNext start marker rootEnd end doc
     items :: [Item]
     items =
       (if isJust marker || not first then id else dropWhile (\i -> isEmptyLine i && i.at < rootStart)) $
-        scanItems e start end (skipRanges e doc.root)
+        scanItems (skipRanges e doc.root)
 
     (docItems, afterMarker) = case marker of
       Just m -> span (\i -> i.at < m - e.base) items
@@ -118,6 +118,84 @@ attachComments e first hasNext start marker rootEnd end doc
     atEnd ls
       | hasNext = ls
       | otherwise = reverse (dropWhile (== EmptyLine) (reverse ls))
+
+    -- A quick check for a comment or an empty line in the document.
+    mayHaveItems :: Bool
+    mayHaveItems = go True start
+      where
+        go :: Bool -> Int -> Bool
+        go blank i
+          | i >= end = False
+          | otherwise = case A.unsafeIndex e.array i of
+              HASH -> True
+              w
+                | isBreak w -> blank || go True (i + 1)
+                | isWhite w -> go blank (i + 1)
+                | otherwise -> go False (i + 1)
+
+    -- The comments and the empty lines of the document, outside the given
+    -- ranges. The offsets of the items are relative to the start of the
+    -- input.
+    scanItems :: [(Int, Int)] -> [Item]
+    scanItems = go start start False False
+      where
+        -- The flags tell if the line has something other than white space and
+        -- if the previous line was empty.
+        go :: Int -> Int -> Bool -> Bool -> [(Int, Int)] -> [Item]
+        go i ls content prevEmpty ranges
+          | i >= end = []
+          | (rs, re) : others <- ranges
+          , rs <= i =
+              if re > i
+                -- A block scalar can end at the start of a line.
+                then let ls' = lineBefore i re ls in go re ls' (ls' /= re) False others
+                else go i ls content prevEmpty others
+          -- The parser allows byte order marks at the start of a line only
+          -- between documents, where a comment can follow them.
+          | i == ls
+          , isBom e i =
+              let j = skipBoms e i in go j j content prevEmpty ranges
+          | otherwise = case A.unsafeIndex e.array i of
+              w
+                | isBreak w ->
+                    let j =
+                          if w == CR && i + 1 < end && A.unsafeIndex e.array (i + 1) == LF
+                            then i + 2
+                            else i + 1
+                        blank = not content
+                        item = [Item (ls - e.base) (ls - e.base) True EmptyLine | blank, not prevEmpty]
+                    in item ++ go j j False blank ranges
+                | w == HASH && (i == ls || isWhite (A.unsafeIndex e.array (i - 1))) ->
+                    let eol = lineEnd i
+                        -- A comment at the end of a line keeps its text after
+                        -- the first #, because 'Comments' has no count for it.
+                        textStart = if content then i + 1 else hashesEnd i
+                        text = T.stripEnd . dropSpace $ slice e textStart eol
+                    in Item (i - e.base) (ls - e.base) (not content) (CommentLine (textStart - i) text)
+                         : go eol ls True prevEmpty ranges
+                | isWhite w -> go (i + 1) ls content prevEmpty ranges
+                | otherwise -> go (i + 1) ls True prevEmpty ranges
+
+        hashesEnd :: Int -> Int
+        hashesEnd i
+          | i < end && A.unsafeIndex e.array i == HASH = hashesEnd (i + 1)
+          | otherwise = i
+
+        lineEnd :: Int -> Int
+        lineEnd i
+          | i < end && not (isBreak (A.unsafeIndex e.array i)) = lineEnd (i + 1)
+          | otherwise = i
+
+        -- The start of the line of the second index, or the given start if no
+        -- line break is between the indices.
+        lineBefore :: Int -> Int -> Int -> Int
+        lineBefore i j ls
+          | j <= i = ls
+          | isBreak (A.unsafeIndex e.array (j - 1)) = j
+          | otherwise = lineBefore i (j - 1) ls
+
+        dropSpace :: T.Text -> T.Text
+        dropSpace t = fromMaybe t (textStripPrefix " " t)
 
 -- | The start of the first line from the index that is empty or has more than
 -- a comment or a @...@ marker. The index is the start of a line.
@@ -182,7 +260,7 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
     en = offsetOf n.endOffset
 
     lineStart, column :: Int
-    lineStart = lineFrom e known s
+    lineStart = lineFrom known s
     column = s - lineStart
 
     -- The lines above the node. A comment at the end of a line that no node
@@ -364,37 +442,23 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
     between :: Int -> Int -> T.Text
     between i j = slice e (i + e.base) (j + e.base)
 
-comment :: Item -> Maybe T.Text
-comment i = case i.line of
-  Comment t -> Just t
-  EmptyLine -> Nothing
+    comment :: Item -> Maybe T.Text
+    comment i = case i.line of
+      Comment t -> Just t
+      EmptyLine -> Nothing
 
--- | The offset of the start of the line with the second offset. The walk stops
--- at the first offset of the pair, and the pair gives the start of its line.
--- Without it, each nested block collection of a long line would walk back to
--- the start of the line, and the time would be quadratic.
-lineFrom :: Env -> (Int, Int) -> Int -> Int
-lineFrom e (p, ls) o = go (o + e.base)
-  where
-    go :: Int -> Int
-    go i
-      | i == p + e.base = ls
-      | i > e.base && not (isBreak (A.unsafeIndex e.array (i - 1))) = go (i - 1)
-      | otherwise = i - e.base
-
--- | A quick check for a comment or an empty line between the indices.
-mayHaveItems :: Env -> Int -> Int -> Bool
-mayHaveItems e = go True
-  where
-    go :: Bool -> Int -> Int -> Bool
-    go blank i stop
-      | i >= stop = False
-      | otherwise = case A.unsafeIndex e.array i of
-          HASH -> True
-          w
-            | isBreak w -> blank || go True (i + 1) stop
-            | isWhite w -> go blank (i + 1) stop
-            | otherwise -> go False (i + 1) stop
+    -- The offset of the start of the line with the second offset. The walk
+    -- stops at the first offset of the pair, and the pair gives the start of
+    -- its line. Without it, each nested block collection of a long line would
+    -- walk back to the start of the line, and the time would be quadratic.
+    lineFrom :: (Int, Int) -> Int -> Int
+    lineFrom (p, ls) o = go (o + e.base)
+      where
+        go :: Int -> Int
+        go i
+          | i == p + e.base = ls
+          | i > e.base && not (isBreak (A.unsafeIndex e.array (i - 1))) = go (i - 1)
+          | otherwise = i - e.base
 
 -- | The ranges of the scalars, which cannot contain comments, in the order of
 -- the input. The range of a block scalar starts after its header.
@@ -420,66 +484,3 @@ skipRanges e root = go root []
       | i >= e.end = i
       | isBreak (A.unsafeIndex e.array i) = i + 1
       | otherwise = nextLine (i + 1)
-
--- | The comments and the empty lines between the indices, outside the given
--- ranges. The offsets of the items are relative to the start of the input.
-scanItems :: Env -> Int -> Int -> [(Int, Int)] -> [Item]
-scanItems e start stop = go start start False False
-  where
-    -- The flags tell if the line has something other than white space and if
-    -- the previous line was empty.
-    go :: Int -> Int -> Bool -> Bool -> [(Int, Int)] -> [Item]
-    go i ls content prevEmpty ranges
-      | i >= stop = []
-      | (rs, re) : rest <- ranges
-      , rs <= i =
-          if re > i
-            -- A block scalar can end at the start of a line.
-            then let ls' = lineBefore i re ls in go re ls' (ls' /= re) False rest
-            else go i ls content prevEmpty rest
-      -- The parser allows byte order marks at the start of a line only
-      -- between documents, where a comment can follow them.
-      | i == ls
-      , isBom e i =
-          let j = skipBoms e i in go j j content prevEmpty ranges
-      | otherwise = case A.unsafeIndex e.array i of
-          w
-            | isBreak w ->
-                let next =
-                      if w == CR && i + 1 < stop && A.unsafeIndex e.array (i + 1) == LF
-                        then i + 2
-                        else i + 1
-                    blank = not content
-                    item = [Item (ls - e.base) (ls - e.base) True EmptyLine | blank, not prevEmpty]
-                in item ++ go next next False blank ranges
-            | w == HASH && (i == ls || isWhite (A.unsafeIndex e.array (i - 1))) ->
-                let eol = lineEnd i
-                    -- A comment at the end of a line keeps its text after
-                    -- the first #, because 'Comments' has no count for it.
-                    textStart = if content then i + 1 else hashesEnd i
-                    text = T.stripEnd . dropSpace $ slice e textStart eol
-                in Item (i - e.base) (ls - e.base) (not content) (CommentLine (textStart - i) text)
-                     : go eol ls True prevEmpty ranges
-            | isWhite w -> go (i + 1) ls content prevEmpty ranges
-            | otherwise -> go (i + 1) ls True prevEmpty ranges
-
-    hashesEnd :: Int -> Int
-    hashesEnd i
-      | i < stop && A.unsafeIndex e.array i == HASH = hashesEnd (i + 1)
-      | otherwise = i
-
-    lineEnd :: Int -> Int
-    lineEnd i
-      | i < stop && not (isBreak (A.unsafeIndex e.array i)) = lineEnd (i + 1)
-      | otherwise = i
-
-    -- The start of the line of the second index, or the given start if no
-    -- line break is between the indices.
-    lineBefore :: Int -> Int -> Int -> Int
-    lineBefore i j ls
-      | j <= i = ls
-      | isBreak (A.unsafeIndex e.array (j - 1)) = j
-      | otherwise = lineBefore i (j - 1) ls
-
-    dropSpace :: T.Text -> T.Text
-    dropSpace t = fromMaybe t (textStripPrefix " " t)

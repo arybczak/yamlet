@@ -417,16 +417,16 @@ tagHandles n0 = nubOrd (go n0 [])
         MappingContent _ kvs -> foldr (\(k, v) -> go k . go v) acc kvs
         _ -> acc
 
--- | The character whose handle a tag needs, if the tag needs a directive.
-tagHandle :: T.Text -> Maybe Char
-tagHandle tag = case T.uncons tag of
-  Just (c, suffix)
-    | c /= '!'
-    , not (T.null suffix)
-    , not (textIsPrefixOf coreTagPrefix tag)
-    , not (isVerbatim tag) ->
-        Just c
-  _ -> Nothing
+    -- The character whose handle a tag needs, if the tag needs a directive.
+    tagHandle :: T.Text -> Maybe Char
+    tagHandle tag = case T.uncons tag of
+      Just (c, suffix)
+        | c /= '!'
+        , not (T.null suffix)
+        , not (textIsPrefixOf coreTagPrefix tag)
+        , not (isVerbatim tag) ->
+            Just c
+      _ -> Nothing
 
 -- | The @%TAG@ directive of the handle for the tags that start with the
 -- character, with the line break. The prefix is always an escape, because

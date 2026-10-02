@@ -883,7 +883,7 @@ instance
       | otherwise -> case gToValue x of
           Nothing -> mapping (withTagEntry [])
           Just v
-            | enc == TaggedFlat, Just entries <- flatEntries opts v -> mapping (withTagEntry entries)
+            | enc == TaggedFlat, Just entries <- flatEntries v -> mapping (withTagEntry entries)
             | otherwise -> mapping (withTagEntry [gToEntry (string opts.contentsKey) x])
     Nothing
       | gNamed @f -> mapping (gToEntries opts (unM1 <$> def) x)
@@ -891,19 +891,19 @@ instance
     where
       withTagEntry :: [(S.Node, S.Node)] -> [(S.Node, S.Node)]
       withTagEntry entries = (opts.tagKey .= gTag opts c) : entries
-  {-# INLINE gToConstructor #-}
 
--- | The entries of a field next to the tag, if the decoder can read them
--- back. The field must be a mapping with a key, and no key can be the tag
--- key or the contents key. The decoder reads a mapping with the contents key
--- as the other form.
-flatEntries :: YamlOptions -> S.Node -> Maybe [(S.Node, S.Node)]
-flatEntries opts v = case v.content of
-  S.MappingContent _ kvs
-    | null kvs -> Nothing
-    | any (\(k, _) -> isKey opts.tagKey k || isKey opts.contentsKey k) kvs -> Nothing
-    | otherwise -> Just kvs
-  _ -> Nothing
+      -- The entries of a field next to the tag, if the decoder can read them
+      -- back. The field must be a mapping with a key, and no key can be the
+      -- tag key or the contents key. The decoder reads a mapping with the
+      -- contents key as the other form.
+      flatEntries :: S.Node -> Maybe [(S.Node, S.Node)]
+      flatEntries v = case v.content of
+        S.MappingContent _ kvs
+          | null kvs -> Nothing
+          | any (\(k, _) -> isKey opts.tagKey k || isKey opts.contentsKey k) kvs -> Nothing
+          | otherwise -> Just kvs
+        _ -> Nothing
+  {-# INLINE gToConstructor #-}
 
 -- | The encoder of the fields of a constructor.
 --

@@ -109,7 +109,103 @@ renderSyntax opts = emptyLines . B.runBuilder . go True
               next : _ -> not (null next.docComments.before)
               [] -> False
             prepared = validAnchors doc {root = commentedBlocks doc.root}
-        in document opts afterEnd nextLines prepared <> go (writesEnd opts prepared) docs
+        in document afterEnd nextLines prepared <> go (writesEnd opts prepared) docs
+
+    -- A document. The flags tell if it starts the stream or follows a
+    -- document end marker, and if the next document has lines above its
+    -- start marker.
+    document :: Bool -> Bool -> Document -> B.Builder
+    document afterEnd nextLines doc =
+      mconcat
+        [ if needsEnd then "...\n" else mempty
+        , gap
+        , lines_ 0 doc.docComments.before
+        , if directives
+            then
+              foldMap
+                (\v -> "%YAML " <> B.fromUnboundedDec v.major <> "." <> B.fromUnboundedDec v.minor <> "\n")
+                version
+                <> foldMap tagDirective handles
+            else mempty
+        , body
+        , if writesEnd opts doc then "...\n" else mempty
+        , lines_ 0 doc.docComments.after
+        ]
+      where
+        -- A block scalar without content at the top level would take the
+        -- lines below it in, also those of the next document.
+        r :: Node
+        r = case doc.root.content of
+          ScalarLinesContent style t starts
+            | isBlockScalar style
+            , needsIndentIndicator t || T.all (== '\n') t && (not (null doc.root.comments.after) || nextLines) ->
+                doc.root {content = ScalarLinesContent DoubleQuoted t starts}
+          _ -> doc.root
+
+        -- The end of the document above takes the comments right below it.
+        -- The lines above the first entry of a block root come first too.
+        gap :: B.Builder
+        gap = case if null doc.docComments.before && not marker then aboveIndicator opts r else doc.docComments.before of
+          Comment _ : _ -> lines_ 0 [EmptyLine]
+          _ -> mempty
+
+        handles :: [Char]
+        handles = tagHandles r
+
+        -- The parser rejects the other versions.
+        version :: Maybe YamlVersion
+        version = case doc.version of
+          Just v | v.major == 1, v.minor >= 0, v.minor <= maxVersion -> Just v
+          _ -> Nothing
+
+        directives :: Bool
+        directives = isJust version || not (null handles)
+
+        needsEnd :: Bool
+        needsEnd = not afterEnd && directives
+
+        -- A document needs a start marker after another document, after
+        -- directives, for a comment on the marker line, and if it is empty. A
+        -- block collection has no line of its own for its comment. Without
+        -- the marker, the lines above a document read back as the root's.
+        marker :: Bool
+        marker =
+          doc.explicitStart
+            || directives
+            || not afterEnd
+            || isEmpty r
+            || not (null doc.docComments.before)
+            || isJust doc.docComments.inline
+            || (isBlock opts r && isJust r.comments.inline)
+
+        -- The marker line holds one comment. The comment of a block
+        -- collection goes below it if the document has one too.
+        (markerComment, rootLines) = case (doc.docComments.inline, r.comments.inline) of
+          (Just dc, Just rc) | isBlock opts r -> (Just dc, Comment rc : r.comments.before)
+          (dc, rc) -> (dc <|> (if isBlock opts r then rc else Nothing), r.comments.before)
+
+        body :: B.Builder
+        body
+          | isBlock opts r =
+              (if marker then "---" <> comment markerComment <> "\n" else mempty)
+                <> lines_ 0 (separated rootLines ++ (if isJust (props r) then firstLines opts r else []))
+                <> maybe mempty (<> "\n") (props r)
+                <> block opts 0 0 True (isJust (props r)) [] r
+          | otherwise = scalarBody <> linesBelow 0 r
+
+        scalarBody :: B.Builder
+        scalarBody
+          | isEmpty r = case (doc.docComments.inline, r.comments.inline) of
+              (Just dc, Just rc) -> "---" <> comment (Just dc) <> "\n" <> lines_ 0 (r.comments.before ++ [Comment rc])
+              (dc, rc) -> "---" <> comment (dc <|> rc) <> "\n" <> lines_ 0 r.comments.before
+          | marker =
+              "---"
+                <> comment doc.docComments.inline
+                <> "\n"
+                <> lines_ 0 r.comments.before
+                <> inline opts InValue indentStep r r.comments.inline
+                <> "\n"
+          | otherwise = lines_ 0 r.comments.before <> inline opts InValue indentStep r r.comments.inline <> "\n"
 
 -- | The node with every flow collection that has a comment inside
 -- in the block style, so that every comment has a line. The comments of a
@@ -223,106 +319,11 @@ writesEnd opts doc =
       MappingContent {} -> isBlock opts doc.root
       _ -> True
 
--- | A document. The flags tell if it starts the stream or follows a document
--- end marker, and if the next document has lines above its start marker.
-document :: RenderOptions -> Bool -> Bool -> Document -> B.Builder
-document opts afterEnd nextLines doc =
-  mconcat
-    [ if needsEnd then "...\n" else mempty
-    , gap
-    , lines_ 0 doc.docComments.before
-    , if directives
-        then
-          foldMap
-            (\v -> "%YAML " <> B.fromUnboundedDec v.major <> "." <> B.fromUnboundedDec v.minor <> "\n")
-            version
-            <> foldMap tagDirective handles
-        else mempty
-    , body
-    , if writesEnd opts doc then "...\n" else mempty
-    , lines_ 0 doc.docComments.after
-    ]
-  where
-    -- A block scalar without content at the top level would take the lines
-    -- below it in, also those of the next document.
-    r :: Node
-    r = case doc.root.content of
-      ScalarLinesContent style t starts
-        | isBlockScalar style
-        , needsIndentIndicator t || T.all (== '\n') t && (not (null doc.root.comments.after) || nextLines) ->
-            doc.root {content = ScalarLinesContent DoubleQuoted t starts}
-      _ -> doc.root
-
-    -- The end of the document above takes the comments right below it. The
-    -- lines above the first entry of a block root come first too.
-    gap :: B.Builder
-    gap = case if null doc.docComments.before && not marker then aboveIndicator opts r else doc.docComments.before of
-      Comment _ : _ -> lines_ 0 [EmptyLine]
-      _ -> mempty
-
-    handles :: [Char]
-    handles = tagHandles r
-
-    -- The parser rejects the other versions.
-    version :: Maybe YamlVersion
-    version = case doc.version of
-      Just v | v.major == 1, v.minor >= 0, v.minor <= maxVersion -> Just v
-      _ -> Nothing
-
-    directives :: Bool
-    directives = isJust version || not (null handles)
-
-    needsEnd :: Bool
-    needsEnd = not afterEnd && directives
-
-    -- A document needs a start marker after another document, after
-    -- directives, for a comment on the marker line, and if it is empty. A
-    -- block collection has no line of its own for its comment. Without the
-    -- marker, the lines above a document read back as the root's.
-    marker :: Bool
-    marker =
-      doc.explicitStart
-        || directives
-        || not afterEnd
-        || isEmpty r
-        || not (null doc.docComments.before)
-        || isJust doc.docComments.inline
-        || (isBlock opts r && isJust r.comments.inline)
-
-    -- The marker line holds one comment. The comment of a block collection
-    -- goes below it if the document has one too.
-    (markerComment, rootLines) = case (doc.docComments.inline, r.comments.inline) of
-      (Just dc, Just rc) | isBlock opts r -> (Just dc, Comment rc : r.comments.before)
-      (dc, rc) -> (dc <|> (if isBlock opts r then rc else Nothing), r.comments.before)
-
-    body :: B.Builder
-    body
-      | isBlock opts r =
-          (if marker then "---" <> comment markerComment <> "\n" else mempty)
-            <> lines_ 0 (separated rootLines ++ (if isJust (props r) then firstLines opts r else []))
-            <> maybe mempty (<> "\n") (props r)
-            <> block opts 0 0 True (isJust (props r)) [] r
-      | otherwise = scalarBody <> linesBelow 0 r
-
-    scalarBody :: B.Builder
-    scalarBody
-      | isEmpty r = case (doc.docComments.inline, r.comments.inline) of
-          (Just dc, Just rc) -> "---" <> comment (Just dc) <> "\n" <> lines_ 0 (r.comments.before ++ [Comment rc])
-          (dc, rc) -> "---" <> comment (dc <|> rc) <> "\n" <> lines_ 0 r.comments.before
-      | marker =
-          "---"
-            <> comment doc.docComments.inline
-            <> "\n"
-            <> lines_ 0 r.comments.before
-            <> inline opts InValue indentStep r r.comments.inline
-            <> "\n"
-      | otherwise = lines_ 0 r.comments.before <> inline opts InValue indentStep r r.comments.inline <> "\n"
-
 -- | The entries of a block collection at the given indentation, and the lines
 -- after them at the given column. The first entry does not start with
 -- indentation if the collection continues a line, and the lines above it are
 -- not written if the caller wrote them already. The given lines go to the
--- first entry if it starts below its indicator, as in 'indicatorLines'.
+-- first entry if it starts below its indicator, as in @indicatorLines@.
 block :: RenderOptions -> Int -> Int -> Bool -> Bool -> [Line] -> Node -> B.Builder
 block opts indent afterColumn atLineStart hoisted carried n = case n.content of
   SequenceContent _ xs -> mconcat (zipWith item [0 :: Int ..] xs) <> lines_ afterColumn n.comments.after
@@ -432,7 +433,7 @@ block opts indent afterColumn atLineStart hoisted carried n = case n.content of
 
 -- | A node after the indicator of a sequence item or an explicit entry, with
 -- the line break, and the lines below the indicator and the lines for the
--- first entry from 'indicatorLines'. A block collection starts on the same
+-- first entry from @indicatorLines@. A block collection starts on the same
 -- line if it can. The lines after a scalar go at the given column.
 after :: RenderOptions -> Int -> Int -> [Line] -> [Line] -> Node -> B.Builder
 after opts indent column below rest n
@@ -572,7 +573,7 @@ inline opts pos indent n lineComment = case n.content of
 
     content_ :: B.Builder
     content_ = case n.content of
-      ScalarLinesContent style t starts -> scalar pos indent (if inKey then [] else starts) style t
+      ScalarLinesContent style t starts -> scalar (if inKey then [] else starts) style t
       SequenceContent _ [] | hasEndLines n -> "[\n" <> lines_ indent (fst (bracketLines n)) <> spaces indent <> "]"
       MappingContent _ [] | hasEndLines n -> "{\n" <> lines_ indent (fst (bracketLines n)) <> spaces indent <> "}"
       SequenceContent _ xs -> "[" <> commas (map (\x -> inline opts itemPos indent (flowItem x) Nothing) xs) <> "]"
@@ -607,21 +608,21 @@ inline opts pos indent n lineComment = case n.content of
       [] -> mempty
       b : bs -> b <> mconcat (map (", " <>) bs)
 
--- | A scalar in its style, or in a style that can hold its text, on the lines
--- that start at the positions. The lines after the first one are at the
--- given indentation.
-scalar :: Position -> Int -> [Int] -> ScalarStyle -> T.Text -> B.Builder
-scalar pos indent starts style t = case style of
-  Plain
-    | T.null t -> mempty
-    | null starts -> if plainSyntax inFlow t then B.fromText t else quotedPlain t
-    | Just b <- plainLines inFlow indent starts t -> b
-    | otherwise -> quotedPlainLines indent starts t
-  SingleQuoted -> fromMaybe (doubleQuotedLines indent starts t) (singleQuotedLines indent starts t)
-  _ -> doubleQuotedLines indent starts t
-  where
-    inFlow :: Bool
-    inFlow = pos == InFlow || pos == InFlowKey
+    -- A scalar in its style, or in a style that can hold its text, on the
+    -- lines that start at the positions. The lines after the first one are at
+    -- the indentation.
+    scalar :: [Int] -> ScalarStyle -> T.Text -> B.Builder
+    scalar starts style t = case style of
+      Plain
+        | T.null t -> mempty
+        | null starts -> if plainSyntax inFlow t then B.fromText t else quotedPlain t
+        | Just b <- plainLines inFlow indent starts t -> b
+        | otherwise -> quotedPlainLines indent starts t
+      SingleQuoted -> fromMaybe (doubleQuotedLines indent starts t) (singleQuotedLines indent starts t)
+      _ -> doubleQuotedLines indent starts t
+      where
+        inFlow :: Bool
+        inFlow = pos == InFlow || pos == InFlowKey
 
 -- | A key on one line, or 'Nothing' if it needs an explicit entry.
 implicitKey :: RenderOptions -> Node -> Maybe B.Builder

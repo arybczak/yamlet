@@ -40,7 +40,7 @@ import Yamlet.Internal.Utils
 
 -- | Parse all documents of a stream.
 parseStream :: T.Text -> Either Error [Document]
-parseStream input@(T.Text arr off len) = case prescan e start of
+parseStream input@(T.Text arr off len) = case prescan of
   Left i -> Left $ errorAt input (toOffset e i) ("invalid character " ++ codePointName (T.head (slice e i e.end)))
   Right (markers, boms) -> case runParser e start (lYamlStream markers) of
     Left (ParseError i msg) -> Left $ parseError i msg
@@ -101,48 +101,48 @@ parseStream input@(T.Text arr off len) = case prescan e start of
     start :: Int
     start = streamStart e
 
+    -- Check that the input has only characters that YAML allows, and find
+    -- the lines that start with a document marker, and the byte order marks.
+    -- A document cannot contain such a line. A marker after a byte order mark
+    -- does not count: a quoted scalar can contain the line, and other nodes
+    -- end at the mark anyway. Each byte order mark comes with a flag that is
+    -- true if the mark is at the start of a line, as 'isStartOfLine' tells.
+    -- Return the index of an invalid character on error.
+    prescan :: Either Int ([Int], [(Int, Bool)])
+    prescan = go start start [start | isMarker e start] []
+      where
+        -- A byte order mark at index ls is at the start of a line.
+        go :: Int -> Int -> [Int] -> [(Int, Bool)] -> Either Int ([Int], [(Int, Bool)])
+        go i ls acc boms
+          | i >= e.end = Right (reverse acc, reverse boms)
+          | otherwise =
+              let w = A.unsafeIndex e.array i
+              in if
+                   | w >= SPACE && w < DEL -> go (i + 1) ls acc boms
+                   | w == LF || (w == CR && byteAt e (i + 1) /= LF) ->
+                       let s = i + 1
+                       in go s s (if isMarker e s then s : acc else acc) boms
+                   | w == CR || w == TAB -> go (i + 1) ls acc boms
+                   | w < SPACE || w == DEL -> Left i
+                   -- C1 control characters except NEL.
+                   | w == 0xC2 && i + 1 < e.end
+                   , let w1 = A.unsafeIndex e.array (i + 1)
+                   , w1 >= 0x80 && w1 <= 0x9F && w1 /= 0x85 ->
+                       Left i
+                   -- U+FFFE and U+FFFF.
+                   | w == 0xEF && i + 2 < e.end
+                   , A.unsafeIndex e.array (i + 1) == 0xBF
+                   , let w2 = A.unsafeIndex e.array (i + 2)
+                   , w2 == 0xBE || w2 == 0xBF ->
+                       Left i
+                   | w == 0xEF && isBom e i ->
+                       let next = i + bomLength
+                       in go next (if i == ls then next else ls) acc ((i, i == ls) : boms)
+                   | otherwise -> go (i + 1) ls acc boms
+
 -- | The index after the byte order mark at the start of the input.
 streamStart :: Env -> Int
 streamStart e = if isBom e e.base then e.base + bomLength else e.base
-
--- | Check that the input has only characters that YAML allows, and find the
--- lines that start with a document marker, and the byte order marks. A
--- document cannot contain such a line. A marker after a byte order mark does
--- not count: a quoted scalar can contain the line, and other nodes end at the
--- mark anyway. Each byte order mark comes with a flag that is true if the
--- mark is at the start of a line, as 'isStartOfLine' tells. Return the index
--- of an invalid character on error.
-prescan :: Env -> Int -> Either Int ([Int], [(Int, Bool)])
-prescan e start = go start start [start | isMarker e start] []
-  where
-    -- A byte order mark at index ls is at the start of a line.
-    go :: Int -> Int -> [Int] -> [(Int, Bool)] -> Either Int ([Int], [(Int, Bool)])
-    go i ls acc boms
-      | i >= e.end = Right (reverse acc, reverse boms)
-      | otherwise =
-          let w = A.unsafeIndex e.array i
-          in if
-               | w >= SPACE && w < DEL -> go (i + 1) ls acc boms
-               | w == LF || (w == CR && byteAt e (i + 1) /= LF) ->
-                   let s = i + 1
-                   in go s s (if isMarker e s then s : acc else acc) boms
-               | w == CR || w == TAB -> go (i + 1) ls acc boms
-               | w < SPACE || w == DEL -> Left i
-               -- C1 control characters except NEL.
-               | w == 0xC2 && i + 1 < e.end
-               , let w1 = A.unsafeIndex e.array (i + 1)
-               , w1 >= 0x80 && w1 <= 0x9F && w1 /= 0x85 ->
-                   Left i
-               -- U+FFFE and U+FFFF.
-               | w == 0xEF && i + 2 < e.end
-               , A.unsafeIndex e.array (i + 1) == 0xBF
-               , let w2 = A.unsafeIndex e.array (i + 2)
-               , w2 == 0xBE || w2 == 0xBF ->
-                   Left i
-               | w == 0xEF && isBom e i ->
-                   let next = i + bomLength
-                   in go next (if i == ls then next else ls) acc ((i, i == ls) : boms)
-               | otherwise -> go (i + 1) ls acc boms
 
 ----------------------------------------
 -- Contexts
@@ -252,15 +252,15 @@ bBreak = do
   p <- pos
   if isBreak (byteAt e p) then setPos (breakEnd e p) else failure
 
-atEnd :: P ()
-atEnd = do
-  e <- env
-  p <- pos
-  guardP $ p >= e.end
-
 -- | b-comment
 bComment :: P ()
 bComment = bBreak <|> atEnd
+  where
+    atEnd :: P ()
+    atEnd = do
+      e <- env
+      p <- pos
+      guardP $ p >= e.end
 
 -- | s-b-comment
 sBComment :: P ()
@@ -1399,7 +1399,7 @@ cLBlockScalar n props = do
     -- At the top level, n is -1. A literal reading of the specification then
     -- gives |1 no indentation, but libyaml and other parsers count from 0.
     Just m -> pure $ max 0 n + m
-    Nothing -> case detectIndent e n q of
+    Nothing -> case detectIndent e q of
       Right m -> pure m
       Left i ->
         throwAt
@@ -1420,6 +1420,44 @@ cLBlockScalar n props = do
   setPos r
   lTrailComments indent
   pure $! mkNode e p (toOffset e contentEnd) props (ScalarLinesContent style value starts)
+  where
+    -- Detect the content indentation of a block scalar from its first
+    -- non-empty line. Return the index of a leading empty line with too many
+    -- spaces on error.
+    detectIndent :: Env -> Int -> Either Int Int
+    detectIndent e = go 0 Nothing
+      where
+        go :: Int -> Maybe Int -> Int -> Either Int Int
+        go maxEmpty maxAt i =
+          let s = skipSpaces e i
+              k = s - i
+              w = byteAt e s
+          in if
+               | isBreak w || (s >= e.end && k > 0) ->
+                   go (max maxEmpty k) (if k > maxEmpty then Just s else maxAt) (breakEnd e s)
+               | s >= e.end || k <= n -> Right (max (n + 1) (max maxEmpty 1))
+               | maxEmpty > k, Just j <- maxAt -> Left j
+               | otherwise -> Right k
+
+    literalText :: [BlockLine] -> T.Text
+    literalText = \case
+      [] -> T.empty
+      BlockLine k t : rest -> T.concat $ T.replicate k "\n" : t : concatMap line rest
+      where
+        line :: BlockLine -> [T.Text]
+        line (BlockLine k t) = ["\n", T.replicate k "\n", t]
+
+    -- Apply the chomping to the content of a block scalar. The end of the
+    -- input counts as a line break, as in the YAML test suite.
+    chomp :: Chomping -> Bool -> Int -> T.Text -> T.Text
+    chomp chomping hasContent trailing text = case chomping of
+      Strip -> text
+      Clip
+        | hasContent -> text <> "\n"
+        | otherwise -> text
+      Keep
+        | hasContent -> text <> T.replicate (trailing + 1) "\n"
+        | otherwise -> T.replicate trailing "\n"
 
 -- | c-b-block-header(t). Return the chomping and the indentation indicator.
 cBBlockHeader :: Int -> P (Chomping, Maybe Int)
@@ -1455,24 +1493,6 @@ cBBlockHeader p = do
     indentOf w
       | w >= DIGIT_1 && w <= DIGIT_9 = Just (fromIntegral (w - DIGIT_0))
       | otherwise = Nothing
-
--- | Detect the content indentation of a block scalar from its first non-empty
--- line. Return the index of a leading empty line with too many spaces on
--- error.
-detectIndent :: Env -> Int -> Int -> Either Int Int
-detectIndent e n = go 0 Nothing
-  where
-    go :: Int -> Maybe Int -> Int -> Either Int Int
-    go maxEmpty maxAt i =
-      let s = skipSpaces e i
-          k = s - i
-          w = byteAt e s
-      in if
-           | isBreak w || (s >= e.end && k > 0) ->
-               go (max maxEmpty k) (if k > maxEmpty then Just s else maxAt) (breakEnd e s)
-           | s >= e.end || k <= n -> Right (max (n + 1) (max maxEmpty 1))
-           | maxEmpty > k, Just j <- maxAt -> Left j
-           | otherwise -> Right k
 
 -- | A content line of a block scalar: the number of empty lines before it and
 -- its text after the indentation.
@@ -1519,14 +1539,6 @@ blockLines e indent = go 0 []
       | j < e.end && not (isBreak (byteAt e j)) = lineEnd (j + 1)
       | otherwise = j
 
-literalText :: [BlockLine] -> T.Text
-literalText = \case
-  [] -> T.empty
-  BlockLine k t : rest -> T.concat $ T.replicate k "\n" : t : concatMap line rest
-  where
-    line :: BlockLine -> [T.Text]
-    line (BlockLine k t) = ["\n", T.replicate k "\n", t]
-
 -- | The text of a folded block scalar and the positions where its lines
 -- start.
 foldedText :: [BlockLine] -> (T.Text, [Int])
@@ -1550,18 +1562,6 @@ foldedText = \case
     isSpaced t = case T.uncons t of
       Just (ch, _) -> ch == ' ' || ch == '\t'
       Nothing -> False
-
--- | Apply the chomping to the content of a block scalar. The end of the input
--- counts as a line break, as in the YAML test suite.
-chomp :: Chomping -> Bool -> Int -> T.Text -> T.Text
-chomp chomping hasContent trailing text = case chomping of
-  Strip -> text
-  Clip
-    | hasContent -> text <> "\n"
-    | otherwise -> text
-  Keep
-    | hasContent -> text <> T.replicate (trailing + 1) "\n"
-    | otherwise -> T.replicate trailing "\n"
 
 -- | l-trail-comments(n)
 lTrailComments :: Int -> P ()
