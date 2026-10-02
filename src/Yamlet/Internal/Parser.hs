@@ -463,6 +463,13 @@ directives = go Nothing defaultHandles Set.empty
       q <- pos
       throwAt (skipWhites e q) msg
 
+    -- s-separate-in-line between the parts of a directive, or the error.
+    separator :: String -> P ()
+    separator msg = do
+      w <- peek
+      unless (isWhite w) $ throwAfter msg
+      sSeparateInLine
+
     directiveName :: P T.Text
     directiveName = do
       e <- env
@@ -481,9 +488,7 @@ directives = go Nothing defaultHandles Set.empty
 
     yamlVersion :: Int -> P YamlVersion
     yamlVersion p = do
-      w <- peek
-      unless (isWhite w) $ throwAfter badVersion
-      sSeparateInLine
+      separator badVersion
       v <- pos
       major <- number v
       char DOT <|> throwAt v badVersion
@@ -521,15 +526,10 @@ directives = go Nothing defaultHandles Set.empty
     tagDirective :: P (T.Text, T.Text)
     tagDirective = do
       e <- env
-      w <- peek
-      unless (isWhite w) $
-        throwAfter "expected a tag handle and a prefix after %TAG, e.g. %TAG !e! tag:example.com,2000:"
-      sSeparateInLine
+      separator "expected a tag handle and a prefix after %TAG, e.g. %TAG !e! tag:example.com,2000:"
       h <- pos
       handle <- cTagHandle <|> throwAt h "invalid tag handle"
-      w' <- peek
-      unless (isWhite w') $ throwAfter noPrefix
-      sSeparateInLine
+      separator noPrefix
       q <- pos
       first <- peek
       when (first == 0 || isBreak first || first == HASH) $ throwAt q noPrefix
