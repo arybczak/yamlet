@@ -182,9 +182,14 @@ option a p = p <|> pure a
 -- an error, as in '<|>'.
 notFollowedBy :: P a -> P ()
 notFollowedBy (P g) = P $ \e p fu -> case g e p fu of
-  OK# {} -> Fail# (if isTrue# (p ># fu) then p else fu)
+  OK# {} -> Fail# (furthestOf p fu)
   Fail# _ -> OK# () p fu
   Err# err -> Err# err
+
+-- | The furthest of a position where the parser failed and the furthest
+-- failure so far.
+furthestOf :: Int# -> Int# -> Int#
+furthestOf p fu = if isTrue# (p ># fu) then p else fu
 
 ----------------------------------------
 -- Primitives
@@ -214,7 +219,7 @@ peekAt :: Int -> P Word8
 peekAt k = P $ \e p fu -> OK# (byteAt e (I# p + k)) p fu
 
 failure :: P a
-failure = P $ \_ p fu -> Fail# (if isTrue# (p ># fu) then p else fu)
+failure = P $ \_ p fu -> Fail# (furthestOf p fu)
 
 guardP :: Bool -> P ()
 guardP b = unless b failure
@@ -234,7 +239,7 @@ char :: Word8 -> P ()
 char w = P $ \e p fu ->
   if byteAt e (I# p) == w
     then OK# () (p +# 1#) fu
-    else Fail# (if isTrue# (p ># fu) then p else fu)
+    else Fail# (furthestOf p fu)
 
 skipWhile :: (Word8 -> Bool) -> P ()
 skipWhile f = P $ \e p fu ->
@@ -254,7 +259,7 @@ data Scanned a
 withScan :: (Env -> Int -> Scanned a) -> P a
 withScan f = P $ \e p fu -> case f e (I# p) of
   Done (I# q) a -> OK# a q fu
-  NoMatch (I# q) -> Fail# (if isTrue# (q ># fu) then q else fu)
+  NoMatch (I# q) -> Fail# (furthestOf q fu)
   Failed i msg -> Err# (ParseError i msg)
 
 -- | Move to the index that the function computes from the current one.
