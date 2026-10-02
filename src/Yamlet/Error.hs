@@ -32,6 +32,11 @@ import Yamlet.Internal.Parser.Chars
 import Yamlet.Internal.Syntax
 
 -- | An error of the parser or the decoder.
+--
+-- An error from the functions of this module keeps no part of the input
+-- alive once it is in weak head normal form. Its message and its path are
+-- evaluated then, because a message often contains a slice of the input,
+-- e.g. a key, and a path comes from the syntax tree.
 data Error = Error
   { location :: !Location
   , message :: !String
@@ -329,18 +334,18 @@ nodePaths offs root = map (\off -> M.findWithDefault [] off found) offs
 -- | Create an error at the given offset of the input.
 errorAt :: T.Text -> Offset -> String -> Error
 errorAt input off msg
-  | off == noOffset = Error (locate input off) msg T.empty 0 []
+  | off == noOffset = force $ Error (locate input off) msg T.empty 0 []
   | otherwise =
       let (loc, index, _) = locateFrom input (startScan input) off
           sourceLine = T.copy (lineAt input off)
-      in Error loc msg sourceLine (min (lengthWord8 sourceLine) index) []
+      in force $ Error loc msg sourceLine (min (lengthWord8 sourceLine) index) []
 
 -- | Create errors at the given offsets of a document, with their paths, in the
 -- order of the list. The text is the input of the document, e.g. for the
 -- offsets of t'Located' values.
 documentErrors :: T.Text -> Document -> [(Offset, String)] -> [Error]
 documentErrors input doc errs =
-  zipWith (\err p -> err {path = p}) (errorsAt input errs) (nodePaths (map fst errs) doc.root)
+  zipWith (\err p -> force err {path = p}) (errorsAt input errs) (nodePaths (map fst errs) doc.root)
 
 -- | Create errors at the given offsets of the input, in the order of the
 -- list. One scan of the input locates all of them, and the errors on one
@@ -354,13 +359,13 @@ errorsAt input errs =
     go s prev = \case
       [] -> []
       (i, (off, msg)) : rest
-        | off == noOffset -> (i, Error (locate input off) msg T.empty 0 []) : go s prev rest
+        | off == noOffset -> (i, force $ Error (locate input off) msg T.empty 0 []) : go s prev rest
         | otherwise ->
             let (loc, index, s') = locateFrom input s off
                 sourceLine = case prev of
                   Just (ln, t) | ln == loc.line -> t
                   _ -> T.copy (lineAt input off)
-            in (i, Error loc msg sourceLine (min (lengthWord8 sourceLine) index) []) : go s' (Just (loc.line, sourceLine)) rest
+            in (i, force $ Error loc msg sourceLine (min (lengthWord8 sourceLine) index) []) : go s' (Just (loc.line, sourceLine)) rest
 
 -- | Compute the line and the column of an offset. The byte order marks at the
 -- start of a line are not columns, because they are not content. For

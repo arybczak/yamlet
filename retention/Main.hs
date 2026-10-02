@@ -128,6 +128,7 @@ checks =
   , retains @[Figure] "single field contents" "- Sign: a"
   , errorRetains @(M.Map T.Text T.Text) "error with a key in the path" "k: [1]"
   , errorRetains @(T.Text, M.Map T.Text T.Text) "error with an alias in the path" "- &a k\n- *a : [1]"
+  , errorRetains @Closed "error with a key in the message" "title: a\nhots: 1"
   ]
 
 -- | The array of the input is garbage while the value is alive. A weak
@@ -155,7 +156,8 @@ errorRetains name doc = Check name $ do
   weak <- weakArray input
   case decodeText @a input of
     Left errs -> do
-      _ <- evaluate (length (show errs))
+      -- An error in weak head normal form has no thunks that keep the input.
+      mapM_ evaluate errs
       ref <- newIORef errs
       performMajorGC
       kept <- isJust <$> deRefWeak weak
@@ -232,6 +234,13 @@ data Figure = Round {label :: T.Text} | Sign T.Text
 
 instance GenericYamlOptions Figure where
   type SumEncoding Figure = SingleField
+
+newtype Closed = Closed {title :: T.Text}
+  deriving stock (Generic)
+  deriving (FromYaml) via GenericYaml Closed
+
+instance GenericYamlOptions Closed where
+  yamlOptions = defaultYamlOptions {rejectUnknownFields = True}
 
 newtype Keys = Keys [T.Text]
 
