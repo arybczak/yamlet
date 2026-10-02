@@ -1,12 +1,19 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TemplateHaskellQuotes #-}
 
 -- | Obligations for the inspection tests. They are in their own module,
 -- because a splice cannot use a function of the module that holds it.
+--
+-- Keep every function of this module, also one that no test uses at the
+-- moment, e.g. 'assertFailureIf' and 'ghcVersion' when no test expects a
+-- failure. A later change to the library or a new version of GHC can need
+-- them again.
 module Obligations
   ( hasNoGenericRep
   , hasNoGenericDictionaries
   , assertSuccess
-  , assertKnownFailure
+  , assertFailureIf
+  , ghcVersion
   ) where
 
 import GHC.Generics qualified as G
@@ -59,9 +66,16 @@ assertSuccess = \case
   Success _ -> pure ()
   Failure err -> assertFailure err
 
--- | Fail if the obligation holds, for a known failure. Then the test also
--- shows when a version of GHC fixes the failure.
-assertKnownFailure :: Result -> Assertion
-assertKnownFailure = \case
-  Success msg -> assertFailure ("expected a failure, but " ++ msg)
-  Failure _ -> pure ()
+-- | If the flag is set, fail if the obligation holds, for a known failure,
+-- e.g. on a version of GHC that optimizes the code less. Then the test also
+-- shows when a version of GHC fixes the failure. Otherwise, 'assertSuccess'.
+assertFailureIf :: Bool -> Result -> Assertion
+assertFailureIf = \case
+  True -> \case
+    Success msg -> assertFailure ("expected a failure, but " ++ msg)
+    Failure _ -> pure ()
+  False -> assertSuccess
+
+-- | The major version of GHC, e.g. @(9, 12)@.
+ghcVersion :: (Int, Int)
+ghcVersion = __GLASGOW_HASKELL__ `quotRem` 100

@@ -16,10 +16,11 @@ import Obligations
 import Yamlet
 
 -- Each type has a test for each method. The encoder of Step is a known
--- failure with every GHC, which 'assertKnownFailure' expects. The optimizer
--- moves the node of Halt, which has no fields, to the top level. Then the code
--- of the last constructors is in a function with two callers, which takes
--- their representation.
+-- failure with every GHC, and the encoder of Shape with GHC before 9.12,
+-- which 'assertFailureIf' expects. The optimizer moves the node of the
+-- constructor without fields, Halt or Dot, to the top level. Then the code of
+-- the last constructors is in a function with two callers, which takes their
+-- representation.
 main :: IO ()
 main =
   defaultMain $
@@ -178,7 +179,7 @@ main =
       , testGroup
           "Shape"
           [ testCase "encode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'encodeShape)
+              assertFailureIf (ghcVersion < (9, 12)) $(inspectTest $ hasNoGenericRep 'encodeShape)
           , testCase "decode" $
               assertSuccess $(inspectTest $ hasNoGenericRep 'decodeShape)
           , testCase "encode a list" $
@@ -193,7 +194,7 @@ main =
       , testGroup
           "Step"
           [ testCase "encode" $
-              assertKnownFailure $(inspectTest $ hasNoGenericRep 'encodeStep)
+              assertFailureIf True $(inspectTest $ hasNoGenericRep 'encodeStep)
           , testCase "decode" $
               assertSuccess $(inspectTest $ hasNoGenericRep 'decodeStep)
           , testCase "encode a list" $

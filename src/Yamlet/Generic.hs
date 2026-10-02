@@ -355,10 +355,10 @@ data YamlOptions = YamlOptions
   -- ^ The tag of a constructor from the name of the constructor. If two
   -- constructors get the same tag, e.g. @FooBar@ and @Foo_bar@ with
   -- 'snakeCase', the decoder reads the tag as the first of them.
-  , tagKey :: T.Text
+  , tagKey :: !T.Text
   -- ^ The key of the tag, @tag@ by default. A record with a field of the same
   -- key encodes as a mapping with two equal keys, which does not read back.
-  , contentsKey :: T.Text
+  , contentsKey :: !T.Text
   -- ^ The key of the fields of a tagged constructor without field names,
   -- @contents@ by default. If it is the same as 'tagKey', such a constructor
   -- encodes as a mapping with two equal keys, which does not read back.
@@ -376,10 +376,6 @@ data YamlOptions = YamlOptions
   -- ^ Reject a key that is not a field of the constructor. Off by default.
   }
   deriving stock (Generic)
-
--- The fields tagKey and contentsKey are lazy. With strict keys, GHC keeps the
--- generic representation in the encoder of a sum type, as the inspection test
--- of encodeShape shows.
 
 -- | The options with the defaults that the fields of t'YamlOptions' name.
 defaultYamlOptions :: YamlOptions
@@ -822,7 +818,13 @@ genericToYaml x =
   -- Forcing the encoding forces the check of the shape, e.g. with deferred
   -- type errors in a test of the errors.
   let enc = gEncoding @(SumEncoding a) @f
-  in enc `seq` checkDefault @a `seq` gToYaml (yamlOptions @a) enc (gUnwrap . from <$> yamlDefault @a) (gUnwrap (from x))
+      -- The keys of the options are texts that GHC does not know to be
+      -- evaluated. Without the bang, it evaluates them in each branch of the
+      -- constructors, and it keeps the generic representation of a sum, as
+      -- the inspection test of encodeShape shows. GHC before 9.12 keeps it
+      -- also with the bang.
+      !opts = yamlOptions @a
+  in enc `seq` checkDefault @a `seq` gToYaml opts enc (gUnwrap . from <$> yamlDefault @a) (gUnwrap (from x))
 {-# INLINE genericToYaml #-}
 
 -- The encoder takes the default for 'omitNullFields': it leaves out a null
