@@ -328,8 +328,12 @@ withInt f = parseNode $ \n -> case view n of
 
 -- | The nearest double. An integer counts as a floating-point number too.
 withFloat :: (Double -> Parser a) -> S.Node -> Parser a
-withFloat f = parseNode $ \n -> case view n of
-  FloatView v -> f (floatValueToDouble v)
+withFloat = withRealFloat
+
+-- | The nearest value of a floating-point type, as for 'withFloat'.
+withRealFloat :: RealFloat b => (b -> Parser a) -> S.Node -> Parser a
+withRealFloat f = parseNode $ \n -> case view n of
+  FloatView v -> f (floatValueToRealFloat v)
   IntView i -> f (fromInteger i)
   _ -> typeMismatch "a number" n
 
@@ -1067,10 +1071,7 @@ picoseconds s
 
 -- | The nearest float. A conversion by way of 'Double' could round twice.
 instance FromYaml Float where
-  parseYaml = parseNode $ \n -> case view n of
-    FloatView v -> pure (floatValueToFloat v)
-    IntView i -> pure (fromInteger i)
-    _ -> typeMismatch "a number" n
+  parseYaml = withRealFloat pure
 
 instance FromYaml T.Text where
   parseYaml = withText pure

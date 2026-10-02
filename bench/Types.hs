@@ -133,7 +133,7 @@ instance J.FromJSON Json where
 instance FromYaml Item where
   parseYaml n = case view n of
     IntView i -> pure $ ItemNumber (fromInteger i)
-    FloatView f -> pure $ ItemNumber (floatValueToDouble f)
+    FloatView f -> pure $ ItemNumber (floatValueToRealFloat f)
     BoolView b -> pure $ ItemBool b
     NullView -> pure ItemNull
     _ -> typeMismatch "a number, a boolean or null" n

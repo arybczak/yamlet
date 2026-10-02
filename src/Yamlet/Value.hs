@@ -22,10 +22,8 @@ module Yamlet.Value
   ( -- * Values
     Value (..)
   , FloatValue (..)
-  , floatValueToDouble
-  , doubleToFloatValue
-  , floatValueToFloat
-  , floatToFloatValue
+  , floatValueToRealFloat
+  , realFloatToFloatValue
   , describe
 
     -- * Tags
@@ -91,7 +89,7 @@ instance NFData Value where
 --
 -- Arithmetic on a t'Data.Scientific.Scientific' with a huge exponent, e.g.
 -- @1e1000000000@, can use all memory. Convert a value from an untrusted input
--- with 'floatValueToDouble' or with the bounded conversions of
+-- with 'floatValueToRealFloat' or with the bounded conversions of
 -- "Data.Scientific".
 data FloatValue
   = -- | A finite value other than negative zero.
@@ -112,44 +110,45 @@ data FloatValue
 instance NFData FloatValue where
   rnf = rwhnf
 
--- | The nearest double, infinite if the value is out of its range.
+-- | The nearest value of a floating-point type, e.g. 'Double', infinite if
+-- the value is out of its range. The decimal converts to the type directly,
+-- so it is rounded once, e.g. a 'Float' does not go by way of a 'Double'.
 --
--- >>> map floatValueToDouble [Finite 0.1, Finite 1e400, NegativeZero]
+-- >>> map (floatValueToRealFloat @Double) [Finite 0.1, Finite 1e400, NegativeZero]
 -- [0.1,Infinity,-0.0]
-floatValueToDouble :: FloatValue -> Double
-floatValueToDouble = toRealFloat
-
--- | The value of a double. A finite double becomes the shortest decimal that
--- reads back as the same double, e.g. @0.1@.
---
--- >>> map doubleToFloatValue [0.1, -0, 1 / 0]
--- [Finite 0.1,NegativeZero,Infinity]
-doubleToFloatValue :: Double -> FloatValue
-doubleToFloatValue = fromRealFloat
-
--- | The nearest float, infinite if the value is out of its range.
-floatValueToFloat :: FloatValue -> Float
-floatValueToFloat = toRealFloat
-
--- | The value of a float. A finite float becomes the shortest decimal that
--- reads back as the same float, e.g. @0.1@.
-floatToFloatValue :: Float -> FloatValue
-floatToFloatValue = fromRealFloat
-
-toRealFloat :: RealFloat a => FloatValue -> a
-toRealFloat = \case
+floatValueToRealFloat :: RealFloat a => FloatValue -> a
+floatValueToRealFloat = \case
   Finite s -> Sci.toRealFloat s
   NegativeZero -> -0
   Infinity -> 1 / 0
   NegativeInfinity -> -(1 / 0)
   NaN -> 0 / 0
+-- With INLINEABLE, GHC specializes the function at the type of a caller in
+-- another module, also the conversion of "Data.Scientific" inside it, as a
+-- probe with a newtype of Double showed. The specializations are for the
+-- types of the instances of the library. Without them, the decode benchmarks
+-- of the config and the JSON input allocate more.
+{-# INLINEABLE floatValueToRealFloat #-}
+{-# SPECIALIZE floatValueToRealFloat :: FloatValue -> Double #-}
+{-# SPECIALIZE floatValueToRealFloat :: FloatValue -> Float #-}
 
-fromRealFloat :: RealFloat a => a -> FloatValue
-fromRealFloat d
+-- | The value of a floating-point number, e.g. a 'Double'. A finite number
+-- becomes the shortest decimal that reads back as the same number, e.g.
+-- @0.1@.
+--
+-- >>> map (realFloatToFloatValue @Double) [0.1, -0, 1 / 0]
+-- [Finite 0.1,NegativeZero,Infinity]
+realFloatToFloatValue :: RealFloat a => a -> FloatValue
+realFloatToFloatValue d
   | isNaN d = NaN
   | isInfinite d = if d > 0 then Infinity else NegativeInfinity
   | isNegativeZero d = NegativeZero
   | otherwise = Finite (Sci.fromFloatDigits d)
+-- As for 'floatValueToRealFloat'. Without the specializations, the encode
+-- benchmarks of the config and the JSON input are slower and allocate more.
+{-# INLINEABLE realFloatToFloatValue #-}
+{-# SPECIALIZE realFloatToFloatValue :: Double -> FloatValue #-}
+{-# SPECIALIZE realFloatToFloatValue :: Float -> FloatValue #-}
 
 -- | The kind of a value in plain words, for error messages, e.g. "a list".
 -- The tag of 'Tagged' does not change it.

@@ -162,9 +162,9 @@ integral = scalar . Int . toInteger
 -- - 0.01
 -- - 1.5e-7
 -- - 2.0e+21
-instance ToYaml Double where toYaml = scalar . Float . doubleToFloatValue
+instance ToYaml Double where toYaml = scalar . Float . realFloatToFloatValue
 
-instance ToYaml Float where toYaml = scalar . Float . floatToFloatValue
+instance ToYaml Float where toYaml = scalar . Float . realFloatToFloatValue
 
 -- | A value whose exponent in scientific notation is beyond the range from
 -- -1000 to 1000, e.g. @1e1001@, does not read back, see 'Finite'.
