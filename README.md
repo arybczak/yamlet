@@ -127,6 +127,17 @@ working, with these exceptions:
 - The yaml package reads `y`, `yes`, `on`, `n`, `no` and `off` as booleans,
   as YAML 1.1 does. Here they are strings, and a decoder that expects a
   boolean suggests `true` or `false`.
+- The yaml package reads a number only in the syntax of JSON, apart from
+  the `0x` and `0o` prefixes. It reads `.5`, `+.5`, `.inf`, `-.Inf`, `.NaN`
+  and similar values as strings, and writes such strings without quotes,
+  although YAML 1.1 and 1.2 read them as floats. Here they are floats, and a
+  decoder that expects a string suggests quotes.
+- aeson writes an infinite `Double` as the string `+inf` or `-inf`, because
+  JSON has no infinity. Here they are strings too, and an infinite `Double`
+  is `.inf` or `-.inf`.
+- The yaml package writes the characters U+2028 and U+2029 in a string as
+  line breaks, with indentation after them. YAML 1.2 has no such line
+  breaks, so here the string keeps the spaces of the indentation.
 - The yaml package merges the entries of a `<<` key into its mapping, as
   YAML 1.1 does. YAML 1.2 has no merge keys, so here `<<` is an ordinary key.
 - The keys of a map keep their type. aeson writes every key as a string, so
