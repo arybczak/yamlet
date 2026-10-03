@@ -919,6 +919,11 @@ test_syntaxErrors = do
   check "tab indentation" (2, 1, "tabs cannot be used for indentation") "a:\n\tb: 1\n"
   check "tab after spaces before a key" (2, 3, "tabs cannot be used for indentation") "a:\n  \tb: c\n"
   check "tab before a scalar continuation" (2, 1, "tabs cannot be used for indentation") "a: 1\n\t@\n"
+  -- A space in place of the tab fails too, but the indentation of the line
+  -- above does not.
+  check "tab before a second key" (3, 1, "tabs cannot be used for indentation") "a:\n  b: 1\n\tc: 2\n"
+  check "tab before a second item" (3, 1, "tabs cannot be used for indentation") "a:\n  - 1\n\t- 2\n"
+  check "tab below a comment" (5, 1, "tabs cannot be used for indentation") "a:\n  b: 1\n  # c\n\n\tc: 2\n"
   -- With spaces in place of the tab, the parser fails at the same place.
   check "tab before an indicator" (1, 2, "unexpected '@', a plain scalar cannot start with it, quote the value") "\t@\n"
   check "tab before a bracket" (1, 2, "unexpected ']'") "\t]\n"

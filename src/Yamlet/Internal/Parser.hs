@@ -67,7 +67,9 @@ parseStream input@(T.Text arr off len) = case prescan of
 
     -- The error for the furthest failure, with the environment of its
     -- document. A tab before the failure on its line is the likely cause,
-    -- unless the parser fails there also with spaces in place of the tabs.
+    -- unless the parser fails there also with spaces in place of the tabs:
+    -- a space for each tab, or the indentation of the line above in place
+    -- of the indentation with tabs.
     furthestError :: [Int] -> Env -> Int -> (Int, String)
     furthestError markers de i
       | snd withTabs == tabMessage && not tabCause = unexpected False de i
@@ -77,29 +79,52 @@ parseStream input@(T.Text arr off len) = case prescan of
         withTabs = unexpected True de i
 
         tabCause :: Bool
-        tabCause = case runParser spaced (moved start) (lYamlStream (map moved markers)) of
+        tabCause =
+          parsesFurther (T.map (\c -> if c == '\t' then ' ' else c) (T.Text arr s (i - s))) i
+            || or
+              [ parsesFurther (T.replicate n " ") indentEnd
+              | indentEnd <= i
+              , TAB `elem` map (byteAt e) [s .. indentEnd - 1]
+              , Just n <- [indentationAbove s]
+              ]
+
+        s, indentEnd :: Int
+        s = lineStartAt e i
+        indentEnd = skipWhites e s
+
+        -- The parser gets past the failure with the text in place of the
+        -- input from the start of the line to the index.
+        parsesFurther :: T.Text -> Int -> Bool
+        parsesFurther replacement upto = case runParser spaced (moved start) (lYamlStream (map moved markers)) of
           Left (ParseError j _) -> j > moved i
           Left (UnexpectedParseError _ j) -> j > moved i
           Right (Nothing, _, j) -> j > moved i
           Right (Just _, _, _) -> True
+          where
+            T.Text _ _ replacementLen = replacement
+            T.Text spacedArr spacedOff spacedLen =
+              T.copy $ T.concat [T.Text arr off (s - off), replacement, T.Text arr upto (off + len - upto)]
 
-        s :: Int
-        s = lineStartAt e i
+            spaced :: Env
+            spaced = e {array = spacedArr, base = spacedOff, end = spacedOff + spacedLen, streamEnd = spacedOff + spacedLen}
 
-        T.Text spacedArr spacedOff _ =
-          T.copy $
-            T.concat
-              [ T.Text arr off (s - off)
-              , T.map (\c -> if c == '\t' then ' ' else c) (T.Text arr s (i - s))
-              , T.Text arr i (off + len - i)
-              ]
+            -- The index in the input with the replacement.
+            moved :: Int -> Int
+            moved j
+              | j < upto = j - off + spacedOff
+              | otherwise = j - upto + spacedOff + (s - off) + replacementLen
 
-        spaced :: Env
-        spaced = e {array = spacedArr, base = spacedOff, end = spacedOff + len, streamEnd = spacedOff + len}
-
-        -- The index in the input with spaces.
-        moved :: Int -> Int
-        moved j = j - off + spacedOff
+        -- The indentation of the nearest line above with content other than
+        -- a comment.
+        indentationAbove :: Int -> Maybe Int
+        indentationAbove k
+          | k <= off = Nothing
+          | otherwise =
+              let p = previousLineStart e k
+                  c = skipWhites e p
+              in if isBreak (byteAt e c) || byteAt e c == HASH
+                   then indentationAbove p
+                   else Just (skipSpaces e p - p)
 
     -- A byte order mark at the start of the line of an error is the likely
     -- cause if the parser fails before the content of the line, unless a
