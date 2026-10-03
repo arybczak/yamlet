@@ -10,11 +10,17 @@ author:             Andrzej Rybczak
 synopsis:           A pure, fast and conforming YAML 1.2 library.
 
 description:
-  A YAML 1.2.2 library written in Haskell. It passes all cases of the YAML
-  test suite and has few dependencies.
+  A YAML 1.2.2 library written in Haskell. Main features:
 
-  * Decoding and encoding with the classes @FromYaml@ and @ToYaml@. The
-    generic instances use the formats of aeson.
+  * Conformance: the parser passes all cases of the
+    <https://github.com/yaml/yaml-test-suite YAML test suite>.
+
+  * Decoding and encoding with the classes @FromYaml@ and @ToYaml@, with
+    instances for common types.
+
+  * Instances for your own data types, derived via @GenericYaml@.
+    Inspection tests check that the generic representation optimizes away
+    for common shapes of data types.
 
   * Errors with the line, the column and the path of the problem, e.g.
     @jobs[1].name@. The decoder reports the errors of independent parts
@@ -24,8 +30,11 @@ description:
     change a file and write it back with its comments, and a decoded value
     can keep a part of the document as it was written.
 
-  * Safe for untrusted input. The time and the memory of a decode are close
-    to linear in the size of the input.
+  * Output that YAML 1.1 parsers read the same way, e.g. PyYAML and go-yaml
+    v2, which Kubernetes uses.
+
+  * Safe for untrusted input. The time of a decode is close to linear in the
+    size of the input, and the memory is linear.
 
 extra-doc-files:
   CHANGELOG.md

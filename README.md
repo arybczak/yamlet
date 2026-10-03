@@ -2,60 +2,116 @@
 
 [![CI](https://github.com/arybczak/yamlet/actions/workflows/haskell-gha.yml/badge.svg?branch=master)](https://github.com/arybczak/yamlet/actions/workflows/haskell-gha.yml?query=branch%3Amaster)
 
-A YAML 1.2.2 library written in Haskell.
+A YAML 1.2.2 library written in Haskell. Main features:
 
-## Features
+- Conformance: the parser passes all cases of the
+  [YAML test suite](https://github.com/yaml/yaml-test-suite).
+- Decoding and encoding with the classes `FromYaml` and `ToYaml`, with
+  instances for common types.
+- Instances for your own data types, derived via `GenericYaml`.
+  Inspection tests check that the generic representation optimizes away
+  for common shapes of data types.
+- Errors with the line, the column and the path of the problem, e.g.
+  `jobs[1].name`. The decoder reports the errors of independent parts
+  together, e.g. every bad field of a record.
+- A syntax tree that keeps the comments and the empty lines. A program can
+  change a file and write it back with its comments, and a decoded value
+  can keep a part of the document as it was written.
+- Output that YAML 1.1 parsers read the same way, e.g. PyYAML and go-yaml
+  v2, which Kubernetes uses.
+- Safe for untrusted input. The time of a decode is close to linear in the
+  size of the input, and the memory is linear.
 
-- The parser follows the grammar of the YAML 1.2.2 specification. It passes
-  all 402 cases of the [YAML test suite](https://github.com/yaml/yaml-test-suite)
-  (release `data-2022-01-17`), for both the parse events and the JSON values.
-- Errors give the line and the column of the problem, both counted from 1, and
-  an excerpt of the input. A decoder error also gives the keys and indices
-  that lead to the problem, e.g. `jobs[1].name`. Messages name the kinds of
-  values in plain words, e.g. `expected a list, but got an integer`.
-- The decoder reports the errors of independent parts together, e.g. every
-  bad field of a record, every bad item of a list and every unknown key. A
-  syntax error stops the parser at the first one, and two equal keys in a
-  mapping stop the decoder at the first pair.
-- Mappings keep the order of their keys, on input and on output.
-- The encoder writes output that common YAML 1.1 parsers read the same way:
-  PyYAML, Ruby's Psych and go-yaml v2, which Kubernetes uses. It quotes the
-  strings that these parsers read as other types, e.g. `yes`, `22:22`,
-  `1,000` and `2024-01-01`. The decoder follows only the YAML 1.2 rules.
-- Instances of `FromYaml` and `ToYaml` for the common types, and generic
-  instances.
-- The syntax tree keeps the comments and the empty lines, so a program can
-  read a file, change it and write it back with its comments.
-- A decoded type can keep a part of a document as a `Node`. The encoder
-  writes it back as it was written, with its comments and styles. A field of
-  type `Commented a` also keeps the comments of its entry, e.g. the comment
-  above `permissions:`. A field of type `Located a` keeps the position of its
-  value. Thus a check after the decode can give an error with the line, the
-  column and the path.
-- Floating-point numbers are exact, e.g. `0.1` is exactly one tenth. They
-  convert to `Scientific` without loss and to `Double` on request.
-- The input can be UTF-8, UTF-16 or UTF-32. The library detects the encoding
-  as the specification describes.
+The library supports GHC 9.2 and later.
 
-## Modules
+## Example
 
-- `Yamlet`: decoding with the `FromYaml` class and encoding with the `ToYaml`
-  class. The instances read and write the nodes of the syntax tree. The
-  module also exports the contents of `Yamlet.Value` and of the four modules
-  below.
-  - `Yamlet.Decode`: the `FromYaml` class and the functions to write its
-    instances.
-  - `Yamlet.Encode`: the `ToYaml` class and the functions to write its
-    instances.
-  - `Yamlet.Generic`: the generic instances and their options.
-  - `Yamlet.Error`: the errors, with the line, the column and the path.
-- `Yamlet.Value`: the values of documents, with resolved tags and aliases,
-  e.g. for a document whose structure a program does not know.
-- `Yamlet.Syntax`: the syntax tree, with styles, anchors and unresolved tags.
-  It keeps the comments and the empty lines, each at a node that the rules in
-  its documentation choose. The module has a parser and a renderer for it.
-- `Yamlet.Schema`: the rules of the core schema, e.g. to check how a plain
-  scalar reads back.
+A configuration type derives its decoder. The options reject unknown keys,
+and the default gives the paths when the key is missing:
+
+```haskell
+{-# LANGUAGE GHC2021 #-}
+{-# LANGUAGE DerivingVia #-}
+
+import Data.Text (Text)
+import Yamlet
+
+data Config = Config
+  { name :: Text
+  , paths :: [FilePath]
+  }
+  deriving stock (Generic, Show)
+  deriving (FromYaml) via GenericYaml Config
+
+instance GenericYamlOptions Config where
+  yamlOptions = defaultYamlOptions {rejectUnknownFields = True}
+  yamlDefault = Just Config {name = requiredField, paths = ["."]}
+
+main :: IO ()
+main = do
+  result <- decodeFile @Config "config.yaml"
+  case result of
+    Left errs -> mapM_ (putStrLn . prettyError "config.yaml") errs
+    Right config -> print config
+```
+
+For this file:
+
+```yaml
+paths:
+- src
+- 42
+port: 80
+```
+
+the program prints every error:
+
+```
+config.yaml:1:1: missing key "name"
+  |
+1 | paths:
+  | ^
+config.yaml:3:3: paths[1]: expected a string, but got an integer, quote the value, e.g. '42'
+  |
+3 | - 42
+  |   ^
+config.yaml:4:1: unknown key "port", expected one of: name, paths
+  |
+4 | port: 80
+  | ^
+```
+
+A decoded type can also keep comments and parts of a document as they were
+written:
+
+```haskell
+{-# LANGUAGE GHC2021 #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DerivingVia #-}
+
+import Data.Text (Text)
+import Yamlet
+
+data Workflow = Workflow
+  { name :: Commented Text
+  , matrix :: Node
+  }
+  deriving stock (Generic)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Workflow
+```
+
+This input decodes to a `Workflow`, and `encodeText` writes it back
+unchanged:
+
+```yaml
+# The name in the UI.
+name: build # short
+matrix:
+  # Each system runs the jobs.
+  os: [linux, macos]
+  ghc: ['9.10', '9.12']
+```
 
 ## Coming from the yaml package
 
@@ -64,6 +120,11 @@ encodes with the instances of aeson. The instances of yamlet, the generic
 ones too, read and write the same YAML, so files written for it keep
 working, with these exceptions:
 
+- The yaml package reads `y`, `yes`, `on`, `n`, `no` and `off` as booleans,
+  as YAML 1.1 does. Here they are strings, and a decoder that expects a
+  boolean suggests `true` or `false`.
+- The yaml package merges the entries of a `<<` key into its mapping, as
+  YAML 1.1 does. YAML 1.2 has no merge keys, so here `<<` is an ordinary key.
 - The keys of a map keep their type. aeson writes every key as a string, so
   the yaml package writes a key of a `Map Int` as `'1'`, which does not
   decode here. An `IntMap` and a map with keys that aeson cannot write as
@@ -80,77 +141,31 @@ working, with these exceptions:
 The documentation of the instances and of the generic options describes the
 remaining details.
 
-## Untrusted input
+## Known limits
 
-The decoder is safe to use on untrusted input. The time to decode a
-document is close to linear in its size, and the memory is linear in its
-size.
-
-A decoded value is never much larger than its text. Two parts of the syntax
-can let a short text stand for a large value: aliases and exponents. The
-library limits both:
-
-- A small document with aliases to aliases can expand to billions of nodes,
-  and many aliases to one long string can expand to billions of characters.
-  To prevent this, the library counts each node and each character of a
-  scalar as one unit. The aliases of a document can add at most 100000
-  units. For a document with more than 100000 units, they can add as many
-  units as the document has. A document beyond the limit is an error.
-- A program that converts `1e999999999` to an integer gets a billion digits.
-  To prevent this, a float whose exponent in scientific notation is outside
-  the range from -1000 to 1000 is an error, e.g. `1e1001` or `10e1000`.
-  Thus a float converts to an integer of at most 1001 digits. The limit
-  covers every `Double`, and every float that the decoder accepts reads back
-  after the encoder writes it. The limit also applies to a document that a
-  program built.
-
-The library also applies these rules:
-
-- Integers can have any number of digits, and floats any number of digits
-  within the limit above. The time to read and write them is close to
-  linear in the number of digits.
-- The check for duplicate keys takes close to linear time, also for keys
-  that are large collections or aliases.
-- Deeply nested collections, e.g. 100000 levels of flow sequences, take
-  linear time to parse.
-- A fraction is reduced as an `Integer`, and its parts must fit in the
-  target type.
-- The decoded values do not keep the input in memory, because the decoders
-  of the library copy their texts. This holds for a kept `Node` too. A
-  value from a hand-written decoder can keep the input while it has
-  unevaluated parts, e.g. a lazy list. Evaluate such a value, e.g. with
-  `force`, to release the input.
-- With the instances of the library and the derived instances, the number
-  of decoder errors grows at most linearly with the size of the document.
-  The time to locate the errors in the input and to find their paths is
-  close to linear, also for many errors on one line.
-
-The program must still limit the size of the input, because the memory
-grows with it.
+- No streaming. The parser reads the whole input, and a decode of a stream
+  parses all its documents before it decodes the first one. The library has
+  no interface to the events of the parser.
+- Only YAML 1.2. A document with `%YAML 1.1` follows the rules of YAML 1.2,
+  e.g. `yes` is a string and `0755` is the integer 755. The merge keys of
+  YAML 1.1 (`<<`) are not supported.
+- The renderer writes its own layout. A file written back keeps its
+  comments, empty lines, styles and anchors, but not its indentation or the
+  spaces between tokens.
+- Limits for untrusted input. The aliases of a document can add at most
+  100000 nodes and characters, or as many as the document has if it has
+  more. A float with an exponent beyond the range from -1000 to 1000 is an
+  error, e.g. `1e1001`. The library does not limit the size of the input,
+  so a program that reads untrusted input must limit it.
 
 ## Performance
 
-The benchmark in `bench/` uses three generated inputs:
+Each library decodes three generated inputs into the same Haskell type and
+encodes a value of that type back to YAML:
 
 - `config`: a list of records in block style, as in a configuration file.
 - `json`: a list of records in JSON syntax.
 - `text`: a mapping of long multi-line strings.
-
-For each input, every library decodes the YAML into the same Haskell type and
-encodes a value of that type back to YAML. The times below come from GHC
-9.10.3 on a Ryzen 9950X3D. Each benchmark ran in its own process, pinned to
-one core of the CCD with the 3D V-cache. The `yaml` package uses the libyaml C
-library and converts the data by way of an aeson `Value`.
-
-To run the benchmarks in this way and print the tables below, run this
-command:
-
-```
-scripts/bench-readme.sh
-```
-
-The script pins each benchmark to core 2. To use another core, set the
-`CORE` variable, e.g. `CORE=4 scripts/bench-readme.sh`.
 
 Decoding:
 
@@ -168,12 +183,18 @@ Encoding:
 | `json`, 432 KiB    | 12 ms  | 19 ms  | 33 ms  |
 | `text`, 834 KiB    | 3.2 ms | 10 ms  | 9.4 ms |
 
-## Tests
+The times come from GHC 9.10.3 on a Ryzen 9950X3D. Each benchmark ran in its
+own process, pinned to one core of the CCD with the 3D V-cache. The `yaml`
+package uses the libyaml C library and converts the data by way of an aeson
+`Value`. The section [Development](#development) shows how to run the
+benchmarks.
 
-The test suite reads the data of the YAML test suite from
-`tests/fixtures/yaml-test-suite`. The repository contains the data. To
-download it again, e.g. after you change the release in the script, run
-this command:
+## Development
+
+The test suite reads the data of the YAML test suite, release
+`data-2022-01-17`, from `tests/fixtures/yaml-test-suite`. The repository
+contains the data. To download it again, e.g. after you change the release
+in the script, run this command:
 
 ```
 scripts/fetch-test-suite.sh
@@ -187,3 +208,14 @@ diff:
 ```
 YAMLET_ACCEPT_ERRORS=1 cabal test
 ```
+
+To run the benchmarks of the section [Performance](#performance) and print
+its tables, run this command:
+
+```
+scripts/bench-readme.sh
+```
+
+The script runs each benchmark in its own process and pins it to core 2. To
+use another core, set the `CORE` variable, e.g.
+`CORE=4 scripts/bench-readme.sh`.
