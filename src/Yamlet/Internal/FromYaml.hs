@@ -474,17 +474,20 @@ withMapping f = parseNode $ \n -> case n.content of
     mkObject :: S.Node -> [(S.Node, S.Node)] -> (Errors, Object)
     mkObject n kvs =
       let (index, errs) = L.foldl' insert (M.empty, NoErrors) kvs
-      in ( errs
-         , Object
-             { node = n
-             , entries = kvs
-             , index = index
-             , otherKeys = [(k, v) | (k@S.Node {S.content = S.ScalarContent style t}, _) <- kvs, let v = scalarValue k.props.tag style t, case v of String _ -> False; _ -> True]
-             , duplicates = case errs of
-                 NoErrors -> False
-                 _ -> True
-             }
-         )
+          -- GHC does not know that the fold evaluated the index. Without the
+          -- bang, it builds the object in a thunk, so that the index is
+          -- evaluated only when the decoder uses the object.
+          !o =
+            Object
+              { node = n
+              , entries = kvs
+              , index = index
+              , otherKeys = [(k, v) | (k@S.Node {S.content = S.ScalarContent style t}, _) <- kvs, let v = scalarValue k.props.tag style t, case v of String _ -> False; _ -> True]
+              , duplicates = case errs of
+                  NoErrors -> False
+                  _ -> True
+              }
+      in (errs, o)
       where
         insert
           :: (M.Map T.Text (S.Node, S.Node), Errors)
@@ -500,8 +503,8 @@ withMapping f = parseNode $ \n -> case n.content of
 -- | A mapping with fast access to the values of string keys.
 data Object = Object
   { node :: !S.Node
-  , entries :: [(S.Node, S.Node)]
-  , index :: M.Map T.Text (S.Node, S.Node)
+  , entries :: ![(S.Node, S.Node)]
+  , index :: !(M.Map T.Text (S.Node, S.Node))
   , otherKeys :: [(S.Node, Value)]
   -- ^ The keys that are not strings, for the error of a lookup. The field is
   -- lazy, because only an error needs it, and its weak head normal form
@@ -510,10 +513,6 @@ data Object = Object
   , duplicates :: !Bool
   -- ^ Two string keys have the same text.
   }
-
--- The fields entries and index are lazy. With either of them strict, a
--- generic decoder evaluates the field again, and the derive.*.parseYaml.generic
--- benchmarks allocate more.
 
 -- | The node of the mapping.
 objectNode :: Object -> S.Node
