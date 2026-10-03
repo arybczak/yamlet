@@ -467,11 +467,12 @@ mappingNode = contentNode . MappingContent Block
 -- document after: [Comment "a"]
 --
 -- The renderer writes the markers and the empty lines that these rules
--- need, so that the lines read back at the same places. One case has no
--- such text: if the lines at the end of a document have an empty line, the
--- renderer does not write the root as a flow collection, and another
--- document follows, the empty line and the lines below it read back as the
--- lines of the next document.
+-- need, so that the lines read back at the same places. One case is an
+-- exception: if the lines at the end of a document end with empty lines,
+-- the renderer does not write the root as a flow collection, and another
+-- document follows, these empty lines read back as the lines of the next
+-- document. A @...@ marker would keep them, but the text reads back the
+-- same without it.
 
 -- $emptyLines
 -- Empty lines go with the node below them, or with the end of the document.
