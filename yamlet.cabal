@@ -15,6 +15,9 @@ description:
   * Conformance: the parser passes all cases of the
     <https://github.com/yaml/yaml-test-suite YAML test suite>.
 
+  * Performance: decoding and encoding are very fast, see the
+    <https://github.com/arybczak/yamlet#performance benchmarks>.
+
   * Decoding and encoding with the classes @FromYaml@ and @ToYaml@, with
     instances for common types.
 

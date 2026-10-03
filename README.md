@@ -6,6 +6,8 @@ A YAML 1.2.2 library written in Haskell. Main features:
 
 - Conformance: the parser passes all cases of the
   [YAML test suite](https://github.com/yaml/yaml-test-suite).
+- Performance: decoding and encoding are very fast, see the
+  [benchmarks](#performance).
 - Decoding and encoding with the classes `FromYaml` and `ToYaml`, with
   instances for common types.
 - Instances for your own data types, derived via `GenericYaml`.
@@ -171,17 +173,17 @@ Decoding:
 
 | Input              | yamlet | HsYAML  | yaml   |
 |--------------------|--------|---------|--------|
-| `config`, 1105 KiB | 27 ms  | 3031 ms | 114 ms |
-| `json`, 432 KiB    | 16 ms  | 2440 ms | 60 ms  |
-| `text`, 834 KiB    | 7.1 ms | 641 ms  | 13 ms  |
+| `config`, 1105 KiB | 27 ms  | 3017 ms | 116 ms |
+| `json`, 432 KiB    | 15 ms  | 2420 ms | 61 ms  |
+| `text`, 834 KiB    | 7.1 ms | 637 ms  | 13 ms  |
 
 Encoding:
 
 | Input              | yamlet | HsYAML | yaml   |
 |--------------------|--------|--------|--------|
-| `config`, 1105 KiB | 20 ms  | 38 ms  | 57 ms  |
-| `json`, 432 KiB    | 12 ms  | 19 ms  | 33 ms  |
-| `text`, 834 KiB    | 3.2 ms | 10 ms  | 9.4 ms |
+| `config`, 1105 KiB | 21 ms  | 39 ms  | 57 ms  |
+| `json`, 432 KiB    | 12 ms  | 19 ms  | 34 ms  |
+| `text`, 834 KiB    | 3.2 ms | 11 ms  | 9.5 ms |
 
 The times come from GHC 9.10.3 on a Ryzen 9950X3D. Each benchmark ran in its
 own process, pinned to one core of the CCD with the 3D V-cache. The `yaml`
