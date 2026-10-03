@@ -155,13 +155,16 @@ integral = scalar . Int . toInteger
 
 -- | Decimal notation from 10^-6 up to 10^21, as JavaScript writes numbers,
 -- and exponential notation otherwise. The text always has a dot, so that it
--- reads back as a float.
+-- reads back as a float. A value that is not a number or is infinite is
+-- @.nan@, @.inf@ or @-.inf@.
 --
--- >>> T.putStr (encodeText [12, 0.01, 1.5e-7, 2.0e21 :: Double])
+-- >>> T.putStr (encodeText [12, 0.01, 1.5e-7, 2.0e21, 0 / 0, -1 / 0 :: Double])
 -- - 12.0
 -- - 0.01
 -- - 1.5e-7
 -- - 2.0e+21
+-- - .nan
+-- - -.inf
 instance ToYaml Double where toYaml = scalar . Float . realFloatToFloatValue
 
 instance ToYaml Float where toYaml = scalar . Float . realFloatToFloatValue

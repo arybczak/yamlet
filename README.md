@@ -22,33 +22,8 @@ A YAML 1.2.2 library written in Haskell.
   PyYAML, Ruby's Psych and go-yaml v2, which Kubernetes uses. It quotes the
   strings that these parsers read as other types, e.g. `yes`, `22:22`,
   `1,000` and `2024-01-01`. The decoder follows only the YAML 1.2 rules.
-- Instances of `FromYaml` and `ToYaml` for the common types. They use the
-  same formats as the instances of aeson, with these differences:
-  - The keys of a map keep their type, e.g. `1: a`, while JSON writes every
-    key as a string.
-  - An `IntMap` and a map with keys that aeson cannot write as strings, e.g.
-    a `Map (Int, Int)`, are mappings too. aeson writes them as lists of
-    pairs.
-  - A `Double` or a `Float` that is not a number or is infinite is `.nan`,
-    `.inf` or `-.inf`. aeson writes `null`, `"+inf"` and `"-inf"`.
-
-  The decoders are stricter than aeson. They reject some values that aeson
-  converts, e.g. `1.0` for an `Int`, `null` for a `Double`, `0.5` for a
-  `Rational` and a duplicate item of a `Set`.
-- Generic instances with the formats of aeson, for fewer shapes of types. A
-  sum type is a mapping with a tag, e.g. `{tag: Circle, radius: 1}`, or a
-  mapping with the constructor as its only key, e.g.
-  `{Circle: {radius: 1}}`. A constructor cannot have several fields without
-  names. With the tag, the constructors of a type cannot mix named fields
-  with a field without a name, e.g. `A {size :: Int} | B Int`. Such a type
-  is a compile error. With the tag, a constructor without
-  fields is `{tag: Dot}`, as in aeson. A type whose constructors have no
-  fields is the name of the constructor, e.g. `Dot`, also with only one
-  constructor, which aeson writes as `[]`. With the second encoding, a
-  constructor without fields is its name too, which aeson writes as
-  `{Dot: []}`. With `omitNullFields`, the encoder leaves out a field of
-  type `Maybe (Maybe a)` with the value `Just Nothing`, while aeson writes
-  `null`. It keeps a field of type `()` as `[]`, which aeson leaves out.
+- Instances of `FromYaml` and `ToYaml` for the common types, and generic
+  instances.
 - The syntax tree keeps the comments and the empty lines, so a program can
   read a file, change it and write it back with its comments.
 - A decoded type can keep a part of a document as a `Node`. The encoder
@@ -81,6 +56,29 @@ A YAML 1.2.2 library written in Haskell.
   its documentation choose. The module has a parser and a renderer for it.
 - `Yamlet.Schema`: the rules of the core schema, e.g. to check how a plain
   scalar reads back.
+
+## Coming from the yaml package
+
+The [yaml](https://hackage.haskell.org/package/yaml) package decodes and
+encodes with the instances of aeson. The instances of yamlet, the generic
+ones too, read and write the same YAML, so files written for it keep
+working, with these exceptions:
+
+- The keys of a map keep their type. aeson writes every key as a string, so
+  the yaml package writes a key of a `Map Int` as `'1'`, which does not
+  decode here. An `IntMap` and a map with keys that aeson cannot write as
+  strings, e.g. a `Map (Int, Int)`, are mappings here and lists of pairs
+  there.
+- A value must have the YAML type of its Haskell type. The decoders reject
+  some values that aeson converts, e.g. `1.0` for an `Int`, `0.5` for a
+  `Rational` and `null` for a `Double`.
+- A generic type with one constructor without fields is the name of the
+  constructor, e.g. `Unit`, where aeson writes `[]`. With the encoding
+  `SingleField`, a constructor without fields is its name, e.g. `Dot`, where
+  aeson writes `{Dot: []}`.
+
+The documentation of the instances and of the generic options describes the
+remaining details.
 
 ## Untrusted input
 
