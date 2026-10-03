@@ -34,6 +34,7 @@ and the default gives the paths when the key is missing:
 ```haskell
 {-# LANGUAGE GHC2021 #-}
 {-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE NoFieldSelectors #-}
 
 import Data.Text (Text)
 import Yamlet
@@ -90,6 +91,7 @@ written:
 {-# LANGUAGE GHC2021 #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE NoFieldSelectors #-}
 
 import Data.Text (Text)
 import Yamlet
