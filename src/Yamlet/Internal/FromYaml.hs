@@ -473,43 +473,50 @@ withMapping f = parseNode $ \n -> case n.content of
     -- little of the time to decode a typical record.
     mkObject :: S.Node -> [(S.Node, S.Node)] -> (Errors, Object)
     mkObject n kvs =
-      let (index, errs) = L.foldl' insert (M.empty, NoErrors) kvs
+      case go M.empty NoErrors [] kvs of
+        (index, errs, others) ->
           -- GHC does not know that the fold evaluated the index. Without the
           -- bang, it builds the object in a thunk, so that the index is
           -- evaluated only when the decoder uses the object.
-          !o =
-            Object
-              { node = n
-              , entries = kvs
-              , index = index
-              , otherKeys = [(k, v) | (k@S.Node {S.content = S.ScalarContent style t}, _) <- kvs, let v = scalarValue k.props.tag style t, case v of String _ -> False; _ -> True]
-              , duplicates = case errs of
-                  NoErrors -> False
-                  _ -> True
-              }
-      in (errs, o)
+          let !o =
+                Object
+                  { node = n
+                  , entries = kvs
+                  , index = index
+                  , otherKeys = others
+                  , duplicates = case errs of
+                      NoErrors -> False
+                      _ -> True
+                  }
+          in (errs, o)
       where
-        insert
-          :: (M.Map T.Text (S.Node, S.Node), Errors)
-          -> (S.Node, S.Node)
-          -> (M.Map T.Text (S.Node, S.Node), Errors)
-        insert (!m, !errs) kv@(k, _) = case stringValue k of
-          Just t -> case M.insertLookupWithKey (\_ _ old -> old) t kv m of
-            (Just (first, _), _) ->
-              (m, bothErrors errs (OneError k.offset ("duplicate key " ++ show t) [(first.offset, "the first key " ++ show t)]))
-            (Nothing, m') -> (m', errs)
-          _ -> (m, errs)
+        -- The other keys are in reverse order until the end.
+        go
+          :: M.Map T.Text (S.Node, S.Node)
+          -> Errors
+          -> [(S.Node, Value)]
+          -> [(S.Node, S.Node)]
+          -> (M.Map T.Text (S.Node, S.Node), Errors, [(S.Node, Value)])
+        go !m !errs !others = \case
+          [] -> (m, errs, reverse others)
+          -- With 'view' instead, GHC builds the text of each key again for the
+          -- map.
+          kv@(k, _) : rest -> case stringValue k of
+            Just t -> case M.insertLookupWithKey (\_ _ old -> old) t kv m of
+              (Just (first, _), _) ->
+                go m (bothErrors errs (OneError k.offset ("duplicate key " ++ show t) [(first.offset, "the first key " ++ show t)])) others rest
+              (Nothing, m') -> go m' errs others rest
+            Nothing -> case k.content of
+              S.ScalarContent style t -> go m errs ((k, scalarValue k.props.tag style t) : others) rest
+              _ -> go m errs others rest
 
 -- | A mapping with fast access to the values of string keys.
 data Object = Object
   { node :: !S.Node
   , entries :: ![(S.Node, S.Node)]
   , index :: !(M.Map T.Text (S.Node, S.Node))
-  , otherKeys :: [(S.Node, Value)]
-  -- ^ The keys that are not strings, for the error of a lookup. The field is
-  -- lazy, because only an error needs it, and its weak head normal form
-  -- would already resolve the keys up to the first one that is not a
-  -- string.
+  , otherKeys :: ![(S.Node, Value)]
+  -- ^ The scalar keys that are not strings, for the error of a lookup.
   , duplicates :: !Bool
   -- ^ Two string keys have the same text.
   }
