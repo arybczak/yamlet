@@ -21,6 +21,7 @@ module Yamlet.Internal.Utils
   , uEscapeDigits
   , bigUEscapeDigits
   , percentDigits
+  , strictPair
   , strictMap
   ) where
 
@@ -134,6 +135,10 @@ bigUEscapeDigits = 8
 -- | The number of hex digits of a @%XX@ escape in a tag.
 percentDigits :: Int
 percentDigits = 2
+
+-- | A pair with both components evaluated.
+strictPair :: a -> b -> (a, b)
+strictPair !a !b = (a, b)
 
 -- | 'map' with the spine and the elements of the result evaluated. The
 -- results are in reverse until the end, so that the stack does not grow with

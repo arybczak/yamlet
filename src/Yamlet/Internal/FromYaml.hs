@@ -935,7 +935,7 @@ instance FromYaml Value where
       copy = \case
         String t -> String (T.copy t)
         Sequence xs -> Sequence (strictMap copy xs)
-        Mapping kvs -> Mapping (strictMap (\(k, v) -> let !k' = copy k; !v' = copy v in (k', v')) kvs)
+        Mapping kvs -> Mapping (strictMap (\(k, v) -> strictPair (copy k) (copy v)) kvs)
         Tagged tag v -> Tagged (T.copy tag) (copy v)
         v -> v
 

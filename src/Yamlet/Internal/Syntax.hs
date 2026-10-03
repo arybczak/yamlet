@@ -410,15 +410,9 @@ copyNode n =
     , content = case n.content of
         ScalarLinesContent style t ls -> ScalarLinesContent style (T.copy t) ls
         SequenceContent style xs -> SequenceContent style (strictMap copyNode xs)
-        MappingContent style kvs -> MappingContent style (strictMap copyEntry kvs)
+        MappingContent style kvs -> MappingContent style (strictMap (\(k, v) -> strictPair (copyNode k) (copyNode v)) kvs)
         AliasContent name -> AliasContent (T.copy name)
     }
-  where
-    copyEntry :: (Node, Node) -> (Node, Node)
-    copyEntry (k, v) =
-      let !k' = copyNode k
-          !v' = copyNode v
-      in (k', v')
 
 copyComments :: Comments -> Comments
 copyComments c = case c of
