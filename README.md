@@ -161,6 +161,9 @@ remaining details.
   more. A float with an exponent beyond the range from -1000 to 1000 is an
   error, e.g. `1e1001`. The library does not limit the size of the input,
   so a program that reads untrusted input must limit it.
+- No deriving with Template Haskell. The generic instances optimize well for
+  the common shapes of data types, and a second way to derive instances
+  would double what the tests must cover.
 
 ## Performance
 
