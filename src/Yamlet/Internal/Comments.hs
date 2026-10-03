@@ -137,24 +137,23 @@ attachComments e first hasNext start marker rootEnd end doc
     -- ranges. The offsets of the items are relative to the start of the
     -- input.
     scanItems :: [(Int, Int)] -> [Item]
-    scanItems = go start start False False
+    scanItems = go start start False
       where
-        -- The flags tell if the line has something other than white space and
-        -- if the previous line was empty.
-        go :: Int -> Int -> Bool -> Bool -> [(Int, Int)] -> [Item]
-        go i ls content prevEmpty ranges
+        -- The flag tells if the line has something other than white space.
+        go :: Int -> Int -> Bool -> [(Int, Int)] -> [Item]
+        go i ls content ranges
           | i >= end = []
           | (rs, re) : others <- ranges
           , rs <= i =
               if re > i
                 -- A block scalar can end at the start of a line.
-                then let ls' = lineBefore i re ls in go re ls' (ls' /= re) False others
-                else go i ls content prevEmpty others
+                then let ls' = lineBefore i re ls in go re ls' (ls' /= re) others
+                else go i ls content others
           -- The parser allows byte order marks at the start of a line only
           -- between documents, where a comment can follow them.
           | i == ls
           , isBom e i =
-              let j = skipBoms e i in go j j content prevEmpty ranges
+              let j = skipBoms e i in go j j content ranges
           | otherwise = case A.unsafeIndex e.array i of
               w
                 | isBreak w ->
@@ -162,9 +161,8 @@ attachComments e first hasNext start marker rootEnd end doc
                           if w == CR && i + 1 < end && A.unsafeIndex e.array (i + 1) == LF
                             then i + 2
                             else i + 1
-                        blank = not content
-                        item = [Item (ls - e.base) (ls - e.base) True EmptyLine | blank, not prevEmpty]
-                    in item ++ go j j False blank ranges
+                        item = [Item (ls - e.base) (ls - e.base) True EmptyLine | not content]
+                    in item ++ go j j False ranges
                 | w == HASH && (i == ls || isWhite (A.unsafeIndex e.array (i - 1))) ->
                     let eol = lineEnd i
                         -- A comment at the end of a line keeps its text after
@@ -172,9 +170,9 @@ attachComments e first hasNext start marker rootEnd end doc
                         textStart = if content then i + 1 else hashesEnd i
                         text = T.stripEnd . dropSpace $ slice e textStart eol
                     in Item (i - e.base) (ls - e.base) (not content) (CommentLine (textStart - i) text)
-                         : go eol ls True prevEmpty ranges
-                | isWhite w -> go (i + 1) ls content prevEmpty ranges
-                | otherwise -> go (i + 1) ls True prevEmpty ranges
+                         : go eol ls True ranges
+                | isWhite w -> go (i + 1) ls content ranges
+                | otherwise -> go (i + 1) ls True ranges
 
         hashesEnd :: Int -> Int
         hashesEnd i

@@ -595,8 +595,8 @@ test_attachment = do
   check "at the end of a mapping with an explicit key" [("/x", "after", "c")] "x:\n  ? a\n  # c\ny: 1\n"
   check "empty lines" [] "a: 1\n\n\nb: 2\n"
   assertEqual
-    "empty line"
-    (Right [EmptyLine])
+    "empty lines"
+    (Right [EmptyLine, EmptyLine])
     ((\case [d] | MappingContent _ [_, (k, _)] <- d.root.content -> k.comments.before; _ -> []) <$> parseDocumentsText "a: 1\n\n\nb: 2\n")
   assertEqual
     "empty line below the end of a collection"
@@ -650,7 +650,7 @@ test_attachment = do
     "[a]\n# c\n\n# d\n---\nb\n"
   assertEqual
     "empty lines above the first key"
-    (Right [([Comment "a", EmptyLine, Comment "b", EmptyLine], [Comment "c"])])
+    (Right [([Comment "a", EmptyLine, Comment "b", EmptyLine, EmptyLine], [Comment "c"])])
     (map (\d -> (d.root.comments.before, firstKey d.root)) <$> parseDocumentsText "# a\n\n# b\n\n\n# c\nk: v\n")
   where
     firstKey :: Node -> [Line]

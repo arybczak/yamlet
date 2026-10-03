@@ -331,7 +331,7 @@ data Located a = Located
   deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable, Generic)
   deriving anyclass (NFData)
 
--- | A line of comments. Several empty lines in a row count as one.
+-- | A line of comments.
 data Line
   = EmptyLine
   | -- | The number of @#@ characters at the start of the comment, e.g. 2 for

@@ -490,8 +490,8 @@ mappingNode = contentNode . MappingContent Block
 -- root.server (value) after: [Comment "The end of the server."]
 -- root.user (key) before: [EmptyLine]
 --
--- Empty lines above a comment go with the comment. Several empty lines in a
--- row count as one.
+-- Empty lines above a comment go with the comment. Each empty line is a
+-- line of its own.
 --
 -- >>> input = "host: localhost\n\n\n# The port.\nport: 80\n\nuser: admin\n"
 --
@@ -505,7 +505,7 @@ mappingNode = contentNode . MappingContent Block
 -- user: admin
 --
 -- >>> printComments input
--- root.port (key) before: [EmptyLine,Comment "The port."]
+-- root.port (key) before: [EmptyLine,EmptyLine,Comment "The port."]
 -- root.user (key) before: [EmptyLine]
 --
 -- One place is an exception. Above the first entry of a block collection,

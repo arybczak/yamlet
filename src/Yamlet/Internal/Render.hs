@@ -45,11 +45,11 @@ defaultRenderOptions =
 -- A @---@ marker is on a line of its own, with at most a comment after it.
 --
 -- A scalar keeps its style if the style can hold its text, otherwise it gets
--- quotes. An empty line from the comments after a block scalar with the @+@
--- indicator goes away, because it would become part of the scalar. A flow
--- collection with comments inside becomes a block collection, so that every
--- comment has a line. A flow collection without comments is on one line, so
--- the empty lines inside it go away.
+-- quotes. The empty lines from the comments right after a block scalar with
+-- the @+@ indicator go away, because they would become part of the scalar.
+-- A flow collection with comments inside becomes a block collection, so
+-- that every comment has a line. A flow collection without comments is on
+-- one line, so the empty lines inside it go away.
 --
 -- A comment that has no place at its node moves to a place that has one,
 -- e.g. the lines above the value of a key go above the key if the value is
@@ -74,12 +74,11 @@ defaultRenderOptions =
 renderSyntax :: RenderOptions -> [Document] -> T.Text
 renderSyntax opts = emptyLines . B.runBuilder . go True
   where
-    -- Several empty lines in a row become one, and empty lines at the start
-    -- or the end of the output go away. The parser reads the output the
-    -- same way: it reads several empty lines as one, and it gives the lines
-    -- at the start or the end to no node. The empty lines in the content of
-    -- a block scalar stay. Only the content of a block scalar with the keep
-    -- indicator ends with an empty line.
+    -- The empty lines at the start or the end of the output go away, because
+    -- the parser gives the lines there to no node. The empty lines in the
+    -- content of a block scalar stay. Only the content of a block scalar
+    -- with the keep indicator ends with an empty line, and the empty lines
+    -- right after it go away, because they would become part of it.
     emptyLines :: T.Text -> T.Text
     emptyLines t
       | T.any (== '\0') t =
@@ -87,15 +86,15 @@ renderSyntax opts = emptyLines . B.runBuilder . go True
             . map (\l -> if l == emptyLine then "" else l)
             . dropEnd
             . dropWhile (== emptyLine)
-            . collapse
+            . afterKeptLines
             $ T.lines t
       -- Every document ends with a line break, so the lines stay the same.
       | otherwise = t
 
-    collapse :: [T.Text] -> [T.Text]
-    collapse = \case
-      a : b : rest | b == emptyLine && (a == emptyLine || T.null a) -> collapse (a : rest)
-      a : rest -> a : collapse rest
+    afterKeptLines :: [T.Text] -> [T.Text]
+    afterKeptLines = \case
+      a : rest | T.null a -> a : afterKeptLines (dropWhile (== emptyLine) rest)
+      a : rest -> a : afterKeptLines rest
       [] -> []
 
     dropEnd :: [T.Text] -> [T.Text]
