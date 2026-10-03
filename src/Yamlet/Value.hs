@@ -17,6 +17,7 @@
 -- the decoder limits the aliases. Each node and each character of a scalar
 -- counts as one unit. The aliases can add 100000 units to a document. For a
 -- document with more units, they can add as many units as the document has.
+-- The documents of a stream share the limit, as if they were one document.
 -- A document beyond the limit is an error.
 module Yamlet.Value
   ( -- * Values

@@ -156,8 +156,8 @@ remaining details.
 - The renderer writes its own layout. A file written back keeps its
   comments, empty lines, styles and anchors, but not its indentation or the
   spaces between tokens.
-- Limits for untrusted input. The aliases of a document can add at most
-  100000 nodes and characters, or as many as the document has if it has
+- Limits for untrusted input. The aliases of a stream can add at most
+  100000 nodes and characters, or as many as the stream has if it has
   more. A float with an exponent beyond the range from -1000 to 1000 is an
   error, e.g. `1e1001`. The library does not limit the size of the input,
   so a program that reads untrusted input must limit it.

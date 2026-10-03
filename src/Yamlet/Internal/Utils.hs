@@ -23,6 +23,7 @@ module Yamlet.Internal.Utils
   , percentDigits
   , strictPair
   , strictMap
+  , firstOfResult
   ) where
 
 import Data.Char
@@ -150,3 +151,10 @@ strictMap f = go []
     go acc = \case
       [] -> reverse acc
       x : xs -> let !y = f x in go (y : acc) xs
+
+-- | The first component of a pair in a result. Unlike @'fmap' 'fst'@, it
+-- gives no selector thunk inside the result.
+firstOfResult :: Either e (a, b) -> Either e a
+firstOfResult = \case
+  Left e -> Left e
+  Right (a, _) -> Right a

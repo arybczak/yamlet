@@ -7,6 +7,8 @@
 -- in subsequent releases.
 module Yamlet.Internal.Compose
   ( prepare
+  , prepareWithin
+  , aliasLimit
   , represent
   , Failure
   , noMergeKeys
@@ -31,43 +33,58 @@ import Yamlet.Value
 -- to. The result has no aliases. A node without aliases comes back
 -- unchanged.
 prepare :: S.Node -> Either Failure S.Node
-prepare root
-  | needsNumbering root = expandAliases root <$ represent root
-  | otherwise = root <$ check root
+prepare root = firstOfResult $ prepareWithin (aliasLimit [root]) 0 root
+
+-- | 'prepare' with the limit of the visits that the aliases can add, see
+-- 'aliasLimit', and the visits that the aliases of the documents before
+-- added. It also gives the visits that the aliases added with this
+-- document.
+prepareWithin :: Int -> Int -> S.Node -> Either Failure (S.Node, Int)
+prepareWithin limit added root
+  | needsNumbering root = (\(_, added') -> (expandAliases root, added')) <$> representWithin limit added root
+  | otherwise = (root, added) <$ check root
 
 -- | The value of a node, with the checks of 'prepare'.
 represent :: S.Node -> Either Failure Value
-represent root
-  | needsNumbering root = fst . fst <$> go (Numbering M.empty M.empty 0) root
-  | otherwise = plain root
+represent root = firstOfResult $ representWithin (aliasLimit [root]) 0 root
+
+-- | The limit of the visits of a traversal that the aliases of the documents
+-- can add together: as many visits as the documents have, or 'smallLimit'
+-- for small documents. A node is one visit and each character of a scalar is
+-- one more, because the decoder copies the text of each alias. Without a
+-- limit, the visits of a small input can be exponential in its size. The
+-- documents of a stream share the limit, so that many small documents cannot
+-- add 'smallLimit' each.
+aliasLimit :: [S.Node] -> Int
+aliasLimit roots = max smallLimit (sum (map syntaxSize roots))
   where
-    -- The limit of the visits of a traversal of the document. A node is one
-    -- visit and each character of a scalar is one more, because the decoder
-    -- copies the text of each alias. Aliases can add as many visits as the
-    -- document has, or 'smallBudget' for a small document. Without a limit,
-    -- the visits of a small input can be exponential in its size.
-    limit :: Int
-    limit = n + max smallBudget n
-      where
-        n :: Int
-        n = syntaxSize root
+    -- A traversal of 100000 nodes takes about 5 ms and 6 MB, measured with
+    -- a copy of the nodes. go-yaml allows about 400000 nodes from aliases in
+    -- a small document.
+    smallLimit :: Int
+    smallLimit = 100000
 
-        -- A traversal of 100000 nodes takes about 5 ms and 6 MB, measured
-        -- with a copy of the nodes. go-yaml allows about 400000 nodes from
-        -- aliases in a small document.
-        smallBudget :: Int
-        smallBudget = 100000
+-- | The visits of a traversal of a node without aliases.
+syntaxSize :: S.Node -> Int
+syntaxSize n = case n.content of
+  S.ScalarContent _ t -> scalarVisits t
+  S.SequenceContent _ xs -> 1 + sum (map syntaxSize xs)
+  S.MappingContent _ kvs -> 1 + sum [syntaxSize k + syntaxSize v | (k, v) <- kvs]
+  S.AliasContent _ -> 1
 
-        syntaxSize :: S.Node -> Int
-        syntaxSize sn = case sn.content of
-          S.ScalarContent _ t -> scalarVisits t
-          S.SequenceContent _ xs -> 1 + sum (map syntaxSize xs)
-          S.MappingContent _ kvs -> 1 + sum [syntaxSize k + syntaxSize v | (k, v) <- kvs]
-          S.AliasContent _ -> 1
+scalarVisits :: T.Text -> Int
+scalarVisits t = 1 + T.length t
 
-    scalarVisits :: T.Text -> Int
-    scalarVisits t = 1 + T.length t
-
+-- | 'represent' with the visits of the aliases as for 'prepareWithin'. The
+-- limit is evaluated only at an alias, so that the size of a document
+-- without aliases is not computed.
+representWithin :: Int -> Int -> S.Node -> Either Failure (Value, Int)
+representWithin limit added root
+  | needsNumbering root = do
+      ((v, _), st) <- go (Numbering M.empty M.empty 0 added) root
+      Right (v, st.added)
+  | otherwise = (,added) <$> plain root
+  where
     -- Without aliases the anchors do not matter, and without collection keys
     -- only scalar keys compare.
     plain :: S.Node -> Either Failure Value
@@ -93,11 +110,11 @@ represent root
       in case sn.content of
            S.AliasContent name -> case M.lookup name st.anchors of
              Just (Just (v, i, visits))
-               | st.visits + visits > limit ->
+               | st.added + visits > limit ->
                    Left
                      $ failure off
-                     $ "the aliases expand the document to more than " ++ show limit ++ " nodes and characters"
-               | otherwise -> Right ((v, i), st {visits = st.visits + visits})
+                     $ "the aliases add more than " ++ show limit ++ " nodes and characters"
+               | otherwise -> Right ((v, i), st {visits = st.visits + visits, added = st.added + visits})
              Just Nothing ->
                Left
                  $ failure off
@@ -166,7 +183,7 @@ represent root
     -- node and of everything inside it. A node inside with the same anchor
     -- comes later in the document, so its definition stays.
     number :: S.Props -> Value -> Shape -> Int -> Int -> Numbering -> ((Value, Int), Numbering)
-    number props v shape own visits st = ((v, i), Numbering anchors' shapes' (st.visits + own))
+    number props v shape own visits st = ((v, i), st {anchors = anchors', shapes = shapes', visits = st.visits + own})
       where
         i :: Int
         shapes' :: M.Map Shape Int
@@ -430,6 +447,9 @@ data Numbering = Numbering
   , shapes :: !(M.Map Shape Int)
   , visits :: !Int
   -- ^ The visits of a traversal of the nodes so far.
+  , added :: !Int
+  -- ^ The visits that the aliases added so far, with those of the documents
+  -- before in the stream.
   }
 
 -- | A value with the numbers of its items or entries in place of them. The

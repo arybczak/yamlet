@@ -136,6 +136,7 @@ module Yamlet
   , module Yamlet.Error
   ) where
 
+import Control.Monad
 import Data.Bifunctor
 import Data.ByteString qualified as BS
 import Data.List.NonEmpty qualified as NE
@@ -149,9 +150,11 @@ import Yamlet.Error
 import Yamlet.Generic
 import Yamlet.Internal.Compose
 import Yamlet.Internal.Encoder
+import Yamlet.Internal.FromYaml
 import Yamlet.Internal.Input
 import Yamlet.Internal.Parser
 import Yamlet.Internal.Syntax qualified as S
+import Yamlet.Internal.Utils
 import Yamlet.Syntax qualified as S
 import Yamlet.Value
 
@@ -206,7 +209,10 @@ decodeWithDocument input =
     [] -> withDocument (S.document (S.Node (S.Offset 0) (S.Offset 0) S.noProps S.noComments (S.ScalarContent S.Plain "")))
     [doc] -> withDocument doc
     docs@(_ : doc : _) -> do
-      mapM_ (\d -> first (decoderErrors input d) (prepare d.root)) docs
+      let limit = aliasLimit (map (.root) docs)
+          check :: Int -> S.Document -> Either (NE.NonEmpty Error) Int
+          check added d = snd <$> first (decoderErrors input d) (prepareWithin limit added d.root)
+      foldM_ check 0 docs
       single . Left $ errorAt input doc.root.offset "expected a single document, but got a second one"
   where
     withDocument :: FromYaml a => S.Document -> Either (NE.NonEmpty Error) (a, S.Document)
@@ -216,7 +222,16 @@ decodeWithDocument input =
 
 -- | Decode every document of a stream. The errors are as for 'decodeAll'.
 decodeAllText :: FromYaml a => T.Text -> Either (NE.NonEmpty Error) [a]
-decodeAllText input = single (parseStream input) >>= mapM (decodeDocument input)
+decodeAllText input = do
+  docs <- single (parseStream input)
+  let limit = aliasLimit (map (.root) docs)
+      go :: FromYaml a => Int -> [S.Document] -> Either (NE.NonEmpty Error) [a]
+      go added = \case
+        [] -> Right []
+        d : ds -> do
+          (a, added') <- decodeDocumentWithin limit added input d
+          (a :) <$> go added' ds
+  go 0 docs
 
 single :: Either Error a -> Either (NE.NonEmpty Error) a
 single = first (NE.:| [])
@@ -238,8 +253,12 @@ single = first (NE.:| [])
 -- text. For a document that the program built, the text can be empty. The
 -- errors are as for 'decode'.
 decodeDocument :: FromYaml a => T.Text -> S.Document -> Either (NE.NonEmpty Error) a
-decodeDocument input doc =
-  first (decoderErrors input doc) (runParser parseYaml root)
+decodeDocument input doc = firstOfResult $ decodeDocumentWithin (aliasLimit [doc.root]) 0 input doc
+
+-- | 'decodeDocument' with the visits of the aliases as for 'prepareWithin'.
+decodeDocumentWithin :: FromYaml a => Int -> Int -> T.Text -> S.Document -> Either (NE.NonEmpty Error) (a, Int)
+decodeDocumentWithin limit added input doc =
+  first (decoderErrors input doc) (runParserWithin limit added parseYaml root)
   where
     -- The root with the lines of the document, e.g. the lines above a @---@
     -- marker and below a @...@ marker, so that a decoder can keep them. The

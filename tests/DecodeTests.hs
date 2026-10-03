@@ -1468,7 +1468,7 @@ test_aliasLimit = do
   assertEqual "small expansion" Nothing (errorOf (decodeAllText @Value (laughs 3)))
   assertEqual
     "exponential expansion"
-    (Just (5, 25, "the aliases expand the document to more than 100151 nodes and characters"))
+    (Just (5, 25, "the aliases add more than 100000 nodes and characters"))
     (errorOf (decodeAllText @Value (laughs 9)))
   let items = T.intercalate ", " (replicate 200000 "x")
       copies :: Int -> T.Text
@@ -1476,7 +1476,7 @@ test_aliasLimit = do
   assertEqual "large document with one copy" Nothing (errorOf (decodeAllText @Value (copies 1)))
   assertEqual
     "large document with two copies"
-    (Just (3, 3, "the aliases expand the document to more than 800008 nodes and characters"))
+    (Just (3, 3, "the aliases add more than 400004 nodes and characters"))
     (errorOf (decodeAllText @Value (copies 2)))
   let long = T.replicate 100000 "x"
       textCopies :: Int -> T.Text
@@ -1484,8 +1484,20 @@ test_aliasLimit = do
   assertEqual "long scalar with one copy" Nothing (errorOf (decodeAllText @Value (textCopies 1)))
   assertEqual
     "long scalar with many copies"
-    (Just (3, 3, "the aliases expand the document to more than 202004 nodes and characters"))
+    (Just (3, 3, "the aliases add more than 101002 nodes and characters"))
     (errorOf (decodeAllText @Value (textCopies 1000)))
+  -- The documents of a stream share the limit.
+  let stream :: Int -> T.Text
+      stream k = T.concat (replicate k ("---\n" <> laughs 3))
+  assertEqual "four documents of a stream" Nothing (errorOf (decodeAllText @Value (stream 4)))
+  assertEqual
+    "five documents of a stream"
+    (Just (25, 15, "the aliases add more than 100000 nodes and characters"))
+    (errorOf (decodeAllText @Value (stream 5)))
+  assertEqual
+    "five documents of a stream with one document expected"
+    (Just (25, 15, "the aliases add more than 100000 nodes and characters"))
+    (errorOf (decodeText @Value (stream 5)))
 
 -- | Anchors a0 to ak, where each anchor after a0 has ten aliases to the one
 -- before it, and the alias *ak expands to about 10^(k+1) nodes.

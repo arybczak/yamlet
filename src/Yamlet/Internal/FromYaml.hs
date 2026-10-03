@@ -13,6 +13,7 @@ module Yamlet.Internal.FromYaml
     -- * Parser
   , Parser
   , runParser
+  , runParserWithin
   , parseNode
   , failAt
   , typeMismatch
@@ -197,10 +198,14 @@ instance MonadFail Parser where
 -- that the alias refers to. If a check fails, the result has only the error
 -- of that check, with its notes.
 runParser :: (S.Node -> Parser a) -> S.Node -> Either (NE.NonEmpty (S.Offset, String)) a
-runParser f n0 = case prepare n0 of
+runParser f n0 = firstOfResult $ runParserWithin (aliasLimit [n0]) 0 f n0
+
+-- | 'runParser' with the visits of the aliases as for 'prepareWithin'.
+runParserWithin :: Int -> Int -> (S.Node -> Parser a) -> S.Node -> Either (NE.NonEmpty (S.Offset, String)) (a, Int)
+runParserWithin limit added f n0 = case prepareWithin limit added n0 of
   Left err -> Left err
-  Right n -> case runChecked f n of
-    Result NoErrors a -> Right a
+  Right (n, added') -> case runChecked f n of
+    Result NoErrors a -> Right (a, added')
     Result e _ -> Left (NE.fromList (map (withMergeHint (mergeValues n)) (sortedErrors e)))
   where
     -- The errors in the order of their offsets, each with its notes after it.
