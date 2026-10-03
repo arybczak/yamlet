@@ -856,6 +856,12 @@ closeName known t =
 --   |
 -- 2 | port: http
 --   |       ^
+--
+-- The instances of the library copy the texts that they keep, so a decoded
+-- value does not keep the input in memory. A value from a hand-written
+-- instance can keep the input while it has unevaluated parts, e.g. a lazy
+-- list. Evaluate such a value, e.g. with 'Control.DeepSeq.force', to release
+-- the input.
 class FromYaml a where
   parseYaml :: S.Node -> Parser a
 
