@@ -382,17 +382,20 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
         go :: [Node] -> [Node] -> [Item] -> ([Node], [Item])
         go acc [] is = let !xs = reverse acc in (xs, is)
         go acc (x : rest) is =
-          let !(x', is') = attachNode e (nextStart rest) (entryColumn style) (s, lineStart) x is
+          let next = nextStart x rest
+              !(x', is') = attachNode e next (entryColumn style) (s, lineStart) x is
               !(x'', is'')
                 -- A list without indentation has no column of its own for the
                 -- lines after its last item, so they stay with the list.
-                | style == Block && not (null rest && minColumn > column) = linesBelow (nextStart rest) x' is'
+                | style == Block && not (null rest && minColumn > column) = linesBelow next x' is'
                 | otherwise = (x', is')
           in go (x'' : acc) rest is''
 
-        nextStart :: [Node] -> Int
-        nextStart = \case
-          y : _ -> offsetOf y.offset
+        nextStart :: Node -> [Node] -> Int
+        nextStart x = \case
+          y : _
+            | style == Block -> entryStart (offsetOf x.endOffset) (offsetOf y.offset)
+            | otherwise -> offsetOf y.offset
           [] -> if style == Flow then en else limit
 
     mappingEntries :: CollectionStyle -> [(Node, Node)] -> [Item] -> ([(Node, Node)], [Item])
@@ -402,17 +405,51 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
         go :: [(Node, Node)] -> [(Node, Node)] -> [Item] -> ([(Node, Node)], [Item])
         go acc [] is = let !kvs = reverse acc in (kvs, is)
         go acc ((k, v) : rest) is =
-          let !(k', is') = attachNode e (offsetOf v.offset) (entryColumn style) (s, lineStart) k is
-              !(v', is'') = attachNode e (nextStart rest) (entryColumn style) (s, lineStart) v is'
+          let next = nextStart v rest
+              !(k', is') = attachNode e (keyLimit k v) (entryColumn style) (s, lineStart) k is
+              !(v', is'') = attachNode e next (entryColumn style) (s, lineStart) v is'
               !(v'', is''')
-                | style == Block = linesBelow (nextStart rest) v' is''
+                | style == Block = linesBelow next v' is''
                 | otherwise = (v', is'')
           in go ((k', v'') : acc) rest is'''
 
-        nextStart :: [(Node, Node)] -> Int
-        nextStart = \case
-          (k, _) : _ -> offsetOf k.offset
+        nextStart :: Node -> [(Node, Node)] -> Int
+        nextStart v = \case
+          (k, _) : _
+            | style == Block -> entryStart (offsetOf v.endOffset) (offsetOf k.offset)
+            | otherwise -> offsetOf k.offset
           [] -> if style == Flow then en else limit
+
+        -- The key takes the comment on the line of the colon, but not the
+        -- lines below it, e.g. in ": &a".
+        keyLimit :: Node -> Node -> Int
+        keyLimit k v
+          | style == Block = lineEnd (offsetOf v.offset) (entryStart (offsetOf k.endOffset) (offsetOf v.offset))
+          | otherwise = offsetOf v.offset
+
+    -- The start of the next entry of a block collection, between the end of
+    -- the previous entry and the content of the next one: the first indicator
+    -- or property, or the content. Lines between an indicator and the content,
+    -- e.g. in "- &a", belong to the next entry.
+    entryStart :: Int -> Int -> Int
+    entryStart from to = go from from
+      where
+        go :: Int -> Int -> Int
+        go i ls
+          | i >= to = to
+          | otherwise = case A.unsafeIndex e.array (i + e.base) of
+              w
+                | isBreak w -> go (i + 1) (i + 1)
+                | isWhite w -> go (i + 1) ls
+                | w == HASH && (i == ls || isWhite (A.unsafeIndex e.array (i + e.base - 1))) -> go (lineEnd to i) ls
+                | otherwise -> i
+
+    -- The end of the line of the second offset, or the first offset if it
+    -- comes first.
+    lineEnd :: Int -> Int -> Int
+    lineEnd to i
+      | i < to && not (isBreak (A.unsafeIndex e.array (i + e.base))) = lineEnd to (i + 1)
+      | otherwise = i
 
     -- The column of 'attachNode' for an entry of a collection in the style.
     entryColumn :: CollectionStyle -> Int

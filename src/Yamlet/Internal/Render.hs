@@ -432,16 +432,23 @@ block opts indent afterColumn atLineStart hoisted carried n = case n.content of
     -- collection that starts below it to the collection up to the last empty
     -- line, and the rest to its first entry. Above the indicator of a first
     -- entry, the collection around it takes the lines up to the last empty
-    -- line, so the lines of a first entry go below its indicator.
+    -- line, so the lines of a first entry go below its indicator. A comment
+    -- on the line of the indicator of a later entry keeps the lines above it
+    -- from the first entry, so the lines of the first entry after the last
+    -- empty line go below the indicator.
     indicatorLines :: Bool -> [Line] -> Node -> ([Line], [Line], [Line])
     indicatorLines isFirst given x
       | startsBelow opts x =
           let ls = given ++ x.comments.before
-              (own, rest)
-                | firstStartsBelow opts x = splitAtLastEmptyLine ls
-                | isFirst = (separated ls ++ firstLines opts x, [])
-                | otherwise = (ls ++ firstLines opts x, [])
-          in if isFirst then ([], own, rest) else (own, [], rest)
+          in if
+               | firstStartsBelow opts x ->
+                   let (own, rest) = splitAtLastEmptyLine ls
+                   in if isFirst then ([], own, rest) else (own, [], rest)
+               | isFirst -> ([], separated ls ++ firstLines opts x, [])
+               | isJust x.comments.inline ->
+                   let (above, below) = splitAtLastEmptyLine (firstLines opts x)
+                   in (ls ++ above, below, [])
+               | otherwise -> (ls ++ firstLines opts x, [], [])
       | otherwise = (aboveIndicator opts x, [], [])
 
     -- The value of a mapping entry after the colon with the comment of the

@@ -812,6 +812,24 @@ test_linesBelowIndicator = do
   check "explicit key" "- ? &x\n    # a\n\n    b: 1\n  : c\n"
   check "nested first items" "- &x\n  - &y\n    # a\n\n    b: 1\n"
   check "second item" "k:\n- a\n- !!map\n  # b\n  c: 1\n"
+  check "second item with a comment" "- a\n- &x # a\n  # b\n  c: 1\n"
+  let owners :: String -> [(String, String, T.Text)] -> T.Text -> Assertion
+      owners preface expected input =
+        assertEqual preface (Right [expected]) (map commentsOf <$> parseDocumentsText input)
+      ownersRenderBack :: String -> [(String, String, T.Text)] -> T.Text -> Assertion
+      ownersRenderBack preface expected input = owners preface expected input >> check preface input
+  ownersRenderBack "below the indicator of a second item" [("/jobs/1/name:key", "before", "c")] "jobs:\n- name: a\n- &b\n  # c\n  name: b\n"
+  ownersRenderBack "below the indicator of a scalar" [("/1", "before", "c")] "- a\n- !!str\n  # c\n  x\n"
+  ownersRenderBack "below the indicator of an explicit key" [("/x:key", "before", "c")] "k: a\n? &k\n  # c\n  x\n: v\n"
+  ownersRenderBack "below the indicator of an explicit value" [("/?/b:key", "before", "c")] "? a: 1\n: &x\n  # c\n  b: 2\n"
+  ownersRenderBack
+    "below an indicator with a comment"
+    [("/1", "inline", "i"), ("/1/c:key", "before", "b")]
+    "- a\n- # i\n  # b\n  c: 1\n"
+  -- The renderer writes these items on the line of the indicator, with the
+  -- lines above it, so the lines read back as the lines of the item.
+  owners "below a bare indicator" [("/1/name:key", "before", "c")] "-\n  name: a\n-\n  # c\n  name: b\n"
+  owners "below the indicator of a nested list" [("/1/0", "before", "c")] "- - a\n-\n  # c\n  - x\n"
   let withAbove :: Node -> Node
       withAbove n = n {comments = noComments {before = [Comment "a"]}}
       list :: Node
