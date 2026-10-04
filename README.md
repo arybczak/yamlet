@@ -117,26 +117,6 @@ matrix:
   ghc: ['9.10', '9.12']
 ```
 
-## Known limits
-
-- No streaming. The parser reads the whole input, and a decode of a stream
-  parses all its documents before it decodes the first one. The library has
-  no interface to the events of the parser.
-- Only YAML 1.2. A document with `%YAML 1.1` follows the rules of YAML 1.2,
-  e.g. `yes` is a string and `0755` is the integer 755. The merge keys of
-  YAML 1.1 (`<<`) are not supported.
-- The renderer writes its own layout. A file written back keeps its
-  comments, empty lines, styles and anchors, but not its indentation or the
-  spaces between tokens.
-- Limits for untrusted input. The aliases of a stream can add at most
-  100000 nodes and characters, or as many as the stream has if it has
-  more. A float with an exponent beyond the range from -1000 to 1000 is an
-  error, e.g. `1e1001`. The library does not limit the size of the input,
-  so a program that reads untrusted input must limit it.
-- No deriving with Template Haskell. The generic instances optimize well for
-  the common shapes of data types, and a second way to derive instances
-  would double what the tests must cover.
-
 ## Performance
 
 Each library decodes three generated inputs into the same Haskell type and
@@ -167,6 +147,26 @@ own process, pinned to one core of the CCD with the 3D V-cache. The `yaml`
 package uses the libyaml C library and converts the data by way of an aeson
 `Value`. The section [Development](#development) shows how to run the
 benchmarks.
+
+## Known limits
+
+- No streaming. The parser reads the whole input, and a decode of a stream
+  parses all its documents before it decodes the first one. The library has
+  no interface to the events of the parser.
+- Only YAML 1.2. A document with `%YAML 1.1` follows the rules of YAML 1.2,
+  e.g. `yes` is a string and `0755` is the integer 755. The merge keys of
+  YAML 1.1 (`<<`) are not supported.
+- The renderer writes its own layout. A file written back keeps its
+  comments, empty lines, styles and anchors, but not its indentation or the
+  spaces between tokens.
+- Limits for untrusted input. The aliases of a stream can add at most
+  100000 nodes and characters, or as many as the stream has if it has
+  more. A float with an exponent beyond the range from -1000 to 1000 is an
+  error, e.g. `1e1001`. The library does not limit the size of the input,
+  so a program that reads untrusted input must limit it.
+- No deriving with Template Haskell. The generic instances optimize well for
+  the common shapes of data types, and a second way to derive instances
+  would double what the tests must cover.
 
 ## Coming from the yaml package
 
