@@ -49,12 +49,12 @@ represent :: S.Node -> Either Failure Value
 represent root = firstOfResult $ representWithin (aliasLimit [root]) 0 root
 
 -- | The limit of the visits of a traversal that the aliases of the documents
--- can add together: as many visits as the documents have, or 'smallLimit'
+-- can add together: as many visits as the documents have, or a fixed minimum
 -- for small documents. A node is one visit and each character of a scalar is
 -- one more, because the decoder copies the text of each alias. Without a
 -- limit, the visits of a small input can be exponential in its size. The
 -- documents of a stream share the limit, so that many small documents cannot
--- add 'smallLimit' each.
+-- add the minimum each.
 aliasLimit :: [S.Node] -> Int
 aliasLimit roots = max smallLimit (sum (map syntaxSize roots))
   where

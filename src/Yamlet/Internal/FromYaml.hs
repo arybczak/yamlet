@@ -123,7 +123,7 @@ import Yamlet.Value
 -- stops, e.g. the check of the port above. The functions that use '>>' also
 -- stop, e.g. 'Control.Monad.mapM_' and 'Control.Monad.forM_'.
 --
--- The operator changes only the errors, never the result. With
+-- The choice between them changes only the errors, never the result. With
 -- @ApplicativeDo@, GHC turns the independent statements of a @do@ block that
 -- ends with 'pure' into '<*>'. Then they collect errors.
 newtype Parser a = Parser (S.Offset -> Result a)
@@ -259,8 +259,8 @@ parseNode f n = let Parser g = f n in Parser $ \_ -> g n.offset
 failAt :: S.Node -> String -> Parser a
 failAt n msg = Parser $ \_ -> failure n.offset msg
 
--- | Fail with an error about the kind of the node, e.g. "expected a list, but
--- got a string".
+-- | Fail with an error that the node is not of the expected kind, e.g.
+-- @typeMismatch "a list" n@ gives "expected a list, but got a string".
 typeMismatch :: String -> S.Node -> Parser a
 typeMismatch expected n = failAt n (mismatchMessage expected n)
 
@@ -759,7 +759,7 @@ missingKey o key = Parser $ \off ->
 -- do not repeat the list.
 --
 -- A key that is not a string, but has the text of a known key, e.g. @true@,
--- is not an error here, if the lookup of the known key reports it.
+-- is left to the lookup of that key, e.g. 'parseField', which reports it.
 rejectUnknownKeys :: [T.Text] -> Object -> Parser ()
 rejectUnknownKeys known o
   -- The index has the text of each string key, so the keys are not viewed

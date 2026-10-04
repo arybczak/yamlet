@@ -1,9 +1,14 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
 -- | Instances of t'Yamlet.Decode.FromYaml' and t'Yamlet.Encode.ToYaml' from
--- the t'GHC.Generics.Generic' representation of a type. A type derives them
--- via t'GenericYaml', and its instance of 'GenericYamlOptions' gives the
--- options:
+-- the t'GHC.Generics.Generic' representation of a type.
+--
+-- Besides GHC2021, the examples need the extensions DataKinds,
+-- DeriveAnyClass, DerivingStrategies, DerivingVia, OverloadedStrings and
+-- TypeFamilies.
+--
+-- A type derives the instances via t'GenericYaml', and its instance of
+-- 'GenericYamlOptions' gives the options:
 --
 -- >>> :{
 -- data Server = Server {host :: T.Text, port :: Int}
@@ -18,10 +23,6 @@
 -- >>> T.putStr (encodeText (Server "localhost" 80))
 -- host: localhost
 -- port: 80
---
--- Besides GHC2021, the examples need the extensions DataKinds,
--- DeriveAnyClass, DerivingStrategies, DerivingVia, OverloadedStrings and
--- TypeFamilies.
 --
 -- A type with other options defines 'yamlOptions' in its instance of
 -- 'GenericYamlOptions':
@@ -41,6 +42,8 @@
 -- - -Wall
 --
 -- = Encoding
+--
+-- The encoding of a type depends on its constructors and their fields:
 --
 -- * A record is a mapping of its fields, e.g. @{host: localhost, port: 80}@.
 --
@@ -133,7 +136,8 @@
 -- fields. A type with several constructors cannot mix named fields with a
 -- field without a name, but a constructor without fields fits with both.
 -- 'SingleField' allows the mix, because each constructor has its own value.
--- 'TaggedFlat' needs constructors with a field without a name.
+-- 'TaggedFlat' needs constructors with one field without a name or no
+-- fields.
 --
 -- Another shape is a compile error that names the constructors, e.g. a
 -- constructor with several fields without names. Give such fields names, or
@@ -145,7 +149,8 @@
 -- has the field, if that type has a default. Otherwise the field decodes as
 -- if its value is null. A missing contents key does the same. Thus a field
 -- of type 'Maybe' is optional, and a missing field of another type is an
--- error, also if the type of the field has a default.
+-- error, even if the type of the field has its own 'yamlDefault': only the
+-- default of the type that has the field counts.
 --
 -- A type with a default configuration derives the decoder like this:
 --
@@ -270,9 +275,9 @@ import Yamlet.Value
 ----------------------------------------
 -- Deriving
 
--- | A type to derive t'Yamlet.Decode.FromYaml' and t'Yamlet.Encode.ToYaml'
--- via, from the t'GHC.Generics.Generic' representation of the type and its
--- instance of 'GenericYamlOptions'.
+-- | A newtype to derive t'Yamlet.Decode.FromYaml' and t'Yamlet.Encode.ToYaml'
+-- with @deriving via@. The instances come from the t'GHC.Generics.Generic'
+-- representation of the type and its instance of 'GenericYamlOptions'.
 newtype GenericYaml a = GenericYaml a
 
 instance
@@ -409,7 +414,7 @@ data SumEncodingKind
   | -- | The entries of a field without a name go next to the tag, e.g.
     -- @{tag: Ahead, distance: 10}@ for @Ahead (Distance 10)@. The
     -- constructors must have one field without a name or no fields,
-    -- otherwise the type is a type error.
+    -- otherwise the derived instances are a type error.
     --
     -- The field must encode as a mapping with a key, and no key can be the
     -- tag key or the contents key. Otherwise the constructor encodes as with
@@ -453,23 +458,25 @@ class GenericYamlOptions a where
 
   type SumEncoding a = TaggedObject
 
+  -- | The options of the type, 'defaultYamlOptions' by default.
   yamlOptions :: YamlOptions
   yamlOptions = defaultYamlOptions
 
   -- | The value that gives the fields of missing keys, e.g. the default
   -- configuration. Without it, a missing key decodes like null. A key with
   -- the value null is not missing. For a sum type, the default applies only
-  -- to its own constructor.
+  -- to the constructor of the default value.
   yamlDefault :: Maybe a
   yamlDefault = Nothing
 
 -- | The value of a field without a default in 'yamlDefault'. A missing key
 -- of the field is an error, also if the field accepts null, e.g. for a field
--- of type 'Maybe'. The encoder with 'omitNullFields' keeps such a field. The
--- field must be 'requiredField' itself, not a value that contains it. The
--- field must be lazy, so that the default does not throw when you build it.
--- The decoder and the encoder of a type with a 'requiredField' in a strict
--- field throw an error each time you use them.
+-- of type 'Maybe'. The encoder with 'omitNullFields' keeps such a field.
+--
+-- The value throws an exception if it is evaluated, e.g. if you use
+-- 'yamlDefault' directly. So the field must be 'requiredField' itself, not a
+-- value that contains it, and the field must be lazy. With a strict field,
+-- the decoder and the encoder of the type throw each time you use them.
 --
 -- With 'TaggedFlat', a field without a name has no key of its own, because
 -- its keys are next to the tag. Thus the type of the field decides about
@@ -477,8 +484,6 @@ class GenericYamlOptions a where
 -- missing keys of that type, or takes them from the 'yamlDefault' of that
 -- type. To require a key of the field, use 'requiredField' in the default of
 -- the type of the field.
---
--- The value throws an exception, e.g. if you use 'yamlDefault' directly.
 requiredField :: a
 requiredField = throw RequiredField
 

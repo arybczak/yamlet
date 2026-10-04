@@ -42,23 +42,33 @@ defaultRenderOptions =
 
 -- | Render documents with their comments and empty lines.
 --
--- A @---@ marker is on a line of its own, with at most a comment after it.
+-- The output differs from the tree where YAML cannot hold it:
 --
--- A scalar keeps its style if the style can hold its text, otherwise it gets
--- quotes. The empty lines from the comments right after a block scalar with
--- the @+@ indicator go away, because they would become part of the scalar.
--- A flow collection with comments inside becomes a block collection, so
--- that every comment has a line. A flow collection without comments is on
--- one line, so the empty lines inside it go away.
+-- * A @---@ marker is on a line of its own, with at most a comment after
+--   it.
 --
--- A comment that has no place at its node moves to a place that has one,
--- e.g. the lines above the value of a key go above the key if the value is
--- on the line of the key.
+-- * A scalar keeps its style if the style can hold its text, otherwise it
+--   gets quotes.
 --
--- An anchor name with a character that YAML does not allow in it, e.g. a
--- space, or that YAML 1.1 reads as a line break, e.g. U+2028, becomes a new
--- name in the anchor and in its aliases. A version that
--- the parser does not support, e.g. 2.0, has no @%YAML@ directive.
+-- * The empty lines from the comments right after a block scalar with the
+--   @+@ indicator go away, because they would become part of the scalar.
+--
+-- * A flow collection with comments inside becomes a block collection, so
+--   that every comment has a line.
+--
+-- * A flow collection without comments is on one line, so the empty lines
+--   inside it go away.
+--
+-- * A comment that has no place at its node moves to a place that has one,
+--   e.g. the lines above the value of a key go above the key if the value
+--   is on the line of the key.
+--
+-- * An anchor name with a character that YAML does not allow in it, e.g. a
+--   space, or that YAML 1.1 reads as a line break, e.g. U+2028, becomes a
+--   new name in the anchor and in its aliases.
+--
+-- * A version that the parser does not support, e.g. 2.0, has no @%YAML@
+--   directive.
 --
 -- With 'forceBlock', the flow collections become block collections:
 --

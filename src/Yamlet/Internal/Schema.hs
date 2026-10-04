@@ -90,7 +90,7 @@ isPlainString t = case resolvePlain t of
   _ -> False
 
 -- | The string reads back as the same string if it is a plain scalar in the
--- block style, as a value or as a key. A key without @?@ can also have at
+-- block style, as a value or as a key. A key without @?@ must also have at
 -- most 1024 characters, which the check does not count. In a flow collection
 -- the characters @,[]{}@ need quotes too, so the check does not apply there.
 --

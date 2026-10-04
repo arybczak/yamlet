@@ -94,7 +94,7 @@ data Content
     ScalarLinesContent !ScalarStyle !T.Text ![Int]
   | SequenceContent !CollectionStyle ![Node]
   | MappingContent !CollectionStyle ![(Node, Node)]
-  | -- | An alias has no properties.
+  | -- | An alias, with the name of its anchor. An alias has no properties.
     AliasContent !T.Text
   deriving stock (Eq, Show, Generic)
 
@@ -177,13 +177,14 @@ data Comments = Comments
   -- ^ The lines above the node.
   , inline :: !(Maybe T.Text)
   -- ^ The comment at the end of the first line of the node. The renderer
-  -- writes a line break in it as a space, the same line breaks as in a
-  -- 'Comment'.
+  -- writes each line break in it as a space. The line breaks are the
+  -- characters that 'CommentLine' lists.
   , after :: ![Line]
-  -- ^ The lines after the last entry of a collection, between the brackets
-  -- of an empty collection, or below a scalar or an alias root. The parser
-  -- gives no such lines to other scalars and aliases, but the renderer
-  -- writes them below the node.
+  -- ^ The lines below the node: after the last entry of a collection,
+  -- between the brackets of an empty collection, or below a scalar or an
+  -- alias in a block collection or at the root. The section
+  -- [Comments]("Yamlet.Syntax#comments") gives the rules. The renderer
+  -- writes such lines below any node.
   }
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (NFData)
@@ -200,7 +201,9 @@ withComments c n = Node n.offset n.endOffset n.props c n.content
 -- | A value with the comments of its mapping entry:
 --
 -- * 'before': the lines above the entry,
+--
 -- * 'inline': the comment at the end of the first line of the entry,
+--
 -- * 'after': the lines after the value, e.g. after the last entry of a
 --   collection.
 --
@@ -244,32 +247,36 @@ withComments c n = Node n.offset n.endOffset n.props c n.content
 -- * The lines after a text of several lines, which the encoder writes as a
 --   block scalar, read back as the lines above the next entry. After the
 --   last entry, they belong to the end of the collection around the entry.
+--
 -- * The lines above a list or a mapping without a key can get an empty line
 --   below them, e.g. at the top level. The empty line reads back as the last
 --   of these lines.
 --
--- A comment survives only if its node decodes into a type with a place for
--- it, i.e. a node or a t'Commented' value. A key without a corresponding
--- Haskell field, e.g. the tag of a constructor, has no such type, so its
--- comments are lost. A comment at the end of a nested mapping survives only
--- if the field that holds the mapping is t'Commented', because a record has
--- no place for the end of its mapping. A record also has no place for the
--- comments of its mapping above its first key, so they are lost, e.g. a
--- comment at the top of a file above an empty line.
+-- A comment is lost if its node has no place for it, i.e. if the node does
+-- not decode into a node or a t'Commented' value:
 --
--- The comments of the key are lost for a type such as
--- @data Name = Name (Commented Text)@ that derives its instances through
--- 'Generic'. A derived instance for one constructor with one field without a
--- name does not give the key of its entry to the value inside. Declare such
--- a type as a newtype and derive its instances with @deriving newtype@,
--- which gives the key to the value.
+-- * the comments of a key without a Haskell field, e.g. the tag of a
+--   constructor;
+--
+-- * a comment at the end of a nested mapping, unless the field that holds
+--   the mapping is t'Commented', because a record has no place for the end
+--   of its mapping;
+--
+-- * the comments of a record's mapping above its first key, e.g. a comment
+--   at the top of a file above an empty line;
+--
+-- * the comments of the key for a type such as
+--   @data Name = Name (Commented Text)@ that derives its instances through
+--   'Generic', because a derived instance for one constructor with one field
+--   without a name does not give the key of its entry to the value inside.
+--   Declare such a type as a newtype and derive its instances with
+--   @deriving newtype@, which gives the key to the value.
 --
 -- In a map, use t'Commented' on the key or on the value, not on both. With
 -- both, the decoder gives the comments of the key to both, and the encoder
 -- writes only those of the value, so a change to the comments of the key is
 -- lost.
 --
--- The order compares the values first and then the comments, e.g. in a set.
 -- A change of the value keeps the comments:
 --
 -- >>> input = "# The port.\nport: 80 # the default\n"
@@ -280,6 +287,8 @@ withComments c n = Node n.offset n.endOffset n.props c n.content
 -- :}
 -- # The port.
 -- port: 81 # the default
+--
+-- The order compares the values first and then the comments, e.g. in a set.
 data Commented a = Commented
   { value :: !a
   , comments :: !Comments
@@ -335,12 +344,12 @@ data Located a = Located
 data Line
   = EmptyLine
   | -- | The number of @#@ characters at the start of the comment, e.g. 2 for
-    -- @## Section@, and the text after them and one space, without the white
-    -- space at its end. The renderer writes a count below 1 as 1. It writes a
-    -- text with line breaks as several comment lines with the same @#@
-    -- characters, and the parser reads them back as several comments.
-    -- U+0085, U+2028 and U+2029 count as line breaks here, because YAML 1.1
-    -- reads them as line breaks.
+    -- @## Section@, and the text after them, without the one space after the
+    -- @#@ characters and without the white space at its end. The renderer
+    -- writes a count below 1 as 1. It writes a text with line breaks as
+    -- several comment lines with the same @#@ characters, and the parser
+    -- reads them back as several comments. U+0085, U+2028 and U+2029 count as
+    -- line breaks here, because YAML 1.1 reads them as line breaks.
     --
     -- The comment at the end of a line in t'Comments' is a text without a
     -- count. It keeps the @#@ characters after the first one in its text.

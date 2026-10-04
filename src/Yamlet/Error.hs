@@ -215,8 +215,10 @@ prettyError file err
 -- A key is in double quotes, e.g. @\"a.b\"@, if it:
 --
 -- * is empty,
+--
 -- * has white space, a character that cannot be printed, or one of the
 --   characters @.[]\"\\@,
+--
 -- * starts with @?@ or @*@.
 --
 -- In the quotes, a character that cannot be printed has an escape as in

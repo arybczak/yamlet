@@ -48,9 +48,9 @@
 --     4 | port: 80
 --       | ^
 --
--- 2. Decoding a document into a Haskell type and encoding it back. The
---    following example showcases capturing comments of some nodes, as well as
---    parts of the document verbatim as a t'Yamlet.Node':
+-- 2. Decoding a document into a Haskell type and encoding it back. A type
+--    can keep the comments of a value with t'Yamlet.Commented', and a part
+--    of the document as it was written with t'Yamlet.Node':
 --
 --     >>> :{
 --     data Workflow = Workflow
@@ -113,7 +113,7 @@ module Yamlet
   , S.noOffset
   , S.Located (..)
 
-    -- * Comments of keys
+    -- * Comments
   , S.Commented (..)
   , S.Comments (..)
   , S.noComments
@@ -242,11 +242,15 @@ single = first (NE.:| [])
 -- fails for:
 --
 -- * a duplicate key,
+--
 -- * an undefined alias,
+--
 -- * aliases beyond the limit in "Yamlet.Value",
+--
 -- * a value that is not valid for its tag,
--- * a float whose exponent in scientific notation is beyond the range from
---   -1000 to 1000.
+--
+-- * a float whose exponent in scientific notation is beyond the range
+--   from -1000 to 1000.
 --
 -- The text is the input of the document. An error takes its line from the
 -- text. For a document that the program built, the text can be empty. The
@@ -320,11 +324,11 @@ encodeAllText = renderDocuments . map toYaml
 -- encoding does not depend on the locale. It is UTF-8, UTF-16 or UTF-32,
 -- detected as the YAML specification describes.
 --
--- For the errors, give the path to 'prettyError':
+-- For the errors, give the same path to 'prettyError':
 --
 -- @
--- decodeFile \@Config "config.yaml" >>= \\case
---   Left errs -> mapM_ (putStrLn . prettyError "config.yaml") errs
+-- decodeFile \@Config path >>= \\case
+--   Left errs -> mapM_ (putStrLn . prettyError path) errs
 --   Right config -> ...
 -- @
 decodeFile :: FromYaml a => FilePath -> IO (Either (NE.NonEmpty Error) a)

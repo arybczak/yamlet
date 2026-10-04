@@ -183,14 +183,32 @@ valueTag = \case
   Mapping _ -> mapTag
   Tagged tag _ -> tag
 
--- | The tags of the core schema, e.g. @tag:yaml.org,2002:null@ for 'nullTag'.
-nullTag, boolTag, intTag, floatTag, strTag, seqTag, mapTag :: T.Text
+-- | @tag:yaml.org,2002:null@.
+nullTag :: T.Text
 nullTag = coreTagPrefix <> "null"
+
+-- | @tag:yaml.org,2002:bool@.
+boolTag :: T.Text
 boolTag = coreTagPrefix <> "bool"
+
+-- | @tag:yaml.org,2002:int@.
+intTag :: T.Text
 intTag = coreTagPrefix <> "int"
+
+-- | @tag:yaml.org,2002:float@.
+floatTag :: T.Text
 floatTag = coreTagPrefix <> "float"
+
+-- | @tag:yaml.org,2002:str@.
+strTag :: T.Text
 strTag = coreTagPrefix <> "str"
+
+-- | @tag:yaml.org,2002:seq@.
+seqTag :: T.Text
 seqTag = coreTagPrefix <> "seq"
+
+-- | @tag:yaml.org,2002:map@.
+mapTag :: T.Text
 mapTag = coreTagPrefix <> "map"
 
 -- $setup
