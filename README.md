@@ -63,6 +63,18 @@ main = do
 For this file:
 
 ```yaml
+name: app
+```
+
+the program prints the configuration with the default paths:
+
+```
+Config {name = "app", paths = ["."]}
+```
+
+For this file:
+
+```yaml
 paths:
 - src
 - 42
