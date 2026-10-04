@@ -8,3 +8,6 @@
     - -XNoFieldSelectors
     - -XOverloadedRecordDot
     - -XOverloadedStrings
+
+# GHC does not specialize elem, so it compares through the dictionary of Eq.
+- ignore: {name: Use elem}
