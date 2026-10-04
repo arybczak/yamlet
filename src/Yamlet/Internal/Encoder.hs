@@ -13,8 +13,9 @@ import Data.Text qualified as T
 import Data.Text.Builder.Linear qualified as B
 
 import Yamlet.Internal.Emit
+import Yamlet.Internal.Render
+import Yamlet.Internal.Syntax qualified as S
 import Yamlet.Internal.Utils
-import Yamlet.Syntax qualified as S
 
 -- | Render documents. Documents after the first one start with a @---@
 -- marker. The collections of 'Yamlet.Encode.toYaml' are in the block style.
@@ -26,7 +27,7 @@ import Yamlet.Syntax qualified as S
 renderDocuments :: [S.Node] -> T.Text
 renderDocuments docs
   | all simple docs = B.runBuilder . mconcat $ zipWith document [0 :: Int ..] docs
-  | otherwise = S.renderSyntax S.defaultRenderOptions (map S.document docs)
+  | otherwise = renderSyntax defaultRenderOptions (map S.document docs)
   where
     document :: Int -> S.Node -> B.Builder
     document i n

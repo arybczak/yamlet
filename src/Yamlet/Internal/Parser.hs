@@ -35,7 +35,7 @@ import Yamlet.Internal.Comments
 import Yamlet.Internal.Parser.Chars
 import Yamlet.Internal.Parser.Hints
 import Yamlet.Internal.Parser.Monad
-import Yamlet.Internal.Syntax
+import Yamlet.Internal.Syntax hiding (document)
 import Yamlet.Internal.Utils
 
 -- | A character that only some places of a stream can contain, with its

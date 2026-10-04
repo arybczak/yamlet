@@ -9,6 +9,7 @@ module Yamlet.Internal.Syntax
   ( -- * Documents
     Document (..)
   , YamlVersion (..)
+  , document
 
     -- * Nodes
   , Node (..)
@@ -19,6 +20,13 @@ module Yamlet.Internal.Syntax
   , ScalarStyle (..)
   , isBlockScalar
   , CollectionStyle (..)
+
+    -- ** Construction
+  , contentNode
+  , scalarNode
+  , plainNode
+  , sequenceNode
+  , mappingNode
 
     -- * Comments
   , Comments (..)
@@ -68,6 +76,17 @@ data YamlVersion = YamlVersion
   }
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (NFData)
+
+-- | A document with the given root, without directives, markers and comments.
+document :: Node -> Document
+document n =
+  Document
+    { version = Nothing
+    , explicitStart = False
+    , explicitEnd = False
+    , docComments = noComments
+    , root = n
+    }
 
 -- | A node of a document.
 data Node = Node
@@ -170,6 +189,37 @@ data CollectionStyle
 
 instance NFData CollectionStyle where
   rnf = rwhnf
+
+-- | A node with the given content, without properties and comments.
+contentNode :: Content -> Node
+contentNode c =
+  Node
+    { offset = noOffset
+    , endOffset = noOffset
+    , props = noProps
+    , comments = noComments
+    , content = c
+    }
+
+-- | A scalar in the given style. If the style cannot hold the text,
+-- 'Yamlet.Syntax.renderSyntax' uses quotes.
+--
+-- >>> T.putStr (renderSyntax defaultRenderOptions [document (mappingNode [(plainNode "key", scalarNode Plain "a: b")])])
+-- key: 'a: b'
+scalarNode :: ScalarStyle -> T.Text -> Node
+scalarNode style = contentNode . ScalarContent style
+
+-- | A plain scalar.
+plainNode :: T.Text -> Node
+plainNode = scalarNode Plain
+
+-- | A block sequence.
+sequenceNode :: [Node] -> Node
+sequenceNode = contentNode . SequenceContent Block
+
+-- | A block mapping.
+mappingNode :: [(Node, Node)] -> Node
+mappingNode = contentNode . MappingContent Block
 
 -- | The comments and the empty lines that belong to a node.
 data Comments = Comments
@@ -443,4 +493,5 @@ copyMaybe = \case
 -- >>> import Data.Map.Strict qualified as M
 -- >>> import Data.Text.IO qualified as T
 -- >>> import Yamlet
+-- >>> import Yamlet.Syntax
 -- >>> printErrors = mapM_ (putStrLn . prettyError "input.yaml")

@@ -269,7 +269,6 @@ import Yamlet.Internal.FromYaml
 import Yamlet.Internal.Syntax qualified as S
 import Yamlet.Internal.ToYaml
 import Yamlet.Internal.View
-import Yamlet.Syntax qualified as S
 import Yamlet.Value
 
 ----------------------------------------

@@ -22,7 +22,7 @@ import GHC.Generics
 
 import Yamlet.Internal.Emit
 import Yamlet.Internal.Parser.Chars hiding (isAnchorChar)
-import Yamlet.Internal.Syntax
+import Yamlet.Internal.Syntax hiding (document)
 import Yamlet.Internal.Utils
 
 -- A data type, so that a later release can add an option.

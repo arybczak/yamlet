@@ -154,7 +154,6 @@ import Yamlet.Internal.Input
 import Yamlet.Internal.Parser
 import Yamlet.Internal.Syntax qualified as S
 import Yamlet.Internal.Utils
-import Yamlet.Syntax qualified as S
 import Yamlet.Value
 
 -- | Decode a stream with one document. An empty stream is null.

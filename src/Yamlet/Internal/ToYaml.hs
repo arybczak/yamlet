@@ -51,7 +51,6 @@ import Numeric.Natural
 import Yamlet.Internal.Schema
 import Yamlet.Internal.Syntax qualified as S
 import Yamlet.Internal.Utils
-import Yamlet.Syntax qualified as S
 import Yamlet.Value
 
 ----------------------------------------

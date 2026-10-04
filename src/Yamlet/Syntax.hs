@@ -113,40 +113,6 @@ parseDocuments bs = decodeInput bs >>= parseStream
 parseDocumentsText :: T.Text -> Either Error [Document]
 parseDocumentsText = parseStream
 
--- | A document with the given root, without directives, markers and comments.
-document :: Node -> Document
-document n =
-  Document
-    { version = Nothing
-    , explicitStart = False
-    , explicitEnd = False
-    , docComments = noComments
-    , root = n
-    }
-
--- | A node with the given content, without properties and comments.
-contentNode :: Content -> Node
-contentNode c =
-  Node
-    { offset = noOffset
-    , endOffset = noOffset
-    , props = noProps
-    , comments = noComments
-    , content = c
-    }
-
--- | A scalar in the given style. If the style cannot hold the text,
--- 'renderSyntax' uses quotes.
---
--- >>> T.putStr (renderSyntax defaultRenderOptions [document (mappingNode [(plainNode "key", scalarNode Plain "a: b")])])
--- key: 'a: b'
-scalarNode :: ScalarStyle -> T.Text -> Node
-scalarNode style = contentNode . ScalarContent style
-
--- | A plain scalar.
-plainNode :: T.Text -> Node
-plainNode = scalarNode Plain
-
 -- | A folded block scalar (@>-@) with the given lines.
 --
 -- >>> T.putStr (renderSyntax defaultRenderOptions [document (mappingNode [(plainNode "options", foldedNode ["--health-cmd pg_isready", "--health-interval 5s"])])])
@@ -165,14 +131,6 @@ foldedNode ls = contentNode (ScalarLinesContent Folded t starts)
       l : rest
         | T.null l -> contentLines (empties + 1) rest
         | otherwise -> BlockLine empties l : contentLines 0 rest
-
--- | A block sequence.
-sequenceNode :: [Node] -> Node
-sequenceNode = contentNode . SequenceContent Block
-
--- | A block mapping.
-mappingNode :: [(Node, Node)] -> Node
-mappingNode = contentNode . MappingContent Block
 
 -- $comments
 -- #comments#
