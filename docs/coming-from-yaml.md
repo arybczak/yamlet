@@ -50,8 +50,8 @@ yamlet does not convert values to the types of JSON:
   name, e.g. `Dot`. aeson writes `{Dot: []}`.
 
 The documentation of the instances in
-[Yamlet.Decode](https://hackage.haskell.org/package/yamlet/docs/Yamlet-Decode.html)
-and [Yamlet.Encode](https://hackage.haskell.org/package/yamlet/docs/Yamlet-Encode.html),
+[Yamlet.Decode](https://hackage.haskell.org/package/yamlet-1.0.0.0/candidate/docs/Yamlet-Decode.html)
+and [Yamlet.Encode](https://hackage.haskell.org/package/yamlet-1.0.0.0/candidate/docs/Yamlet-Encode.html),
 and of the options in
-[Yamlet.Generic](https://hackage.haskell.org/package/yamlet/docs/Yamlet-Generic.html),
+[Yamlet.Generic](https://hackage.haskell.org/package/yamlet-1.0.0.0/candidate/docs/Yamlet-Generic.html),
 describes the remaining details.
