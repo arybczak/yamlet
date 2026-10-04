@@ -28,7 +28,7 @@ The library supports GHC 9.2 and later.
 
 ## Example
 
-A configuration type derives its decoder. The options reject unknown keys,
+A configuration type derives its decoder. The decoder rejects unknown keys,
 and the default gives the paths when the key is missing:
 
 ```haskell
@@ -47,7 +47,6 @@ data Config = Config
   deriving (FromYaml) via GenericYaml Config
 
 instance GenericYamlOptions Config where
-  yamlOptions = defaultYamlOptions {rejectUnknownFields = True}
   yamlDefault = Just Config {name = requiredField, paths = ["."]}
 
 main :: IO ()

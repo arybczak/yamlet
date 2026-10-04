@@ -757,21 +757,45 @@ missingKey o key = Parser $ \off ->
 -- to an unknown key, e.g. "host" to "hots", its error suggests it. Otherwise
 -- the first such error of the mapping lists the known keys, and the others
 -- do not repeat the list.
+--
+-- A key that is not a string, but has the text of a known key, e.g. @true@,
+-- is not an error here, if the lookup of the known key reports it.
 rejectUnknownKeys :: [T.Text] -> Object -> Parser ()
-rejectUnknownKeys known o = go True o.entries
+rejectUnknownKeys known o
+  -- The index has the text of each string key, so the keys are not viewed
+  -- again, which saves the allocation of their text in the benchmarks
+  -- derive.*.parseYaml.generic. The index has every key if the keys are
+  -- strings without duplicates.
+  | M.size o.index == length o.entries && M.foldlWithKey' (\r k _ -> r && isKnown k) True o.index = pure ()
+  | otherwise = go True o.entries
   where
+    -- 'elem' is not specialized to 'T.Text' here, see the Core at -O, so it
+    -- compares through the dictionary of 'Eq'.
+    isKnown :: T.Text -> Bool
+    isKnown t = any (== t) known
+
+    reported :: [S.Node]
+    reported =
+      [ k
+      | key <- known
+      , not (M.member key o.index)
+      , Just (k, _) <- [L.find (\(_, v) -> v == resolvePlain key) o.otherKeys]
+      ]
+
     -- The flag tells if no error listed the known keys yet.
     go :: Bool -> [(S.Node, S.Node)] -> Parser ()
     go unlisted = \case
       [] -> pure ()
       (k, _) : rest -> case stringValue k of
         Just t
-          | t `elem` known -> go unlisted rest
+          | isKnown t -> go unlisted rest
           | t == "<<" -> unknown k t noMergeKeys *> go unlisted rest
           | Just s <- closeName known t -> unknown k t (didYouMean s) *> go unlisted rest
           | unlisted -> unknown k t (expectedOneOf known) *> go False rest
           | otherwise -> unknown k t "" *> go False rest
-        _ -> typeMismatch "a string as the key" k *> go unlisted rest
+        _
+          | any (\r -> r.offset == k.offset) reported -> go unlisted rest
+          | otherwise -> typeMismatch "a string as the key" k *> go unlisted rest
 
     unknown :: S.Node -> T.Text -> String -> Parser ()
     unknown k t hint = failAt k $ "unknown key " ++ show t ++ hint

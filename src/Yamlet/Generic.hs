@@ -373,7 +373,11 @@ data YamlOptions = YamlOptions
   -- from the default, so e.g. a field 'Nothing' with the default @Just 1@
   -- would read back as @Just 1@.
   , rejectUnknownFields :: !Bool
-  -- ^ Reject a key that is not a field of the constructor. Off by default.
+  -- ^ Reject a key that is not a field of the constructor. On by default.
+  --
+  -- Turn it off for a document with keys that the type does not model, e.g.
+  -- keys that only hold anchors. The decoder then ignores such keys, and an
+  -- encode of the value leaves them out.
   }
   deriving stock (Generic)
 
@@ -387,7 +391,7 @@ defaultYamlOptions =
     , contentsKey = "contents"
     , tagSingleConstructors = False
     , omitNullFields = False
-    , rejectUnknownFields = False
+    , rejectUnknownFields = True
     }
 
 -- | How a tagged constructor goes in a mapping. The choice is a type, see

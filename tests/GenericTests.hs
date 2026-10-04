@@ -113,7 +113,6 @@ data Gauge = Gauge {level :: Int} | Off
 
 instance GenericYamlOptions Gauge where
   type SumEncoding Gauge = SingleField
-  yamlOptions = defaultYamlOptions {rejectUnknownFields = True}
 
 data Memo = Memo (Commented T.Text) | NoMemo
   deriving stock (Eq, Show, Generic)
@@ -127,7 +126,14 @@ data Strict = Strict {size :: Int, note :: Maybe T.Text}
   deriving (FromYaml, ToYaml) via GenericYaml Strict
 
 instance GenericYamlOptions Strict where
-  yamlOptions = defaultYamlOptions {rejectUnknownFields = True, omitNullFields = True}
+  yamlOptions = defaultYamlOptions {omitNullFields = True}
+
+newtype Loose = Loose {size :: Int}
+  deriving stock (Eq, Show, Generic)
+  deriving (FromYaml, ToYaml) via GenericYaml Loose
+
+instance GenericYamlOptions Loose where
+  yamlOptions = defaultYamlOptions {rejectUnknownFields = False}
 
 -- | The name of the field reads as a boolean.
 newtype Switch = Switch {true :: Maybe Int}
@@ -182,14 +188,14 @@ data Crate = Crate {contents :: Int, size :: Int}
   deriving anyclass (GenericYamlOptions)
   deriving (FromYaml, ToYaml) via GenericYaml Crate
 
--- | The flat encoding with unknown keys rejected.
+-- | The flat encoding with unknown keys ignored.
 data Order = Hold Int | Hasten Speed
   deriving stock (Eq, Show, Generic)
   deriving (FromYaml, ToYaml) via GenericYaml Order
 
 instance GenericYamlOptions Order where
   type SumEncoding Order = TaggedFlat
-  yamlOptions = defaultYamlOptions {rejectUnknownFields = True}
+  yamlOptions = defaultYamlOptions {rejectUnknownFields = False}
 
 newtype Distance = Distance {distance :: Maybe Int}
   deriving stock (Eq, Show, Generic)
@@ -590,6 +596,11 @@ test_options = do
     "unknown field"
     (Just (2, 1, "unknown key \"colour\", expected one of: size, note"))
     (errorOf (decodeText @Strict "size: 1\ncolour: red\n"))
+  assertEqual "unknown field ignored" (Right (Loose 1)) (decodeText "size: 1\ncolour: red\n")
+  assertEqual
+    "key that is not a string"
+    (Just (2, 1, "expected a string as the key, but got an integer"))
+    (errorOf (decodeText @Strict "size: 1\n2: x\n"))
   assertEqual "tag key and modifiers" "command: forward\nstep_count: 3\n" (encodeText (Forward 3))
   roundTrip "tag key and modifiers" (Forward 3)
 
@@ -664,21 +675,28 @@ test_flatten = do
     (errorOf (decodeText @Step "step: Accelerate\n"))
   assertEqual
     "misspelled field"
-    [(1, 1, "missing key \"speed\"")]
+    [(1, 1, "missing key \"speed\""), (2, 1, "unknown key \"sped\", did you mean \"speed\"?")]
     (errorsOf (decodeText @Step "step: Accelerate\nsped: 2\n"))
   assertEqual
     "misspelled contents key"
-    [(1, 1, "missing key \"contents\"")]
-    (errorsOf (decodeText @Step "step: Wait\ncontnets: 5\n"))
-  assertEqual "other key next to the contents key" (Right (Wait 5)) (decodeText "step: Wait\ncontents: 5\nextra: 1\n")
-  assertEqual
-    "misspelled contents key with unknown keys rejected"
     [(1, 1, "missing key \"contents\""), (2, 1, "unknown key \"contnets\", did you mean \"contents\"?")]
+    (errorsOf (decodeText @Step "step: Wait\ncontnets: 5\n"))
+  assertEqual
+    "other key next to the contents key"
+    [(3, 1, "unknown key \"extra\", expected one of: step, contents")]
+    (errorsOf (decodeText @Step "step: Wait\ncontents: 5\nextra: 1\n"))
+  assertEqual
+    "misspelled field with unknown keys ignored by the outer type only"
+    [(1, 1, "missing key \"speed\""), (2, 1, "unknown key \"sped\", did you mean \"speed\"?")]
+    (errorsOf (decodeText @Order "tag: Hasten\nsped: 2\n"))
+  assertEqual
+    "misspelled contents key with unknown keys ignored"
+    [(1, 1, "missing key \"contents\"")]
     (errorsOf (decodeText @Order "tag: Hold\ncontnets: 5\n"))
   assertEqual
-    "other key next to the contents key with unknown keys rejected"
-    [(3, 1, "unknown key \"extra\", expected one of: tag, contents")]
-    (errorsOf (decodeText @Order "tag: Hold\ncontents: 5\nextra: 1\n"))
+    "other key next to the contents key with unknown keys ignored"
+    (Right (Hold 5))
+    (decodeText "tag: Hold\ncontents: 5\nextra: 1\n")
   -- The flat field of the recursive type reads the mapping again.
   assertEqual
     "duplicate tag keys reported once"

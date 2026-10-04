@@ -12,7 +12,6 @@
 --       deriving stock (Generic, Show)
 --       deriving (FromYaml) via GenericYaml Config
 --     instance GenericYamlOptions Config where
---       yamlOptions = defaultYamlOptions {rejectUnknownFields = True}
 --       yamlDefault = Just Config {name = requiredField, paths = ["."]}
 --     :}
 --

@@ -41,6 +41,9 @@ yamlet does not convert values to the types of JSON:
 
 ## Generic instances
 
+- A key that is not a field of the constructor is an error. aeson ignores
+  such a key. To ignore it in yamlet too, turn off the option
+  `rejectUnknownFields`.
 - A type with one constructor without fields is the name of the
   constructor, e.g. `Unit`. aeson writes `[]`.
 - With the encoding `SingleField`, a constructor without fields is its
