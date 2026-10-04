@@ -42,6 +42,7 @@ description:
 extra-doc-files:
   CHANGELOG.md
   README.md
+  docs/coming-from-yaml.md
 
 extra-source-files:
   tests/fixtures/error-messages.txt

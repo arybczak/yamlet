@@ -117,45 +117,6 @@ matrix:
   ghc: ['9.10', '9.12']
 ```
 
-## Coming from the yaml package
-
-The [yaml](https://hackage.haskell.org/package/yaml) package decodes and
-encodes with the instances of aeson. The instances of yamlet, the generic
-ones too, read and write the same YAML, so files written for it keep
-working, with these exceptions:
-
-- The yaml package reads `y`, `yes`, `on`, `n`, `no` and `off` as booleans,
-  as YAML 1.1 does. Here they are strings, and a decoder that expects a
-  boolean suggests `true` or `false`.
-- The yaml package reads a number only in the syntax of JSON, apart from
-  the `0x` and `0o` prefixes. It reads `.5`, `+.5`, `.inf`, `-.Inf`, `.NaN`
-  and similar values as strings, and writes such strings without quotes,
-  although YAML 1.1 and 1.2 read them as floats. Here they are floats, and a
-  decoder that expects a string suggests quotes.
-- aeson writes an infinite `Double` as the string `+inf` or `-inf`, because
-  JSON has no infinity. Here they are strings too, and an infinite `Double`
-  is `.inf` or `-.inf`.
-- The yaml package writes the characters U+2028 and U+2029 in a string as
-  line breaks, with indentation after them. YAML 1.2 has no such line
-  breaks, so here the string keeps the spaces of the indentation.
-- The yaml package merges the entries of a `<<` key into its mapping, as
-  YAML 1.1 does. YAML 1.2 has no merge keys, so here `<<` is an ordinary key.
-- The keys of a map keep their type. aeson writes every key as a string, so
-  the yaml package writes a key of a `Map Int` as `'1'`, which does not
-  decode here. An `IntMap` and a map with keys that aeson cannot write as
-  strings, e.g. a `Map (Int, Int)`, are mappings here and lists of pairs
-  there.
-- A value must have the YAML type of its Haskell type. The decoders reject
-  some values that aeson converts, e.g. `1.0` for an `Int`, `0.5` for a
-  `Rational` and `null` for a `Double`.
-- A generic type with one constructor without fields is the name of the
-  constructor, e.g. `Unit`, where aeson writes `[]`. With the encoding
-  `SingleField`, a constructor without fields is its name, e.g. `Dot`, where
-  aeson writes `{Dot: []}`.
-
-The documentation of the instances and of the generic options describes the
-remaining details.
-
 ## Known limits
 
 - No streaming. The parser reads the whole input, and a decode of a stream
@@ -206,6 +167,16 @@ own process, pinned to one core of the CCD with the 3D V-cache. The `yaml`
 package uses the libyaml C library and converts the data by way of an aeson
 `Value`. The section [Development](#development) shows how to run the
 benchmarks.
+
+## Coming from the yaml package
+
+The instances of yamlet read and write the same YAML as the aeson instances
+that the [yaml](https://hackage.haskell.org/package/yaml) package uses, with
+a few exceptions. Some come from YAML 1.2, e.g. `yes` is a string and `<<`
+is an ordinary key. Others come from the types, e.g. the keys of a
+`Map Int` are integers and `1.0` is not an `Int`. The document
+[Coming from the yaml package](https://github.com/arybczak/yamlet/blob/master/docs/coming-from-yaml.md)
+lists all of them.
 
 ## Development
 

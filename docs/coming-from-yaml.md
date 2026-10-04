@@ -1,0 +1,54 @@
+# Coming from the yaml package
+
+The [yaml](https://hackage.haskell.org/package/yaml) package decodes and
+encodes with the instances of aeson. The instances of yamlet, the generic
+ones too, read and write the same YAML as the instances of aeson, so files
+written for the yaml package keep working, with the exceptions below.
+
+## YAML 1.2
+
+yamlet follows YAML 1.2 where the yaml package does not:
+
+- `y`, `yes`, `on`, `n`, `no` and `off` are strings, not booleans. A
+  decoder that expects a `Bool` suggests `true` or `false`.
+- `.5`, `+.5`, `.inf`, `-.Inf`, `.NaN` and similar values are floats. The
+  yaml package reads a number only in the syntax of JSON, apart from the
+  `0x` and `0o` prefixes. It reads such values as strings and writes such
+  strings without quotes, although YAML 1.1 reads them as floats too. A
+  yamlet decoder that expects a string suggests quotes.
+- `<<` is an ordinary key. The yaml package merges the entries of a `<<`
+  key into its mapping, as YAML 1.1 does.
+- U+2028 and U+2029 in a string are ordinary characters. The yaml package
+  writes them as line breaks with indentation after them, so the string
+  that yamlet reads back keeps the spaces of the indentation.
+
+## Types
+
+yamlet does not convert values to the types of JSON:
+
+- The keys of a map keep their type, e.g. the keys of a `Map Int` are
+  integers. aeson writes every key as a string, so the yaml package writes
+  the key `1` as `'1'`, which yamlet does not decode as an `Int`.
+- An `IntMap` and a map with keys that aeson cannot write as strings, e.g.
+  a `Map (Int, Int)`, are mappings in yamlet. aeson writes them as lists of
+  pairs.
+- An infinite `Double` is `.inf` or `-.inf`. aeson writes the string `+inf`
+  or `-inf`, because JSON has no infinity, and yamlet reads these as
+  strings.
+- A value must have the YAML type of its Haskell type. yamlet rejects some
+  values that aeson converts, e.g. `1.0` for an `Int`, `0.5` for a
+  `Rational` and `null` for a `Double`.
+
+## Generic instances
+
+- A type with one constructor without fields is the name of the
+  constructor, e.g. `Unit`. aeson writes `[]`.
+- With the encoding `SingleField`, a constructor without fields is its
+  name, e.g. `Dot`. aeson writes `{Dot: []}`.
+
+The documentation of the instances in
+[Yamlet.Decode](https://hackage.haskell.org/package/yamlet/docs/Yamlet-Decode.html)
+and [Yamlet.Encode](https://hackage.haskell.org/package/yamlet/docs/Yamlet-Encode.html),
+and of the options in
+[Yamlet.Generic](https://hackage.haskell.org/package/yamlet/docs/Yamlet-Generic.html),
+describes the remaining details.
