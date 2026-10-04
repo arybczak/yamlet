@@ -25,9 +25,12 @@ import Yamlet.Internal.Parser.Chars hiding (isAnchorChar)
 import Yamlet.Internal.Syntax
 import Yamlet.Internal.Utils
 
+-- A data type, so that a later release can add an option.
+{- HLINT ignore RenderOptions "Use newtype instead of data" -}
+
 -- | The options of 'renderSyntax'.
-newtype RenderOptions = RenderOptions
-  { forceBlock :: Bool
+data RenderOptions = RenderOptions
+  { forceBlock :: !Bool
   -- ^ Write every non-empty collection in the block style. A collection in a
   -- key then becomes an explicit key, e.g. @? - a@.
   }
