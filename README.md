@@ -51,10 +51,13 @@ instance GenericYamlOptions Config where
 
 main :: IO ()
 main = do
-  result <- decodeFile @Config "config.yaml"
+  result <- decodeFile @Config path
   case result of
-    Left errs -> mapM_ (putStrLn . prettyError "config.yaml") errs
+    Left errs -> mapM_ (putStrLn . prettyError path) errs
     Right config -> print config
+  where
+    path :: FilePath
+    path = "config.yaml"
 ```
 
 For this file:
