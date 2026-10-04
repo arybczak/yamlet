@@ -23,8 +23,9 @@ import Data.Text.Array qualified as A
 import Data.Word
 import Numeric
 
-import Yamlet.Internal.Parser.Chars
+import Yamlet.Internal.Chars
 import Yamlet.Internal.Parser.Monad
+import Yamlet.Internal.Parser.Scan
 import Yamlet.Internal.Utils
 
 -- | The location and the message of the error for the furthest position at

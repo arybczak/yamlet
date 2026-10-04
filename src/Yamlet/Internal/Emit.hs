@@ -39,7 +39,7 @@ import Data.Text.Builder.Linear.Buffer qualified as B
 import Data.Text.Encoding qualified as T
 import Numeric
 
-import Yamlet.Internal.Parser.Chars
+import Yamlet.Internal.Chars
 import Yamlet.Internal.Syntax
 import Yamlet.Internal.Utils
 

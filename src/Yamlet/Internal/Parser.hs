@@ -31,10 +31,11 @@ import Data.Text.Internal qualified as T
 import Data.Word
 
 import Yamlet.Error
+import Yamlet.Internal.Chars
 import Yamlet.Internal.Comments
-import Yamlet.Internal.Parser.Chars
 import Yamlet.Internal.Parser.Hints
 import Yamlet.Internal.Parser.Monad
+import Yamlet.Internal.Parser.Scan
 import Yamlet.Internal.Syntax hiding (document)
 import Yamlet.Internal.Utils
 

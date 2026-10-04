@@ -106,6 +106,7 @@ library
                      Yamlet.Encode
                      Yamlet.Error
                      Yamlet.Generic
+                     Yamlet.Internal.Chars
                      Yamlet.Internal.Comments
                      Yamlet.Internal.Compose
                      Yamlet.Internal.Emit
@@ -113,9 +114,9 @@ library
                      Yamlet.Internal.FromYaml
                      Yamlet.Internal.Input
                      Yamlet.Internal.Parser
-                     Yamlet.Internal.Parser.Chars
                      Yamlet.Internal.Parser.Hints
                      Yamlet.Internal.Parser.Monad
+                     Yamlet.Internal.Parser.Scan
                      Yamlet.Internal.Render
                      Yamlet.Internal.Schema
                      Yamlet.Internal.Syntax

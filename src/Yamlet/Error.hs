@@ -28,7 +28,7 @@ import Data.Text.Internal qualified as T
 import GHC.Generics
 import Numeric
 
-import Yamlet.Internal.Parser.Chars
+import Yamlet.Internal.Chars
 import Yamlet.Internal.Syntax
 
 -- | An error of the parser or the decoder.

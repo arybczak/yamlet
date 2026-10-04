@@ -20,8 +20,9 @@ import Data.Maybe
 import Data.Text qualified as T
 import Data.Text.Array qualified as A
 
-import Yamlet.Internal.Parser.Chars
+import Yamlet.Internal.Chars
 import Yamlet.Internal.Parser.Monad hiding ((<|>))
+import Yamlet.Internal.Parser.Scan
 import Yamlet.Internal.Syntax
 import Yamlet.Internal.Utils
 
