@@ -20,8 +20,8 @@ import Data.Text qualified as T
 import Data.Text.Builder.Linear qualified as B
 import GHC.Generics
 
-import Yamlet.Internal.Emit
 import Yamlet.Internal.Chars hiding (isAnchorChar)
+import Yamlet.Internal.Emit
 import Yamlet.Internal.Syntax hiding (document)
 import Yamlet.Internal.Utils
 
