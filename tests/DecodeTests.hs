@@ -1093,6 +1093,11 @@ test_directiveErrors = do
     "valid verbatim tags"
     (Right ["!bar", "tag:yaml.org,2002:str"])
     (map valueTag <$> decodeText @[Value] "[!<!bar> a, !<tag:yaml.org,2002:str> b]")
+  assertEqual
+    "escapes of verbatim tags"
+    (Right ["!foo!", "tag:example.com,2000:\xE9"])
+    (map valueTag <$> decodeText @[Value] "[!<!foo%21> a, !<tag:example.com,2000:%C3%A9> b]")
+  check "invalid UTF-8 in a verbatim tag" (1, 1, "the escapes of the tag are not valid UTF-8") "!<!a%FF> b\n"
 
 newtype IntOrText = IntOrText (Either Integer T.Text)
   deriving stock (Eq, Show)

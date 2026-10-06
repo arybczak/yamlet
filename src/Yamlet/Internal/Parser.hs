@@ -745,7 +745,9 @@ cNsTagProperty = do
       let t = slice e q r
       when (w /= GREATER || not (isLocal t || isGlobal t)) $ throwAt p "invalid verbatim tag"
       advance 1
-      pure $ Tag t
+      case percentDecode t of
+        Just decoded -> pure (Tag decoded)
+        Nothing -> throwAt p "the escapes of the tag are not valid UTF-8"
 
     -- A local tag has a name after the "!".
     isLocal :: T.Text -> Bool

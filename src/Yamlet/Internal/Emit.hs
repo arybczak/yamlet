@@ -450,10 +450,9 @@ tagDirective c = "%TAG " <> handleText c <> " " <> percentEscape c <> "\n"
 handleText :: Char -> B.Builder
 handleText c = "!t" <> B.fromText (T.pack (showHex (ord c) "")) <> "!"
 
--- | A global tag that a verbatim tag holds as it is. The parser does not
--- decode the escapes of a verbatim tag, but libyaml, PyYAML and go-yaml do,
--- and they reject a #. A tag with a % or a # goes in a shorthand tag, with
--- escapes.
+-- | A global tag that a verbatim tag holds as it is. A % in a verbatim tag
+-- starts an escape, and libyaml, PyYAML and go-yaml reject a #, so a tag with
+-- a % or a # goes in a shorthand tag, with escapes.
 isVerbatim :: T.Text -> Bool
 isVerbatim tag = hasScheme && T.all (\c -> c /= '%' && c /= '#' && asciiChar isUriChar c) tag
   where
