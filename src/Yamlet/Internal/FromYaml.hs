@@ -1241,7 +1241,7 @@ insertUnique node item key insert start msg note xs = Parser $ \off -> go off st
         failedSet = Set.fromList fails
 
 instance FromYaml a => FromYaml (Seq.Seq a) where
-  parseYaml = fmap Seq.fromList . parseYaml
+  parseYaml = withSequence (fmap Seq.fromList . parseItems parseYaml)
 
 -- | A list of the label and the subtrees, e.g. @[a, [[b, []]]]@.
 instance FromYaml a => FromYaml (Tree.Tree a) where

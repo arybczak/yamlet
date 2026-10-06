@@ -63,6 +63,12 @@ test_containers = do
   assertEqual "right" "Right: a\n" (encodeText (Right @Int @T.Text "a"))
   roundTrip "int map" (IM.fromList @T.Text [(1, "a"), (-2, "b")])
   roundTrip "sequence" (Seq.fromList @Int [1, 2, 3])
+  -- Only a String is text.
+  assertEqual "string" "ab\n" (encodeText @String "ab")
+  assertEqual "set of characters" "- a\n- b\n" (encodeText (Set.fromList "ba"))
+  roundTrip "set of characters" (Set.fromList "ab")
+  roundTrip "non-empty list of characters" ('a' NE.:| "b")
+  roundTrip "sequence of characters" (Seq.fromList "ab")
   roundTrip @[Either Int T.Text] "either" [Left 1, Right "a"]
   let tree = Tree.Node 'a' [Tree.Node 'b' [], Tree.Node 'c' [Tree.Node 'd' []]]
   assertEqual "tree" "- a\n- - - b\n    - []\n  - - c\n    - - - d\n        - []\n" (encodeText tree)

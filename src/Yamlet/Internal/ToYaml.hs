@@ -256,7 +256,7 @@ instance ToYaml a => ToYaml [a] where
   toYaml = toYamlList
 
 instance ToYaml a => ToYaml (NE.NonEmpty a) where
-  toYaml = toYaml . NE.toList
+  toYaml = items . NE.toList
 
 -- | 'Nothing' is null. The key of an entry goes to the value inside, e.g. for
 -- a 'Yamlet.Commented' value.
@@ -274,14 +274,19 @@ instance ToYaml v => ToYaml (IM.IntMap v) where
 
 -- | A list in ascending order.
 instance ToYaml a => ToYaml (Set.Set a) where
-  toYaml = toYaml . Set.toAscList
+  toYaml = items . Set.toAscList
 
 -- | A list in ascending order.
 instance ToYaml IS.IntSet where
   toYaml = toYaml . IS.toAscList
 
 instance ToYaml a => ToYaml (Seq.Seq a) where
-  toYaml = toYaml . toList
+  toYaml = items . toList
+
+-- | A sequence of the items. Unlike a list, it is never a string, e.g. for
+-- items of type 'Char', because only 'String' is text.
+items :: ToYaml a => [a] -> S.Node
+items = S.sequenceNode . map toYaml
 
 -- | A list of the label and the subtrees, e.g. @[a, [[b, []]]]@.
 instance ToYaml a => ToYaml (Tree.Tree a) where
