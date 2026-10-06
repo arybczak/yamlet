@@ -127,8 +127,8 @@ runTest path = do
             Right docs' -> do
               assertEqual
                 (preface ++ "\nrendered:\n" ++ T.unpack out)
-                (map withoutStyle (toEvents docs))
-                (map withoutStyle (toEvents docs'))
+                (rendered (toEvents docs))
+                (rendered (toEvents docs'))
               assertEqual (preface ++ "\nrendered again") out (renderSyntax defaultRenderOptions docs')
           hasJson <- doesFileExist (path </> "in.json")
           case Y.decodeAllText @Y.Value input of
@@ -154,6 +154,14 @@ runTest path = do
   where
     jsonValues :: A.Parser [J.Value]
     jsonValues = many (A.skipSpace *> J.json') <* A.skipSpace <* A.endOfInput
+
+    -- The events that the renderer keeps. It writes a start marker for every
+    -- document after the first one.
+    rendered :: [Event] -> [Event]
+    rendered = \case
+      DocumentEnd explicit : DocumentStart _ : rest -> DocumentEnd explicit : DocumentStart True : rendered rest
+      e : rest -> withoutStyle e : rendered rest
+      [] -> []
 
     -- The renderer can change the styles.
     withoutStyle :: Event -> Event

@@ -85,7 +85,7 @@ defaultRenderOptions =
 -- - 1
 -- - b: 2
 renderSyntax :: RenderOptions -> [Document] -> T.Text
-renderSyntax opts = emptyLines . B.runBuilder . go True
+renderSyntax opts = emptyLines . B.runBuilder . go True True
   where
     -- The empty lines at the start or the end of the output go away, because
     -- the parser gives the lines there to no node. The empty lines in the
@@ -113,8 +113,8 @@ renderSyntax opts = emptyLines . B.runBuilder . go True
     dropEnd :: [T.Text] -> [T.Text]
     dropEnd = reverse . dropWhile (== emptyLine) . reverse
 
-    go :: Bool -> [Document] -> B.Builder
-    go afterEnd = \case
+    go :: Bool -> Bool -> [Document] -> B.Builder
+    go atStart afterEnd = \case
       [] -> mempty
       doc : docs ->
         let nextLines = case docs of
@@ -122,7 +122,7 @@ renderSyntax opts = emptyLines . B.runBuilder . go True
               [] -> False
             prepared = validAnchors doc {root = topLevel nextLines (commentedBlocks doc.root)}
             ends = writesEnd opts (not (null docs)) nextLines prepared
-        in document afterEnd ends prepared <> go ends docs
+        in document atStart afterEnd ends prepared <> go False ends docs
 
     -- A block scalar without content at the top level would take the lines
     -- below it in, also those of the next document if the flag tells that it
@@ -135,10 +135,11 @@ renderSyntax opts = emptyLines . B.runBuilder . go True
             n {content = ScalarLinesContent DoubleQuoted t starts}
       _ -> n
 
-    -- A document. The flags tell if it starts the stream or follows a
-    -- document end marker, and if it ends with a document end marker.
-    document :: Bool -> Bool -> Document -> B.Builder
-    document afterEnd ends doc =
+    -- A document. The flags tell if it starts the stream, if it starts the
+    -- stream or follows a document end marker, and if it ends with a
+    -- document end marker.
+    document :: Bool -> Bool -> Bool -> Document -> B.Builder
+    document atStart afterEnd ends doc =
       mconcat
         [ if needsEnd then "...\n" else mempty
         , gap
@@ -191,11 +192,13 @@ renderSyntax opts = emptyLines . B.runBuilder . go True
         -- directives, for a comment on the marker line, and if it is empty. A
         -- block collection has no line of its own for its comment. Without
         -- the marker, the lines above a document read back as the root's.
+        -- YAML 1.2 needs no marker after an end marker, but YAML 1.1 parsers
+        -- do.
         marker :: Bool
         marker =
           doc.explicitStart
             || directives
-            || not afterEnd
+            || not atStart
             || isEmpty r
             || not (null doc.docComments.before)
             || isJust doc.docComments.inline

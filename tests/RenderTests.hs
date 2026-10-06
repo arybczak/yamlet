@@ -411,7 +411,9 @@ test_documents = do
       , "a: b"
       , "---"
       ]
-  rendersBack "comment after the end marker" "a: b\n...\n# c\nd: e\n"
+  -- YAML 1.1 parsers need a start marker after an end marker.
+  rendersAs "document after an end marker" "a\n...\n---\nb\n" "a\n...\nb\n"
+  rendersAs "comment after the end marker" "a: b\n...\n# c\n---\nd: e\n" "a: b\n...\n# c\nd: e\n"
   rendersBack "comment before the directives" "a\n...\n# b\n%YAML 1.2\n---\nc\n"
   rendersBack "comments at the end of a root collection and a document" "a: 1\n# b\n\n# c\n...\n"
   rendersBack "comments around an end marker between documents" "a\n# b\n...\n# c\n---\nd\n"
@@ -455,7 +457,7 @@ test_documents = do
       firstKeyLines d = case d.root.content of
         MappingContent _ ((k, _) : _) -> k.comments.before
         _ -> []
-  assertEqual "comment above the first key after an end marker" "a\n...\n\n# c\nk: v\n" afterEnd
+  assertEqual "comment above the first key after an end marker" "a\n...\n---\n# c\nk: v\n" afterEnd
   assertEqual
     "comment above the first key after an end marker, read back"
     (Right [[], [Comment "c"]])
@@ -482,19 +484,19 @@ test_documents = do
       withLines c n = n {comments = c}
   boundary
     "empty line at the end of a block root before a document"
-    "k: v\n\n# c\n...\nb\n"
+    "k: v\n\n# c\n...\n---\nb\n"
     [[("", "after", "c")], []]
     [document (withLines noComments {after = [EmptyLine, Comment "c"]} (mappingNode [(plainNode "k", plainNode "v")])), document (plainNode "b")]
   boundary
     "empty line at the end of the last value of a block root before a document"
-    "k: v\n\n# c\n...\nb\n"
+    "k: v\n\n# c\n...\n---\nb\n"
     [[("", "after", "c")], []]
     [ document (withLines noComments {after = [Comment "c"]} (mappingNode [(plainNode "k", withLines noComments {after = [EmptyLine]} (plainNode "v"))]))
     , document (plainNode "b")
     ]
   boundary
     "empty line above the comment of an empty root before a document"
-    "a\n---\n\n# c\n...\nb\n"
+    "a\n---\n\n# c\n...\n---\nb\n"
     [[], [("", "after", "c")], []]
     [document (plainNode "a"), document (withLines noComments {before = [EmptyLine, Comment "c"]} (plainNode "")), document (plainNode "b")]
   boundary
