@@ -495,6 +495,11 @@ test_documents = do
     , document (plainNode "b")
     ]
   boundary
+    "empty line after the last key of a block root before a document"
+    "k: v\n\n  # c\n...\n---\nb\n"
+    [[("/k", "after", "c")], []]
+    [document (mappingNode [(withLines noComments {after = [EmptyLine, Comment "c"]} (plainNode "k"), plainNode "v")]), document (plainNode "b")]
+  boundary
     "empty line above the comment of an empty root before a document"
     "a\n---\n\n# c\n...\n---\nb\n"
     [[], [("", "after", "c")], []]

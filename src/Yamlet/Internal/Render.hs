@@ -355,14 +355,20 @@ writesEnd opts next nextLines doc =
       | isFlowCollection opts doc.root = []
       | otherwise = linesAtEnd doc.root
 
-    -- The lines at the end of the node and of the nodes that end it.
+    -- The lines at the end of the node and of the nodes that end it. The
+    -- lines after the last key go below the entry if the value is not a block
+    -- collection, as in 'entryComments'.
     linesAtEnd :: Node -> [Line]
     linesAtEnd n = inner ++ n.comments.after
       where
         inner :: [Line]
         inner = case n.content of
           SequenceContent _ xs | isBlock opts n, x : _ <- reverse xs -> linesAtEnd x
-          MappingContent _ kvs | isBlock opts n, (_, v) : _ <- reverse kvs -> linesAtEnd v
+          MappingContent _ kvs
+            | isBlock opts n
+            , (k, v) : _ <- reverse kvs -> case entryComments opts k v of
+                (_, _, below) | not (isBlock opts v) -> below ++ linesAtEnd v
+                _ -> linesAtEnd v
           _ -> []
 
     -- A comment line below the scalar ends its content.
