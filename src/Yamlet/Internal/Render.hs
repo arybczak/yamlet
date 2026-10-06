@@ -658,7 +658,7 @@ inline opts pos indent n lineComment = case n.content of
       ScalarLinesContent style t starts -> scalar (if inKey then [] else starts) style t
       SequenceContent _ [] | hasEndLines n -> "[\n" <> lines_ indent (fst (bracketLines n)) <> spaces indent <> "]"
       MappingContent _ [] | hasEndLines n -> "{\n" <> lines_ indent (fst (bracketLines n)) <> spaces indent <> "}"
-      SequenceContent _ xs -> "[" <> commas (map (\x -> inline opts itemPos indent (flowItem x) Nothing) xs) <> "]"
+      SequenceContent _ xs -> "[" <> commas (map (flowValue . flowItem) xs) <> "]"
       MappingContent _ kvs -> "{" <> commas (map flowEntry kvs) <> "}"
       AliasContent {} -> mempty
 
@@ -682,8 +682,16 @@ inline opts pos indent n lineComment = case n.content of
       mconcat
         [ inline opts InFlowKey indent k Nothing
         , if endsWithName k then " :" else ":"
-        , if isEmpty v then mempty else " " <> inline opts itemPos indent v Nothing
+        , if isEmpty v then mempty else " " <> flowValue v
         ]
+
+    -- YAML 1.1 parsers read a comma or a bracket right after a tag as part
+    -- of the tag.
+    flowValue :: Node -> B.Builder
+    flowValue x =
+      inline opts itemPos indent x Nothing <> case x.content of
+        ScalarContent Plain t | T.null t, x.props.tag /= NoTag -> " "
+        _ -> mempty
 
     commas :: [B.Builder] -> B.Builder
     commas = \case

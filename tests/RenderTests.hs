@@ -206,10 +206,16 @@ test_fallbacks = do
     "block scalar in a flow collection"
     "[\"a\\n\"]\n"
     (render (contentNode (SequenceContent Flow [scalarNode Literal "a\n"])))
+  -- YAML 1.1 parsers read a comma or a bracket right after a tag as part of
+  -- the tag.
   assertEqual
     "empty item of a flow sequence"
-    "[!!null, a]\n"
-    (render (contentNode (SequenceContent Flow [plainNode "", plainNode "a"])))
+    "[!!null , a, !!null ]\n"
+    (render (contentNode (SequenceContent Flow [plainNode "", plainNode "a", plainNode ""])))
+  assertEqual
+    "empty tagged values in flow collections"
+    (Right "[80, !!str , 443]\n---\n{a: !!str , b: !!str }\n")
+    (renderSyntax defaultRenderOptions <$> parseDocumentsText "[80, !!str , 443]\n---\n{a: !!str , b: !!str }\n")
   assertEqual "empty key" "?\n: a\n" (render (mappingNode [(plainNode "", plainNode "a")]))
   let emptyWithComment = (contentNode (SequenceContent Block [])) {comments = noComments {after = [Comment "c"]}}
       commented = mappingNode [(plainNode "k", emptyWithComment)]
