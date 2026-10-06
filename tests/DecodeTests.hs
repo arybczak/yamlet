@@ -83,6 +83,7 @@ decodeTests =
         , testProperty "locations of several errors" prop_errorsAt
         , testCase "paths of several errors" test_nodePaths
         , slow $ testCase "many errors" test_manyErrors
+        , slow $ testCase "deep errors" test_deepErrors
         ]
     ]
 
@@ -561,7 +562,7 @@ test_aliases = do
     "path of an error inside an alias"
     (Left [(2, 3, [Index 1])])
     ( first
-        (map (\err -> (err.location.line, err.location.column, err.path)) . NE.toList)
+        (map (\err -> (err.location.line, err.location.column, pathElements err.path)) . NE.toList)
         (decodeText @([T.Text], [Int]) "- &x [a, b]\n- *x\n")
     )
 
@@ -1649,7 +1650,7 @@ test_errorPaths = do
   assertEqual
     "path elements"
     (Left [CollectionKey, Index 1])
-    (first ((.path) . NE.head) (decodeText @(M.Map [Int] [Int]) "? [1, 2]\n: [3, y]\n"))
+    (first (pathElements . (.path) . NE.head) (decodeText @(M.Map [Int] [Int]) "? [1, 2]\n: [3, y]\n"))
   check "empty value at the end of its key" (Right "a") $ decodeText @(M.Map T.Text Int) "{a}"
   check "empty value at the end of an explicit key" (Right "a") $ decodeText @(M.Map T.Text Int) "? a"
   check "empty key" (Right "") $ decodeText @(M.Map Int Int) ": 1\n"
@@ -1699,13 +1700,28 @@ test_manyErrors = do
         -- The time to render an error does not depend on the length of its
         -- line.
         assertEqual (preface ++ ", rendered") n (length (filter (elem '^') (map (prettyError "f") errs)))
-        assertEqual (preface ++ ", paths") [[Index i] | i <- [0 .. n - 1]] (nodePaths offs doc.root)
+        assertEqual (preface ++ ", paths") [[Index i] | i <- [0 .. n - 1]] (map pathElements (nodePaths offs doc.root))
       _ -> assertFailure "expected one document"
 
     items :: S.Node -> [S.Node]
     items node = case node.content of
       S.SequenceContent _ xs -> xs
       _ -> []
+
+newtype NestedList = NestedList [NestedList]
+  deriving newtype (FromYaml)
+
+-- | The time and the memory of the paths of many errors deep in a document
+-- are linear in its size.
+test_deepErrors :: Assertion
+test_deepErrors = do
+  let n = 20000
+      input = T.replicate n "[" <> T.intercalate ", " (replicate n "x") <> T.replicate n "]"
+  case decodeText @NestedList input of
+    Left errs -> do
+      assertEqual "errors" n (length errs)
+      assertEqual "depth" n (length (pathElements (NE.last errs).path))
+    Right _ -> assertFailure "expected errors"
 
 test_prettyError :: Assertion
 test_prettyError = do

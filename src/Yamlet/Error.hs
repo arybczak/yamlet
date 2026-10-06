@@ -3,6 +3,9 @@ module Yamlet.Error
   ( -- * Errors
     Error (..)
   , Location (..)
+  , Path
+  , pathElements
+  , pathFromElements
   , PathElement (..)
   , prettyError
   , renderPath
@@ -45,13 +48,43 @@ data Error = Error
   , sourceIndex :: !Int
   -- ^ The index of the location in the UTF-8 bytes of 'sourceLine'. It
   -- lets 'prettyError' find the column without a scan of the whole line.
-  , path :: ![PathElement]
-  -- ^ The keys and the indices from the root of the document to the node of
-  -- a decoder error. An error at a key has the path of its mapping. The path
-  -- is empty for an error of the parser and for a node that a program built.
+  , path :: !Path
+  -- ^ The path to the node of a decoder error. An error at a key has the
+  -- path of its mapping. The path is empty for an error of the parser and
+  -- for a node that a program built.
   }
   deriving stock (Eq, Show, Generic)
   deriving anyclass (NFData)
+
+-- | The keys and the indices from the root of a document to a node.
+--
+-- The path of a node shares the path of its parent, so the paths of many
+-- errors in a deep document take memory linear in its size.
+data Path
+  = Root
+  | Child !Path !PathElement
+  deriving stock (Eq)
+
+-- Written by hand, because every field is strict and has no lazy parts, and
+-- a generic instance would walk the shared paths of all errors.
+instance NFData Path where
+  rnf = rwhnf
+
+instance Show Path where
+  showsPrec d p = showParen (d > 10) $ showString "pathFromElements " . shows (pathElements p)
+
+-- | The steps of a path, from the root.
+pathElements :: Path -> [PathElement]
+pathElements = go []
+  where
+    go :: [PathElement] -> Path -> [PathElement]
+    go acc = \case
+      Root -> acc
+      Child p e -> go (e : acc) p
+
+-- | A path with the steps from the root.
+pathFromElements :: [PathElement] -> Path
+pathFromElements = L.foldl' Child Root
 
 -- | A step of a path into a document.
 data PathElement
@@ -122,7 +155,7 @@ prettyError file err
   where
     message :: String
     message
-      | null err.path = err.message
+      | err.path == Root = err.message
       | otherwise = renderPath err.path ++ ": " ++ err.message
 
     lineNo :: String
@@ -224,13 +257,13 @@ prettyError file err
 -- In the quotes, a character that cannot be printed has an escape as in
 -- YAML, e.g. @\"a\\nb\"@.
 --
--- >>> renderPath [Key "jobs", Index 1, Key "name"]
+-- >>> renderPath (pathFromElements [Key "jobs", Index 1, Key "name"])
 -- "jobs[1].name"
 --
--- >>> renderPath [Key "a.b", Key ""]
+-- >>> renderPath (pathFromElements [Key "a.b", Key ""])
 -- "\"a.b\".\"\""
-renderPath :: [PathElement] -> String
-renderPath = \case
+renderPath :: Path -> String
+renderPath path = case pathElements path of
   [] -> ""
   e : rest -> step e ++ concatMap next rest
   where
@@ -279,29 +312,28 @@ renderPath = \case
 -- there, e.g. a block mapping and its first key, the outermost one counts. A
 -- key does not add to the path, and a node inside a key that is a collection
 -- has the path of the mapping.
-nodePath :: Offset -> Node -> [PathElement]
-nodePath off root = fromMaybe [] (listToMaybe (nodePaths [off] root))
+nodePath :: Offset -> Node -> Path
+nodePath off root = fromMaybe Root (listToMaybe (nodePaths [off] root))
 
 -- | The paths of 'nodePath' for several offsets, in the order of the offsets,
 -- from one walk of the tree.
-nodePaths :: [Offset] -> Node -> [[PathElement]]
-nodePaths offs root = map (\off -> M.findWithDefault [] off found) offs
+nodePaths :: [Offset] -> Node -> [Path]
+nodePaths offs root = map (\off -> M.findWithDefault Root off found) offs
   where
-    found :: M.Map Offset [PathElement]
-    found = walk (Set.delete noOffset (Set.fromList offs)) [] root M.empty
+    found :: M.Map Offset Path
+    found = walk (Set.delete noOffset (Set.fromList offs)) Root root M.empty
 
-    -- The path is in reverse.
-    walk :: Set.Set Offset -> [PathElement] -> Node -> M.Map Offset [PathElement] -> M.Map Offset [PathElement]
-    walk wanted rpath n acc
+    walk :: Set.Set Offset -> Path -> Node -> M.Map Offset Path -> M.Map Offset Path
+    walk wanted path n acc
       | Set.null inside = here
       | otherwise = case n.content of
-          SequenceContent _ xs -> L.foldl' (\a (i, x) -> walk inside (Index i : rpath) x a) here (zip [0 ..] xs)
-          MappingContent _ kvs -> L.foldl' (\a (k, v) -> walk inside (keyElement k : rpath) v (key inside rpath k a)) here kvs
+          SequenceContent _ xs -> L.foldl' (\a (i, x) -> walk inside (Child path (Index i)) x a) here (zip [0 ..] xs)
+          MappingContent _ kvs -> L.foldl' (\a (k, v) -> walk inside (Child path (keyElement k)) v (key inside path k a)) here kvs
           _ -> here
       where
-        here :: M.Map Offset [PathElement]
+        here :: M.Map Offset Path
         here
-          | n.offset `Set.member` wanted = M.insertWith (\_ old -> old) n.offset (reverse rpath) acc
+          | n.offset `Set.member` wanted = M.insertWith (\_ old -> old) n.offset path acc
           | otherwise = acc
 
         inside :: Set.Set Offset
@@ -309,12 +341,9 @@ nodePaths offs root = map (\off -> M.findWithDefault [] off found) offs
 
     -- Every node of a key has the path of the mapping. An index or a key
     -- inside the key would read as a step into the mapping.
-    key :: Set.Set Offset -> [PathElement] -> Node -> M.Map Offset [PathElement] -> M.Map Offset [PathElement]
-    key wanted rpath k acc = Set.foldl' (\a off -> M.insertWith (\_ old -> old) off path a) acc offsets
+    key :: Set.Set Offset -> Path -> Node -> M.Map Offset Path -> M.Map Offset Path
+    key wanted path k acc = Set.foldl' (\a off -> M.insertWith (\_ old -> old) off path a) acc offsets
       where
-        path :: [PathElement]
-        path = reverse rpath
-
         -- A value can start at the end of its key, e.g. the empty value in
         -- "{a}", so the end is not a node of the key, unless the key is empty.
         offsets :: Set.Set Offset
@@ -336,11 +365,11 @@ nodePaths offs root = map (\off -> M.findWithDefault [] off found) offs
 -- | Create an error at the given offset of the input.
 errorAt :: T.Text -> Offset -> String -> Error
 errorAt input off msg
-  | off == noOffset = force $ Error (locate input off) msg T.empty 0 []
+  | off == noOffset = force $ Error (locate input off) msg T.empty 0 Root
   | otherwise =
       let (loc, index, _) = locateFrom input (startScan input) off
           sourceLine = T.copy (lineAt input off)
-      in force $ Error loc msg sourceLine (min (lengthWord8 sourceLine) index) []
+      in force $ Error loc msg sourceLine (min (lengthWord8 sourceLine) index) Root
 
 -- | Create errors at the given offsets of a document, with their paths, in the
 -- order of the list. The text is the input of the document, e.g. for the
@@ -361,13 +390,13 @@ errorsAt input errs =
     go s prev = \case
       [] -> []
       (i, (off, msg)) : rest
-        | off == noOffset -> (i, force $ Error (locate input off) msg T.empty 0 []) : go s prev rest
+        | off == noOffset -> (i, force $ Error (locate input off) msg T.empty 0 Root) : go s prev rest
         | otherwise ->
             let (loc, index, s') = locateFrom input s off
                 sourceLine = case prev of
                   Just (ln, t) | ln == loc.line -> t
                   _ -> T.copy (lineAt input off)
-            in (i, force $ Error loc msg sourceLine (min (lengthWord8 sourceLine) index) []) : go s' (Just (loc.line, sourceLine)) rest
+            in (i, force $ Error loc msg sourceLine (min (lengthWord8 sourceLine) index) Root) : go s' (Just (loc.line, sourceLine)) rest
 
 -- | Compute the line and the column of an offset. The byte order marks at the
 -- start of a line are not columns, because they are not content. For
