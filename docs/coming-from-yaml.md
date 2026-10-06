@@ -35,6 +35,9 @@ yamlet does not convert values to the types of JSON:
 - An infinite `Double` is `.inf` or `-.inf`. aeson writes the string `+inf`
   or `-inf`, because JSON has no infinity, and yamlet reads these as
   strings.
+- A NaN `Double` is `.nan`. aeson writes `null`, which yamlet rejects for a
+  `Double`. The yaml package reads `.nan` as a string, so it does not decode
+  it as a `Double`.
 - A value must have the YAML type of its Haskell type. yamlet rejects some
   values that aeson converts, e.g. `1.0` for an `Int`, `0.5` for a
   `Rational` and `null` for a `Double`.
