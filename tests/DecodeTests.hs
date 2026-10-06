@@ -307,11 +307,11 @@ test_containers = do
   assertEqual "set" (Right (Set.fromList [1, 2, 3])) (decodeText @(Set.Set Int) "[3, 1, 2]")
   assertEqual
     "set with a duplicate"
-    (Just ((1, 5, "duplicate element"), (1, 2, "the first element")))
+    (Just ((1, 5, "duplicate element 1.0"), (1, 2, "the first element 1")))
     (errorWithNote (decodeText @(Set.Set Double) "[1, 1.0]"))
   assertEqual
     "set with an equal element"
-    (Just ((1, 5, "duplicate element"), (1, 2, "the first element")))
+    (Just ((1, 5, "duplicate element 1"), (1, 2, "the first element 1")))
     (errorWithNote (decodeText @(Set.Set Int) "[1, 1]"))
   assertEqual "int map" (Right (IM.fromList [(1, "a"), (2, "b")])) (decodeText @(IM.IntMap T.Text) "{2: b, 1: a}")
   assertEqual
@@ -321,7 +321,7 @@ test_containers = do
   assertEqual "int set" (Right (IS.fromList [1, 2, 3])) (decodeText @IS.IntSet "[3, 1, 2]")
   assertEqual
     "int set with a duplicate"
-    (Just ((1, 5, "duplicate element"), (1, 2, "the first element")))
+    (Just ((1, 5, "duplicate element 0x1"), (1, 2, "the first element 1")))
     (errorWithNote (decodeText @IS.IntSet "[1, 0x1]"))
   assertEqual "sequence" (Right (Seq.fromList [1, 2])) (decodeText @(Seq.Seq Int) "[1, 2]")
   assertEqual "left" (Right (Left 1)) (decodeText @(Either Int T.Text) "{Left: 1}")
@@ -436,7 +436,7 @@ test_record = do
     (decodeText "name: x\npaths:\n")
   assertEqual
     "keys of a map that convert to the same key"
-    (Just ((2, 1, "duplicate key after conversion"), (1, 1, "the first key")))
+    (Just ((2, 1, "duplicate key 1.0 after conversion"), (1, 1, "the first key 1")))
     (errorWithNote (decodeText @(M.Map Double Int) "1: 1\n1.0: 2\n"))
   assertEqual
     "string keys with the same text"
@@ -1321,18 +1321,18 @@ test_collectedErrors = do
     (errorsOf (decodeText @CalendarDiffDays "months: x\ndays: y\nweeks: 1\n"))
   assertEqual
     "duplicate keys of a map"
-    [ (1, 8, "duplicate key after conversion")
-    , (1, 2, "the first key")
-    , (1, 22, "duplicate key after conversion")
-    , (1, 16, "the first key")
+    [ (1, 8, "duplicate key 1.0 after conversion")
+    , (1, 2, "the first key 1")
+    , (1, 22, "duplicate key 2.0 after conversion")
+    , (1, 16, "the first key 2")
     ]
     (errorsOf (decodeText @(M.Map Double T.Text) "{1: a, 1.0: b, 2: c, 2.0: d}"))
   assertEqual
     "duplicate elements of a set"
-    [ (1, 5, "duplicate element")
-    , (1, 2, "the first element")
-    , (1, 13, "duplicate element")
-    , (1, 10, "the first element")
+    [ (1, 5, "duplicate element 1.0")
+    , (1, 2, "the first element 1")
+    , (1, 13, "duplicate element 2.0")
+    , (1, 10, "the first element 2")
     ]
     (errorsOf (decodeText @(Set.Set Double) "[1, 1.0, 2, 2.0]"))
   assertEqual
@@ -1341,11 +1341,15 @@ test_collectedErrors = do
     (errorsOf (decodeText @(Set.Set Double) "[x, y]"))
   assertEqual
     "duplicate and invalid elements of a set"
-    [(1, 5, "duplicate element"), (1, 2, "the first element"), (1, 10, "expected a number, but got a string")]
+    [(1, 5, "duplicate element 1.0"), (1, 2, "the first element 1"), (1, 10, "expected a number, but got a string")]
     (errorsOf (decodeText @(Set.Set Double) "[1, 1.0, x]"))
   assertEqual
     "duplicate elements of an int set"
-    [(1, 5, "duplicate element"), (1, 2, "the first element"), (1, 10, "duplicate element"), (1, 2, "the first element")]
+    [ (1, 5, "duplicate element 0x1")
+    , (1, 2, "the first element 1")
+    , (1, 10, "duplicate element 1")
+    , (1, 2, "the first element 1")
+    ]
     (errorsOf (decodeText @IS.IntSet "[1, 0x1, 1]"))
   let count :: (S.Node -> Parser ()) -> Int
       count p = either (error . show) (either length (const 0) . runParser p) (decodeText @Node "[x, y]")
@@ -1621,7 +1625,7 @@ test_nestedDuplicates = do
         | otherwise = "[[], [], " <> sets (d - 1) <> "]"
   assertEqual
     "maps"
-    (concat (replicate depth ["duplicate key after conversion", "the first key"]))
+    (concat (replicate depth ["duplicate key \"a\" after conversion", "the first key \"a\""]))
     (map (\(_, _, msg) -> msg) (errorsOf (decodeText @NestedMap (maps depth))))
   assertEqual
     "sets"

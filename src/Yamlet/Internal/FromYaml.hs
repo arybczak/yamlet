@@ -1172,14 +1172,14 @@ instance FromYaml v => FromYaml (IM.IntMap v) where
 instance (Ord a, FromYaml a) => FromYaml (Set.Set a) where
   parseYaml =
     withSequence $
-      insertUnique id (parseNode parseYaml) id (Set.alterF (,True)) Set.empty "duplicate element" "the first element"
+      insertUnique id (parseNode parseYaml) id (Set.alterF (,True)) Set.empty ("duplicate element" ++) ("the first element" ++)
 
 -- | A list. Two elements that convert to the same value, e.g. @1@ and @0x1@,
 -- are an error.
 instance FromYaml IS.IntSet where
   parseYaml =
     withSequence $
-      insertUnique id (parseNode parseYaml) id (IS.alterF (,True)) IS.empty "duplicate element" "the first element"
+      insertUnique id (parseNode parseYaml) id (IS.alterF (,True)) IS.empty ("duplicate element" ++) ("the first element" ++)
 
 -- | A map from the entries of a mapping, with the alter function and the empty
 -- map of its type. Two keys that convert to the same key are an error.
@@ -1189,7 +1189,7 @@ uniqueEntries
 uniqueEntries alter none = parseNode $ \n -> case n.content of
   -- The index of 'withMapping' would be of no use here.
   S.MappingContent _ kvs ->
-    insertUnique fst entry fst (\(k, v) -> alter (\old -> (isJust old, old <|> Just v)) k) none "duplicate key after conversion" "the first key" kvs
+    insertUnique fst entry fst (\(k, v) -> alter (\old -> (isJust old, old <|> Just v)) k) none (\t -> "duplicate key" ++ t ++ " after conversion") ("the first key" ++) kvs
   _ -> typeMismatch "a mapping" n
   where
     entry :: (FromYaml k, FromYaml v) => (S.Node, S.Node) -> Parser (k, v)
@@ -1197,12 +1197,21 @@ uniqueEntries alter none = parseNode $ \n -> case n.content of
 
 -- | Decode the items and insert them in their order, with the errors of all
 -- items. Each item that is already there is an error at its node, with the
--- note at the first equal item. The insert tells if the item was there, and
--- the key tells which items are equal.
+-- note at the first equal item. The message and the note get the text of
+-- their scalar after a space, or nothing for a collection. The insert tells
+-- if the item was there, and the key tells which items are equal.
 insertUnique
   :: forall a x s c
    . Ord c
-  => (a -> S.Node) -> (a -> Parser x) -> (x -> c) -> (x -> s -> (Bool, s)) -> s -> String -> String -> [a] -> Parser s
+  => (a -> S.Node)
+  -> (a -> Parser x)
+  -> (x -> c)
+  -> (x -> s -> (Bool, s))
+  -> s
+  -> (String -> String)
+  -> (String -> String)
+  -> [a]
+  -> Parser s
 insertUnique node item key insert start msg note xs = Parser $ \off -> go off start NoErrors [] [] xs
   where
     -- The duplicates and the failed items are in reverse.
@@ -1220,7 +1229,16 @@ insertUnique node item key insert start msg note xs = Parser $ \off -> go off st
              Result e _ -> go off acc (bothErrors errs e) dups ((node a).offset : fails) rest
 
     duplicateError :: M.Map c S.Node -> (c, S.Node) -> Errors
-    duplicateError fs (c, n) = OneError n.offset msg [(first.offset, note) | Just first <- [M.lookup c fs]]
+    duplicateError fs (c, n) =
+      OneError n.offset (msg (text n)) [(first.offset, note (text first)) | Just first <- [M.lookup c fs]]
+
+    -- The scalar as the input writes it, a string in quotes.
+    text :: S.Node -> String
+    text n = case n.content of
+      S.ScalarContent _ t
+        | Just s <- stringValue n -> ' ' : show s
+        | not (T.null t) -> ' ' : T.unpack t
+      _ -> ""
 
     -- A second pass finds the first items, only if there are duplicates. It
     -- skips the failed items, because an item with a duplicate inside would
