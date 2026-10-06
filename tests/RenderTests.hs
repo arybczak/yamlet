@@ -661,6 +661,10 @@ test_attachment = do
     "empty line below a flow root"
     [([Comment "c"], []), ([], [EmptyLine, Comment "d"])]
     "[a]\n# c\n\n# d\n---\nb\n"
+  between
+    "empty line below a flow root above the last end marker"
+    [([Comment "c", EmptyLine], [])]
+    "[a]\n# c\n\n...\n\n"
   assertEqual
     "empty lines above the first key"
     (Right [([Comment "a", EmptyLine, Comment "b", EmptyLine, EmptyLine], [Comment "c"])])

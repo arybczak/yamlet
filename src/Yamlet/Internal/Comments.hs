@@ -111,8 +111,12 @@ attachComments e first hasNext start marker rootEnd end doc
           in Node root'.offset root'.endOffset root'.props (strictComments c.before c.inline (if doc.explicitEnd then endLines else atEnd endLines)) root'.content
       | otherwise = root'
 
+    -- Only the lines below a @...@ marker can be at the end of the stream.
     docEnd :: [Line]
-    docEnd = atEnd ((if holdsLines then [] else endLines) ++ map (.line) afterEnd)
+    docEnd
+      | holdsLines = atEnd (map (.line) afterEnd)
+      | doc.explicitEnd = endLines ++ atEnd (map (.line) afterEnd)
+      | otherwise = atEnd (endLines ++ map (.line) afterEnd)
 
     -- The empty lines at the end of the stream belong to no node.
     atEnd :: [Line] -> [Line]
