@@ -46,8 +46,9 @@ data Error = Error
   , sourceLine :: !T.Text
   -- ^ The line of the input that contains the location.
   , sourceIndex :: !Int
-  -- ^ The index of the location in the UTF-8 bytes of 'sourceLine'. It
-  -- lets 'prettyError' find the column without a scan of the whole line.
+  -- ^ The index of the location in the UTF-8 bytes of
+  -- 'Yamlet.Error.sourceLine'. It lets 'prettyError' find the column without
+  -- a scan of the whole line.
   , path :: !Path
   -- ^ The path to the node of a decoder error. An error at a key has the
   -- path of its mapping. The path is empty for an error of the parser and

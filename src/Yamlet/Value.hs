@@ -121,7 +121,7 @@ instance NFData FloatValue where
 
 -- | The nearest value of a floating-point type, e.g. 'Double', infinite if
 -- the value is out of its range. The decimal converts to the type directly,
--- so it is rounded once, e.g. a 'Float' does not go by way of a 'Double'.
+-- so it is rounded once, e.g. a t'Float' does not go by way of a 'Double'.
 --
 -- >>> map (floatValueToRealFloat @Double) [Finite 0.1, Finite 1e400, NegativeZero]
 -- [0.1,Infinity,-0.0]

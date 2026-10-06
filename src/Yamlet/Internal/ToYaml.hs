@@ -290,7 +290,7 @@ instance ToYaml a => ToYaml (Seq.Seq a) where
   toYaml = items . toList
 
 -- | A sequence of the items. Unlike a list, it is never a string, e.g. for
--- items of type 'Char', because only 'String' is text.
+-- items of type 'Char', because only t'String' is text.
 items :: ToYaml a => [a] -> S.Node
 items = S.sequenceNode . map toYaml
 

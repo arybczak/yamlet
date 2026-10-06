@@ -244,18 +244,19 @@ noComments :: Comments
 noComments = Comments [] Nothing []
 
 -- | The node with the comments in place of its own. A record update of the
--- field is ambiguous where 'Commented' is in scope.
+-- field is ambiguous where t'Commented' is in scope.
 withComments :: Comments -> Node -> Node
 withComments c n = Node n.offset n.endOffset n.props c n.content
 
 -- | A value with the comments of its mapping entry:
 --
--- * 'before': the lines above the entry,
+-- * 'Yamlet.Syntax.before': the lines above the entry,
 --
--- * 'inline': the comment at the end of the first line of the entry,
+-- * 'Yamlet.Syntax.inline': the comment at the end of the first line of the
+--   entry,
 --
--- * 'after': the lines after the value, e.g. after the last entry of a
---   collection.
+-- * 'Yamlet.Syntax.after': the lines after the value, e.g. after the last
+--   entry of a collection.
 --
 -- A t'Commented' value of a mapping entry has the comments of the entry. A
 -- block list or mapping under the key has its own comments: the lines below

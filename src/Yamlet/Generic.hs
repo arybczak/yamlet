@@ -360,8 +360,9 @@ data YamlOptions = YamlOptions
   -- key encodes as a mapping with two equal keys, which does not read back.
   , contentsKey :: !T.Text
   -- ^ The key of the fields of a tagged constructor without field names,
-  -- @contents@ by default. If it is the same as 'tagKey', such a constructor
-  -- encodes as a mapping with two equal keys, which does not read back.
+  -- @contents@ by default. If it is the same as 'Yamlet.Generic.tagKey', such
+  -- a constructor encodes as a mapping with two equal keys, which does not
+  -- read back.
   , tagSingleConstructors :: !Bool
   -- ^ Give a type with one constructor a tag too, unless the constructor has
   -- no fields. Off by default.
@@ -429,7 +430,7 @@ data SumEncodingKind
     -- errors are those of 'TaggedObject', e.g. the missing contents key.
     --
     -- The keys of the mapping belong to the field, so the options of its
-    -- type apply to them, e.g. 'rejectUnknownFields'.
+    -- type apply to them, e.g. 'Yamlet.Generic.rejectUnknownFields'.
     TaggedFlat
   | -- | A mapping with one key, the tag, and the fields as its value, e.g.
     -- @{Circle: {radius: 1}}@. A field without a name is the value, e.g.
@@ -438,8 +439,8 @@ data SumEncodingKind
     --
     -- Each constructor has its own value, so the constructors of a type can
     -- mix named fields with a field without a name. A second key in the
-    -- mapping is an error. 'rejectUnknownFields' applies to the named fields
-    -- in the value.
+    -- mapping is an error. 'Yamlet.Generic.rejectUnknownFields' applies to
+    -- the named fields in the value.
     --
     -- The key of a constructor with named fields is not a field, so its
     -- comments are lost. The key of a field without a name goes to the
@@ -468,7 +469,8 @@ class GenericYamlOptions a where
 
 -- | The value of a field without a default in 'yamlDefault'. A missing key
 -- of the field is an error, also if the field accepts null, e.g. for a field
--- of type 'Maybe'. The encoder with 'omitNullFields' keeps such a field.
+-- of type 'Maybe'. The encoder with 'Yamlet.Generic.omitNullFields' keeps
+-- such a field.
 --
 -- The value throws an exception if it is evaluated, e.g. if you use
 -- 'yamlDefault' directly. So the field must be 'requiredField' itself, not a

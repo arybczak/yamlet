@@ -73,7 +73,8 @@ defaultRenderOptions =
 -- * A version that the parser does not support, e.g. 2.0, has no @%YAML@
 --   directive.
 --
--- With 'forceBlock', the flow collections become block collections:
+-- With 'Yamlet.Syntax.forceBlock', the flow collections become block
+-- collections:
 --
 -- >>> :{
 -- case parseDocumentsText "a: [1, {b: 2}]\n" of
