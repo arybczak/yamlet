@@ -57,6 +57,7 @@ decodeTests =
     , testCase "aliases" test_aliases
     , slow $ testCase "nesting" test_nesting
     , slow $ testCase "many keys" test_manyKeys
+    , slow $ testCase "nested duplicates" test_nestedDuplicates
     , slow $ testCase "alias keys" test_aliasKeys
     , slow $ testCase "alias limit" test_aliasLimit
     , slow $ testCase "long numbers" test_longNumbers
@@ -1596,6 +1597,35 @@ test_manyKeys = do
     entries = \case
       Mapping kvs -> kvs
       _ -> []
+
+newtype NestedMap = NestedMap (M.Map T.Text NestedMap)
+  deriving newtype (FromYaml)
+
+newtype NestedSet = NestedSet (Set.Set NestedSet)
+  deriving stock (Eq, Ord)
+  deriving newtype (FromYaml)
+
+-- | The time of the check for duplicates is linear in the depth of
+-- collections that each have a duplicate.
+test_nestedDuplicates :: Assertion
+test_nestedDuplicates = do
+  let depth = 1000
+      maps :: Int -> T.Text
+      maps d
+        | d == 0 = "{}"
+        | otherwise = "{a: {}, !x a: {}, b: " <> maps (d - 1) <> "}"
+      sets :: Int -> T.Text
+      sets d
+        | d == 0 = "[[[]]]"
+        | otherwise = "[[], [], " <> sets (d - 1) <> "]"
+  assertEqual
+    "maps"
+    (concat (replicate depth ["duplicate key after conversion", "the first key"]))
+    (map (\(_, _, msg) -> msg) (errorsOf (decodeText @NestedMap (maps depth))))
+  assertEqual
+    "sets"
+    (concat (replicate depth ["duplicate element", "the first element"]))
+    (map (\(_, _, msg) -> msg) (errorsOf (decodeText @NestedSet (sets depth))))
 
 -- | A decoder error has the path to its node.
 test_errorPaths :: Assertion

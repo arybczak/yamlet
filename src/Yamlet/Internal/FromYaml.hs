@@ -1203,31 +1203,42 @@ insertUnique
   :: forall a x s c
    . Ord c
   => (a -> S.Node) -> (a -> Parser x) -> (x -> c) -> (x -> s -> (Bool, s)) -> s -> String -> String -> [a] -> Parser s
-insertUnique node item key insert start msg note xs = Parser $ \off -> go off start NoErrors [] xs
+insertUnique node item key insert start msg note xs = Parser $ \off -> go off start NoErrors [] [] xs
   where
-    -- The duplicates are in reverse.
-    go :: S.Offset -> s -> Errors -> [(c, S.Node)] -> [a] -> Result s
-    go off !acc errs dups = \case
+    -- The duplicates and the failed items are in reverse.
+    go :: S.Offset -> s -> Errors -> [(c, S.Node)] -> [S.Offset] -> [a] -> Result s
+    go off !acc errs dups fails = \case
       [] -> case (errs, dups) of
         (NoErrors, []) -> Result NoErrors acc
-        _ -> Result (L.foldl' bothErrors errs (map (duplicateError (firsts off)) dups)) failed
+        _ -> Result (L.foldl' bothErrors errs (map (duplicateError (firsts off fails)) dups)) failed
       a : rest ->
         let Parser p = item a
         in case p off of
              Result NoErrors x -> case insert x acc of
-               (False, acc') -> go off acc' errs dups rest
-               (True, acc') -> go off acc' errs ((key x, node a) : dups) rest
-             Result e _ -> go off acc (bothErrors errs e) dups rest
+               (False, acc') -> go off acc' errs dups fails rest
+               (True, acc') -> go off acc' errs ((key x, node a) : dups) fails rest
+             Result e _ -> go off acc (bothErrors errs e) dups ((node a).offset : fails) rest
 
     duplicateError :: M.Map c S.Node -> (c, S.Node) -> Errors
     duplicateError fs (c, n) = OneError n.offset msg [(first.offset, note) | Just first <- [M.lookup c fs]]
 
-    -- A second pass finds the first items, only if there are duplicates.
-    firsts :: S.Offset -> M.Map c S.Node
-    firsts off =
+    -- A second pass finds the first items, only if there are duplicates. It
+    -- skips the failed items, because an item with a duplicate inside would
+    -- decode its own items twice again, which doubles the time with each
+    -- level of nesting.
+    firsts :: S.Offset -> [S.Offset] -> M.Map c S.Node
+    firsts off fails =
       M.fromListWith
         (\_ old -> old)
-        [(key x, node a) | a <- xs, let Parser p = item a, Result NoErrors x <- [p off]]
+        [ (key x, node a)
+        | a <- xs
+        , not ((node a).offset `Set.member` failedSet)
+        , let Parser p = item a
+        , Result NoErrors x <- [p off]
+        ]
+      where
+        failedSet :: Set.Set S.Offset
+        failedSet = Set.fromList fails
 
 instance FromYaml a => FromYaml (Seq.Seq a) where
   parseYaml = fmap Seq.fromList . parseYaml
