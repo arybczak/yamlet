@@ -262,14 +262,16 @@ instance ToYaml a => ToYaml [a] where
 instance ToYaml a => ToYaml (NE.NonEmpty a) where
   toYaml = items . NE.toList
 
--- | 'Nothing' is null. The key of an entry goes to the value inside, e.g. for
--- a 'Yamlet.Commented' value.
+-- | 'Nothing' is null. @'Just' 'Nothing'@ is null too, so it reads back as
+-- 'Nothing', as in aeson. The key of an entry goes to the value inside, e.g.
+-- for a 'Yamlet.Commented' value.
 instance ToYaml a => ToYaml (Maybe a) where
   toYaml = maybe (scalar Null) toYaml
   toYamlField k = maybe (k, scalar Null) (toYamlField k)
 
--- | Two keys that give the same node, e.g. 'Nothing' and @'Just' ()@, or two
--- NaN values, give a mapping that does not read back.
+-- | Two keys that give equal nodes give a mapping that does not read back,
+-- e.g. 'Nothing' and @'Just' 'Nothing'@, two NaN values, or two v'Mapping'
+-- values with the same entries in a different order.
 instance (ToYaml k, ToYaml v) => ToYaml (M.Map k v) where
   toYaml m = mapping [toYamlField (toYaml k) v | (k, v) <- M.toList m]
 
