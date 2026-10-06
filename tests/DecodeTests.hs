@@ -1220,7 +1220,7 @@ test_typeErrors = do
   assertEqual "void" (Just (1, 1, "the type Void has no values")) (errorOf (decodeText @Void "a"))
   assertEqual
     "zero denominator"
-    (Just (1, 1, "the denominator is 0"))
+    (Just (1, 29, "the denominator is 0"))
     (errorOf (decodeText @Rational "{numerator: 1, denominator: 0}"))
   assertEqual "negative denominator" (Right (negate 1 % 2)) (decodeText @Rational "{numerator: 2, denominator: -4}")
   assertEqual

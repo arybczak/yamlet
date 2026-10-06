@@ -1268,8 +1268,7 @@ instance (Integral a, FromYaml a) => FromYaml (Ratio a) where
   parseYaml = withMapping $ \o -> do
     (n, d) <-
       rejectUnknownKeys ["numerator", "denominator"] o
-        *> ((,) <$> parseField @a o "numerator" <*> parseField @a o "denominator")
-    when (d == 0) $ fail "the denominator is 0"
+        *> ((,) <$> parseField @a o "numerator" <*> parseFieldWith nonZero o "denominator")
     -- The reduction happens in Integer, where the gcd is fast. For another
     -- type, the gcd takes quadratic time in the number of digits, and in a
     -- bounded type, a negation can overflow, e.g. of minBound.
@@ -1279,6 +1278,11 @@ instance (Integral a, FromYaml a) => FromYaml (Ratio a) where
     if fits (numerator r) && fits (denominator r)
       then pure (fromInteger (numerator r) :% fromInteger (denominator r))
       else fail "the fraction is out of the range of the type"
+    where
+      nonZero :: S.Node -> Parser a
+      nonZero n = do
+        d <- parseYaml n
+        d <$ when (d == 0) (fail "the denominator is 0")
 
 -- | A number that is a multiple of the step of the type, e.g. @1.25@ for
 -- 'Centi'. A number with more digits after the point is an error, not a
