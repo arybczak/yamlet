@@ -511,6 +511,14 @@ test_parameters = do
   assertEqual "null field left out" "name: a\n" (encodeText (Sparse @(Maybe Int) "a" Nothing))
   assertEqual "field that is not null" "name: a\nextra: 1\n" (encodeText (Sparse @(Maybe Int) "a" (Just 1)))
   roundTrip "round trip with a null field left out" (Sparse @(Maybe Int) "a" Nothing)
+  assertEqual
+    "null field with a comment"
+    "name: a\n# b\nextra: null\n"
+    (encodeText (Sparse "a" (Commented (Nothing @Int) (Comments [Comment "b"] Nothing []))))
+  assertEqual
+    "null field without comments left out"
+    "name: a\n"
+    (encodeText (Sparse "a" (Commented (Nothing @Int) noComments)))
   assertEqual "encoded sum" "- tag: Filled\n  contents: 1\n- tag: Vacant\n" (encodeText [Filled @Int 1, Vacant])
   roundTrip "round trip of a sum" [Filled @Int 1, Vacant]
 

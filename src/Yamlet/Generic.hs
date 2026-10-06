@@ -371,6 +371,8 @@ data YamlOptions = YamlOptions
   -- no fields. Off by default.
   , omitNullFields :: !Bool
   -- ^ Leave out a field whose value is null, e.g. 'Nothing'. Off by default.
+  -- A null field with comments stays, e.g. a t'Yamlet.Commented' field with
+  -- the value 'Nothing' and a comment.
   --
   -- With 'yamlDefault', a null field stays if its default is not null.
   -- Otherwise the value would not read back: the decoder fills a missing key
@@ -952,11 +954,15 @@ instance
   => GToFields (S1 (MetaSel (Just name) u s d) (Rec0 a))
   where
   gToEntries opts def (M1 (K1 x))
-    | opts.omitNullFields && isNullNode (snd entry) && nullDefault = []
+    | opts.omitNullFields && isNullNode (snd entry) && uncommented && nullDefault = []
     | otherwise = [entry]
     where
       entry :: (S.Node, S.Node)
       entry = fieldKey @name opts .= x
+
+      -- The comments would go away with the entry.
+      uncommented :: Bool
+      uncommented = (fst entry).comments == S.noComments && (snd entry).comments == S.noComments
 
       -- The decoder fills a missing key from the default.
       nullDefault :: Bool
