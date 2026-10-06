@@ -437,7 +437,8 @@ withSequence f = parseNode $ \n -> case n.content of
 
 -- | The values of the items, with the errors of all items, as with 'mapM'.
 -- Unlike 'mapM', the stack does not grow with the number of items, because
--- the errors and the values are in accumulators until the end.
+-- the errors and the values are in accumulators until the end. A decoder of
+-- a list is @withSequence (parseItems parseYaml)@.
 parseItems :: forall a. (S.Node -> Parser a) -> [S.Node] -> Parser [a]
 parseItems p xs0 = Parser $ \off -> go off NoErrors [] xs0
   where

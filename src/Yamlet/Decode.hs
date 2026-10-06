@@ -28,6 +28,7 @@ module Yamlet.Decode
 
     -- * Collections
   , withSequence
+  , parseItems
   , withMapping
   , Object
   , objectNode
