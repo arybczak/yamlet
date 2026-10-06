@@ -164,7 +164,7 @@ renderSyntax opts = emptyLines . B.runBuilder . go True True
         -- to the document, as do the lines below the marker. Below the
         -- marker, an empty line would end them.
         linesAboveEnd :: Bool
-        linesAboveEnd = isFlowCollection opts r && commentBelowEmptyLine doc.docComments.after
+        linesAboveEnd = isFlowCollection opts r && EmptyLine `elem` doc.docComments.after
 
         -- The end of the document above takes the comments right below it.
         -- The lines above the first entry of a block root come first too.
@@ -337,8 +337,8 @@ validAnchors doc
 --
 -- Without the marker, the lines at the end of the document read back as the
 -- root's, unless the root is a flow collection. Before the next document,
--- an empty line at the end of the root would end the lines of the root, and
--- a literal block scalar with the keep indicator at the end would take the
+-- an empty line at the end of the root, or below a flow collection root,
+-- would end the lines of the document, and a literal block scalar with the keep indicator at the end would take the
 -- empty line above the lines of the next document in.
 writesEnd :: RenderOptions -> Bool -> Bool -> Document -> Bool
 writesEnd opts next nextLines doc =
@@ -347,12 +347,13 @@ writesEnd opts next nextLines doc =
     || next && commentBelowEmptyLine endLines
     || nextLines && endsWithKeep doc.root
   where
-    -- The lines at the end of the root, which read back as its last lines.
-    -- The lines of an empty root are all below its start marker.
+    -- The lines at the end of the root, which read back as its last lines,
+    -- or the lines of the document below a flow collection root. The lines
+    -- of an empty root are all below its start marker.
     endLines :: [Line]
     endLines
       | isEmpty doc.root = snd (emptyRootLines doc) ++ doc.root.comments.after
-      | isFlowCollection opts doc.root = []
+      | isFlowCollection opts doc.root = doc.docComments.after
       | otherwise = linesAtEnd doc.root
 
     -- The lines at the end of the node and of the nodes that end it. The

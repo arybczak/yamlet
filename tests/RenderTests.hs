@@ -474,6 +474,7 @@ test_documents = do
     (renderSyntax defaultRenderOptions [rootWithGap False, document (plainNode "b")])
   -- The end marker keeps the lines of a document from the next document.
   rendersBack "empty line below a flow root above an end marker" "[a]\n\n# c\n...\n---\nx\n"
+  rendersBack "empty line at the end of a flow root above an end marker" "[a]\n# c\n\n...\n---\nx\n"
   rendersAs "empty line at the end of a flow root in the block style" "key: value\n\n# c\n...\n---\nx\n" "{\n key: value\n\n# c\n}\n---\nx\n"
   let boundary :: String -> T.Text -> [[(String, String, T.Text)]] -> [Document] -> Assertion
       boundary preface expected comments docs = do
@@ -492,6 +493,13 @@ test_documents = do
     "k: v\n\n# c\n...\n---\nb\n"
     [[("", "after", "c")], []]
     [ document (withLines noComments {after = [Comment "c"]} (mappingNode [(plainNode "k", withLines noComments {after = [EmptyLine]} (plainNode "v"))]))
+    , document (plainNode "b")
+    ]
+  boundary
+    "empty line below a flow root before a document"
+    "[a]\n\n# c\n...\n---\nb\n"
+    [[("document", "after", "c")], []]
+    [ (document (contentNode (SequenceContent Flow [plainNode "a"]))) {docComments = noComments {after = [EmptyLine, Comment "c"]}}
     , document (plainNode "b")
     ]
   boundary
