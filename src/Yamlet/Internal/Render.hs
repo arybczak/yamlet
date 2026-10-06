@@ -34,7 +34,7 @@ data RenderOptions = RenderOptions
   -- ^ Write every non-empty collection in the block style. A collection in a
   -- key then becomes an explicit key, e.g. @? - a@.
   }
-  deriving stock (Generic)
+  deriving stock (Eq, Show, Generic)
 
 -- | Keep the collection styles of the tree.
 defaultRenderOptions :: RenderOptions

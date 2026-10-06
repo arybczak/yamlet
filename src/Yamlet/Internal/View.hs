@@ -35,7 +35,7 @@ data View
   | -- | 'Yamlet.Decode.runParser' replaces the aliases, so only a node that a
     -- program builds can have one.
     AliasView !T.Text
-  deriving stock (Generic)
+  deriving stock (Eq, Show, Generic)
 
 -- | The view of a node.
 view :: S.Node -> View
