@@ -1,5 +1,6 @@
 module EncodeTests (encodeTests) where
 
+import Data.Either
 import Data.Fixed
 import Data.Functor.Const
 import Data.Functor.Identity
@@ -138,6 +139,9 @@ test_time = do
     "time zone of 25 hours"
     "'2024-01-01T12:00:00+25:00'\n"
     (encodeText (ZonedTime (LocalTime (fromGregorian 2024 1 1) (TimeOfDay 12 0 0)) (hoursToTimeZone 25)))
+  assertBool
+    "time zone of 25 hours does not read back"
+    (isLeft (decodeText @ZonedTime (encodeText (ZonedTime noon (hoursToTimeZone 25)))))
   roundTrip "leap second" (UTCTime (fromGregorian 2016 12 31) 86400.5)
   assertEqual "duration" "1.5\n" (encodeText @NominalDiffTime 1.5)
   roundTrip "local time" noon

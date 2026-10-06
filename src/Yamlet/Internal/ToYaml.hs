@@ -175,7 +175,11 @@ instance ToYaml Sci.Scientific where toYaml = scalar . Float . Finite
 instance ToYaml Day where toYaml = timestamp buildDay
 instance ToYaml TimeOfDay where toYaml = iso8601 timeOfDay
 instance ToYaml LocalTime where toYaml = timestamp localTime
+
+-- | The decoder accepts an offset of less than 24 hours, so a larger offset,
+-- e.g. @+25:00@, does not read back.
 instance ToYaml ZonedTime where toYaml = timestamp (\(ZonedTime t z) -> localTime t <> buildTimeZone z)
+
 instance ToYaml UTCTime where toYaml = timestamp (\(UTCTime d s) -> localTime (LocalTime d (timeToTimeOfDay s)) <> "Z")
 
 -- | The time of day without the trailing zeros of the fraction, e.g.
