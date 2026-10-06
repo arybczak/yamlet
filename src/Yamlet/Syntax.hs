@@ -70,6 +70,7 @@ module Yamlet.Syntax
     -- $comments
   , Comments (..)
   , noComments
+  , withComments
   , Line (..)
 
     -- ** Lines above a node
