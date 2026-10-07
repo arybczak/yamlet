@@ -239,9 +239,19 @@ prettyError file err
         charEnd :: Int -> Int
         charEnd i = if i < lineEnd && not (isCharStart (A.unsafeIndex arr i)) then charEnd (i + 1) else i
 
-    -- A tab before the column keeps the caret aligned in a terminal.
+    -- A tab before the column keeps the caret aligned in a terminal, and a
+    -- combining mark takes no cell. A wide character, e.g. of CJK, takes two
+    -- cells, so the caret is one cell to the left for each one before the
+    -- column. base has no data on the width of characters, and the library
+    -- does not keep a copy of the Unicode table for this.
     caret :: String
-    caret = map (\c -> if c == '\t' then '\t' else ' ') (take before shown)
+    caret = concatMap cell (take before shown)
+      where
+        cell :: Char -> String
+        cell c = case generalCategory c of
+          NonSpacingMark -> ""
+          EnclosingMark -> ""
+          _ -> if c == '\t' then "\t" else " "
 
 -- | A path in the form @jobs[1].name@. A key that is a collection is @?@,
 -- and a key that is an alias is its alias, e.g. @*base@.

@@ -1765,6 +1765,13 @@ test_prettyError = do
     forM_ starts $ \i -> do
       let err = errorAt input (Offset i) "m"
       assertEqual ("excerpt of a line of " ++ show n ++ " characters at " ++ show i) (excerpt err) (drop 1 (lines (prettyError "f" err)))
+  case decodeText @(M.Map T.Text Int) "e\x301\&e\x301: x\n" of
+    Left errs ->
+      assertEqual
+        "caret after combining marks"
+        ["  | " ++ replicate 4 ' ' ++ "^"]
+        (map (last . lines . prettyError "f") (NE.toList errs))
+    Right _ -> assertFailure "expected an error"
   where
     -- The excerpt and the caret from a scan of the whole line.
     excerpt :: Error -> [String]
