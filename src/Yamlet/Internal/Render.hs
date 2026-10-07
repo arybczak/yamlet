@@ -72,7 +72,9 @@ defaultRenderOptions =
 --
 -- * An anchor name with a character that YAML does not allow in it, e.g. a
 --   space, or that YAML 1.1 reads as a line break, e.g. U+2028, becomes a
---   new name in the anchor and in its aliases.
+--   new name in the anchor and in its aliases. Other names stay, also those
+--   that libyaml and PyYAML reject, e.g. @a:@ or @é@, because they accept
+--   only ASCII letters, digits, @-@ and @_@.
 --
 -- * A version that the parser does not support, e.g. 2.0, has no @%YAML@
 --   directive.
