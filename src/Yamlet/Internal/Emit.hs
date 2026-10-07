@@ -74,13 +74,20 @@ plainSyntax inFlow t = case T.uncons t of
         | prev == ' ' && c == '#' -> False
         | otherwise -> valid c s'
 
+    -- YAML 1.1 parsers end a plain scalar at a question mark in a flow
+    -- collection, or reject it. As one top-level function with the flag for
+    -- both callers, it made the encode benchmark of the text input allocate
+    -- several times more.
     isPlainChar :: Char -> Bool
     isPlainChar c =
       (c == ' ' || (isScalarChar c && c /= '\t'))
-        && not (inFlow && asciiChar isFlowIndicator c)
+        && not (inFlow && (asciiChar isFlowIndicator c || c == '?'))
 
+    -- YAML 1.1 parsers reject a plain scalar that starts with a colon in a
+    -- flow collection.
     firstOk :: Char -> T.Text -> Bool
     firstOk c rest
+      | inFlow && c == ':' = False
       | elem @[] c "-?:" = case T.uncons rest of
           Just (c', _) -> not (asciiChar isWhite c')
           Nothing -> False
@@ -112,10 +119,11 @@ plainLines inFlow indent starts t
           && not (T.isInfixOf " #" l)
       _ -> False
 
+    -- As in 'plainSyntax'.
     isPlainChar :: Char -> Bool
     isPlainChar c =
       (c == ' ' || (isScalarChar c && c /= '\t'))
-        && not (inFlow && asciiChar isFlowIndicator c)
+        && not (inFlow && (asciiChar isFlowIndicator c || c == '?'))
 
 -- | A single-quoted scalar on one line, if the text has no line breaks.
 singleQuoted :: T.Text -> Maybe B.Builder

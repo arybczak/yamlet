@@ -218,6 +218,16 @@ test_fallbacks = do
     "empty tagged values in flow collections"
     (Right "[80, !!str , 443]\n---\n{a: !!str , b: !!str }\n")
     (renderSyntax defaultRenderOptions <$> parseDocumentsText "[80, !!str , 443]\n---\n{a: !!str , b: !!str }\n")
+  -- YAML 1.1 parsers misread or reject these plain scalars, empty keys and
+  -- empty values in flow collections.
+  assertEqual
+    "indicators in plain scalars of a flow collection"
+    "['?a', 'a?b', ':a', 'a:?', a:b, -a]\n"
+    (render (contentNode (SequenceContent Flow (map plainNode ["?a", "a?b", ":a", "a:?", "a:b", "-a"]))))
+  rendersAs
+    "empty keys and values in flow mappings"
+    "{k: , a: 1}\n---\n{? : x}\n---\n{? }\n"
+    "{k:, a: 1}\n---\n{: x}\n---\n{: }\n"
   -- libyaml and PyYAML reject an implicit key of more than 1024 characters
   -- in a flow mapping too.
   let flowEntry :: Node -> Node -> Node

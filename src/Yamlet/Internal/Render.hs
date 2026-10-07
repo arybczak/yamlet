@@ -744,21 +744,26 @@ inline opts pos indent n lineComment = case n.content of
       _ -> x
 
     -- YAML 1.2 allows an implicit key of any length in a flow mapping, but
-    -- libyaml and PyYAML reject one as long as in a block mapping.
+    -- libyaml and PyYAML reject one as long as in a block mapping. YAML 1.1
+    -- parsers also reject an empty implicit key, and a colon right before
+    -- the end of the entry.
     flowEntry :: (Node, Node) -> B.Builder
     flowEntry (k, v)
-      | fits =
+      | fits && not (isEmpty k) =
           mconcat
             [ inline opts InFlowKey indent k Nothing
-            , if endsWithName k then " :" else ":"
-            , if isEmpty v then mempty else " " <> flowValue v
+            , if endsWithName k then " : " else ": "
+            , flowValue v
             ]
       -- libyaml rejects an explicit key with a colon but no value.
       | otherwise =
           mconcat
             [ "? "
             , inline opts InFlowKey indent k Nothing
-            , if isEmpty v then mempty else " : " <> flowValue v
+            , if
+                | isEmpty v -> mempty
+                | isEmpty k -> ": " <> flowValue v
+                | otherwise -> " : " <> flowValue v
             ]
       where
         -- A short scalar without properties fits even in two quotes with each
