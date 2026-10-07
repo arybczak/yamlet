@@ -11,7 +11,6 @@ import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
 import Data.Monoid qualified as Mon
 import Data.Ord
-import Data.Proxy
 import Data.Ratio
 import Data.Scientific qualified as Sci
 import Data.Semigroup qualified as Sem
@@ -83,7 +82,6 @@ test_containers = do
 test_base :: Assertion
 test_base = do
   assertEqual "ordering" "- LT\n- EQ\n- GT\n" (encodeText [LT, EQ, GT])
-  assertEqual "proxy" "null\n" (encodeText (Proxy @Int))
   assertEqual "unit" "[]\n" (encodeText ())
   roundTrip "unit" ()
   assertEqual "ratio" "numerator: 1\ndenominator: 3\n" (encodeText @Rational (1 % 3))

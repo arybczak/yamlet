@@ -24,7 +24,6 @@ import Data.Map.Strict qualified as M
 import Data.Maybe
 import Data.Monoid qualified as Mon
 import Data.Ord
-import Data.Proxy
 import Data.Ratio
 import Data.Semigroup qualified as Sem
 import Data.Sequence qualified as Seq
@@ -109,7 +108,6 @@ checks =
   , retains @[Ratio Int] "Ratio" "- {numerator: 1, denominator: 2}"
   , retains @[()] "unit" "- []"
   , retains @[Ordering] "Ordering" "- LT"
-  , retains @[Proxy Int] "Proxy" "- null"
   , retains @[Day] "Day" "- 2026-01-01"
   , retains @[Value] "Value" "- !x {a: !y b}"
   , retains @[Node] "Node" "- !x {a: &y b} # c"

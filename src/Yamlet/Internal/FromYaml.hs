@@ -1287,10 +1287,6 @@ instance FromYaml Ordering where
     "GT" -> pure GT
     _ -> fail "expected LT, EQ or GT"
 
--- | Null.
-instance FromYaml (Proxy a) where
-  parseYaml = withNull (pure Proxy)
-
 instance FromYaml Void where
   parseYaml _ = fail "the type Void has no values"
 

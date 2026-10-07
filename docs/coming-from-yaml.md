@@ -56,7 +56,8 @@ yamlet does not convert values to the types of JSON:
 - The mapping of a `Rational`, a `CalendarDiffDays` or a
   `CalendarDiffTime` must have only the keys of the type, e.g. `numerator`
   and `denominator`. aeson ignores other keys.
-- A `Proxy` is `null`. aeson reads any value as a `Proxy`.
+- `Proxy` has no instances, because it holds no value. aeson writes it as
+  `null` and reads any value as a `Proxy`.
 
 ## Generic instances
 

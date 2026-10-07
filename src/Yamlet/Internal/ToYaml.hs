@@ -305,10 +305,6 @@ instance ToYaml a => ToYaml (Tree.Tree a) where
 instance ToYaml Ordering where
   toYaml = scalar . String . T.pack . show
 
--- | Null.
-instance ToYaml (Proxy a) where
-  toYaml _ = scalar Null
-
 instance ToYaml Void where
   toYaml = absurd
 
