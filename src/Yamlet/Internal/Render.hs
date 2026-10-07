@@ -669,9 +669,63 @@ firstEntryOf x = case x.content of
   _ -> Nothing
 
 -- | A block collection starts on the line after its indicator if it has
--- properties or a comment on the line of the indicator.
+-- properties or a comment on the line of the indicator, or if the lines of
+-- its first entry from 'firstLines' do not end with an empty line. A
+-- collection on the line of its indicator takes every line above the
+-- indicator, so these lines would read back as its own, or as those of a
+-- collection around it. Below the indicator, the lines after the last empty
+-- line go to the first entry.
+--
+-- The check looks at the lines of the first entry before it asks whether the
+-- entry starts below its indicator. Most entries have no lines, so the check
+-- does not follow a long chain of first entries from each of them, which
+-- would make the time quadratic in the length of the chain. It follows the
+-- chain only through entries with lines, and the output has these lines at
+-- the indentation of their depth, so it is quadratic in that length too.
 startsBelow :: RenderOptions -> Node -> Bool
-startsBelow opts x = isBlock opts x && (isJust (props x) || isJust x.comments.inline)
+startsBelow opts x
+  | not (isBlock opts x) = False
+  | isJust (props x) || isJust x.comments.inline = True
+  | otherwise = case x.content of
+      -- A first key without comments has no lines above it. Without the
+      -- case, the check for an implicit key in 'belowIndicator' makes the
+      -- render benchmark of the config input allocate more.
+      MappingContent _ ((k, v) : _)
+        | k.comments == noComments
+        , v.comments == noComments
+        , not (isBlock opts k) ->
+            False
+      _ -> fst (belowIndicator opts x)
+
+-- | 'startsBelow' and whether 'firstLines' is empty. Both depend on the same
+-- facts about the first entry, and with a separate check for each, the time
+-- would be exponential in the length of a chain of first entries.
+belowIndicator :: RenderOptions -> Node -> (Bool, Bool)
+belowIndicator opts x =
+  (isBlock opts x && (isJust (props x) || isJust x.comments.inline || firstHasLines), noFirstLines)
+  where
+    firstHasLines, noFirstLines :: Bool
+    (firstHasLines, noFirstLines) = case x.content of
+      SequenceContent _ (y : _) -> entry y y.comments.before
+      MappingContent _ ((k, v) : _) -> case implicitKey opts k of
+        Just _ -> let (above, _, _) = entryComments opts k v in (endsWithLine above, null above)
+        Nothing -> entry k k.comments.before
+      _ -> (False, True)
+
+    -- Whether the lines of the entry and those of its first entry, as in
+    -- 'aboveIndicator', end with a line other than an empty line, and whether
+    -- there are none. The lines of an entry that starts below its indicator
+    -- stay there. The lines of its first entry end with an empty line if it
+    -- has any, because otherwise the entry would start below its indicator.
+    entry :: Node -> [Line] -> (Bool, Bool)
+    entry y ls =
+      let (below, none) = if isBlock opts y then belowIndicator opts y else (False, True)
+      in (endsWithLine ls && not below && none, below || null ls && none)
+
+    endsWithLine :: [Line] -> Bool
+    endsWithLine ls = case reverse ls of
+      l : _ -> l /= EmptyLine
+      [] -> False
 
 -- | The first entry of a collection starts below its indicator.
 firstStartsBelow :: RenderOptions -> Node -> Bool

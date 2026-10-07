@@ -919,6 +919,13 @@ test_linesBelowIndicator = do
   rendersBack "below properties above a first item with a comment" "- !!seq\n  # h\n  - # b\n    - x\n"
   rendersBack "below an indicator above an explicit key with a comment" "- # a\n  # h\n  ? # b\n    - x\n  : v\n"
   rendersBack "below root properties above a first item with a comment" "!!seq\n# h\n- # b\n  - x\n"
+  -- A collection on the line of its indicator would take the lines of its
+  -- first entry, so it starts below the indicator.
+  ownersRenderBack "above a nested first item" [("/0/0", "before", "c")] "# c\n-\n  - 1\n"
+  rendersBack "above a nested first item, the text" "# c\n-\n  - 1\n"
+  ownersRenderBack "above a first key" [("/1/a:key", "before", "c")] "- x\n# c\n-\n  a: 1\n  b: 2\n"
+  rendersBack "above a first key, the text" "- x\n# c\n-\n  a: 1\n  b: 2\n"
+  rendersAs "above an explicit key" "- ?\n    # c\n    - a\n  : v\n" "-\n  ?\n    # c\n    - a\n  : v\n"
   ownersRenderBack "below the indicator of a scalar" [("/1", "before", "c")] "- a\n- !!str\n  # c\n  x\n"
   ownersRenderBack "below the indicator of an explicit key" [("/x:key", "before", "c")] "k: a\n? &k\n  # c\n  x\n: v\n"
   ownersRenderBack "below the indicator of an explicit value" [("/?/b:key", "before", "c")] "? a: 1\n: &x\n  # c\n  b: 2\n"
