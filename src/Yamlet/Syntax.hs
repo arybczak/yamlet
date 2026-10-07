@@ -202,23 +202,27 @@ foldedNode ls = contentNode (ScalarLinesContent Folded t starts)
 -- $endOfLine
 -- A comment at the end of a line belongs to the node that ends last before
 -- it on that line, if only spaces, a colon or a comma come between them.
--- E.g. the value gets the comment in @key: value # comment@, and the key
--- gets it in @key: # comment@. A comment on the line of a block scalar
--- header belongs to the block scalar.
+-- E.g. the value gets the comment in @key: value # comment@. In
+-- @key: # comment@, the key gets it if the value starts on a later line.
+-- Otherwise the value is empty and ends after the colon, so it gets the
+-- comment. A comment on the line of a block scalar header belongs to the
+-- block scalar.
 --
--- >>> input = "host: localhost # a\nports: # b\n- 80\ntext: | # c\n  Hello.\n"
+-- >>> input = "host: localhost # a\nports: # b\n- 80\nproxy: # c\ntext: | # d\n  Hello.\n"
 --
 -- >>> T.putStr input
 -- host: localhost # a
 -- ports: # b
 -- - 80
--- text: | # c
+-- proxy: # c
+-- text: | # d
 --   Hello.
 --
 -- >>> printComments input
 -- root.host (value) inline: "a"
 -- root.ports (key) inline: "b"
--- root.text (value) inline: "c"
+-- root.proxy (value) inline: "c"
+-- root.text (value) inline: "d"
 --
 -- A comment at the end of a line that the rule above does not give to a
 -- node, e.g. after @- @, belongs to the node below it. If that node also has
