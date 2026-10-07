@@ -133,7 +133,9 @@ renderSyntax opts = emptyLines . B.runBuilder . go True True
 
     -- A block scalar without content at the top level would take the lines
     -- below it in, also those of the next document if the flag tells that it
-    -- has lines above its start marker.
+    -- has lines above its start marker. It gets quotes also when an end
+    -- marker follows, which would end it, because the choice of the marker
+    -- looks at the root with the quotes. Only the style changes.
     topLevel :: Bool -> Node -> Node
     topLevel nextLines n = case n.content of
       ScalarLinesContent style t starts
