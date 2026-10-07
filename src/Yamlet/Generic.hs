@@ -489,8 +489,11 @@ class GenericYamlOptions a where
 --
 -- The value throws an exception if it is evaluated, e.g. if you use
 -- 'yamlDefault' directly. So the field must be 'requiredField' itself, not a
--- value that contains it, and the field must be lazy. With a strict field,
--- the decoder and the encoder of the type throw each time you use them.
+-- value that contains it, and the field must be lazy. The field of a newtype
+-- is not lazy, because the newtype is the value of its field. With a strict
+-- field or a newtype, the decoder and the encoder of the type throw each time
+-- you use them. To require the key of a type with one field, declare it with
+-- @data@.
 --
 -- With 'TaggedFlat', a field without a name has no key of its own, because
 -- its keys are next to the tag. Thus the type of the field decides about
@@ -519,13 +522,13 @@ defaultField x = case unsafeDupablePerformIO (uninterruptibleMask_ (try (evaluat
   Right _ -> Just x
 
 -- | An error if the 'yamlDefault' of the type has a 'requiredField' in a
--- strict field. Without the check, each field would look required, and a
+-- strict field or in the field of a newtype. Without the check, each field would look required, and a
 -- missing key would give the error of a field that has a default.
 checkDefault :: forall a. (GenericYamlOptions a, GDatatype (Rep a)) => ()
 checkDefault = case yamlDefault @a of
   Just d
     | isNothing (defaultField d) ->
-        error $ "requiredField in a strict field of the default of " ++ gDatatypeName @(Rep a)
+        error $ "requiredField in a strict field or a newtype of the default of " ++ gDatatypeName @(Rep a)
   _ -> ()
 -- Without the pragma, the derived encoders and decoders of lists and fields
 -- keep the generic dictionaries, and their inspection tests fail.

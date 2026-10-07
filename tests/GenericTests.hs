@@ -296,6 +296,13 @@ data Login = Login {user :: !T.Text, shell :: T.Text}
 instance GenericYamlOptions Login where
   yamlDefault = Just (Login requiredField "/bin/sh")
 
+newtype Port = Port {port :: Maybe Int}
+  deriving stock (Eq, Show, Generic)
+  deriving (FromYaml) via GenericYaml Port
+
+instance GenericYamlOptions Port where
+  yamlDefault = Just (Port requiredField)
+
 -- | A default with a field that waits for a gate, so that a test can
 -- interrupt the decoder while it checks the field.
 data Gated = Gated {gated :: Int, other :: Int}
@@ -794,12 +801,14 @@ test_requiredField = do
   assertEqual "present contents" (Right (Once 2)) (decodeText "tag: Once\ncontents: 2\n")
   assertEqual "missing contents" (Just (1, 1, "missing key \"contents\"")) (errorOf (decodeText @Task "tag: Once\n"))
   decoded <- try @ErrorCall (evaluate (length (show (decodeText @Login "user: x\nshell: y\n"))))
-  assertEqual "decoder with a strict field" (Left strictError) (first message decoded)
+  assertEqual "decoder with a strict field" (Left (strictError "Login")) (first message decoded)
   encoded <- try @ErrorCall (evaluate (T.length (encodeText (Login "x" "y"))))
-  assertEqual "encoder with a strict field" (Left strictError) (first message encoded)
+  assertEqual "encoder with a strict field" (Left (strictError "Login")) (first message encoded)
+  newtypeDecoded <- try @ErrorCall (evaluate (length (show (decodeText @Port "port: 1\n"))))
+  assertEqual "decoder of a newtype" (Left (strictError "Port")) (first message newtypeDecoded)
   where
-    strictError :: String
-    strictError = "requiredField in a strict field of the default of Login"
+    strictError :: String -> String
+    strictError name = "requiredField in a strict field or a newtype of the default of " ++ name
 
     -- The equality of 'ErrorCall' also compares the location of the call.
     message :: ErrorCall -> String
