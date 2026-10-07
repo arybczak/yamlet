@@ -159,8 +159,9 @@ import Yamlet.Value
 -- | Decode a stream with one document. An empty stream is null.
 --
 -- If the input has a syntax error or fails a check that 'decodeDocument'
--- describes, the result has only that error. Otherwise the result has every
--- error that the 'Parser' collects, in the order of their positions.
+-- describes, the result has only that error, with its notes, e.g. the first
+-- key of a duplicate key. Otherwise the result has every error that the
+-- 'Parser' collects, in the order of their positions.
 --
 -- >>> decode @[Int] "- 1\n- 2\n"
 -- Right [1,2]
