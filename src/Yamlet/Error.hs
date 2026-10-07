@@ -29,10 +29,10 @@ import Data.Text qualified as T
 import Data.Text.Array qualified as A
 import Data.Text.Internal qualified as T
 import GHC.Generics
-import Numeric
 
 import Yamlet.Internal.Chars
 import Yamlet.Internal.Syntax
+import Yamlet.Internal.Utils
 
 -- | An error of the parser or the decoder.
 --
@@ -283,28 +283,10 @@ renderPath path = case pathElements path of
     key :: T.Text -> String
     key k
       | not (T.null k) && T.all plain k && not (T.isPrefixOf "?" k || T.isPrefixOf "*" k) = T.unpack k
-      | otherwise = "\"" ++ concatMap escape (T.unpack k) ++ "\""
+      | otherwise = showText k
       where
         plain :: Char -> Bool
         plain c = notElem @[] c ".[]\"\\" && isPrint c && not (isSpace c)
-
-        -- The escapes of a double-quoted scalar, so that the path stays on
-        -- the line of the error.
-        escape :: Char -> String
-        escape c
-          | c == '"' || c == '\\' = ['\\', c]
-          | c == '\n' = "\\n"
-          | c == '\r' = "\\r"
-          | c == '\t' = "\\t"
-          | isPrint c = [c]
-          | ord c <= 0xFF = hex 'x' 2
-          | ord c <= 0xFFFF = hex 'u' 4
-          | otherwise = hex 'U' 8
-          where
-            hex :: Char -> Int -> String
-            hex p width =
-              let h = showHex (ord c) ""
-              in '\\' : p : replicate (width - length h) '0' ++ h
 
     index :: Int -> String
     index i = "[" ++ show i ++ "]"

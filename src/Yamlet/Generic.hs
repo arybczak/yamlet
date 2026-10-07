@@ -264,6 +264,7 @@ import System.IO.Unsafe
 import Yamlet.Internal.FromYaml
 import Yamlet.Internal.Syntax qualified as S
 import Yamlet.Internal.ToYaml
+import Yamlet.Internal.Utils
 import Yamlet.Internal.View
 import Yamlet.Value
 
@@ -1082,7 +1083,7 @@ gParseYaml opts enc def k n
     -- A string that is the tag of a constructor with fields.
     withoutValue :: T.Text -> Parser a
     withoutValue t
-      | t `elem` tags = failAt n $ "expected a mapping with the key " ++ show t ++ ", because the constructor has fields"
+      | t `elem` tags = failAt n $ "expected a mapping with the key " ++ showText t ++ ", because the constructor has fields"
       | otherwise = unknown n "constructor" t
 
     unknown :: S.Node -> String -> T.Text -> Parser a
@@ -1157,7 +1158,7 @@ instance
   gFromSingle opts def k t entry@(kn, v)
     | t /= constructorTagOf @name opts = Nothing
     | gNamed @f = Just (withMapping (fmap (k . M1) . fromObject opts False [] (unM1 <$> def)) v)
-    | gArity @f == 0 = Just (failAt kn $ "expected the string " ++ show t ++ ", because the constructor has no fields")
+    | gArity @f == 0 = Just (failAt kn $ "expected the string " ++ showText t ++ ", because the constructor has no fields")
     | otherwise = Just (k . M1 <$> gFromEntry entry)
   {-# INLINE gFromSingle #-}
 

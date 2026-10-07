@@ -357,7 +357,7 @@ scalar off props style t = case props.tag of
             $ "invalid value for the tag !!"
               ++ T.unpack (T.drop (T.length coreTagPrefix) tag)
               ++ if tag == boolTag && isYaml11Bool t
-                then ", " ++ show t ++ " is a boolean only in YAML 1.1"
+                then ", " ++ showText t ++ " is a boolean only in YAML 1.1"
                 else ""
 
 collectionTag :: S.Offset -> S.Props -> T.Text -> Either Failure T.Text
@@ -427,7 +427,7 @@ duplicateKey (kn, k) (firstNode, first) = (kn.offset, message) NE.:| [(firstNode
     keyText :: S.Node -> Value -> Maybe String
     keyText n v = case (n.content, v) of
       (S.AliasContent name, _) -> Just ('*' : T.unpack name)
-      (S.ScalarContent {}, String t) -> Just (show t)
+      (S.ScalarContent {}, String t) -> Just (showText t)
       (S.ScalarContent _ t, _) | not (T.null t) -> Just (T.unpack t)
       _ -> Nothing
 

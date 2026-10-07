@@ -321,7 +321,7 @@ withBool f = parseNode $ \n -> case view n of
     , isYaml11Bool t ->
         failAt n $
           "expected a boolean, but got the string "
-            ++ show t
+            ++ showText t
             ++ ", which is a boolean only in YAML 1.1, use true or false"
   _ -> typeMismatch "a boolean" n
 
@@ -510,7 +510,7 @@ withMapping f = parseNode $ \n -> case n.content of
           kv@(k, _) : rest -> case stringValue k of
             Just t -> case M.insertLookupWithKey (\_ _ old -> old) t kv m of
               (Just (first, _), _) ->
-                go m (bothErrors errs (OneError k.offset ("duplicate key " ++ show t) [(first.offset, "the first key " ++ show t)])) others rest
+                go m (bothErrors errs (OneError k.offset ("duplicate key " ++ showText t) [(first.offset, "the first key " ++ showText t)])) others rest
               (Nothing, m') -> go m' errs others rest
             Nothing -> case k.content of
               S.ScalarContent style t -> go m errs ((k, scalarValue k.props.tag style t) : others) rest
@@ -750,8 +750,8 @@ missingKey o key = Parser $ \off ->
   let Parser g = findKey o key
   in case g off of
        Result NoErrors _
-         | M.member "<<" o.index -> failure o.node.offset ("missing key " ++ show key ++ noMergeKeys)
-         | otherwise -> failure o.node.offset ("missing key " ++ show key)
+         | M.member "<<" o.index -> failure o.node.offset ("missing key " ++ showText key ++ noMergeKeys)
+         | otherwise -> failure o.node.offset ("missing key " ++ showText key)
        Result e _ -> Result e failed
 
 -- | Fail at each key that is not in the list. If a key in the list is close
@@ -799,17 +799,17 @@ rejectUnknownKeys known o
           | otherwise -> typeMismatch "a string as the key" k *> go unlisted rest
 
     unknown :: S.Node -> T.Text -> String -> Parser ()
-    unknown k t hint = failAt k $ "unknown key " ++ show t ++ hint
+    unknown k t hint = failAt k $ "unknown key " ++ showText t ++ hint
 
 -- | The error at the node for a name that is none of the known names, e.g.
 -- an unknown value, with the known name that is close to it, or else all
 -- known names.
 unknownName :: String -> [T.Text] -> S.Node -> T.Text -> Parser a
 unknownName what known n t =
-  failAt n $ "unknown " ++ what ++ " " ++ show t ++ maybe (expectedOneOf known) didYouMean (closeName known t)
+  failAt n $ "unknown " ++ what ++ " " ++ showText t ++ maybe (expectedOneOf known) didYouMean (closeName known t)
 
 didYouMean :: T.Text -> String
-didYouMean s = ", did you mean " ++ show s ++ "?"
+didYouMean s = ", did you mean " ++ showText s ++ "?"
 
 expectedOneOf :: [T.Text] -> String
 expectedOneOf known = ", expected one of: " ++ L.intercalate ", " (map T.unpack known)
@@ -1237,7 +1237,7 @@ insertUnique node item key insert start msg note xs = Parser $ \off -> go off st
     text :: S.Node -> String
     text n = case n.content of
       S.ScalarContent _ t
-        | Just s <- stringValue n -> ' ' : show s
+        | Just s <- stringValue n -> ' ' : showText s
         | not (T.null t) -> ' ' : T.unpack t
       _ -> ""
 

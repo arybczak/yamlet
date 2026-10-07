@@ -443,6 +443,10 @@ test_record = do
     (Just ((2, 6, "duplicate key \"name\""), (1, 1, "the first key \"name\"")))
     (errorWithNote (decodeText @Config "name: x\n!foo name: y\n"))
   assertEqual
+    "duplicate keys that are not ASCII"
+    (Just ((2, 1, "duplicate key \"ż\""), (1, 1, "the first key \"ż\"")))
+    (errorWithNote (decodeText @Value "ż: 1\nż: 2\n"))
+  assertEqual
     "several string keys with the same text and a bad field"
     [ (2, 1, "duplicate key \"name\"")
     , (1, 6, "the first key \"name\"")
@@ -1296,6 +1300,12 @@ test_collectedErrors = do
     , (3, 1, "unknown key \"bogus\", expected one of: name, paths, jobs")
     ]
     (errorsOf (decodeText @Config "name: x\njob: 1\nbogus: 2\n"))
+  assertEqual
+    "unknown keys that are not ASCII or do not print"
+    [ (2, 1, "unknown key \"zażółć\", expected one of: name, paths, jobs")
+    , (3, 1, "unknown key \"tab\\there\\x01\"")
+    ]
+    (errorsOf (decodeText @Config "name: x\nzażółć: 1\n\"tab\\there\\x01\": 2\n"))
   assertEqual
     "list of the known keys once"
     [ (2, 1, "unknown key \"foo\", expected one of: name, paths, jobs")

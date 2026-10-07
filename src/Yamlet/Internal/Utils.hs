@@ -21,6 +21,7 @@ module Yamlet.Internal.Utils
   , uEscapeDigits
   , bigUEscapeDigits
   , percentDigits
+  , showText
   , strictPair
   , strictMap
   , firstOfResult
@@ -31,6 +32,7 @@ import Data.Fixed
 import Data.Proxy
 import Data.Text qualified as T
 import Math.NumberTheory.Logarithms
+import Numeric
 
 #if !MIN_VERSION_text(2,1,4)
 import Data.Text.Internal qualified as T
@@ -136,6 +138,29 @@ bigUEscapeDigits = 8
 -- | The number of hex digits of a @%XX@ escape in a tag.
 percentDigits :: Int
 percentDigits = 2
+
+-- | The text in double quotes for a message, with the escapes of a
+-- double-quoted scalar for a quote, a backslash and a character that does
+-- not print, so that the message stays on one line. Unlike 'show', it keeps
+-- the other characters that are not ASCII, e.g. @"zażółć"@.
+showText :: T.Text -> String
+showText t = '"' : concatMap escape (T.unpack t) ++ "\""
+  where
+    escape :: Char -> String
+    escape c
+      | c == '"' || c == '\\' = ['\\', c]
+      | c == '\n' = "\\n"
+      | c == '\r' = "\\r"
+      | c == '\t' = "\\t"
+      | isPrint c = [c]
+      | ord c < 16 ^ xEscapeDigits = hex 'x' xEscapeDigits
+      | ord c < 16 ^ uEscapeDigits = hex 'u' uEscapeDigits
+      | otherwise = hex 'U' bigUEscapeDigits
+      where
+        hex :: Char -> Int -> String
+        hex p width =
+          let h = showHex (ord c) ""
+          in '\\' : p : replicate (width - length h) '0' ++ h
 
 -- | A pair with both components evaluated.
 strictPair :: a -> b -> (a, b)
