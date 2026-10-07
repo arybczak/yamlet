@@ -489,6 +489,10 @@ test_documents = do
     "comment above a document with directives"
     "a\n...\n\n# c\n%YAML 1.2\n---\nb\n"
     (renderSyntax defaultRenderOptions [document (plainNode "a"), commented (document (plainNode "b")) {version = Just (YamlVersion 1 2)}])
+  let flowWithLines = (document (contentNode (SequenceContent Flow [plainNode "a"]))) {docComments = noComments {after = [Comment "c"]}}
+      beforeDirectives = renderSyntax defaultRenderOptions [flowWithLines, (document (plainNode "b")) {version = Just (YamlVersion 1 2)}]
+  assertEqual "lines of a flow root above directives" "[a]\n...\n# c\n%YAML 1.2\n---\nb\n" beforeDirectives
+  rendersBack "lines of a flow root above directives, rendered again" beforeDirectives
   -- A block scalar without content would take the comment in.
   forM_ [Literal, Folded] $ \style ->
     assertEqual

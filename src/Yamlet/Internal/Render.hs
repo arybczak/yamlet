@@ -92,7 +92,7 @@ defaultRenderOptions =
 -- - 1
 -- - b: 2
 renderSyntax :: RenderOptions -> [Document] -> T.Text
-renderSyntax opts = emptyLines . B.runBuilder . go True True
+renderSyntax opts = emptyLines . B.runBuilder . go True
   where
     -- The empty lines at the start or the end of the output go away, because
     -- the parser gives the lines there to no node. The empty lines in the
@@ -120,16 +120,18 @@ renderSyntax opts = emptyLines . B.runBuilder . go True True
     dropEnd :: [T.Text] -> [T.Text]
     dropEnd = reverse . dropWhile (== emptyLine) . reverse
 
-    go :: Bool -> Bool -> [Document] -> B.Builder
-    go atStart afterEnd = \case
+    go :: Bool -> [Document] -> B.Builder
+    go atStart = \case
       [] -> mempty
       doc : docs ->
         let nextLines = case docs of
               next : _ -> not (null next.docComments.before)
               [] -> False
             prepared = validAnchors doc {root = topLevel nextLines (commentedBlocks doc.root)}
-            ends = writesEnd opts (not (null docs)) nextLines prepared
-        in document atStart afterEnd ends prepared <> go False ends docs
+            -- Directives need an end marker above them. The document above
+            -- writes it, so that its lines go where they read back from.
+            ends = any hasDirectives (take 1 docs) || writesEnd opts (not (null docs)) nextLines prepared
+        in document atStart ends prepared <> go False docs
 
     -- A block scalar without content at the top level would take the lines
     -- below it in, also those of the next document if the flag tells that it
@@ -144,14 +146,12 @@ renderSyntax opts = emptyLines . B.runBuilder . go True True
             n {content = ScalarLinesContent DoubleQuoted t starts}
       _ -> n
 
-    -- A document. The flags tell if it starts the stream, if it starts the
-    -- stream or follows a document end marker, and if it ends with a
-    -- document end marker.
-    document :: Bool -> Bool -> Bool -> Document -> B.Builder
-    document atStart afterEnd ends doc =
+    -- A document. The flags tell if it starts the stream and if it ends with
+    -- a document end marker.
+    document :: Bool -> Bool -> Document -> B.Builder
+    document atStart ends doc =
       mconcat
-        [ if needsEnd then "...\n" else mempty
-        , gap
+        [ gap
         , lines_ 0 doc.docComments.before
         , if directives
             then
@@ -185,17 +185,11 @@ renderSyntax opts = emptyLines . B.runBuilder . go True True
         handles :: [Char]
         handles = tagHandles r
 
-        -- The parser rejects the other versions.
         version :: Maybe YamlVersion
-        version = case doc.version of
-          Just v | v.major == 1, v.minor >= 0, v.minor <= maxVersion -> Just v
-          _ -> Nothing
+        version = supportedVersion doc
 
         directives :: Bool
         directives = isJust version || not (null handles)
-
-        needsEnd :: Bool
-        needsEnd = not afterEnd && directives
 
         -- A document needs a start marker after another document, after
         -- directives, for a comment on the marker line, and if it is empty. A
@@ -363,6 +357,17 @@ validAnchors doc
     -- YAML 1.1 reads U+2028 and U+2029 as line breaks.
     isAnchorChar :: Char -> Bool
     isAnchorChar c = isPrintable c && c /= ' ' && c /= '\x2028' && c /= '\x2029' && not (asciiChar isFlowIndicator c)
+
+-- | The version of the document if the parser accepts it. The parser
+-- rejects the other versions.
+supportedVersion :: Document -> Maybe YamlVersion
+supportedVersion doc = case doc.version of
+  Just v | v.major == 1, v.minor >= 0, v.minor <= maxVersion -> Just v
+  _ -> Nothing
+
+-- | The document starts with directives: a version or a tag handle.
+hasDirectives :: Document -> Bool
+hasDirectives doc = isJust (supportedVersion doc) || not (null (tagHandles doc.root))
 
 -- | The document ends with a @...@ marker. The flags tell if another
 -- document follows and if it has lines above its start marker.
