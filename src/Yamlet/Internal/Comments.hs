@@ -90,7 +90,7 @@ attachComments e first hasNext start marker rootEnd end doc
             (Just t, is)
       _ -> (Nothing, afterMarker)
 
-    (root', leftover) = attachNode e (rootEnd - e.base) 0 (rootStart, rootLine) doc.root rest
+    (root', leftover) = attachNode e (rootEnd - e.base) 0 (rootStart, rootLine) [] doc.root rest
 
     (below, afterEnd) = span (\i -> i.at < rootEnd - e.base) leftover
 
@@ -269,9 +269,13 @@ offsetOf (Offset o) = o
 -- | Attach the comments to a node and the nodes inside it. The limit is the
 -- offset of the next node, and the column is the smallest one for the lines
 -- after the last entry of a block collection. The pair is an offset at or
--- before the node and the start of its line.
-attachNode :: Env -> Int -> Int -> (Int, Int) -> Node -> [Item] -> (Node, [Item])
-attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, items5)
+-- before the node and the start of its line. The first list holds the lines
+-- on their own above the node that its parent gave to it, in reverse. They
+-- are not in the items, so that a chain of nested first entries passes them
+-- down without a walk over them at each level, which would make the time
+-- quadratic.
+attachNode :: Env -> Int -> Int -> (Int, Int) -> [Item] -> Node -> [Item] -> (Node, [Item])
+attachNode e limit minColumn known above n items0 = node `seq` items5 `seq` (node, items5)
   where
     node :: Node
     node =
@@ -291,12 +295,12 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
     -- The lines above the node. A comment at the end of a line that no node
     -- took, e.g. in "- # comment" above a mapping, belongs to the node. It is
     -- a line above the node if the node has a comment on its own line.
-    (pre, items1) =
+    (pre, toEntry, items1) =
       let (ls, rest) = span (\i -> i.at < s) items0
       in case n.content of
            SequenceContent Block (_ : _) | startsLine -> toFirstEntry ls rest
            MappingContent Block (_ : _) | startsLine -> toFirstEntry ls rest
-           _ -> (ls, rest)
+           _ -> (reverse above ++ ls, [], rest)
 
     -- A collection after "- " on the same line keeps the lines above the
     -- indicator, so that a comment above an item stays with the item. The walk
@@ -312,12 +316,15 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
           | isWhite (A.unsafeIndex e.array (i - 1)) = go (i - 1)
           | otherwise = False
 
-    -- The lines on their own after the last empty line go to the first entry.
-    toFirstEntry :: [Item] -> [Item] -> ([Item], [Item])
+    -- The lines on their own after the last empty line go to the first entry,
+    -- in reverse.
+    toFirstEntry :: [Item] -> [Item] -> ([Item], [Item], [Item])
     toFirstEntry ls rest =
       let (ownLines, others) = span (.own) (reverse ls)
           (entry, kept) = break isEmptyLine ownLines
-      in (reverse (kept ++ others), reverse entry ++ rest)
+      in case (kept, others) of
+           ([], []) -> ([], entry ++ above, rest)
+           _ -> (reverse (kept ++ others ++ above), entry, rest)
 
     fallbackItem :: Maybe Item
     fallbackItem = case reverse (filter (not . (.own)) pre) of
@@ -405,21 +412,21 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
       in (concatMap itemLines (reverse taken'), reverse empties, rest)
 
     sequenceItems :: CollectionStyle -> [Node] -> [Item] -> ([Node], [Item])
-    sequenceItems style = go []
+    sequenceItems style = go [] toEntry
       where
         -- The nodes are in reverse, so that the list is evaluated when the
         -- result is.
-        go :: [Node] -> [Node] -> [Item] -> ([Node], [Item])
-        go acc [] is = let !xs = reverse acc in (xs, is)
-        go acc (x : rest) is =
+        go :: [Node] -> [Item] -> [Node] -> [Item] -> ([Node], [Item])
+        go acc _ [] is = let !xs = reverse acc in (xs, is)
+        go acc xAbove (x : rest) is =
           let next = nextStart x rest
-              !(x', is') = attachNode e next (entryColumn style) (s, lineStart) x is
+              !(x', is') = attachNode e next (entryColumn style) (s, lineStart) xAbove x is
               !(x'', is'')
                 -- A list without indentation has no column of its own for the
                 -- lines after its last item, so they stay with the list.
                 | style == Block && not (null rest && minColumn > column) = linesBelow next x' is'
                 | otherwise = (x', is')
-          in go (x'' : acc) rest is''
+          in go (x'' : acc) [] rest is''
 
         nextStart :: Node -> [Node] -> Int
         nextStart x = \case
@@ -429,19 +436,19 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
           [] -> if style == Flow then en else limit
 
     mappingEntries :: CollectionStyle -> [(Node, Node)] -> [Item] -> ([(Node, Node)], [Item])
-    mappingEntries style = go []
+    mappingEntries style = go [] toEntry
       where
         -- The entries are in reverse, as in 'sequenceItems'.
-        go :: [(Node, Node)] -> [(Node, Node)] -> [Item] -> ([(Node, Node)], [Item])
-        go acc [] is = let !kvs = reverse acc in (kvs, is)
-        go acc ((k, v) : rest) is =
+        go :: [(Node, Node)] -> [Item] -> [(Node, Node)] -> [Item] -> ([(Node, Node)], [Item])
+        go acc _ [] is = let !kvs = reverse acc in (kvs, is)
+        go acc kAbove ((k, v) : rest) is =
           let next = nextStart v rest
-              !(k', is') = attachNode e (keyLimit k v) (entryColumn style) (s, lineStart) k is
-              !(v', is'') = attachNode e next (entryColumn style) (s, lineStart) v is'
+              !(k', is') = attachNode e (keyLimit k v) (entryColumn style) (s, lineStart) kAbove k is
+              !(v', is'') = attachNode e next (entryColumn style) (s, lineStart) [] v is'
               !(v'', is''')
                 | style == Block = linesBelow next v' is''
                 | otherwise = (v', is'')
-          in go ((k', v'') : acc) rest is'''
+          in go ((k', v'') : acc) [] rest is'''
 
         nextStart :: Node -> [(Node, Node)] -> Int
         nextStart v = \case

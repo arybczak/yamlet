@@ -25,6 +25,7 @@ renderTests =
     , testCase "lines of scalars" test_scalarLines
     , slow $ testCase "many invalid anchor names" test_manyAnchors
     , slow $ testCase "deep comment" test_deepComment
+    , slow $ testCase "comments above nesting" test_commentsAboveNesting
     , slow $ testCase "many escaped line breaks" test_escapedBreaks
     , testGroup
         "comments"
@@ -368,6 +369,32 @@ test_deepComment =
 
     indent :: T.Text
     indent = T.replicate (2 * (depth - 1)) " "
+
+-- | The time to attach the comment lines above nested lists, each on its own
+-- line, is linear in the number of lines, not in the number of lines times
+-- the depth.
+test_commentsAboveNesting :: Assertion
+test_commentsAboveNesting =
+  assertEqual
+    "lines above the innermost item"
+    (Right [replicate count (Comment "c")])
+    (map (innermostLines . (.root)) <$> parseDocumentsText input)
+  where
+    count, depth :: Int
+    count = 100000
+    depth = 2000
+
+    input :: T.Text
+    input =
+      T.replicate count "# c\n"
+        <> T.concat [T.replicate i " " <> "-\n" | i <- [0 .. depth - 1]]
+        <> T.replicate depth " "
+        <> "a\n"
+
+    innermostLines :: Node -> [Line]
+    innermostLines n = case n.content of
+      SequenceContent _ (x : _) -> innermostLines x
+      _ -> n.comments.before
 
 -- | The time to render a double-quoted scalar whose escaped line breaks all
 -- join their lines is linear in the number of lines.
