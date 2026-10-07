@@ -37,6 +37,7 @@ import Data.Text qualified as T
 import Data.Text.Builder.Linear qualified as B
 import Data.Text.Builder.Linear.Buffer qualified as B
 import Data.Text.Encoding qualified as T
+import Data.Text.Internal qualified as T
 import Numeric
 
 import Yamlet.Internal.Chars
@@ -213,7 +214,15 @@ flowLines quoted escapes white starts t = case splitLines starts t of
       [] -> (a, [])
       b : rest -> case lineEnd isFirst (null rest) a b of
         Just (a', end) -> let (l, ls) = go False b rest in (a', (end, l) : ls)
-        Nothing -> go isFirst (a <> b) rest
+        Nothing -> go isFirst (join a b) rest
+
+    -- The pieces of 'splitLines' follow each other in the array of the text,
+    -- so two of them join without a copy. A copy at each join would make the
+    -- time quadratic in the number of lines.
+    join :: T.Text -> T.Text -> T.Text
+    join (T.Text arr off len) b@(T.Text _ _ len')
+      | len == 0 = b
+      | otherwise = T.Text arr off (len + len')
 
     -- The first line without the text that the line break replaces, and the
     -- number of empty lines.

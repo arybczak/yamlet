@@ -24,6 +24,7 @@ renderTests =
     , testCase "lines of scalars" test_scalarLines
     , slow $ testCase "many invalid anchor names" test_manyAnchors
     , slow $ testCase "deep comment" test_deepComment
+    , slow $ testCase "many escaped line breaks" test_escapedBreaks
     , testGroup
         "comments"
         [ testCase "attachment" test_attachment
@@ -328,6 +329,18 @@ test_deepComment =
 
     indent :: T.Text
     indent = T.replicate (2 * (depth - 1)) " "
+
+-- | The time to render a double-quoted scalar whose escaped line breaks all
+-- join their lines is linear in the number of lines.
+test_escapedBreaks :: Assertion
+test_escapedBreaks =
+  assertEqual
+    "output"
+    (Right ("k: \"a" <> T.replicate count " b" <> "\\\n  c\"\n"))
+    (renderSyntax defaultRenderOptions <$> parseDocumentsText ("k: \"a\\\n" <> T.replicate count "  \\ b\\\n" <> "  c\"\n"))
+  where
+    count :: Int
+    count = 300000
 
 test_forceBlock :: Assertion
 test_forceBlock = do
