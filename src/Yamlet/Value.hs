@@ -71,9 +71,9 @@ data Value
     -- back as @Int 1@. A value that does not fit a tag of the core schema,
     -- e.g. a v'String' with 'intTag', does not read back. YAML has no
     -- syntax for the empty tag or a tag of one character, e.g. @x@ or @!@.
-    -- The encoder writes such a tag as the non-specific tag @!@, and the
-    -- value reads back without 'Tagged'. A node has one tag, so the encoder
-    -- writes only the outer tag of a 'Tagged' value inside another, e.g.
+    -- The encoder drops such a tag, so the value reads back without it, e.g.
+    -- @Tagged "" (Int 1)@ reads back as @Int 1@. A node has one tag, so the
+    -- encoder writes only the outermost tag that it does not drop, e.g.
     -- @Tagged "!a" (Tagged "!b" (Sequence []))@ reads back as
     -- @Tagged "!a" (Sequence [])@.
     Tagged !T.Text !Value

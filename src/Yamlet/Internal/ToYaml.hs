@@ -512,7 +512,11 @@ toSyntax :: Value -> S.Node
 toSyntax = \case
   Sequence xs -> S.sequenceNode (map toSyntax xs)
   Mapping kvs -> S.mappingNode [(toSyntax k, toSyntax v) | (k, v) <- kvs]
-  Tagged tag v -> (toSyntax v) {S.props = S.Props Nothing (S.Tag tag)}
+  Tagged tag v
+    | T.compareLength tag 1 == GT -> (toSyntax v) {S.props = S.Props Nothing (S.Tag tag)}
+    -- YAML has no syntax for such a tag. The non-specific tag ! would make
+    -- the value a string in YAML 1.2, but not in YAML 1.1 parsers.
+    | otherwise -> toSyntax v
   v -> scalar v
 
 -- | A scalar in a style that reads back as the value. A collection is empty.

@@ -377,6 +377,11 @@ test_tags = do
     "%TAG !t74! %74\n---\n!t74!ag:example.com%2C2000:a%2520b x\n"
     (encodeText (Tagged "tag:example.com,2000:a%20b" (String "x")))
   assertEqual "verbatim tag" "!<http://example.com/a> x\n" (encodeText (Tagged "http://example.com/a" (String "x")))
+  -- YAML 1.1 parsers read the non-specific tag ! as no tag, e.g. "! 12" as
+  -- an integer, and YAML 1.2 as a string.
+  assertEqual "empty tag" "12\n" (encodeText (Tagged "" (Int 12)))
+  assertEqual "tag of one character" "'yes'\n" (encodeText (Tagged "!" (String "yes")))
+  assertEqual "empty tag around a tag" "!b x\n" (encodeText (Tagged "" (Tagged "!b" (String "x"))))
   assertEqual
     "directives after a document"
     (Right [strTag, "foo"])
