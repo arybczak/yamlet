@@ -62,7 +62,7 @@
 --       deriving (FromYaml, ToYaml) via GenericYaml Workflow
 --     :}
 --
---     >>> input = "# The name in the UI.\nname: build # short\nmatrix:\n  # Each system runs the jobs.\n  os: [linux, macos]\n"
+--     >>> input = "# The name in the UI.\nname: build # short\nmatrix:\n  # Each system runs the jobs.\n  os: [linux, macos]\n  ghc: ['9.10', '9.12']\n"
 --
 --     >>> T.putStr input
 --     # The name in the UI.
@@ -70,6 +70,7 @@
 --     matrix:
 --       # Each system runs the jobs.
 --       os: [linux, macos]
+--       ghc: ['9.10', '9.12']
 --
 --     >>> Right workflow = decodeText @Workflow input
 --
@@ -85,6 +86,7 @@
 --     matrix:
 --       # Each system runs the jobs.
 --       os: [linux, macos]
+--       ghc: ['9.10', '9.12']
 module Yamlet
   ( -- * Decoding
     decode
