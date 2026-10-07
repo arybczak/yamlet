@@ -464,12 +464,15 @@ block opts indent afterColumn atLineStart hoisted chainWritten carried n = case 
     --
     -- The parser gives the lines above and below the indicator of a block
     -- collection that starts below it to the collection up to the last empty
-    -- line, and the rest to its first entry. Above the indicator of a first
-    -- entry, the collection around it takes the lines up to the last empty
-    -- line, so the lines of a first entry go below its indicator. A comment
-    -- on the line of the indicator of a later entry keeps the lines above it
-    -- from the first entry, so the lines of the first entry after the last
-    -- empty line go below the indicator.
+    -- line, and the rest to its first entry. A comment on the line of the
+    -- indicator keeps the lines above it from the first entry. Above the
+    -- indicator of a first entry, the collection around it takes the lines
+    -- up to the last empty line. So the lines of the collection after the
+    -- last empty line go above the indicator if it has a comment and nothing
+    -- else takes them there. Otherwise an empty line after them keeps them
+    -- from the first entry, above the indicator of a later entry and below
+    -- the indicator of a first entry. Without lines of the collection, the
+    -- given lines go to its first entry.
     --
     -- The lines of the first entry also read back the same above the
     -- indicator, if they have no empty line and no node between them and the
@@ -483,7 +486,8 @@ block opts indent afterColumn atLineStart hoisted chainWritten carried n = case 
     indicatorLines isFirst given x
       | startsBelow opts x =
           let ls = given ++ x.comments.before
-              aboveFirst = isFirst && null ls && atLineStart && not hoisted && not chainWritten
+              lineStart = atLineStart && not hoisted && not chainWritten
+              aboveFirst = isFirst && null ls && lineStart
           in if
                | firstStartsBelow opts x ->
                    let (own, rest) = splitAtLastEmptyLine ls
@@ -491,9 +495,11 @@ block opts indent afterColumn atLineStart hoisted chainWritten carried n = case 
                    in if
                         | isFirst && chainWritten -> ([], own, rest, True)
                         | aboveFirst, Just ls' <- lifted -> (ls', [], [], True)
-                        | not isFirst, null rest, Just ls' <- lifted -> (own ++ ls', [], [], True)
-                        | isFirst -> ([], own, rest, False)
-                        | otherwise -> (own, [], rest, False)
+                        | not isFirst, Just ls' <- lifted -> (separated ls ++ ls', [], [], True)
+                        | null x.comments.before -> ([], own, rest, False)
+                        | isJust x.comments.inline, not isFirst || null own && lineStart -> (ls, [], [], False)
+                        | isFirst -> ([], separated ls, [], False)
+                        | otherwise -> (separated ls, [], [], False)
                | isFirst && chainWritten -> ([], separated ls, [], False)
                | aboveFirst, Just ls' <- liftable (Just (firstLines opts x)) -> (ls', [], [], False)
                | isFirst -> ([], separated ls ++ firstLines opts x, [], False)

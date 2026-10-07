@@ -898,6 +898,10 @@ test_linesBelowIndicator = do
   rendersBack "above a second item with nested first items" "- x\n# c\n- !a\n  - !b\n    - 2\n"
   rendersBack "above an explicit key with an anchor" "# c\n? &a\n  - a\n: b\n"
   rendersBack "below a first item with a comment on its line" "- &a # i\n  # c\n  k: v\n"
+  -- A comment on the line of the indicator keeps the lines above it from
+  -- the first entries.
+  rendersBack "above a first item with a comment and nested first items" "# c\n- # d\n  - !!map\n    k: v\n"
+  rendersBack "above a second item with a comment and nested first items" "- x\n# c\n\n# e\n- # d\n  - &b\n    - y\n"
   ownersRenderBack "below the indicator of a scalar" [("/1", "before", "c")] "- a\n- !!str\n  # c\n  x\n"
   ownersRenderBack "below the indicator of an explicit key" [("/x:key", "before", "c")] "k: a\n? &k\n  # c\n  x\n: v\n"
   ownersRenderBack "below the indicator of an explicit value" [("/?/b:key", "before", "c")] "? a: 1\n: &x\n  # c\n  b: 2\n"
@@ -917,6 +921,12 @@ test_linesBelowIndicator = do
     "lines of a first item below its indicator"
     (Right [[("/0", "before", "a"), ("/0", "inline", "i")]])
     (map commentsOf <$> parseDocumentsText (render (sequenceNode [list {comments = noComments {before = [Comment "a"], inline = Just "i"}}])))
+  let anchored :: Node -> Node
+      anchored n = n {props = noProps {anchor = Just "x"}}
+  assertEqual
+    "lines of a first item with nested first items"
+    (Right [[("/0", "before", "a")]])
+    (map commentsOf <$> parseDocumentsText (render (sequenceNode [withAbove (anchored (sequenceNode [anchored list]))])))
   assertEqual "lines of a block value below its key" "k:\n# a\n\n- 1\n" (render (mappingNode [(plainNode "k", withAbove list)]))
   assertEqual
     "lines of a block value below its key read back"
