@@ -525,6 +525,14 @@ block opts indent afterColumn atLineStart hoisted chainWritten carried n = case 
                         | otherwise -> (separated ls, [], [], False)
                | isFirst && chainWritten -> ([], separated ls, [], False)
                | aboveFirst, Just ls' <- liftable (Just (firstLines opts x)) -> (ls', [], [], False)
+               -- An empty line above the indicator would give the lines up to
+               -- it to the collection around, and one below it would give them
+               -- to this collection.
+               | isFirst
+               , isJust x.comments.inline
+               , lineStart
+               , EmptyLine `notElem` ls ++ firstLines opts x ->
+                   (ls, firstLines opts x, [], False)
                | isFirst -> ([], separated ls ++ firstLines opts x, [], False)
                | isJust x.comments.inline ->
                    let (above, below) = splitAtLastEmptyLine (firstLines opts x)

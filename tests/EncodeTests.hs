@@ -588,10 +588,10 @@ test_commentedKeys = do
     (Right quotedLinesAfter)
     (encodeText <$> decodeText @(M.Map T.Text (Commented T.Text)) quotedLinesAfter)
   let linesAbove = [Commented @[Int] [1, 2] noComments {before = [Comment "above"], inline = Just "inline"}]
-  assertEqual "lines above a commented list item" "- # inline\n  # above\n\n  - 1\n  - 2\n" (encodeText linesAbove)
+  assertEqual "lines above a commented list item" "# above\n- # inline\n  - 1\n  - 2\n" (encodeText linesAbove)
   assertEqual
     "lines above a commented list item read back"
-    (Right [noComments {before = [Comment "above", EmptyLine], inline = Just "inline"}])
+    (Right [noComments {before = [Comment "above"], inline = Just "inline"}])
     (map (.comments) <$> decodeText @[Commented [Int]] (encodeText linesAbove))
 
 -- | The faster renderer of the encoder gives the same output as the renderer

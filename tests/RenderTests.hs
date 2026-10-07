@@ -902,6 +902,9 @@ test_linesBelowIndicator = do
   -- the first entries.
   rendersBack "above a first item with a comment and nested first items" "# c\n- # d\n  - !!map\n    k: v\n"
   rendersBack "above a second item with a comment and nested first items" "- x\n# c\n\n# e\n- # d\n  - &b\n    - y\n"
+  rendersBack "above a first item with a comment" "# c\n- # d\n  # f\n  - a\n"
+  rendersBack "above a first item with a comment under a key" "k:\n# c\n- # d\n  - a\n"
+  rendersBack "above an explicit key with a comment" "# c\n? # d\n  - a\n: v\n"
   ownersRenderBack "below the indicator of a scalar" [("/1", "before", "c")] "- a\n- !!str\n  # c\n  x\n"
   ownersRenderBack "below the indicator of an explicit key" [("/x:key", "before", "c")] "k: a\n? &k\n  # c\n  x\n: v\n"
   ownersRenderBack "below the indicator of an explicit value" [("/?/b:key", "before", "c")] "? a: 1\n: &x\n  # c\n  b: 2\n"
