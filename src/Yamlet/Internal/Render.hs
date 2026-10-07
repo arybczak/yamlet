@@ -199,10 +199,10 @@ renderSyntax opts = emptyLines . B.runBuilder . go True True
 
         -- A document needs a start marker after another document, after
         -- directives, for a comment on the marker line, and if it is empty. A
-        -- block collection has no line of its own for its comment. Without
-        -- the marker, the lines above a document read back as the root's.
-        -- YAML 1.2 needs no marker after an end marker, but YAML 1.1 parsers
-        -- do.
+        -- block collection without properties has no line of its own for its
+        -- comment. Without the marker, the lines above a document read back
+        -- as the root's. YAML 1.2 needs no marker after an end marker, but
+        -- YAML 1.1 parsers do.
         marker :: Bool
         marker =
           doc.explicitStart
@@ -211,18 +211,41 @@ renderSyntax opts = emptyLines . B.runBuilder . go True True
             || isEmpty r
             || not (null doc.docComments.before)
             || isJust doc.docComments.inline
-            || (isBlock opts r && isJust r.comments.inline)
+            || (isBlock opts r && isJust r.comments.inline && isNothing propsLine)
+
+        -- The properties of a block collection with its comment on their
+        -- line, which keeps the lines above it from the first entry.
+        propsLine :: Maybe B.Builder
+        propsLine = case props r of
+          Just p | isBlock opts r, Just c <- r.comments.inline -> Just (p <> comment (Just c))
+          _ -> Nothing
 
         -- The marker line holds one comment. The comment of a block
         -- collection goes below it if the document has one too.
         (markerComment, rootLines) = case (doc.docComments.inline, r.comments.inline) of
+          (dc, _) | isJust propsLine -> (dc, r.comments.before)
           (Just dc, Just rc) | isBlock opts r -> (Just dc, Comment rc : r.comments.before)
           (dc, rc) -> (dc <|> (if isBlock opts r then rc else Nothing), r.comments.before)
 
+        startMarker :: B.Builder
+        startMarker = if marker then "---" <> comment markerComment <> "\n" else mempty
+
+        -- Below the line of the properties with a comment, the root takes the
+        -- lines up to the last empty line, as below an indicator, so these
+        -- lines of the first entry go above the properties. A first entry
+        -- that starts below its indicator has its lines there.
         body :: B.Builder
         body
+          | Just p <- propsLine =
+              let (above, below) = splitAtLastEmptyLine (firstLines opts r)
+              in startMarker
+                   <> lines_ 0 (rootLines ++ above)
+                   <> p
+                   <> "\n"
+                   <> lines_ 0 below
+                   <> block opts 0 0 True (not (firstStartsBelow opts r)) False [] r
           | isBlock opts r =
-              (if marker then "---" <> comment markerComment <> "\n" else mempty)
+              startMarker
                 <> lines_ 0 (separated rootLines ++ (if isJust (props r) then firstLines opts r else []))
                 <> maybe mempty (<> "\n") (props r)
                 <> block opts 0 0 True (isJust (props r)) False [] r

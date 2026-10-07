@@ -992,6 +992,12 @@ test_movedComments = do
     "comment on a block root"
     "--- # c\na: 1\n"
     (render (withInline "c" (mappingNode [(plainNode "a", plainNode "1")])))
+  rendersBack "comment on the properties of a block root" "# r\n!!map # c\n# f\na: 1\n"
+  rendersBack "comment on the properties of a block root below a marker with a comment" "--- # d\n&a # c\n- x\n"
+  rendersAs
+    "lines below the properties of a block root with a comment"
+    "# e\n\n!!map # c\n# f\na: 1\n"
+    "!!map # c\n# e\n\n# f\na: 1\n"
   let rootWithLines = withBefore "r" (mappingNode [(plainNode "a", plainNode "1")])
   assertEqual "lines of a block root without an empty line" "# r\n\na: 1\n" (render rootWithLines)
   assertEqual
