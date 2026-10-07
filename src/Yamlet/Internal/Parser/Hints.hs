@@ -52,7 +52,9 @@ unexpected tabs input i = case if tabs then indentationTab (i - 1) Nothing else 
       | byteBefore e i == STAR && not (isAnchorChar w) -> "expected an alias name after '*'"
       | byteBefore e i == AMP && not (isAnchorChar w) -> "expected an anchor name after '&'"
       | w == 0 -> "unexpected end of input"
-      | indented -> fromMaybe "unexpected indentation" indentationMistake
+      | indented, Just msg <- indentationMistake -> msg
+      | indented, Just msg <- mistakeIn e False i -> msg
+      | indented, not alignedWithEntry -> "unexpected indentation"
       | isBreak w -> "unexpected end of line"
       | i > e.base && isBreak (byteBefore e i), Just msg <- indentationMistake -> msg
       | w == COLON && firstColon && not (fitsKey e entryStart i) ->
@@ -262,6 +264,14 @@ unexpected tabs input i = case if tabs then indentationTab (i - 1) Nothing else 
               SPACE -> go (j - 1)
               w -> isBreak w
 
+    -- The index is at the column of a list item or a key on a line above, so
+    -- the content is the mistake, not the indentation. A line of a block
+    -- scalar above is neither.
+    alignedWithEntry :: Bool
+    alignedWithEntry = case entryAbove (i - lineStartAt e i) (lineStartAt e i) of
+      Just k -> isListItem k || any isKeyColon [k .. lineContentEnd e k - 1]
+      Nothing -> False
+
     -- The first tab before the content of the line of the index, as in
     -- "\tkey: value". A plain scalar can follow a tab, but a key cannot.
     tabBeforeContent :: Maybe Int
@@ -290,7 +300,7 @@ unexpected tabs input i = case if tabs then indentationTab (i - 1) Nothing else 
     blockMistake :: Maybe (Int, String)
     blockMistake = do
       guard $ start < stop
-      k <- entryAbove (lineStartAt e stop)
+      k <- entryAbove column (lineStartAt e stop)
       if
         | isListItem k && byteAt e start == MINUS && stop == start + 1 ->
             Just (stop, "expected a space after '-'")
@@ -323,19 +333,6 @@ unexpected tabs input i = case if tabs then indentationTab (i - 1) Nothing else 
         column :: Int
         column = start - lineStartAt e stop
 
-        -- The closest entry above that starts at the column. An entry can
-        -- follow "- " on its line, as in "- key: value".
-        entryAbove :: Int -> Maybe Int
-        entryAbove from = do
-          k <- lineAbove from
-          let indent = k - lineStartAt e k
-              entry = skipListItems k
-          if
-            | indent == column -> Just k
-            | entry - lineStartAt e k == column -> Just entry
-            | indent < column -> Nothing
-            | otherwise -> entryAbove (lineStartAt e k)
-
         -- A colon before a word, as in "key:value", but not in "http://".
         tightColon :: Int -> Bool
         tightColon j = byteAt e j == COLON && startsWord (byteAt e (j + 1))
@@ -347,6 +344,19 @@ unexpected tabs input i = case if tabs then indentationTab (i - 1) Nothing else 
             || b == DQUOTE
             || b == LBRACKET
             || b == LBRACE
+
+    -- The closest entry above the line that starts at the index, at the
+    -- column. An entry can follow "- " on its line, as in "- key: value".
+    entryAbove :: Int -> Int -> Maybe Int
+    entryAbove column from = do
+      k <- lineAbove from
+      let indent = k - lineStartAt e k
+          entry = skipListItems k
+      if
+        | indent == column -> Just k
+        | entry - lineStartAt e k == column -> Just entry
+        | indent < column -> Nothing
+        | otherwise -> entryAbove column (lineStartAt e k)
 
     -- The error for content at the index that starts a line with a wrong
     -- indentation, if the lines above show the likely mistake: a list item

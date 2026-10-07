@@ -848,6 +848,15 @@ test_syntaxErrors = do
   let check :: String -> (Int, Int, String) -> T.Text -> Assertion
       check preface expected input = assertEqual preface (Just expected) (errorOf (decodeAllText @Value input))
   check "bad indentation" (3, 2, "unexpected indentation") "a:\n  b: 1\n c: 2\n"
+  check
+    "indicator at the indentation of a key"
+    (3, 3, "unexpected '@', a plain scalar cannot start with it, quote the value")
+    "dependencies:\n  typescript: ^5.0.0\n  @types/node: ^20.0.0\n"
+  check
+    "indicator on an indented first line"
+    (1, 3, "unexpected '@', a plain scalar cannot start with it, quote the value")
+    "  @b: c\n"
+  check "bracket at the indentation of a list item" (3, 3, "unexpected ']'") "a:\n  - b\n  ]\n"
   -- The BOM at the start of the input is not content of the first line.
   forM_
     [ ("colon in an alias", (1, 3, "the name of the alias includes the ':', write a space before ':' if the alias is a key"), "*x: 1")
