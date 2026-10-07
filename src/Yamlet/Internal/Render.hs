@@ -242,7 +242,7 @@ renderSyntax opts = emptyLines . B.runBuilder . go True
               startMarker
                 <> lines_ 0 (separated rootLines ++ (if isJust (props r) then firstLines opts r else []))
                 <> maybe mempty (<> "\n") (props r)
-                <> block opts 0 0 True (isJust (props r)) False [] r
+                <> block opts 0 0 True (isJust (props r) && not (firstStartsBelow opts r)) False [] r
           | otherwise = scalarBody <> linesBelow 0 r
 
         scalarBody :: B.Builder
@@ -617,7 +617,7 @@ after opts indent column chainWritten below rest n
             <> comment n.comments.inline
             <> "\n"
             <> lines_ (indent + indentStep) below
-            <> block opts (indent + indentStep) (indent + indentStep) True True chainWritten rest n
+            <> block opts (indent + indentStep) (indent + indentStep) True (not (firstStartsBelow opts n)) chainWritten rest n
         else " " <> block opts (indent + indentStep) (indent + indentStep) False True False [] n
   | isEmpty n = comment n.comments.inline <> "\n" <> linesBelow column n
   | otherwise =
