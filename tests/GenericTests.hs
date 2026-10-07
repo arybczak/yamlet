@@ -198,6 +198,23 @@ instance GenericYamlOptions Order where
   type SumEncoding Order = TaggedFlat
   yamlOptions = defaultYamlOptions {rejectUnknownFields = False}
 
+-- | Another contents key.
+data Volume = Level Int | Mute
+  deriving stock (Eq, Show, Generic)
+  deriving (FromYaml, ToYaml) via GenericYaml Volume
+
+instance GenericYamlOptions Volume where
+  yamlOptions = defaultYamlOptions {contentsKey = "value"}
+
+-- | The flat encoding with another contents key, which is the key of a field.
+data Parcel = Sent Speed | Held Int | Packaged Box
+  deriving stock (Eq, Show, Generic)
+  deriving (FromYaml, ToYaml) via GenericYaml Parcel
+
+instance GenericYamlOptions Parcel where
+  type SumEncoding Parcel = TaggedFlat
+  yamlOptions = defaultYamlOptions {contentsKey = "speed"}
+
 -- | The flat encoding of a mapping that an alias elsewhere can refer to.
 data Shared = Shared Node | Unshared
   deriving stock (Eq, Show, Generic)
@@ -673,6 +690,17 @@ test_options = do
     (errorOf (decodeText @Strict "size: 1\n2: x\n"))
   assertEqual "tag key and modifiers" "command: forward\nstep_count: 3\n" (encodeText (Forward 3))
   roundTrip "tag key and modifiers" (Forward 3)
+  assertEqual "contents key" "tag: Level\nvalue: 3\n" (encodeText (Level 3))
+  roundTrip "contents key" [Level 3, Mute]
+  assertEqual "missing contents key" (Just (1, 1, "missing key \"value\"")) (errorOf (decodeText @Volume "tag: Level\n"))
+  assertEqual
+    "default contents key"
+    [(1, 1, "missing key \"value\""), (2, 1, "unknown key \"contents\", expected one of: tag, value")]
+    (errorsOf (decodeText @Volume "tag: Level\ncontents: 3\n"))
+  assertEqual "flat contents key" "tag: Sent\nspeed:\n  speed: 1\n" (encodeText (Sent (Speed 1)))
+  assertEqual "flat contents key without a mapping" "tag: Held\nspeed: 5\n" (encodeText (Held 5))
+  assertEqual "flat default contents key" "tag: Packaged\ncontents: 1\n" (encodeText (Packaged (Box 1)))
+  roundTrip "flat contents key" [Sent (Speed 1), Held 5, Packaged (Box 1)]
 
 test_missingContents :: Assertion
 test_missingContents = do
