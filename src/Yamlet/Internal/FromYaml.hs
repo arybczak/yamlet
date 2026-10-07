@@ -973,9 +973,9 @@ instance FromYaml a => FromYaml (S.Located a) where
 
 -- | The value of the node, with the tags resolved and the aliases replaced.
 instance FromYaml Value where
-  parseYaml n = case represent n of
+  parseYaml n = case representPrepared n of
     -- The value is built lazily. The copy visits a node once per alias of
-    -- it, as the limit of 'represent' allows.
+    -- it, as the limit of 'prepare' allows.
     Right r -> pure $! copy r
     Left ((off, msg) NE.:| notes) -> Parser $ \_ -> Result (OneError off msg notes) failed
     where

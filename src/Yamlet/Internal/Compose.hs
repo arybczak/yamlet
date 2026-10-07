@@ -9,7 +9,7 @@ module Yamlet.Internal.Compose
   ( prepare
   , prepareWithin
   , aliasLimit
-  , represent
+  , representPrepared
   , Failure
   , noMergeKeys
   ) where
@@ -41,12 +41,8 @@ prepare root = firstOfResult $ prepareWithin (aliasLimit [root]) 0 root
 -- document.
 prepareWithin :: Int -> Int -> S.Node -> Either Failure (S.Node, Int)
 prepareWithin limit added root
-  | needsNumbering root = (\(_, added') -> (expandAliases root, added')) <$> representWithin limit added root
+  | needsNumbering root = (expandAliases root,) <$> numberWithin limit added root
   | otherwise = (root, added) <$ check root
-
--- | The value of a node, with the checks of 'prepare'.
-represent :: S.Node -> Either Failure Value
-represent root = firstOfResult $ representWithin (aliasLimit [root]) 0 root
 
 -- | The limit of the visits of a traversal that the aliases of the documents
 -- can add together: as many visits as the documents have, or a fixed minimum
@@ -75,34 +71,15 @@ syntaxSize n = case n.content of
 scalarVisits :: T.Text -> Int
 scalarVisits t = 1 + T.length t
 
--- | 'represent' with the visits of the aliases as for 'prepareWithin'. The
--- limit is evaluated only at an alias, so that the size of a document
--- without aliases is not computed.
-representWithin :: Int -> Int -> S.Node -> Either Failure (Value, Int)
-representWithin limit added root
-  | needsNumbering root = do
-      ((v, _), st) <- go (Numbering M.empty M.empty 0 added) root
-      Right (v, st.added)
-  | otherwise = (,added) <$> plain root
+-- | The checks of 'prepareWithin' for a node with aliases or collection keys,
+-- which compare by the numbers of their values, and the visits that the
+-- aliases added. The limit is evaluated only at an alias, so that the size
+-- of a document without aliases is not computed.
+numberWithin :: Int -> Int -> S.Node -> Either Failure Int
+numberWithin limit added root = do
+  (_, st) <- go (Numbering M.empty M.empty 0 added) root
+  Right st.added
   where
-    -- Without aliases the anchors do not matter, and without collection keys
-    -- only scalar keys compare.
-    plain :: S.Node -> Either Failure Value
-    plain sn =
-      let off = sn.offset; props = sn.props
-      in case sn.content of
-           S.ScalarContent style t -> scalar off props style t
-           S.SequenceContent _ xs -> do
-             tag <- collectionTag off props seqTag
-             vs <- mapEither plain xs
-             Right $ withTag tag (Sequence vs)
-           S.MappingContent _ kvs -> do
-             tag <- collectionTag off props mapTag
-             entries <- mapEither (\(k, v) -> (,) <$> plain k <*> plain v) kvs
-             checkUniqueKeys (zip (map fst kvs) (map fst entries))
-             Right $ withTag tag (Mapping entries)
-           S.AliasContent _ -> Left $ failure off "unexpected alias"
-
     -- Each value comes with its number.
     go :: Numbering -> S.Node -> Either Failure ((Value, Int), Numbering)
     go st sn =
@@ -207,6 +184,26 @@ representWithin limit added root
             Just first -> Left $ duplicateKey (kn, k) first
             Nothing -> loop (IM.insert i (kn, k) seen) rest
 
+-- | The value of a node that passed 'prepare', so it has no aliases and its
+-- keys are unique already.
+representPrepared :: S.Node -> Either Failure Value
+representPrepared = go
+  where
+    go :: S.Node -> Either Failure Value
+    go sn =
+      let off = sn.offset; props = sn.props
+      in case sn.content of
+           S.ScalarContent style t -> scalar off props style t
+           S.SequenceContent _ xs -> do
+             tag <- collectionTag off props seqTag
+             vs <- mapEither go xs
+             Right $ withTag tag (Sequence vs)
+           S.MappingContent _ kvs -> do
+             tag <- collectionTag off props mapTag
+             entries <- mapEither (\(k, v) -> (,) <$> go k <*> go v) kvs
+             Right $ withTag tag (Mapping entries)
+           S.AliasContent _ -> Left $ failure off "unexpected alias"
+
 -- | 'mapM' for 'Either', with a stack that does not grow with the length of
 -- the list.
 mapEither :: forall a e b. (a -> Either e b) -> [a] -> Either e [b]
@@ -226,7 +223,8 @@ type Failure = NE.NonEmpty (S.Offset, String)
 failure :: S.Offset -> String -> Failure
 failure off msg = (off, msg) NE.:| []
 
--- | The checks of 'represent' for a node without aliases and collection keys.
+-- | The checks of 'numberWithin' for a node without aliases and collection
+-- keys.
 -- Only the keys get values, for the comparison.
 check :: S.Node -> Either Failure ()
 check sn =
@@ -260,8 +258,8 @@ check sn =
 -- inside the copy have the offsets of the alias too, so that an error inside
 -- the copy names the place and the path where the document uses the value,
 -- and not those of the anchor. They have no comments, because the comments
--- are at the anchor already. The node must pass 'represent', so every alias
--- refers to an earlier anchor.
+-- are at the anchor already. The node must pass 'numberWithin', so every
+-- alias refers to an earlier anchor.
 expandAliases :: S.Node -> S.Node
 expandAliases = fst . go M.empty
   where
