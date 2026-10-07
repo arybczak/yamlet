@@ -803,7 +803,7 @@ inline opts pos indent n lineComment = case n.content of
             [ "? "
             , inline opts InFlowKey indent k Nothing
             , if
-                | isEmpty v -> mempty
+                | isEmpty v -> afterTag k
                 | isEmpty k -> ": " <> flowValue v
                 | otherwise -> " : " <> flowValue v
             ]
@@ -817,13 +817,15 @@ inline opts pos indent n lineComment = case n.content of
             | T.compareLength t ((maxImplicitKeyLength - 2) `div` (2 + bigUEscapeDigits)) /= GT -> True
           _ -> T.compareLength (B.runBuilder (inline opts InFlowKey indent k Nothing)) maxImplicitKeyLength /= GT
 
+    flowValue :: Node -> B.Builder
+    flowValue x = inline opts itemPos indent x Nothing <> afterTag x
+
     -- YAML 1.1 parsers read a comma or a bracket right after a tag as part
     -- of the tag.
-    flowValue :: Node -> B.Builder
-    flowValue x =
-      inline opts itemPos indent x Nothing <> case x.content of
-        ScalarContent Plain t | T.null t, x.props.tag /= NoTag -> " "
-        _ -> mempty
+    afterTag :: Node -> B.Builder
+    afterTag x = case x.content of
+      ScalarContent Plain t | T.null t, x.props.tag /= NoTag -> " "
+      _ -> mempty
 
     commas :: [B.Builder] -> B.Builder
     commas = \case

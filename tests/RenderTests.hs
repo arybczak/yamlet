@@ -242,6 +242,12 @@ test_fallbacks = do
     "flow key that an anchor makes long"
     ("{? &anchor " <> T.replicate 1020 "a" <> " : 1}\n")
     (render (flowEntry anchoredKey (plainNode "1")))
+  let longTag = "!" <> T.replicate 1100 "t"
+      longTagged = (plainNode "") {props = noProps {tag = Tag longTag}}
+  assertEqual
+    "flow key that a tag makes long, without a value"
+    ("{? " <> longTag <> " , b: c}\n")
+    (render (contentNode (MappingContent Flow [(longTagged, plainNode ""), (plainNode "b", plainNode "c")])))
   assertEqual
     "long flow keys read back"
     (Right [Mapping [(String long, Int 1)], Mapping [(String long, Null)], Mapping [(String (T.replicate 1020 "a"), Int 1)]])
