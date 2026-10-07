@@ -1,13 +1,18 @@
 # The default extensions of yamlet.cabal.
 - arguments:
     - -XGHC2021
+    - -XDataKinds
+    - -XDeriveAnyClass
     - -XDerivingStrategies
+    - -XDerivingVia
     - -XDuplicateRecordFields
     - -XLambdaCase
     - -XMultiWayIf
     - -XNoFieldSelectors
     - -XOverloadedRecordDot
     - -XOverloadedStrings
+    - -XTypeFamilies
+    - -XUndecidableInstances
 
 # GHC does not specialize elem, so it compares through the dictionary of Eq.
 - ignore: {name: Use elem}
