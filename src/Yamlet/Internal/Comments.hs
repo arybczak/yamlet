@@ -26,15 +26,23 @@ import Yamlet.Internal.Parser.Scan
 import Yamlet.Internal.Syntax
 import Yamlet.Internal.Utils
 
--- | A comment or an empty line. The indices are offsets of the input.
+-- | A comment or empty lines. The indices are offsets of the input.
 data Item = Item
   { at :: !Int
-  -- ^ The index of the @#@, or of the start of the empty line.
+  -- ^ The index of the @#@, or of the start of the first empty line.
   , lineStart :: !Int
   , own :: !Bool
   -- ^ Nothing else is on the line.
   , line :: !Line
+  , count :: !Int
+  -- ^ The number of lines. One item holds the empty lines that follow each
+  -- other, because the nested collections hand the empty lines at their end
+  -- to each other, and one by one the time would be quadratic.
   }
+
+-- | The lines of the item.
+itemLines :: Item -> [Line]
+itemLines i = replicate i.count i.line
 
 -- | Attach the comments of a document, and return the lines at its end that
 -- belong to the next document. The flags tell if the document is the first
@@ -49,7 +57,7 @@ attachComments e first hasNext start marker rootEnd end doc
       ( doc
           { docComments =
               strictComments
-                ((if first then dropWhile (== EmptyLine) else id) (map (.line) docItems))
+                ((if first then dropWhile (== EmptyLine) else id) (concatMap itemLines docItems))
                 markerComment
                 docEnd
           , root = root''
@@ -102,7 +110,7 @@ attachComments e first hasNext start marker rootEnd end doc
       | otherwise = break (== EmptyLine) rootLines
       where
         rootLines :: [Line]
-        rootLines = (if holdsLines then root'.comments.after else []) ++ map (.line) below
+        rootLines = (if holdsLines then root'.comments.after else []) ++ concatMap itemLines below
 
     root'' :: Node
     root''
@@ -114,9 +122,9 @@ attachComments e first hasNext start marker rootEnd end doc
     -- Only the lines below a @...@ marker can be at the end of the stream.
     docEnd :: [Line]
     docEnd
-      | holdsLines = atEnd (map (.line) afterEnd)
-      | doc.explicitEnd = endLines ++ atEnd (map (.line) afterEnd)
-      | otherwise = atEnd (endLines ++ map (.line) afterEnd)
+      | holdsLines = atEnd (concatMap itemLines afterEnd)
+      | doc.explicitEnd = endLines ++ atEnd (concatMap itemLines afterEnd)
+      | otherwise = atEnd (endLines ++ concatMap itemLines afterEnd)
 
     -- The empty lines at the end of the stream belong to no node.
     atEnd :: [Line] -> [Line]
@@ -142,8 +150,25 @@ attachComments e first hasNext start marker rootEnd end doc
     -- ranges. The offsets of the items are relative to the start of the
     -- input.
     scanItems :: [(Int, Int)] -> [Item]
-    scanItems = go start start False
+    scanItems = runs . go start start False
       where
+        runs :: [Item] -> [Item]
+        runs = \case
+          i : is | isEmptyLine i -> run i 1 i.at is
+          i : is -> i : runs is
+          [] -> []
+
+        -- The empty lines from the first item, with the start of the last
+        -- one. A line joins them only if it comes right after the last one,
+        -- so that no node is between them.
+        run :: Item -> Int -> Int -> [Item] -> [Item]
+        run i0 n lastAt = \case
+          i : is
+            | isEmptyLine i
+            , i.at + e.base == breakEnd e (skipWhites e (lastAt + e.base)) ->
+                run i0 (n + 1) i.at is
+          is -> Item i0.at i0.lineStart True EmptyLine n : runs is
+
         -- The flag tells if the line has something other than white space.
         go :: Int -> Int -> Bool -> [(Int, Int)] -> [Item]
         go i ls content ranges
@@ -166,7 +191,7 @@ attachComments e first hasNext start marker rootEnd end doc
                           if w == CR && i + 1 < end && A.unsafeIndex e.array (i + 1) == LF
                             then i + 2
                             else i + 1
-                        item = [Item (ls - e.base) (ls - e.base) True EmptyLine | not content]
+                        item = [Item (ls - e.base) (ls - e.base) True EmptyLine 1 | not content]
                     in item ++ go j j False ranges
                 | w == HASH && (i == ls || isWhite (A.unsafeIndex e.array (i - 1))) ->
                     let eol = lineEnd i
@@ -174,7 +199,7 @@ attachComments e first hasNext start marker rootEnd end doc
                         -- the first #, because 'Comments' has no count for it.
                         textStart = if content then i + 1 else hashesEnd i
                         text = T.stripEnd . dropSpace $ slice e textStart eol
-                    in Item (i - e.base) (ls - e.base) (not content) (CommentLine (textStart - i) text)
+                    in Item (i - e.base) (ls - e.base) (not content) (CommentLine (textStart - i) text) 1
                          : go eol ls True ranges
                 | isWhite w -> go (i + 1) ls content ranges
                 | otherwise -> go (i + 1) ls True ranges
@@ -251,7 +276,7 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
     node :: Node
     node =
       n
-        { comments = strictComments [i.line | i <- pre, isJust own || not (isFallback i)] (own <|> fallback) afterLines
+        { comments = strictComments [l | i <- pre, isJust own || not (isFallback i), l <- itemLines i] (own <|> fallback) afterLines
         , content = content'
         }
 
@@ -370,14 +395,14 @@ attachNode e limit minColumn known n items0 = node `seq` items5 `seq` (node, ite
     takeLines ok is =
       let (taken, rest) = span ok is
           (empties, taken') = span isEmptyLine (reverse taken)
-      in (map (.line) (reverse taken'), reverse empties ++ rest)
+      in (concatMap itemLines (reverse taken'), reverse empties ++ rest)
 
     -- The lines before the closing bracket.
     flowAfter :: [Item] -> ([Line], [Item], [Item])
     flowAfter is =
       let (taken, rest) = span (\i -> i.at < en) is
           (empties, taken') = span isEmptyLine (reverse taken)
-      in (map (.line) (reverse taken'), reverse empties, rest)
+      in (concatMap itemLines (reverse taken'), reverse empties, rest)
 
     sequenceItems :: CollectionStyle -> [Node] -> [Item] -> ([Node], [Item])
     sequenceItems style = go []
