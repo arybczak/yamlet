@@ -426,9 +426,10 @@ data SumEncodingKind
     -- t'Yamlet.Commented' value. 'TaggedObject' keeps them.
     --
     -- The decoder reads a mapping with the contents key as with
-    -- 'TaggedObject', and the other keys are unknown keys. If the flat form
-    -- fails and a key is close to the contents key, e.g. @contnets@, the
-    -- errors are those of 'TaggedObject', e.g. the missing contents key.
+    -- 'TaggedObject', and the other keys are unknown keys. Without the
+    -- contents key, the other keys are the field, so a field that is not a
+    -- mapping needs the contents key. An error at the mapping itself, e.g.
+    -- that an integer is not a mapping, has a note at the tag that says so.
     --
     -- The keys of the mapping belong to the field, so the options of its
     -- type apply to them, e.g. 'Yamlet.Generic.rejectUnknownFields'.
@@ -1180,13 +1181,7 @@ fromObject opts flat keys def o
   | flat
   , not (null others)
   , not (any (isKey opts.contentsKey . fst) others) =
-      -- After an error, a key close to the contents key, e.g. a misspelled
-      -- one, gives the error of the missing contents key instead. The check
-      -- is slow, so it runs only after an error.
-      merged
-        `orElse` if any (isJust . closeName [opts.contentsKey]) (mapMaybe (stringValue . fst) others)
-          then checked [opts.contentsKey] (missingKey o opts.contentsKey)
-          else merged
+      flatField
   | otherwise = checked [opts.contentsKey] $ case M.lookup opts.contentsKey o.index of
       Just entry -> gFromEntry entry
       -- A missing contents key is null, if the fields accept null. A flat
@@ -1195,13 +1190,25 @@ fromObject opts flat keys def o
       Nothing
         | Just fields <- gDefaultValue =<< def -> pure fields
         | isJust def, not flat -> missingKey o opts.contentsKey
-        | flat -> maybe merged pure (succeeds gFromValue nullNode)
+        | flat -> maybe flatField pure (succeeds gFromValue nullNode)
         | otherwise -> maybe (missingKey o opts.contentsKey) pure (succeeds gFromValue nullNode)
   where
     -- The fields, with the errors of the unknown keys if the options reject
     -- them.
     checked :: [T.Text] -> Parser (f p) -> Parser (f p)
     checked fields = (when opts.rejectUnknownFields (rejectUnknownKeys (keys ++ fields) o) *>)
+
+    -- An error at the mapping itself, e.g. of a field that is not a mapping,
+    -- does not show that the field is the mapping, so a note at the tag says
+    -- it.
+    flatField :: Parser (f p)
+    flatField =
+      withNote
+        (objectNode o).offset
+        ( maybe S.noOffset (.offset) (lookupKey opts.tagKey o)
+        , "without the key " ++ showText opts.contentsKey ++ ", the other keys of this mapping are the field"
+        )
+        merged
 
     -- The field decodes from the mapping without the given keys, and without
     -- the comments of the mapping, which the record drops.

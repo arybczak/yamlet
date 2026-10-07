@@ -52,9 +52,9 @@ module Yamlet.Internal.FromYaml
   , parseEntry
   , findKey
   , missingKey
-  , closeName
   , unknownName
   , succeeds
+  , withNote
   , nullNode
   ) where
 
@@ -250,6 +250,19 @@ succeeds :: (S.Node -> Parser a) -> S.Node -> Maybe a
 succeeds f n = case runChecked f n of
   Result NoErrors a -> Just a
   Result _ _ -> Nothing
+
+-- | The parser with the note after each of its errors at the offset, e.g. to
+-- say how the decoder read the node of the error.
+withNote :: S.Offset -> (S.Offset, String) -> Parser a -> Parser a
+withNote off note (Parser g) = Parser $ \o -> case g o of
+  r@(Result NoErrors _) -> r
+  Result e a -> Result (addNote e) a
+  where
+    addNote :: Errors -> Errors
+    addNote = \case
+      OneError eo msg notes | eo == off -> OneError eo msg (notes ++ [note])
+      BothErrors e1 e2 -> BothErrors (addNote e1) (addNote e2)
+      e -> e
 
 -- | Run a parser on a node, so that 'fail' points to the node.
 parseNode :: (S.Node -> Parser a) -> S.Node -> Parser a

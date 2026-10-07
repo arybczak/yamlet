@@ -197,6 +197,19 @@ instance GenericYamlOptions Order where
   type SumEncoding Order = TaggedFlat
   yamlOptions = defaultYamlOptions {rejectUnknownFields = False}
 
+-- | The flat encoding of a field with a key close to the contents key.
+data Event = Opened Issue | Closed
+  deriving stock (Eq, Show, Generic)
+  deriving (FromYaml, ToYaml) via GenericYaml Event
+
+instance GenericYamlOptions Event where
+  type SumEncoding Event = TaggedFlat
+
+data Issue = Issue {title :: T.Text, comments :: [T.Text]}
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Issue
+
 newtype Distance = Distance {distance :: Maybe Int}
   deriving stock (Eq, Show, Generic)
   deriving anyclass (GenericYamlOptions)
@@ -677,29 +690,36 @@ test_flatten = do
     , Packed (Crate 1 2)
     ]
   assertEqual "missing field" (Right (Ahead (Distance Nothing))) (decodeText "step: Ahead\n")
+  let flatNote :: Int -> (Int, Int, String)
+      flatNote column = (1, column, "without the key \"contents\", the other keys of this mapping are the field")
   assertEqual
     "error in a field"
-    (Just (1, 1, "missing key \"speed\""))
-    (errorOf (decodeText @Step "step: Accelerate\n"))
+    [(1, 1, "missing key \"speed\""), flatNote 7]
+    (errorsOf (decodeText @Step "step: Accelerate\n"))
   assertEqual
     "misspelled field"
-    [(1, 1, "missing key \"speed\""), (2, 1, "unknown key \"sped\", did you mean \"speed\"?")]
+    [(1, 1, "missing key \"speed\""), flatNote 7, (2, 1, "unknown key \"sped\", did you mean \"speed\"?")]
     (errorsOf (decodeText @Step "step: Accelerate\nsped: 2\n"))
   assertEqual
     "misspelled contents key"
-    [(1, 1, "missing key \"contents\""), (2, 1, "unknown key \"contnets\", did you mean \"contents\"?")]
+    [(1, 1, "expected an integer, but got a mapping"), flatNote 7]
     (errorsOf (decodeText @Step "step: Wait\ncontnets: 5\n"))
+  assertEqual
+    "error in a field with a key close to the contents key"
+    [(2, 8, "expected a string, but got a list")]
+    (errorsOf (decodeText @Event "tag: Opened\ntitle: [1]\ncomments: [first]\n"))
+  roundTrip "field with a key close to the contents key" (Opened (Issue "a" ["b"]))
   assertEqual
     "other key next to the contents key"
     [(3, 1, "unknown key \"extra\", expected one of: step, contents")]
     (errorsOf (decodeText @Step "step: Wait\ncontents: 5\nextra: 1\n"))
   assertEqual
     "misspelled field with unknown keys ignored by the outer type only"
-    [(1, 1, "missing key \"speed\""), (2, 1, "unknown key \"sped\", did you mean \"speed\"?")]
+    [(1, 1, "missing key \"speed\""), flatNote 6, (2, 1, "unknown key \"sped\", did you mean \"speed\"?")]
     (errorsOf (decodeText @Order "tag: Hasten\nsped: 2\n"))
   assertEqual
     "misspelled contents key with unknown keys ignored"
-    [(1, 1, "missing key \"contents\"")]
+    [(1, 1, "expected an integer, but got a mapping"), flatNote 6]
     (errorsOf (decodeText @Order "tag: Hold\ncontnets: 5\n"))
   assertEqual
     "other key next to the contents key with unknown keys ignored"
@@ -709,6 +729,7 @@ test_flatten = do
   assertEqual
     "duplicate tag keys reported once"
     [ (1, 1, "missing key \"step\"")
+    , flatNote 7
     , (2, 4, "duplicate key \"step\"")
     , (1, 1, "the first key \"step\"")
     , (3, 4, "duplicate key \"step\"")
