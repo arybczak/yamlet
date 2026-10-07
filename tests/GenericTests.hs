@@ -15,6 +15,7 @@ import Test.Tasty.QuickCheck
 
 import Helpers
 import Yamlet
+import Yamlet.Syntax qualified as S
 
 genericTests :: TestTree
 genericTests =
@@ -196,6 +197,19 @@ data Order = Hold Int | Hasten Speed
 instance GenericYamlOptions Order where
   type SumEncoding Order = TaggedFlat
   yamlOptions = defaultYamlOptions {rejectUnknownFields = False}
+
+-- | The flat encoding of a mapping that an alias elsewhere can refer to.
+data Shared = Shared Node | Unshared
+  deriving stock (Eq, Show, Generic)
+  deriving (FromYaml, ToYaml) via GenericYaml Shared
+
+instance GenericYamlOptions Shared where
+  type SumEncoding Shared = TaggedFlat
+
+data Route = Route {first :: Shared, again :: Node}
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Route
 
 -- | The flat encoding of a field with a key close to the contents key.
 data Event = Opened Issue | Closed
@@ -737,6 +751,20 @@ test_flatten = do
     [(2, 8, "expected a string, but got a list")]
     (errorsOf (decodeText @Event "tag: Opened\ntitle: [1]\ncomments: [first]\n"))
   roundTrip "field with a key close to the contents key" (Opened (Issue "a" ["b"]))
+  let entry = S.mappingNode [(S.plainNode "k", S.plainNode "v")]
+      anchored = entry {S.props = S.noProps {S.anchor = Just "x"}}
+      route = encodeText (Route (Shared anchored) (S.contentNode (S.AliasContent "x")))
+  assertEqual "mapping without an anchor" "tag: Shared\nk: v\n" (encodeText (Shared entry))
+  assertEqual "mapping with an anchor" "first:\n  tag: Shared\n  contents: &x\n    k: v\nagain: *x\n" route
+  assertEqual
+    "alias to a mapping with an anchor read back"
+    ( Right $
+        Mapping
+          [ (String "first", Mapping [(String "tag", String "Shared"), (String "contents", Mapping [(String "k", String "v")])])
+          , (String "again", Mapping [(String "k", String "v")])
+          ]
+    )
+    (decodeText @Value route)
   assertEqual
     "other key next to the contents key"
     [(3, 1, "unknown key \"extra\", expected one of: step, contents")]
