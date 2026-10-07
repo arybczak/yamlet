@@ -304,11 +304,12 @@ unexpected tabs input i = case if tabs then indentationTab (i - 1) Nothing else 
       if
         | isListItem k && byteAt e start == MINUS && stop == start + 1 ->
             Just (stop, "expected a space after '-'")
-        | not (isListItem k) && (w == 0 || isBreak w || stop < i) && not (any isKeyColon [start .. stop - 1]) ->
-            Just $ case filter tightColon [start .. stop - 1] of
-              _ | openQuote -> (stop, "a key must be on a single line")
-              colon : _ -> (colon + 1, "expected a space after ':'")
-              [] -> (stop, "expected ':' after the key")
+        | not (isListItem k) && (w == 0 || isBreak w || stop < i) && not (any isKeyColon [afterKey .. stop - 1]) ->
+            Just $ case (keyEnd, filter tightColon [afterKey .. stop - 1]) of
+              (Nothing, _) -> (start, "unterminated " ++ quotedName ++ " scalar")
+              (Just end, _) | end > stop -> (stop, "a key must be on a single line")
+              (_, colon : _) -> (colon + 1, "expected a space after ':'")
+              (_, []) -> (stop, "expected ':' after the key")
         | otherwise -> Nothing
       where
         -- The parser fails at a comment after the content, as in "key # note".
@@ -317,12 +318,34 @@ unexpected tabs input i = case if tabs then indentationTab (i - 1) Nothing else 
           | byteAt e i == HASH && isWhite (byteBefore e i) = skipBackWhites e i
           | otherwise = i
 
-        -- The line starts a quoted scalar that does not end on it, as in "a
-        -- quoted key on two lines".
-        openQuote :: Bool
-        openQuote =
-          let q = byteAt e start
-          in (q == DQUOTE || q == SQUOTE) && q `notElem` [byteAt e j | j <- [start + 1 .. stop - 1]]
+        -- The index after the quoted scalar that starts the line, or the start
+        -- of the line without a quote, or 'Nothing' if the scalar does not
+        -- end. A colon inside the scalar does not end a key.
+        keyEnd :: Maybe Int
+        keyEnd
+          | quote == DQUOTE || quote == SQUOTE = closing (start + 1)
+          | otherwise = Just start
+          where
+            closing :: Int -> Maybe Int
+            closing j
+              | j >= e.end = Nothing
+              | quote == SQUOTE && b == SQUOTE && byteAt e (j + 1) == SQUOTE = closing (j + 2)
+              | quote == DQUOTE && b == BACKSLASH = closing (j + 2)
+              | b == quote = Just (j + 1)
+              | otherwise = closing (j + 1)
+              where
+                b :: Word8
+                b = byteAt e j
+
+        -- The index after the key on the line.
+        afterKey :: Int
+        afterKey = fromMaybe stop keyEnd
+
+        quote :: Word8
+        quote = byteAt e start
+
+        quotedName :: String
+        quotedName = if quote == DQUOTE then "double-quoted" else "single-quoted"
 
         w :: Word8
         w = byteAt e stop
