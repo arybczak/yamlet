@@ -144,8 +144,8 @@ test-suite test
                     , yamlet
                     , scientific
                     , tasty
-                    , tasty-hunit
-                    , tasty-quickcheck
+                    , tasty-hunit >= 0.10
+                    , tasty-quickcheck >= 0.8.1
                     , text
                     , time
                     , uuid-types
