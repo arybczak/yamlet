@@ -880,6 +880,14 @@ test_linesBelowIndicator = do
       ownersRenderBack :: String -> [(String, String, T.Text)] -> T.Text -> Assertion
       ownersRenderBack preface expected input = owners preface expected input >> check preface input
   ownersRenderBack "below the indicator of a second item" [("/jobs/1/name:key", "before", "c")] "jobs:\n- name: a\n- &b\n  # c\n  name: b\n"
+  -- The lines of the first entries read back the same above the indicator,
+  -- where they stay.
+  ownersRenderBack "above a first item with an anchor" [("/jobs/0/name:key", "before", "c")] "jobs:\n# c\n- &b\n  name: b\n"
+  rendersBack "above a first item with an anchor, the text" "jobs:\n# c\n- &b\n  name: b\n"
+  rendersBack "above nested first items with tags" "# c\n- !a\n  - !b\n    - 2\n"
+  rendersBack "above a second item with nested first items" "- x\n# c\n- !a\n  - !b\n    - 2\n"
+  rendersBack "above an explicit key with an anchor" "# c\n? &a\n  - a\n: b\n"
+  rendersBack "below a first item with a comment on its line" "- &a # i\n  # c\n  k: v\n"
   ownersRenderBack "below the indicator of a scalar" [("/1", "before", "c")] "- a\n- !!str\n  # c\n  x\n"
   ownersRenderBack "below the indicator of an explicit key" [("/x:key", "before", "c")] "k: a\n? &k\n  # c\n  x\n: v\n"
   ownersRenderBack "below the indicator of an explicit value" [("/?/b:key", "before", "c")] "? a: 1\n: &x\n  # c\n  b: 2\n"

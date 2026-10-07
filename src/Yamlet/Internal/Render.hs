@@ -223,7 +223,7 @@ renderSyntax opts = emptyLines . B.runBuilder . go True True
               (if marker then "---" <> comment markerComment <> "\n" else mempty)
                 <> lines_ 0 (separated rootLines ++ (if isJust (props r) then firstLines opts r else []))
                 <> maybe mempty (<> "\n") (props r)
-                <> block opts 0 0 True (isJust (props r)) [] r
+                <> block opts 0 0 True (isJust (props r)) False [] r
           | otherwise = scalarBody <> linesBelow 0 r
 
         scalarBody :: B.Builder
@@ -414,10 +414,12 @@ isFlowCollection opts n = case n.content of
 -- | The entries of a block collection at the given indentation, and the lines
 -- after them at the given column. The first entry does not start with
 -- indentation if the collection continues a line, and the lines above it are
--- not written if the caller wrote them already. The given lines go to the
--- first entry if it starts below its indicator, as in @indicatorLines@.
-block :: RenderOptions -> Int -> Int -> Bool -> Bool -> [Line] -> Node -> B.Builder
-block opts indent afterColumn atLineStart hoisted carried n = case n.content of
+-- not written if the caller wrote them already. The second flag tells if the
+-- caller wrote the lines of the first entries of the chain that starts with
+-- the first entry, as in @indicatorLines@. The given lines go to the first
+-- entry if it starts below its indicator.
+block :: RenderOptions -> Int -> Int -> Bool -> Bool -> Bool -> [Line] -> Node -> B.Builder
+block opts indent afterColumn atLineStart hoisted chainWritten carried n = case n.content of
   SequenceContent _ xs -> mconcat (zipWith item [0 :: Int ..] xs) <> lines_ afterColumn n.comments.after
   MappingContent _ kvs -> mconcat (zipWith entry [0 :: Int ..] kvs) <> lines_ afterColumn n.comments.after
   _ -> mempty
@@ -433,9 +435,9 @@ block opts indent afterColumn atLineStart hoisted carried n = case n.content of
     item :: Int -> Node -> B.Builder
     item i x
       | startsBelow opts x =
-          let (above, below, rest) = indicatorLines (i == 0) (if i == 0 then carried else []) x
-          in start i above <> "-" <> after opts indent (indent + indentStep) below rest x
-      | otherwise = start i (aboveIndicator opts x) <> "-" <> after opts indent (indent + indentStep) [] [] x
+          let (above, below, rest, written) = indicatorLines (i == 0) (if i == 0 then carried else []) x
+          in start i above <> "-" <> after opts indent (indent + indentStep) written below rest x
+      | otherwise = start i (aboveIndicator opts x) <> "-" <> after opts indent (indent + indentStep) False [] [] x
 
     entry :: Int -> (Node, Node) -> B.Builder
     entry i (k, v) = case implicitKey opts k of
@@ -443,15 +445,15 @@ block opts indent afterColumn atLineStart hoisted carried n = case n.content of
         let (above, lineComment, below) = entryComments opts k v
         in start i above <> key <> ":" <> value v lineComment below
       Nothing ->
-        let (keyAbove, keyBelow, keyRest) = indicatorLines (i == 0) (if i == 0 then carried else []) k
-            (valueAbove, valueBelow, valueRest) = indicatorLines False [] v
+        let (keyAbove, keyBelow, keyRest, keyWritten) = indicatorLines (i == 0) (if i == 0 then carried else []) k
+            (valueAbove, valueBelow, valueRest, valueWritten) = indicatorLines False [] v
         in start i keyAbove
              <> "?"
-             <> after opts indent indent keyBelow keyRest k
+             <> after opts indent indent keyWritten keyBelow keyRest k
              <> lines_ indent valueAbove
              <> spaces indent
              <> ":"
-             <> after opts indent (indent + indentStep) valueBelow valueRest v
+             <> after opts indent (indent + indentStep) valueWritten valueBelow valueRest v
 
     -- The lines above the indicator of a sequence item or an explicit entry,
     -- the lines below it, and the lines for the first entry of a block
@@ -466,20 +468,47 @@ block opts indent afterColumn atLineStart hoisted carried n = case n.content of
     -- on the line of the indicator of a later entry keeps the lines above it
     -- from the first entry, so the lines of the first entry after the last
     -- empty line go below the indicator.
-    indicatorLines :: Bool -> [Line] -> Node -> ([Line], [Line], [Line])
+    --
+    -- The lines of the first entry also read back the same above the
+    -- indicator, if they have no empty line and no node between them and the
+    -- indicator has lines of its own or a comment on the line of its
+    -- indicator. Then they go there, at the start of a line, so that the
+    -- lines above a list item with an anchor stay above it. Through a chain
+    -- of first entries that start below their indicators they go above the
+    -- first indicator, and the last flag of the result tells the chain that
+    -- they are written.
+    indicatorLines :: Bool -> [Line] -> Node -> ([Line], [Line], [Line], Bool)
     indicatorLines isFirst given x
       | startsBelow opts x =
           let ls = given ++ x.comments.before
+              aboveFirst = isFirst && null ls && atLineStart && not hoisted && not chainWritten
           in if
                | firstStartsBelow opts x ->
                    let (own, rest) = splitAtLastEmptyLine ls
-                   in if isFirst then ([], own, rest) else (own, [], rest)
-               | isFirst -> ([], separated ls ++ firstLines opts x, [])
+                       lifted = liftable (firstEntryOf x >>= chainLines opts)
+                   in if
+                        | isFirst && chainWritten -> ([], own, rest, True)
+                        | aboveFirst, Just ls' <- lifted -> (ls', [], [], True)
+                        | not isFirst, null rest, Just ls' <- lifted -> (own ++ ls', [], [], True)
+                        | isFirst -> ([], own, rest, False)
+                        | otherwise -> (own, [], rest, False)
+               | isFirst && chainWritten -> ([], separated ls, [], False)
+               | aboveFirst, Just ls' <- liftable (Just (firstLines opts x)) -> (ls', [], [], False)
+               | isFirst -> ([], separated ls ++ firstLines opts x, [], False)
                | isJust x.comments.inline ->
                    let (above, below) = splitAtLastEmptyLine (firstLines opts x)
-                   in (ls ++ above, below, [])
-               | otherwise -> (ls ++ firstLines opts x, [], [])
-      | otherwise = (aboveIndicator opts x, [], [])
+                   in (ls ++ above, below, [], False)
+               | otherwise -> (ls ++ firstLines opts x, [], [], False)
+      | otherwise = (aboveIndicator opts x, [], [], False)
+      where
+        liftable :: Maybe [Line] -> Maybe [Line]
+        liftable = \case
+          Just ls'
+            | isNothing x.comments.inline
+            , not (null ls')
+            , EmptyLine `notElem` ls' ->
+                Just ls'
+          _ -> Nothing
 
     -- The value of a mapping entry after the colon with the comment of the
     -- line, and the line break. The lines go between the key and a block
@@ -498,7 +527,7 @@ block opts indent afterColumn atLineStart hoisted carried n = case n.content of
                 SequenceContent _ xs
                   | not (hasCommentLine v.comments.after) || not (endsWithBlock xs) -> indent
                 _ -> indent + indentStep
-          in header <> lines_ column below <> block opts column (indent + indentStep) True False rest v
+          in header <> lines_ column below <> block opts column (indent + indentStep) True False False rest v
       | isEmpty v = comment lineComment <> "\n" <> entryBelow
       | otherwise = " " <> inline opts InValue (indent + indentStep) v lineComment <> "\n" <> entryBelow
       where
@@ -532,10 +561,11 @@ block opts indent afterColumn atLineStart hoisted carried n = case n.content of
 
 -- | A node after the indicator of a sequence item or an explicit entry, with
 -- the line break, and the lines below the indicator and the lines for the
--- first entry from @indicatorLines@. A block collection starts on the same
--- line if it can. The lines after a scalar go at the given column.
-after :: RenderOptions -> Int -> Int -> [Line] -> [Line] -> Node -> B.Builder
-after opts indent column below rest n
+-- first entry from @indicatorLines@, with its flag for the lines of the
+-- chain. A block collection starts on the same line if it can. The lines
+-- after a scalar go at the given column.
+after :: RenderOptions -> Int -> Int -> Bool -> [Line] -> [Line] -> Node -> B.Builder
+after opts indent column chainWritten below rest n
   | isBlock opts n =
       if startsBelow opts n
         then
@@ -543,8 +573,8 @@ after opts indent column below rest n
             <> comment n.comments.inline
             <> "\n"
             <> lines_ (indent + indentStep) below
-            <> block opts (indent + indentStep) (indent + indentStep) True True rest n
-        else " " <> block opts (indent + indentStep) (indent + indentStep) False True [] n
+            <> block opts (indent + indentStep) (indent + indentStep) True True chainWritten rest n
+        else " " <> block opts (indent + indentStep) (indent + indentStep) False True False [] n
   | isEmpty n = comment n.comments.inline <> "\n" <> linesBelow column n
   | otherwise =
       let column' = if isBlockScalarNode n then indent else column
@@ -576,6 +606,23 @@ firstLines opts x
         Just _ -> let (above, _, _) = entryComments opts k v in above
         Nothing -> aboveIndicator opts k
       _ -> []
+
+-- | The lines above the first entry at the end of a chain of first entries
+-- that start below their indicators, from the node at its start, or 'Nothing'
+-- if a node of the chain has lines of its own or a comment on the line of
+-- its indicator.
+chainLines :: RenderOptions -> Node -> Maybe [Line]
+chainLines opts x
+  | not (null x.comments.before) || isJust x.comments.inline = Nothing
+  | firstStartsBelow opts x = firstEntryOf x >>= chainLines opts
+  | otherwise = Just (firstLines opts x)
+
+-- | The first item of a sequence, or the first key of a mapping.
+firstEntryOf :: Node -> Maybe Node
+firstEntryOf x = case x.content of
+  SequenceContent _ (y : _) -> Just y
+  MappingContent _ ((k, _) : _) -> Just k
+  _ -> Nothing
 
 -- | A block collection starts on the line after its indicator if it has
 -- properties or a comment on the line of the indicator.
