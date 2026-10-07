@@ -12,6 +12,7 @@ module Yamlet.Internal.Parser.Hints
   , codePointName
   , firstTab
   , tabMessage
+  , keyLengthMessage
   ) where
 
 import Control.Monad
@@ -57,10 +58,7 @@ unexpected tabs input i = case if tabs then indentationTab (i - 1) Nothing else 
       | indented, not alignedWithEntry -> "unexpected indentation"
       | isBreak w -> "unexpected end of line"
       | i > e.base && isBreak (byteBefore e i), Just msg <- indentationMistake -> msg
-      | w == COLON && firstColon && not (fitsKey e entryStart i) ->
-          "a key can be at most "
-            ++ show maxImplicitKeyLength
-            ++ " characters long, write a longer key after '? '"
+      | w == COLON && firstColon && not (fitsKey e entryStart i) -> keyLengthMessage
       | w == COLON && multiLineKey -> "unexpected ':', a key must be on a single line"
       | w == COLON && firstColon && valueColon && onStartMarkerLine ->
           "unexpected ':', a mapping cannot start on the line of '---'"
@@ -538,6 +536,12 @@ firstTab e i j = L.find (\k -> byteAt e k == TAB) [i .. j - 1]
 
 tabMessage :: String
 tabMessage = "tabs cannot be used for indentation"
+
+keyLengthMessage :: String
+keyLengthMessage =
+  "a key can be at most "
+    ++ show maxImplicitKeyLength
+    ++ " characters long, write a longer key after '? '"
 
 -- | The code point of a character, e.g. U+0007, for a character that an error
 -- cannot show.

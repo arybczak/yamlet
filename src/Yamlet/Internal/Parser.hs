@@ -1149,7 +1149,7 @@ cFlowSequence n c props = do
   char LBRACKET
   optional_ $ sSeparate n c
   entries <- flowEntries n c' (nsFlowSeqEntry n c')
-  closing c' p RBRACKET "flow sequence" "expected ',' or ']'"
+  closing c' p RBRACKET "flow sequence" entries "expected ',' or ']'"
   q <- pos
   pure $! mkNode e p (toOffset e q) props (SequenceContent Flow entries)
   where
@@ -1164,7 +1164,7 @@ cFlowMapping n c props = do
   char LBRACE
   optional_ $ sSeparate n c
   entries <- flowEntries n c' (nsFlowMapEntry n c')
-  closing c' p RBRACE "flow mapping" (expected entries)
+  closing c' p RBRACE "flow mapping" [] (expected entries)
   q <- pos
   pure $! mkNode e p (toOffset e q) props (MappingContent Flow entries)
   where
@@ -1200,9 +1200,11 @@ flowEntries n c entry = go []
 -- | The closing bracket of a flow collection that starts at the index. Its
 -- absence is an error unless the collection is an implicit key, which the
 -- parser can try again as a value. If the collection stops at the end of a
--- line, the error points to its start, which can be far away.
-closing :: Ctx -> Int -> Word8 -> String -> String -> P ()
-closing c start w kind msg = do
+-- line, the error points to its start, which can be far away. The nodes are
+-- the entries of a flow sequence, whose last one can be a key too long for a
+-- pair.
+closing :: Ctx -> Int -> Word8 -> String -> [Node] -> String -> P ()
+closing c start w kind entries msg = do
   e <- env
   p <- pos
   char w
@@ -1220,6 +1222,10 @@ closing c start w kind msg = do
           _ -> throwAt start ("unterminated " ++ kind)
       | dash e p ->
           throwAt p "unexpected '-', a list item cannot be inside a flow collection, quote '-' if it is a string"
+      | byteAt e p == COLON
+      , Node {offset = Offset o} : _ <- reverse entries
+      , not (fitsKey e (o + e.base) p) ->
+          throwAt p keyLengthMessage
       | otherwise -> throwAt p (fromMaybe msg (mistake e True p))
   where
     -- The separation after an entry goes on to the next line if the
