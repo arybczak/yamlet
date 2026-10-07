@@ -266,6 +266,14 @@ instance GenericYamlOptions Profile where
   yamlOptions = defaultYamlOptions {omitNullFields = True}
   yamlDefault = Just (Profile "app" (Just "proxy") Nothing)
 
+data Remark = Remark {user :: T.Text, note :: Commented (Maybe T.Text)}
+  deriving stock (Eq, Show, Generic)
+  deriving (FromYaml, ToYaml) via GenericYaml Remark
+
+instance GenericYamlOptions Remark where
+  yamlOptions = defaultYamlOptions {omitNullFields = True}
+  yamlDefault = Just (Remark "app" (Commented Nothing noComments {before = [Comment "default"]}))
+
 data Account = Account {user :: T.Text, shell :: T.Text, home :: Maybe T.Text}
   deriving stock (Eq, Show, Generic)
   deriving (FromYaml, ToYaml) via GenericYaml Account
@@ -768,6 +776,11 @@ test_default = do
     "user: x\nproxy: null\n"
     (encodeText (Profile "x" Nothing Nothing))
   roundTrip "round trip of null fields" (Profile "x" Nothing Nothing)
+  assertEqual
+    "null fields left out only if the default has no comments"
+    "user: x\nnote: null\n"
+    (encodeText (Remark "x" (Commented Nothing noComments)))
+  roundTrip "round trip of a null field without comments" (Remark "x" (Commented Nothing noComments))
 
 test_requiredField :: Assertion
 test_requiredField = do

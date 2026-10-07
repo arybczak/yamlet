@@ -382,10 +382,13 @@ data YamlOptions = YamlOptions
   -- A null field with comments stays, e.g. a t'Yamlet.Commented' field with
   -- the value 'Nothing' and a comment.
   --
-  -- With 'yamlDefault', a null field stays if its default is not null.
-  -- Otherwise the value would not read back: the decoder fills a missing key
-  -- from the default, so e.g. a field 'Nothing' with the default @Just 1@
-  -- would read back as @Just 1@.
+  -- With 'yamlDefault', a null field stays unless its default is null without
+  -- comments. Otherwise the value would not read back: the decoder fills a
+  -- missing key from the default, so e.g. a field 'Nothing' with the default
+  -- @Just 1@ would read back as @Just 1@. A value that encodes as its default
+  -- does still reads back as the default, e.g. a field 'Nothing' of type
+  -- @Maybe (Maybe a)@ with the default @Just Nothing@, because both encode
+  -- as null.
   , rejectUnknownFields :: !Bool
   -- ^ Reject a key that is not a field of the constructor. On by default.
   --
@@ -848,9 +851,9 @@ genericToYaml x =
 {-# INLINE genericToYaml #-}
 
 -- The encoder takes the default for 'omitNullFields': it leaves out a null
--- field only if the default of the field is null too. Otherwise the decoder
--- would fill the missing key from the default, and the value would not read
--- back.
+-- field only if the default of the field is null without comments too.
+-- Otherwise the decoder would fill the missing key from the default, and the
+-- value would not read back.
 gToYaml
   :: forall f p
    . ( GConstructors f
@@ -995,9 +998,12 @@ instance
         Nothing -> True
   {-# INLINE gToEntries #-}
 
--- | The field of a default is null, and not 'requiredField'.
+-- | The field of a default is null without comments, and not
+-- 'requiredField'.
 isNullDefault :: ToYaml a => a -> Bool
-isNullDefault d = maybe False (isNullNode . toYaml) (defaultField d)
+isNullDefault d = case toYaml <$> defaultField d of
+  Just n -> isNullNode n && n.comments == S.noComments
+  Nothing -> False
 -- Not inlined, the call has only constant arguments, so GHC computes it once
 -- for each field of a default. Inlined in the encoder, as in the @where@
 -- clause of its caller, it ran on each encode, and the encode of records with
