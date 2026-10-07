@@ -574,6 +574,13 @@ test_parameters = do
     "null field without comments left out"
     "name: a\n"
     (encodeText (Sparse "a" (Commented (Nothing @Int) noComments)))
+  let anchored = (S.plainNode "") {S.props = S.noProps {S.anchor = Just "x"}}
+      shared = encodeText [Sparse "a" anchored, Sparse "b" (S.contentNode (S.AliasContent "x"))]
+  assertEqual "null field with an anchor" "- name: a\n  extra: &x\n- name: b\n  extra: *x\n" shared
+  assertEqual
+    "alias to a null field read back"
+    (Right [Sparse "a" Null, Sparse "b" Null])
+    (decodeText @[Sparse Value] shared)
   assertEqual "encoded sum" "- tag: Filled\n  contents: 1\n- tag: Vacant\n" (encodeText [Filled @Int 1, Vacant])
   roundTrip "round trip of a sum" [Filled @Int 1, Vacant]
 

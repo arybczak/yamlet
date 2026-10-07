@@ -380,7 +380,8 @@ data YamlOptions = YamlOptions
   , omitNullFields :: !Bool
   -- ^ Leave out a field whose value is null, e.g. 'Nothing'. Off by default.
   -- A null field with comments stays, e.g. a t'Yamlet.Commented' field with
-  -- the value 'Nothing' and a comment.
+  -- the value 'Nothing' and a comment. So does a null field with an anchor,
+  -- which an alias elsewhere can refer to.
   --
   -- With 'yamlDefault', a null field stays unless its default is null without
   -- comments. Otherwise the value would not read back: the decoder fills a
@@ -988,7 +989,7 @@ instance
   => GToFields (S1 (MetaSel (Just name) u s d) (Rec0 a))
   where
   gToEntries opts def (M1 (K1 x))
-    | opts.omitNullFields && isNullNode (snd entry) && uncommented && nullDefault = []
+    | opts.omitNullFields && isNullNode (snd entry) && uncommented && unanchored && nullDefault = []
     | otherwise = [entry]
     where
       entry :: (S.Node, S.Node)
@@ -997,6 +998,10 @@ instance
       -- The comments would go away with the entry.
       uncommented :: Bool
       uncommented = (fst entry).comments == S.noComments && (snd entry).comments == S.noComments
+
+      -- An alias elsewhere can refer to the anchor.
+      unanchored :: Bool
+      unanchored = isNothing (snd entry).props.anchor
 
       -- The decoder fills a missing key from the default.
       nullDefault :: Bool
