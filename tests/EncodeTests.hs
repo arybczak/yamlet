@@ -63,6 +63,7 @@ test_containers = do
   assertEqual "left" "Left: 1\n" (encodeText (Left @Int @T.Text 1))
   assertEqual "right" "Right: a\n" (encodeText (Right @Int @T.Text "a"))
   roundTrip "int map" (IM.fromList @T.Text [(1, "a"), (-2, "b")])
+  assertEqual "map with an empty list key" "? []\n: a\n? - 1\n: b\n" (encodeText (M.fromList @[Int] @T.Text [([], "a"), ([1], "b")]))
   roundTrip "sequence" (Seq.fromList @Int [1, 2, 3])
   -- Only a String is text.
   assertEqual "string" "ab\n" (encodeText @String "ab")

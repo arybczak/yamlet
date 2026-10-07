@@ -127,8 +127,11 @@ blockMapping indent atLineStart n = case n.content of
         , plainSyntax False t ->
             if T.length t > maxImplicitKeyLength then Nothing else Just (B.fromText t)
         | otherwise -> fits (withTag k (scalarText style t))
-      S.SequenceContent _ [] -> fits (inlineValue 0 k)
-      S.MappingContent _ [] -> fits (inlineValue 0 k)
+      -- go-yaml v2 reads "[]: a" and "{}: a" without an error, but as an
+      -- empty list or mapping, and drops the entries after them. A tag
+      -- avoids that.
+      S.SequenceContent _ [] | isJust (tagPrefix k) -> fits (inlineValue 0 k)
+      S.MappingContent _ [] | isJust (tagPrefix k) -> fits (inlineValue 0 k)
       _ -> Nothing
       where
         fits :: B.Builder -> Maybe B.Builder

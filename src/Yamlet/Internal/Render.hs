@@ -907,6 +907,10 @@ implicitKey :: RenderOptions -> Node -> Maybe B.Builder
 implicitKey opts k
   | isBlock opts k = Nothing
   | isEmpty k = Nothing
+  -- go-yaml v2 reads "[]: a" and "{}: a" without an error, but as an empty
+  -- list or mapping, and drops the entries after them. An anchor or a tag
+  -- avoids that.
+  | Props Nothing NoTag <- k.props, isEmptyCollection = Nothing
   -- An empty collection with lines inside is on several lines.
   | hasEndLines k, not (isScalarLike k) = Nothing
   | T.length key > maxImplicitKeyLength = Nothing
@@ -916,6 +920,12 @@ implicitKey opts k
     key = case (k.props, k.content) of
       (Props Nothing NoTag, ScalarContent Plain t) | plainSyntax False t -> t
       _ -> B.runBuilder $ inline opts InKey 0 k Nothing <> if endsWithName k then " " else mempty
+
+    isEmptyCollection :: Bool
+    isEmptyCollection = case k.content of
+      SequenceContent _ [] -> True
+      MappingContent _ [] -> True
+      _ -> False
 
 -- | The node is a collection that the renderer writes in the block style.
 isBlock :: RenderOptions -> Node -> Bool
