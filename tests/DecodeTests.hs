@@ -1537,6 +1537,14 @@ test_aliasLimit = do
     "five documents of a stream with one document expected"
     (Just (25, 15, "the aliases add more than 100000 nodes and characters"))
     (errorOf (decodeText @Value (stream 5)))
+  case S.parseDocumentsText (stream 5) of
+    Right docs -> do
+      assertEqual
+        "five parsed documents"
+        (Just (25, 15, "the aliases add more than 100000 nodes and characters"))
+        (errorOf (decodeDocuments @Value (stream 5) docs))
+      assertEqual "a parsed document on its own" Nothing (errorOf (traverse (decodeDocument @Value (stream 5)) docs))
+    Left err -> assertFailure (show err)
 
 -- | Anchors a0 to ak, where each anchor after a0 has ten aliases to the one
 -- before it, and the alias *ak expands to about 10^(k+1) nodes.

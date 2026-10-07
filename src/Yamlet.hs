@@ -98,6 +98,7 @@ module Yamlet
     -- * Syntax trees
   , decodeWithDocument
   , decodeDocument
+  , decodeDocuments
 
     -- * Encoding
   , encode
@@ -221,16 +222,7 @@ decodeWithDocument input =
 
 -- | Decode every document of a stream. The errors are as for 'decodeAll'.
 decodeAllText :: FromYaml a => T.Text -> Either (NE.NonEmpty Error) [a]
-decodeAllText input = do
-  docs <- single (parseStream input)
-  let limit = aliasLimit (map (.root) docs)
-      go :: FromYaml a => Int -> [S.Document] -> Either (NE.NonEmpty Error) [a]
-      go added = \case
-        [] -> Right []
-        d : ds -> do
-          (a, added') <- decodeDocumentWithin limit added input d
-          (a :) <$> go added' ds
-  go 0 docs
+decodeAllText input = single (parseStream input) >>= decodeDocuments input
 
 single :: Either Error a -> Either (NE.NonEmpty Error) a
 single = first (NE.:| [])
@@ -255,8 +247,28 @@ single = first (NE.:| [])
 -- The text is the input of the document. An error takes its line from the
 -- text. For a document that the program built, the text can be empty. The
 -- errors are as for 'decode'.
+--
+-- The document has the limit of the aliases to itself. For the documents of
+-- a stream, use 'decodeDocuments', so that they share the limit.
 decodeDocument :: FromYaml a => T.Text -> S.Document -> Either (NE.NonEmpty Error) a
 decodeDocument input doc = firstOfResult $ decodeDocumentWithin (aliasLimit [doc.root]) 0 input doc
+
+-- | Decode the documents of a syntax tree as 'decodeDocument' does, e.g. the
+-- documents of a stream from 'Yamlet.Syntax.parseDocumentsText'. The
+-- documents share the limit of the aliases, as the documents of a stream do.
+-- The errors are as for 'decodeAll'.
+decodeDocuments :: FromYaml a => T.Text -> [S.Document] -> Either (NE.NonEmpty Error) [a]
+decodeDocuments input docs = go 0 docs
+  where
+    limit :: Int
+    limit = aliasLimit (map (.root) docs)
+
+    go :: FromYaml a => Int -> [S.Document] -> Either (NE.NonEmpty Error) [a]
+    go added = \case
+      [] -> Right []
+      d : ds -> do
+        (a, added') <- decodeDocumentWithin limit added input d
+        (a :) <$> go added' ds
 
 -- | 'decodeDocument' with the visits of the aliases as for 'prepareWithin'.
 decodeDocumentWithin :: FromYaml a => Int -> Int -> T.Text -> S.Document -> Either (NE.NonEmpty Error) (a, Int)
