@@ -229,8 +229,13 @@ isYaml11NonString t = case T.uncons t of
     opt :: (T.Text -> [T.Text]) -> T.Text -> [T.Text]
     opt m s = s : m s
 
+    -- The rests of each step go in front of the rests that follow, because
+    -- s : (m s >>= many m) appends once per step and takes quadratic time.
     many :: (T.Text -> [T.Text]) -> T.Text -> [T.Text]
-    many m s = s : (m s >>= many m)
+    many m s0 = go s0 []
+      where
+        go :: T.Text -> [T.Text] -> [T.Text]
+        go s rests = s : foldr go rests (m s)
 
     some :: (T.Text -> [T.Text]) -> T.Text -> [T.Text]
     some m = m >=> many m

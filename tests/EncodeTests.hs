@@ -40,6 +40,7 @@ encodeTests =
     , testCase "floats" test_floats
     , testProperty "float format" prop_floatFormat
     , slow $ testCase "long floats" test_longFloats
+    , slow $ testCase "long strings like numbers" test_longNumberLikeStrings
     , testCase "literal block scalars" test_literal
     , testCase "tags" test_tags
     , testCase "syntax tree" test_syntax
@@ -305,6 +306,15 @@ prop_floatFormat c = forAll ((,) <$> chooseInt (0, 3) <*> chooseInt (-30, 30)) $
             (m, 'e' : ex@(d : _)) | d /= '-' -> m ++ "e+" ++ ex
             _ -> Sci.formatScientific Sci.Exponent Nothing s
   in encodeText s === T.pack expected <> "\n"
+
+-- | The time to check if YAML 1.1 parsers read a string as another value is
+-- linear in its length.
+test_longNumberLikeStrings :: Assertion
+test_longNumberLikeStrings = do
+  let underscores = T.replicate 20000 "1_" <> "x"
+      base60 = "1" <> T.replicate 60000 ":55" <> "x"
+  assertEqual "underscores" (underscores <> "\n") (encodeText underscores)
+  assertEqual "base 60" (base60 <> "\n") (encodeText base60)
 
 -- | The time to write a float is not quadratic in the number of its digits.
 test_longFloats :: Assertion
