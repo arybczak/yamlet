@@ -17,9 +17,9 @@ import Yamlet
 
 -- | The time limit of a test on a large input, so that a regression to
 -- quadratic time fails the test instead of stalling the suite. No
--- measurement gave the limit. It is far above the run times, which were at
--- most 4.2 s for the test of many keys and below 2.5 s for the others, with
--- GHC 9.10.3.
+-- measurement gave the limit. A test must stay well below it also on CI,
+-- which runs the tests several times slower than a fast local machine, so a
+-- slow test gets a smaller input, not a higher limit.
 slow :: TestTree -> TestTree
 slow = localOption (mkTimeout 10000000)
 
