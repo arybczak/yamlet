@@ -62,6 +62,10 @@ defaultRenderOptions =
 -- * A flow collection without comments is on one line, so the empty lines
 --   inside it go away.
 --
+-- * A key of more than 1024 characters in a flow mapping becomes an explicit
+--   key, e.g. @{? key : value}@, because YAML 1.1 parsers reject a longer
+--   implicit key there too.
+--
 -- * A comment that has no place at its node moves to a place that has one,
 --   e.g. the lines above the value of a key go above the key if the value
 --   is on the line of the key.
@@ -688,13 +692,32 @@ inline opts pos indent n lineComment = case n.content of
             x {props = Props Nothing (Tag (coreTagPrefix <> "null"))}
       _ -> x
 
+    -- YAML 1.2 allows an implicit key of any length in a flow mapping, but
+    -- libyaml and PyYAML reject one as long as in a block mapping.
     flowEntry :: (Node, Node) -> B.Builder
-    flowEntry (k, v) =
-      mconcat
-        [ inline opts InFlowKey indent k Nothing
-        , if endsWithName k then " :" else ":"
-        , if isEmpty v then mempty else " " <> flowValue v
-        ]
+    flowEntry (k, v)
+      | fits =
+          mconcat
+            [ inline opts InFlowKey indent k Nothing
+            , if endsWithName k then " :" else ":"
+            , if isEmpty v then mempty else " " <> flowValue v
+            ]
+      -- libyaml rejects an explicit key with a colon but no value.
+      | otherwise =
+          mconcat
+            [ "? "
+            , inline opts InFlowKey indent k Nothing
+            , if isEmpty v then mempty else " : " <> flowValue v
+            ]
+      where
+        -- A short scalar without properties fits even in two quotes with each
+        -- character as the longest escape, \U and its digits, and then the
+        -- check renders nothing.
+        fits :: Bool
+        fits = case (k.props, k.content) of
+          (Props Nothing NoTag, ScalarContent _ t)
+            | T.compareLength t ((maxImplicitKeyLength - 2) `div` (2 + bigUEscapeDigits)) /= GT -> True
+          _ -> T.compareLength (B.runBuilder (inline opts InFlowKey indent k Nothing)) maxImplicitKeyLength /= GT
 
     -- YAML 1.1 parsers read a comma or a bracket right after a tag as part
     -- of the tag.

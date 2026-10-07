@@ -10,6 +10,7 @@ import Test.Tasty.QuickCheck
 
 import Helpers
 import Thunks
+import Yamlet hiding (Commented (..))
 import Yamlet.Syntax
 
 renderTests :: TestTree
@@ -217,6 +218,28 @@ test_fallbacks = do
     "empty tagged values in flow collections"
     (Right "[80, !!str , 443]\n---\n{a: !!str , b: !!str }\n")
     (renderSyntax defaultRenderOptions <$> parseDocumentsText "[80, !!str , 443]\n---\n{a: !!str , b: !!str }\n")
+  -- libyaml and PyYAML reject an implicit key of more than 1024 characters
+  -- in a flow mapping too.
+  let flowEntry :: Node -> Node -> Node
+      flowEntry k v = contentNode (MappingContent Flow [(k, v)])
+      longest = T.replicate 1024 "a"
+      long = T.replicate 1025 "a"
+      anchoredKey = (plainNode (T.replicate 1020 "a")) {props = noProps {anchor = Just "anchor"}}
+  assertEqual "flow key of the longest length" ("{" <> longest <> ": 1}\n") (render (flowEntry (plainNode longest) (plainNode "1")))
+  assertEqual "long flow key" ("{? " <> long <> " : 1}\n") (render (flowEntry (plainNode long) (plainNode "1")))
+  assertEqual "long flow key without a value" ("{? " <> long <> "}\n") (render (flowEntry (plainNode long) (plainNode "")))
+  assertEqual
+    "flow key that an anchor makes long"
+    ("{? &anchor " <> T.replicate 1020 "a" <> " : 1}\n")
+    (render (flowEntry anchoredKey (plainNode "1")))
+  assertEqual
+    "long flow keys read back"
+    (Right [Mapping [(String long, Int 1)], Mapping [(String long, Null)], Mapping [(String (T.replicate 1020 "a"), Int 1)]])
+    ( decodeAllText @Value . renderSyntax defaultRenderOptions $
+        map
+          document
+          [flowEntry (plainNode long) (plainNode "1"), flowEntry (plainNode long) (plainNode ""), flowEntry anchoredKey (plainNode "1")]
+    )
   assertEqual "empty key" "?\n: a\n" (render (mappingNode [(plainNode "", plainNode "a")]))
   let emptyWithComment = (contentNode (SequenceContent Block [])) {comments = noComments {after = [Comment "c"]}}
       commented = mappingNode [(plainNode "k", emptyWithComment)]
