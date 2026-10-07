@@ -727,6 +727,15 @@ test_encodings = do
   case decodeInput "a: b\n\xFF\n" of
     Left err -> assertEqual "invalid UTF-8" (2, 1) (err.location.line, err.location.column)
     Right _ -> assertFailure "expected an error"
+  let stream = "a: 1\n---\n- b\n" :: T.Text
+  case S.parseDocumentsText stream of
+    Right docs -> do
+      assertEqual "documents of the stream" 2 (length docs)
+      assertEqual "documents parsed from UTF-16LE" (Right docs) (S.parseDocuments (T.encodeUtf16LE stream))
+    Left err -> assertFailure (show err)
+  case S.parseDocuments "a: b\n\xFF\n" of
+    Left err -> assertEqual "documents parsed from invalid UTF-8" (2, 1, "invalid UTF-8") (err.location.line, err.location.column, err.message)
+    Right _ -> assertFailure "expected an error"
   let invalid :: String -> T.Text -> BS.ByteString -> Assertion
       invalid preface msg bytes =
         assertEqual preface (Just (2, 3, T.unpack msg)) (errorOf (first pure (decodeInput bytes)))
