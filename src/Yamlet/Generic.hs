@@ -387,9 +387,9 @@ data YamlOptions = YamlOptions
   -- comments. Otherwise the value would not read back: the decoder fills a
   -- missing key from the default, so e.g. a field 'Nothing' with the default
   -- @Just 1@ would read back as @Just 1@. A value that encodes as its default
-  -- does still reads back as the default, e.g. a field 'Nothing' of type
-  -- @Maybe (Maybe a)@ with the default @Just Nothing@, because both encode
-  -- as null.
+  -- still reads back as the default, e.g. a field 'Nothing' of type
+  -- @Maybe (Maybe a)@ with the default @Just Nothing@, because both encode as
+  -- null.
   , rejectUnknownFields :: !Bool
   -- ^ Reject a key that is not a field of the constructor. On by default.
   --
