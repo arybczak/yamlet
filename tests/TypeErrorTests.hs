@@ -21,10 +21,11 @@ typeErrorTests =
         rejects "The constructor Pair has several fields without names." (decodeText @Pair "[1, a]")
     , testCase "several fields without names in a sum" $
         rejects "The constructor Line has several fields without names." (encodeText (Line 1 2))
-    , testCase "named fields and a field without a name" $
+    , testCase "named fields and a field without a name" $ do
         rejects
           "The constructor Circle has named fields and the constructor Label has one field without a name."
           (encodeText (Label "x"))
+        rejects "use the sum encoding SingleField" (encodeText (Label "x"))
     , testCase "flat named fields" $
         rejects
           "TaggedFlat needs constructors with one field without a name, but the constructor Jump has named fields."

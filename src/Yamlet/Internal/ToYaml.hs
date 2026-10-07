@@ -252,6 +252,9 @@ instance ToYaml CalendarDiffTime where
 instance ToYaml T.Text where toYaml = scalar . String
 instance ToYaml TL.Text where toYaml = scalar . String . TL.toStrict
 
+-- | A string of the character, and a t'String' as a string. A surrogate code
+-- point, which t'T.Text' cannot hold, becomes U+FFFD, so it does not read
+-- back.
 instance ToYaml Char where
   toYaml = scalar . String . T.singleton
   toYamlList = scalar . String . T.pack

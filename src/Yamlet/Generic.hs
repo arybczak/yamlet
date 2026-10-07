@@ -681,7 +681,7 @@ type family MixedFields (named :: Symbol) (unnamed :: Symbol) :: Shape where
           :<>: Text " has named fields and the constructor "
           :<>: Text unnamed
           :<>: Text " has one field without a name."
-          :$$: Text "The constructors of a type must all have named fields or all have one field without a name."
+          :$$: Text "Give them the same kind of fields, or use the sum encoding SingleField, where each constructor has its own value."
       )
 
 -- | The shape is valid. The instances match on the shape, so that GHC

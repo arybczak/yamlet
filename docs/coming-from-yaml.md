@@ -21,6 +21,8 @@ yamlet follows YAML 1.2 where the yaml package does not:
 - U+2028 and U+2029 in a string are ordinary characters. The yaml package
   writes them as line breaks with indentation after them, so the string
   that yamlet reads back keeps the spaces of the indentation.
+- The keys of a mapping must be unique, so two equal keys are an error. The
+  yaml package keeps the value of the last one.
 
 ## Types
 
@@ -28,7 +30,10 @@ yamlet does not convert values to the types of JSON:
 
 - The keys of a map keep their type, e.g. the keys of a `Map Int` are
   integers. aeson writes every key as a string, so the yaml package writes
-  the key `1` as `'1'`, which yamlet does not decode as an `Int`.
+  the key `1` as `'1'`, which yamlet does not decode as an `Int`. The other
+  way round, the yaml package reads every key as a string, e.g. the key
+  `404` or `true` of a `Map Text`. yamlet rejects such a key without
+  quotes.
 - An `IntMap` and a map with keys that aeson cannot write as strings, e.g.
   a `Map (Int, Int)`, are mappings in yamlet. aeson writes them as lists of
   pairs.
@@ -38,6 +43,9 @@ yamlet does not convert values to the types of JSON:
 - A NaN `Double` is `.nan`. aeson writes `null`, which yamlet rejects for a
   `Double`. The yaml package reads `.nan` as a string, so it does not decode
   it as a `Double`.
+- A float with an exponent beyond the range from -1000 to 1000 is an error,
+  e.g. `1e1001`, which keeps the decoding of untrusted input fast. The yaml
+  package reads `1e1001` as an infinite `Double`.
 - A value must have the YAML type of its Haskell type. yamlet rejects some
   values that aeson converts, e.g. `1.0` for an `Int`, `0.5` for a
   `Rational` and `null` for a `Double`.
