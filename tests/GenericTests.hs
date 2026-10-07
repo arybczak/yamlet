@@ -320,11 +320,24 @@ data Lint = Lint {version :: Commented T.Text, level :: T.Text}
   deriving anyclass (GenericYamlOptions)
   deriving (FromYaml, ToYaml) via GenericYaml Lint
 
+-- | A record with a field whose type is its own field.
+data Card = Card {title :: Title, pages :: Int}
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Card
+
+newtype Title = Title (Commented T.Text)
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (GenericYamlOptions)
+  deriving (FromYaml, ToYaml) via GenericYaml Title
+
 -- | A comment above a key with no empty line below it belongs to the key, also
 -- for the first key of a mapping.
 test_commentedFields :: Assertion
-test_commentedFields =
+test_commentedFields = do
   assertEqual "round trip" (Right input) (encodeText <$> decodeText @Pipeline input)
+  let card = T.unlines ["# The title.", "title: Hello # short", "pages: 2"]
+  assertEqual "field of a type that is its field" (Right card) (encodeText <$> decodeText @Card card)
   where
     input :: T.Text
     input =

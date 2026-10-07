@@ -301,7 +301,12 @@ instance
   -- of the class, the benchmark derive.contents.toYaml.generic is slower.
   toYamlList xs = S.sequenceNode (map (toYaml @a) (coerce xs))
 
-  toYamlField k (GenericYaml x) = (k, toYaml @a x)
+  -- A type that is its field passes the key to the field.
+  toYamlField k (GenericYaml x)
+    | not (isTagged @f (yamlOptions @a))
+    , Just entry <- gToUntaggedEntry k (gUnwrap (from x)) =
+        entry
+    | otherwise = (k, toYaml @a x)
 
 instance
   ( Generic a
@@ -336,7 +341,12 @@ instance
   -- dictionaries, and the inspection tests of the list decoders fail.
   {-# INLINE parseYamlList #-}
 
-  parseYamlField _ = coerce (parseYaml @a)
+  -- A type that is its field passes the key to the field.
+  parseYamlField k v
+    | not (isTagged @f (yamlOptions @a))
+    , Just p <- gFromUntaggedEntry (to . gWrap) (k, v) =
+        coerce @(Parser a) p
+    | otherwise = coerce (parseYaml @a v)
 
 ----------------------------------------
 -- Options
@@ -862,10 +872,17 @@ class GToConstructor f where
   -- | The constructor, with the tag in the given encoding.
   gToConstructor :: YamlOptions -> Maybe SumEncodingKind -> Maybe (f p) -> f p -> S.Node
 
+  -- | The mapping entry under the key of a constructor without a tag, if it
+  -- has one field without a name. The field gets the key, e.g. for the
+  -- comments above the key of a 'Yamlet.Commented' field.
+  gToUntaggedEntry :: S.Node -> f p -> Maybe (S.Node, S.Node)
+
 instance GToConstructor V1 where
   gTag _ = \case {}
 
   gToConstructor _ _ _ = \case {}
+
+  gToUntaggedEntry _ = \case {}
 
 instance (GToConstructor f, GToConstructor g) => GToConstructor (f :+: g) where
   gTag opts = \case
@@ -877,6 +894,9 @@ instance (GToConstructor f, GToConstructor g) => GToConstructor (f :+: g) where
     L1 x -> gToConstructor opts flat (leftDefault def) x
     R1 x -> gToConstructor opts flat (rightDefault def) x
   {-# INLINE gToConstructor #-}
+
+  -- A type with several constructors always has a tag.
+  gToUntaggedEntry _ _ = Nothing
 
 instance
   ( KnownSymbol name
@@ -920,6 +940,10 @@ instance
           | otherwise -> Just kvs
         _ -> Nothing
   {-# INLINE gToConstructor #-}
+
+  gToUntaggedEntry k (M1 x)
+    | gNamed @f || gArity @f == 0 = Nothing
+    | otherwise = Just (gToEntry k x)
 
 -- | The encoder of the fields of a constructor.
 --
@@ -1110,6 +1134,11 @@ class GFromConstructor f where
   -- | The only constructor, without a tag.
   gFromUntagged :: YamlOptions -> Maybe (f p) -> (f p -> a) -> S.Node -> Parser a
 
+  -- | The only constructor, without a tag, from a mapping entry, if it has
+  -- one field without a name. The field gets the key, e.g. for the comments
+  -- above the key of a 'Yamlet.Commented' field.
+  gFromUntaggedEntry :: (f p -> a) -> (S.Node, S.Node) -> Maybe (Parser a)
+
 instance GFromConstructor V1 where
   gFromTag _ _ _ _ = Nothing
 
@@ -1118,6 +1147,8 @@ instance GFromConstructor V1 where
   gFromSingle _ _ _ _ _ = Nothing
 
   gFromUntagged _ _ _ _ = fail "expected a type with constructors"
+
+  gFromUntaggedEntry _ _ = Nothing
 
 instance (GFromConstructor f, GFromConstructor g) => GFromConstructor (f :+: g) where
   gFromTag opts k n t = gFromTag opts (k . L1) n t `mplus` gFromTag opts (k . R1) n t
@@ -1135,6 +1166,8 @@ instance (GFromConstructor f, GFromConstructor g) => GFromConstructor (f :+: g) 
 
   -- A type with several constructors always has a tag.
   gFromUntagged _ _ _ _ = fail "expected a tag"
+
+  gFromUntaggedEntry _ _ = Nothing
 
 instance
   ( KnownSymbol name
@@ -1167,6 +1200,10 @@ instance
     | gNamed @f || gArity @f == 0 = withMapping (fmap (k . M1) . fromObject opts False [] (unM1 <$> def)) n
     | otherwise = k . M1 <$> gFromValue n
   {-# INLINE gFromUntagged #-}
+
+  gFromUntaggedEntry k entry
+    | gNamed @f || gArity @f == 0 = Nothing
+    | otherwise = Just (k . M1 <$> gFromEntry entry)
 
 -- | The fields of a constructor from a mapping. The given keys, e.g. the tag
 -- key, are no fields but valid keys.
