@@ -1042,7 +1042,8 @@ instance FromYaml Double where
 instance FromYaml Sci.Scientific where
   parseYaml = withScientific pure
 
--- | @YYYY-MM-DD@, e.g. @2026-09-25@.
+-- | @YYYY-MM-DD@, e.g. @2026-09-25@. The year has at most 15 digits, here and
+-- in the other types with a date.
 instance FromYaml Day where
   parseYaml = withIso8601 "expected a date such as 2026-09-25" parseDay
 

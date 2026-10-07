@@ -172,14 +172,23 @@ instance ToYaml Float where toYaml = scalar . Float . realFloatToFloatValue
 -- -1000 to 1000, e.g. @1e1001@, does not read back, see 'Finite'.
 instance ToYaml Sci.Scientific where toYaml = scalar . Float . Finite
 
+-- | The decoder accepts a year of at most 15 digits, so a larger year, e.g.
+-- @10^15@, does not read back.
 instance ToYaml Day where toYaml = timestamp buildDay
+
 instance ToYaml TimeOfDay where toYaml = iso8601 timeOfDay
+
+-- | The decoder accepts a year of at most 15 digits, so a larger year does
+-- not read back.
 instance ToYaml LocalTime where toYaml = timestamp localTime
 
 -- | The decoder accepts an offset of less than 24 hours, so a larger offset,
--- e.g. @+25:00@, does not read back.
+-- e.g. @+25:00@, does not read back. Neither does a year of more than 15
+-- digits.
 instance ToYaml ZonedTime where toYaml = timestamp (\(ZonedTime t z) -> localTime t <> buildTimeZone z)
 
+-- | The decoder accepts a year of at most 15 digits, so a larger year does
+-- not read back.
 instance ToYaml UTCTime where toYaml = timestamp (\(UTCTime d s) -> localTime (LocalTime d (timeToTimeOfDay s)) <> "Z")
 
 -- | The time of day without the trailing zeros of the fraction, e.g.
@@ -218,8 +227,14 @@ seconds ps = scalar (Float (Finite (Sci.scientific ps (negate picoDecimals))))
 -- | The text form with hyphens, e.g. @123e4567-e89b-12d3-a456-426614174000@.
 instance ToYaml UUID.UUID where toYaml = scalar . String . UUID.toText
 
+-- | The decoder accepts a year of at most 15 digits, so a larger year does
+-- not read back.
 instance ToYaml Month where toYaml = iso8601 buildMonth
+
+-- | The decoder accepts a year of at most 15 digits, so a larger year does
+-- not read back.
 instance ToYaml Quarter where toYaml = iso8601 buildQuarter
+
 instance ToYaml QuarterOfYear where toYaml = iso8601 buildQuarterOfYear
 
 -- | A string in an ISO 8601 format, the same as in aeson.
