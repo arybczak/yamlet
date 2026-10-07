@@ -1177,7 +1177,7 @@ newtype Tree = Tree Document
 instance Arbitrary Tree where
   arbitrary = do
     root <- sized genNode
-    c <- genComments False
+    c <- genComments
     pure . Tree $ (document root) {docComments = c}
 
 genNode :: Int -> Gen Node
@@ -1195,27 +1195,35 @@ genNode size = do
   p <- case n.content of
     AliasContent _ -> pure noProps
     _ -> genProps
-  c <- genComments (isCollection n)
-  pure n {props = p, comments = c}
+  c <- genComments
+  -- The text has no place for the lines after a block scalar.
+  pure n {props = p, comments = if isBlock n then c {after = []} else c}
   where
     genList :: Gen [Node]
     genList = do
       k <- choose (0, 4)
       vectorOf k (genNode (size `div` 3))
 
+    -- The lines below a scalar or an alias key read back as the lines above
+    -- the value.
     genEntries :: Gen [(Node, Node)]
     genEntries = do
       k <- choose (0, 4)
-      vectorOf k ((,) <$> genNode (size `div` 4) <*> genNode (size `div` 3))
+      vectorOf k ((,) . noLinesAfterScalar <$> genNode (size `div` 4) <*> genNode (size `div` 3))
+
+    noLinesAfterScalar :: Node -> Node
+    noLinesAfterScalar k = case k.content of
+      SequenceContent {} -> k
+      MappingContent {} -> k
+      _ -> k {comments = k.comments {after = []}}
+
+    isBlock :: Node -> Bool
+    isBlock n = case n.content of
+      ScalarLinesContent style _ _ -> style == Literal || style == Folded
+      _ -> False
 
     genStyle :: Gen CollectionStyle
     genStyle = elements [Block, Flow]
-
-    isCollection :: Node -> Bool
-    isCollection n = case n.content of
-      SequenceContent _ (_ : _) -> True
-      MappingContent _ (_ : _) -> True
-      _ -> False
 
     -- A scalar, often with positions of new lines. Some positions are not
     -- valid, e.g. outside the text or twice the same.
@@ -1295,18 +1303,12 @@ genNode size = do
             , (1, arbitrary)
             ]
 
--- | Comments for a node. Only a non-empty collection has lines after it.
-genComments :: Bool -> Gen Comments
-genComments collection =
+-- | Comments for a node.
+genComments :: Gen Comments
+genComments =
   frequency
     [ (3, pure noComments)
-    ,
-      ( 1
-      , Comments
-          <$> genLines
-          <*> oneof [pure Nothing, Just <$> genCommentText]
-          <*> (if collection then genLines else pure [])
-      )
+    , (1, Comments <$> genLines <*> oneof [pure Nothing, Just <$> genCommentText] <*> genLines)
     ]
   where
     genLines :: Gen [Line]
