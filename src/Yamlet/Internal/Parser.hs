@@ -116,13 +116,14 @@ parseStream input@(T.Text arr off len) = case prescan of
               | otherwise = j - upto + spacedOff + (s - off) + replacementLen
 
         -- The indentation of the nearest line above with content other than
-        -- a comment.
+        -- a comment. A line in the prefix of a document can start with a byte
+        -- order mark.
         indentationAbove :: Int -> Maybe Int
         indentationAbove k
           | k <= off = Nothing
           | otherwise =
               let p = previousLineStart e k
-                  c = skipWhites e p
+                  c = skipWhites e (skipBoms e p)
               in if isBreak (byteAt e c) || byteAt e c == HASH
                    then indentationAbove p
                    else Just (skipSpaces e p - p)

@@ -750,6 +750,10 @@ test_encodings = do
   errorAfterBom "error after a BOM after an end marker" (3, 5, "unexpected ':', quote the value if it contains \": \"") "a\n...\n\xFEFF\&b: x: y\n"
   errorAfterBom "error after a BOM and a comment after an end marker" (4, 4, "unterminated flow sequence") "a\n...\n\xFEFF# c\n\xFEFF\&b: [\n"
   errorAfterBom "error after a second BOM at the start" (1, 4, "unterminated flow sequence") "\xFEFF\xFEFF\&a: [\n"
+  errorAfterBom
+    "tab below a BOM and a comment"
+    (2, 2, "unexpected '%', a plain scalar cannot start with it, quote the value")
+    "\xFEFF# c\n\t%x\n"
   assertEqual
     "source line after a BOM"
     (Left "]")
