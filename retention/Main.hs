@@ -18,7 +18,7 @@ import Data.Functor.Identity
 import Data.IORef
 import Data.IntMap.Strict qualified as IM
 import Data.IntSet qualified as IS
-import Data.List
+import Data.List qualified as L
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
 import Data.Maybe
@@ -34,7 +34,7 @@ import Data.Text.Internal qualified as T
 import Data.Text.Lazy qualified as TL
 import Data.Time
 import Data.Tree qualified as Tree
-import GHC.Exts qualified as E
+import GHC.Exts (mkWeakNoFinalizer#)
 import GHC.Generics
 import GHC.IO
 import GHC.Weak
@@ -179,12 +179,12 @@ keptAlive what weak x = do
       ++ " keeps the input alive; after a second collection, the input is "
       ++ (if still then "still alive" else "gone")
       ++ "; thunks in the value: "
-      ++ (if null ts then "none" else intercalate ", " ts)
+      ++ (if null ts then "none" else L.intercalate ", " ts)
 
 -- | A weak pointer to the array of the text. A slice of the text shares the
 -- array, so the weak pointer is empty only if no text of the array is alive.
 weakArray :: T.Text -> IO (Weak ())
-weakArray (T.Text (A.ByteArray arr) _ _) = IO $ \s -> case E.mkWeakNoFinalizer# arr () s of
+weakArray (T.Text (A.ByteArray arr) _ _) = IO $ \s -> case mkWeakNoFinalizer# arr () s of
   (# s', w #) -> (# s', Weak w #)
 
 data Mode = Development | Production

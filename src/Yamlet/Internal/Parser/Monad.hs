@@ -57,7 +57,7 @@ import Data.Text qualified as T
 import Data.Text.Array qualified as A
 import Data.Text.Internal qualified as T
 import Data.Word
-import GHC.Exts
+import GHC.Exts (Int (I#), Int#, isTrue#, (+#), (>#))
 
 import Yamlet.Internal.Syntax
 
