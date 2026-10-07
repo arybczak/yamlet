@@ -1256,6 +1256,7 @@ test_typeErrors = do
   assertEqual "fixed with fewer digits" (Right 1.5) (decodeText @Centi "1.5")
   assertEqual "fixed with an exponent" (Right 120) (decodeText @Centi "1.2e2")
   assertEqual "fixed with too many digits" (Just (1, 1, "expected a multiple of 0.01")) (errorOf (decodeText @Centi "1.239"))
+  assertEqual "fixed of whole numbers" (Just (1, 1, "expected a multiple of 1")) (errorOf (decodeText @Uni "1.5"))
   assertEqual "largest fixed" (Right (10 ^ (1000 :: Int))) (decodeText @Centi "1e1000")
   assertEqual "resolution of 2s and 5s" (Right (MkFixed 7)) (decodeText @(Fixed Fortieths) "0.175")
   assertEqual

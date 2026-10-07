@@ -1337,7 +1337,7 @@ instance HasResolution a => FromYaml (Fixed a) where
       -- 0.03 for 1/40 and 0.4 for 1/3.
       step :: String
       step = case decimalPlaces res of
-        Just places -> Sci.formatScientific Sci.Fixed Nothing (Sci.scientific (10 ^ places `div` res) (negate places))
+        Just places -> Sci.formatScientific Sci.Fixed (Just places) (Sci.scientific (10 ^ places `div` res) (negate places))
         Nothing -> "1/" ++ show res
 
 -- | The value inside.
