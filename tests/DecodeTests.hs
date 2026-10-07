@@ -1769,8 +1769,8 @@ test_prettyError = do
     Left errs ->
       assertEqual
         "caret after combining marks"
-        ["  | " ++ replicate 4 ' ' ++ "^"]
-        (map (last . lines . prettyError "f") (NE.toList errs))
+        [["  | " ++ replicate 4 ' ' ++ "^"]]
+        (map (drop 3 . lines . prettyError "f") (NE.toList errs))
     Right _ -> assertFailure "expected an error"
   where
     -- The excerpt and the caret from a scan of the whole line.
