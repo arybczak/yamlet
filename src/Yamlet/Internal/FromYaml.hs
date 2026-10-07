@@ -385,6 +385,7 @@ withName :: [T.Text] -> (T.Text -> Parser a) -> S.Node -> Parser a
 withName names f = parseNode $ \n -> case (view n, n.content) of
   (StringView t, _) -> f t
   (_, S.ScalarContent S.Plain t) | S.NoTag <- n.props.tag, t `elem` names -> failAt n (stringMismatch n)
+  _ | null names -> failAt n "no value is accepted"
   _ -> typeMismatch ("one of: " ++ L.intercalate ", " (map T.unpack names)) n
 
 -- | The value that goes with the string in the list of pairs, e.g. for names
@@ -770,7 +771,8 @@ missingKey o key = Parser $ \off ->
 -- | Fail at each key that is not in the list. If a key in the list is close
 -- to an unknown key, e.g. "host" to "hots", its error suggests it. Otherwise
 -- the first such error of the mapping lists the known keys, and the others
--- do not repeat the list.
+-- do not repeat the list. An empty list accepts only an empty mapping, e.g.
+-- for a value written as @{}@.
 --
 -- A key that is not a string, but has the text of a known key, e.g. @true@,
 -- is left to the lookup of that key, e.g. 'parseField', which reports it.
@@ -805,7 +807,7 @@ rejectUnknownKeys known o
           | isKnown t -> go unlisted rest
           | t == "<<" -> unknown k t noMergeKeys *> go unlisted rest
           | Just s <- closeName known t -> unknown k t (didYouMean s) *> go unlisted rest
-          | unlisted -> unknown k t (expectedOneOf known) *> go False rest
+          | unlisted -> unknown k t (if null known then ", the mapping must be empty" else expectedOneOf known) *> go False rest
           | otherwise -> unknown k t "" *> go False rest
         _
           | any (\r -> r.offset == k.offset) reported -> go unlisted rest
@@ -819,7 +821,12 @@ rejectUnknownKeys known o
 -- known names.
 unknownName :: String -> [T.Text] -> S.Node -> T.Text -> Parser a
 unknownName what known n t =
-  failAt n $ "unknown " ++ what ++ " " ++ showText t ++ maybe (expectedOneOf known) didYouMean (closeName known t)
+  failAt n $ "unknown " ++ what ++ " " ++ showText t ++ hint
+  where
+    hint :: String
+    hint
+      | null known = ", no " ++ what ++ " is accepted"
+      | otherwise = maybe (expectedOneOf known) didYouMean (closeName known t)
 
 didYouMean :: T.Text -> String
 didYouMean s = ", did you mean " ++ showText s ++ "?"

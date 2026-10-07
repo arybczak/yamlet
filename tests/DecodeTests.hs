@@ -269,6 +269,13 @@ instance FromYaml Config where
       <*> parseFieldDefault o "paths" []
       <*> parseFieldDefault o "jobs" 1
 
+-- | A value written as an empty mapping.
+data EmptyDir = EmptyDir
+  deriving stock (Eq, Show)
+
+instance FromYaml EmptyDir where
+  parseYaml = withMapping $ \o -> EmptyDir <$ rejectUnknownKeys [] o
+
 -- | Edge cases of block scalars that the specification leaves unclear.
 test_blockScalars :: Assertion
 test_blockScalars = do
@@ -1153,6 +1160,13 @@ newtype Size = Size Int
 instance FromYaml Size where
   parseYaml = oneOf [("small", Size 1), ("large", Size 2), ("10", Size 10)]
 
+-- | A choice from a list that the program found empty.
+newtype Profile = Profile Int
+  deriving stock (Eq, Show)
+
+instance FromYaml Profile where
+  parseYaml = oneOf []
+
 test_typeErrors :: Assertion
 test_typeErrors = do
   assertEqual "first alternative" (Right (IntOrText (Left 1))) (decodeText "1")
@@ -1178,6 +1192,14 @@ test_typeErrors = do
     "collection"
     (Just (1, 1, "expected one of: small, large, 10, but got a list"))
     (errorOf (decodeText @Size "[small]"))
+  assertEqual
+    "name without names"
+    (Just (1, 1, "unknown value \"dev\", no value is accepted"))
+    (errorOf (decodeText @Profile "dev"))
+  assertEqual
+    "collection without names"
+    (Just (1, 1, "no value is accepted"))
+    (errorOf (decodeText @Profile "[dev]"))
   assertEqual
     "pair"
     (Just (1, 1, "expected a list of 2 elements, but got 1"))
@@ -1344,6 +1366,11 @@ test_collectedErrors = do
     , (4, 1, "unknown key \"job\", did you mean \"jobs\"?")
     ]
     (errorsOf (decodeText @Config "name: x\nfoo: 1\nbar: 2\njob: 3\n"))
+  assertEqual "no known keys" (Right EmptyDir) (decodeText @EmptyDir "{}")
+  assertEqual
+    "unknown keys without known keys"
+    [(1, 1, "unknown key \"a\", the mapping must be empty"), (2, 1, "unknown key \"b\"")]
+    (errorsOf (decodeText @EmptyDir "a: 1\nb: 2\n"))
   assertEqual
     "statement of a do block"
     [(2, 1, "unknown key \"bogus\", expected one of: name, paths, jobs")]
