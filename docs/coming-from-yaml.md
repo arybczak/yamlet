@@ -49,6 +49,14 @@ yamlet does not convert values to the types of JSON:
 - A value must have the YAML type of its Haskell type. yamlet rejects some
   values that aeson converts, e.g. `1.0` for an `Int`, `0.5` for a
   `Rational` and `null` for a `Double`.
+- The elements of a `Set` or an `IntSet` must be unique, so `[a, a]` is an
+  error. aeson keeps one of them.
+- A `Fixed` value must be a multiple of the resolution of its type, so
+  `1.255` is an error for a `Centi`. aeson rounds it down to `1.25`.
+- The mapping of a `Rational`, a `CalendarDiffDays` or a
+  `CalendarDiffTime` must have only the keys of the type, e.g. `numerator`
+  and `denominator`. aeson ignores other keys.
+- A `Proxy` is `null`. aeson reads any value as a `Proxy`.
 
 ## Generic instances
 
