@@ -32,8 +32,9 @@ data View
   | StringView !T.Text
   | SequenceView ![S.Node]
   | MappingView ![(S.Node, S.Node)]
-  | -- | 'Yamlet.Decode.runParser' replaces the aliases, so only a node that a
-    -- program builds can have one.
+  | -- | An alias, e.g. in a node from 'Yamlet.Syntax.parseDocuments'.
+    -- 'Yamlet.Decode.runParser' replaces the aliases, so a parser never sees
+    -- one.
     AliasView !T.Text
   deriving stock (Eq, Show, Generic)
 
