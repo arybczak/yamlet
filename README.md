@@ -192,6 +192,10 @@ is an ordinary key. Others come from the types, e.g. the keys of a
 [Coming from the yaml package](https://github.com/arybczak/yamlet/blob/master/docs/coming-from-yaml.md)
 lists all of them.
 
+The package [yamlet-aeson](https://hackage.haskell.org/package/yamlet-aeson)
+decodes and encodes with the instances of aeson, so a program can switch to
+yamlet before it has instances of yamlet.
+
 ## Development
 
 The test suite reads the data of the YAML test suite, release

@@ -9,18 +9,20 @@
 
 set -eu
 
-doctest \
-  src \
-  -XGHC2021 \
-  -XDataKinds \
-  -XDeriveAnyClass \
-  -XDerivingStrategies \
-  -XDerivingVia \
-  -XDuplicateRecordFields \
-  -XLambdaCase \
-  -XMultiWayIf \
-  -XNoFieldSelectors \
-  -XOverloadedRecordDot \
-  -XOverloadedStrings \
-  -XTypeFamilies \
-  -XUndecidableInstances
+for dir in src yamlet-aeson/src; do
+  doctest \
+    "$dir" \
+    -XGHC2021 \
+    -XDataKinds \
+    -XDeriveAnyClass \
+    -XDerivingStrategies \
+    -XDerivingVia \
+    -XDuplicateRecordFields \
+    -XLambdaCase \
+    -XMultiWayIf \
+    -XNoFieldSelectors \
+    -XOverloadedRecordDot \
+    -XOverloadedStrings \
+    -XTypeFamilies \
+    -XUndecidableInstances
+done

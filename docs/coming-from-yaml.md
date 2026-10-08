@@ -5,6 +5,18 @@ encodes with the instances of aeson. The instances of yamlet, the generic
 ones too, read and write the same YAML as the instances of aeson, so files
 written for the yaml package keep working, with the exceptions below.
 
+## Switching in steps
+
+The package [yamlet-aeson](https://hackage.haskell.org/package/yamlet-aeson)
+decodes and encodes a type with its instances of aeson, wrapped in
+`ViaAeson`, e.g. `decodeFile @(ViaAeson Config)`. A program can switch to
+the parser of yamlet first and derive the instances of yamlet later, one
+type at a time. A field whose type has only instances of aeson derives its
+instances of yamlet via `ViaAeson`.
+
+Through `ViaAeson`, the rules of YAML 1.2 below apply, but the types follow
+the instances of aeson, e.g. `1.0` is an `Int`.
+
 ## YAML 1.2
 
 yamlet follows YAML 1.2 where the yaml package does not:

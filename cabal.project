@@ -1,4 +1,4 @@
-packages: .
+packages: . yamlet-aeson
 
 if impl(ghc >= 10)
   allow-newer:
