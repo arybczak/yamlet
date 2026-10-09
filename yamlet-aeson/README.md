@@ -64,6 +64,8 @@ A YAML document converts to an aeson `Value` as follows:
 - A key is the text of its scalar, e.g. `"0x10"` for `0x10` and `"~"` for
   `~`, as in the yaml package. Two keys with the same text are an error,
   e.g. `1` and `"1"`. A key that is a collection is an error.
+- A key `<<` is an ordinary key, because the merge keys of YAML 1.1 are
+  not supported.
 - `.inf` and `-.inf` are the strings `"+inf"` and `"-inf"`, and `.nan` is
   null, which the instances of aeson for `Double` and `Float` read and
   write.

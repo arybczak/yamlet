@@ -1,6 +1,6 @@
 # yamlet
 
-[![CI](https://github.com/arybczak/yamlet/actions/workflows/haskell-gha.yml/badge.svg?branch=master)](https://github.com/arybczak/yamlet/actions/workflows/haskell-gha.yml?query=branch%3Amaster)
+[![CI](https://github.com/arybczak/yamlet/actions/workflows/haskell-gha.yaml/badge.svg?branch=master)](https://github.com/arybczak/yamlet/actions/workflows/haskell-gha.yaml?query=branch%3Amaster)
 
 A YAML 1.2.2 library written in Haskell. Main features:
 

@@ -30,8 +30,9 @@ yamlet follows YAML 1.2 where the yaml package does not:
   yamlet decoder that expects a string suggests quotes.
 - `<<` is an ordinary key. The yaml package merges the entries of a `<<`
   key into its mapping, as YAML 1.1 does.
-- U+2028 and U+2029 in a string are ordinary characters. The yaml package
-  writes them as line breaks with indentation after them, so the string
+- U+2028 and U+2029 in a string are ordinary characters. In a string that
+  the yaml package writes in single quotes, e.g. `true` followed by U+2028,
+  it writes them as line breaks with indentation after them, so the string
   that yamlet reads back keeps the spaces of the indentation.
 - The keys of a mapping must be unique, so two equal keys are an error. The
   yaml package keeps the value of the last one.
