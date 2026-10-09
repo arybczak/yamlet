@@ -359,9 +359,8 @@ validAnchors doc
     isAnchorName :: T.Text -> Bool
     isAnchorName a = not (T.null a) && T.all isAnchorChar a
 
-    -- YAML 1.1 reads U+2028 and U+2029 as line breaks.
     isAnchorChar :: Char -> Bool
-    isAnchorChar c = isPrintable c && c /= ' ' && c /= '\x2028' && c /= '\x2029' && not (asciiChar isFlowIndicator c)
+    isAnchorChar c = isScalarChar c && c /= ' ' && not (asciiChar isFlowIndicator c)
 
 -- | The version of the document if the parser accepts it. The parser
 -- rejects the other versions.

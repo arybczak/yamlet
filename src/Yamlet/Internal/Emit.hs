@@ -26,6 +26,7 @@ module Yamlet.Internal.Emit
   , tagHandles
   , tagDirective
   , isPrintable
+  , isScalarChar
   , spaces
   ) where
 

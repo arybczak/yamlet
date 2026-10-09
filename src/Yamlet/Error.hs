@@ -359,11 +359,15 @@ nodePaths offs root = map (\off -> M.findWithDefault Root off found) offs
 -- | Create an error at the given offset of the input.
 errorAt :: T.Text -> Offset -> String -> Error
 errorAt input off msg
-  | off == noOffset = force $ Error (locate input off) msg T.empty 0 Root
+  | off == noOffset = errorOnLine (locate input off) msg T.empty 0
   | otherwise =
       let (loc, index, _) = locateFrom input (startScan input) off
-          sourceLine = T.copy (lineAt input off)
-      in force $ Error loc msg sourceLine (min (T.lengthWord8 sourceLine) index) Root
+      in errorOnLine loc msg (T.copy (lineAt input off)) index
+
+-- | An error at the location, with the line that contains it and the index of
+-- the location in the bytes of the line.
+errorOnLine :: Location -> String -> T.Text -> Int -> Error
+errorOnLine loc msg sourceLine index = force $ Error loc msg sourceLine (min (T.lengthWord8 sourceLine) index) Root
 
 -- | Create errors at the given offsets of a document, with their paths, in the
 -- order of the list. The text is the input of the document, e.g. for the
@@ -384,13 +388,13 @@ errorsAt input errs =
     go s prev = \case
       [] -> []
       (i, (off, msg)) : rest
-        | off == noOffset -> (i, force $ Error (locate input off) msg T.empty 0 Root) : go s prev rest
+        | off == noOffset -> (i, errorOnLine (locate input off) msg T.empty 0) : go s prev rest
         | otherwise ->
             let (loc, index, s') = locateFrom input s off
                 sourceLine = case prev of
                   Just (ln, t) | ln == loc.line -> t
                   _ -> T.copy (lineAt input off)
-            in (i, force $ Error loc msg sourceLine (min (T.lengthWord8 sourceLine) index) Root) : go s' (Just (loc.line, sourceLine)) rest
+            in (i, errorOnLine loc msg sourceLine index) : go s' (Just (loc.line, sourceLine)) rest
 
 -- | Compute the line and the column of an offset. The byte order marks at the
 -- start of a line are not columns, because they are not content. For
