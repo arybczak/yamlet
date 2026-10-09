@@ -37,7 +37,7 @@ unexpected input i = (tabCause, other)
   where
     tabCause :: Maybe Int
     tabCause = case indentationTab (i - 1) Nothing of
-      Nothing | byteAt e i == COLON && firstColon -> tabBeforeContent
+      Nothing | byteAt e i == COLON && firstColonFrom contentStart -> firstTab e lineStart contentStart
       t -> t
 
     other :: (Int, String)
@@ -214,10 +214,13 @@ unexpected input i = (tabCause, other)
     entryStart :: Int
     entryStart = skipListItems (skipSpaces e (lineStartAt e i))
 
-    -- No colon that ends a key precedes the index on its line, other than
-    -- in a flow collection.
     firstColon :: Bool
-    firstColon = go entryStart 0
+    firstColon = firstColonFrom entryStart
+
+    -- No colon that ends a key is from the given index to the index of the
+    -- error, other than in a flow collection.
+    firstColonFrom :: Int -> Bool
+    firstColonFrom start = go start 0
       where
         go :: Int -> Int -> Bool
         go j depth
@@ -267,18 +270,26 @@ unexpected input i = (tabCause, other)
       Just k -> isListItem k || any isKeyColon [k .. lineContentEnd e k - 1]
       Nothing -> False
 
-    -- The first tab before the content of the line of the index, as in
-    -- "\tkey: value". A plain scalar can follow a tab, but a key cannot.
-    tabBeforeContent :: Maybe Int
-    tabBeforeContent =
-      let start = lineStartAt e i
-      in firstTab e start (skipWhites e start)
+    lineStart :: Int
+    lineStart = lineStartAt e i
+
+    -- The content of the line of the index after the white space and the
+    -- indicators of block entries, as in "- ? key". A plain scalar can follow
+    -- a tab there, but a key cannot.
+    contentStart :: Int
+    contentStart = go lineStart
+      where
+        go :: Int -> Int
+        go j =
+          let k = skipWhites e j
+          in if isBlockIndicator k then go (k + 1) else k
 
     -- The first tab in the indentation before the index, if only white space
-    -- precedes the index on its line.
+    -- and the indicators of block entries precede the index on its line.
     indentationTab :: Int -> Maybe Int -> Maybe Int
     indentationTab j tab
       | j < e.base = tab'
+      | isBlockIndicator j = indentationTab (j - 1) tab
       | otherwise = case A.unsafeIndex e.array j of
           SPACE -> indentationTab (j - 1) tab
           TAB -> indentationTab (j - 1) (Just j)
@@ -288,6 +299,11 @@ unexpected input i = (tabCause, other)
       where
         tab' :: Maybe Int
         tab' = if byteAt e i == TAB then Just (fromMaybe i tab) else tab
+
+    isBlockIndicator :: Int -> Bool
+    isBlockIndicator j =
+      let w = byteAt e j
+      in (w == MINUS || w == QUESTION || w == COLON) && isWhite (byteAt e (j + 1))
 
     -- The error for a line of a block collection that lacks the space after
     -- "-" or the ":" after a key, if the entries above it at the same
@@ -465,6 +481,9 @@ mistakeIn e flow i
       Just $ unexpectedChar e i ++ " after a single-quoted scalar, write '' for a quote inside it"
   | afterQuote DQUOTE =
       Just $ unexpectedChar e i ++ " after a double-quoted scalar, write \\\" for a quote inside it"
+  -- A '%' at the start of a line in the block style starts a directive.
+  | not flow && w == PERCENT && isStartOfLine e i && isNsChar (byteAt e (i + 1)) =
+      Just "unexpected '%', a directive needs '...' on a line above it to end the document"
   -- Other indicators start a node of another kind, e.g. '&' an anchor.
   | w == AT || w == GRAVE || w == PERCENT =
       Just $ unexpectedChar e i ++ ", a plain scalar cannot start with it, quote the value"

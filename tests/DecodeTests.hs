@@ -918,8 +918,13 @@ test_syntaxErrors = do
     "word1  # comment\nword2\n"
   check
     "directive after a comment"
-    (3, 1, "unexpected '%', a plain scalar cannot start with it, quote the value")
+    (3, 1, "unexpected '%', a directive needs '...' on a line above it to end the document")
     "---\nscalar1 # comment\n%YAML 1.2\n---\nscalar2\n"
+  check
+    "directive after a mapping"
+    (2, 1, "unexpected '%', a directive needs '...' on a line above it to end the document")
+    "a: 1\n%YAML 1.2\n---\nb: 2\n"
+  check "percent sign at the start of a line in a flow sequence" (2, 1, "unexpected '%', a plain scalar cannot start with it, quote the value") "[a,\n%x]\n"
   check
     "anchor on its own line in a sequence"
     (2, 1, "an anchor or a tag cannot be on a line of its own here, write it after the key or the '-'")
@@ -973,6 +978,12 @@ test_syntaxErrors = do
   check "tab before a comment below a block scalar" (3, 1, "tabs cannot be used for indentation") "a: |\n  x\n\t# c\nb: 1\n"
   check "tab on a blank line of a plain scalar" (2, 1, "tabs cannot be used for indentation") "a: b\n\t\n c\n"
   check "tab on a blank line above a line indented too much" (3, 3, "unexpected indentation") "a: 1\n\t\n  b: 2\n"
+  check "tab after a list item indicator" (3, 3, "tabs cannot be used for indentation") "x:\n- a\n- \tb: c\n"
+  check "tab right after a list item indicator" (1, 2, "tabs cannot be used for indentation") "-\tname: x\n"
+  check "tab after an explicit key indicator" (2, 3, "tabs cannot be used for indentation") "x: 1\n? \ta: b\n"
+  check "tab after a value indicator" (2, 2, "tabs cannot be used for indentation") "? a\n:\tb: c\n"
+  -- With a space in place of the tab, the parser fails at the same place.
+  check "tab before a list after a key" (1, 6, "unexpected '-', a list cannot start on the line of its key") "key:\t- a\n"
   -- With spaces in place of the tab, the parser fails at the same place.
   check "tab before an indicator" (1, 2, "unexpected '@', a plain scalar cannot start with it, quote the value") "\t@\n"
   check "tab before a bracket" (1, 2, "unexpected ']'") "\t]\n"
