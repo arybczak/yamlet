@@ -125,15 +125,16 @@ runTest path = do
       | otherwise -> do
           expected <- lines . T.unpack . T.decodeUtf8 <$> BS.readFile (path </> "test.event")
           assertEqual preface expected (map renderEvent (toEvents docs))
-          let out = renderSyntax defaultRenderOptions docs
-          case parseDocumentsText out of
-            Left err -> assertFailure $ preface ++ "\nrendered:\n" ++ T.unpack out ++ "\nerror: " ++ prettyError "out.yaml" err
-            Right docs' -> do
-              assertEqual
-                (preface ++ "\nrendered:\n" ++ T.unpack out)
-                (rendered (toEvents docs))
-                (rendered (toEvents docs'))
-              assertEqual (preface ++ "\nrendered again") out (renderSyntax defaultRenderOptions docs')
+          forM_ [("rendered", defaultRenderOptions), ("rendered in block style", defaultRenderOptions {forceBlock = True})] $ \(label, options) -> do
+            let out = renderSyntax options docs
+            case parseDocumentsText out of
+              Left err -> assertFailure $ preface ++ "\n" ++ label ++ ":\n" ++ T.unpack out ++ "\nerror: " ++ prettyError "out.yaml" err
+              Right docs' -> do
+                assertEqual
+                  (preface ++ "\n" ++ label ++ ":\n" ++ T.unpack out)
+                  (rendered (toEvents docs))
+                  (rendered (toEvents docs'))
+                assertEqual (preface ++ "\n" ++ label ++ " again") out (renderSyntax options docs')
           hasJson <- doesFileExist (path </> "in.json")
           case Y.decodeAllText @Y.Value input of
             Left err
