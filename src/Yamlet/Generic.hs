@@ -444,7 +444,7 @@ data SumEncodingKind
     -- 'TaggedObject', and the other keys are unknown keys. Without the
     -- contents key, the other keys are the field, so a field that is not a
     -- mapping needs the contents key. An error at the mapping itself, e.g.
-    -- that an integer is not a mapping, has a note at the tag that says so.
+    -- that a mapping is not an integer, has a note at the tag that says so.
     --
     -- The keys of the mapping belong to the field, so the options of its
     -- type apply to them, e.g. 'Yamlet.Generic.rejectUnknownFields'.

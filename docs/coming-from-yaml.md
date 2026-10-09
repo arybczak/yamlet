@@ -24,10 +24,14 @@ yamlet follows YAML 1.2 where the yaml package does not:
 - `y`, `yes`, `on`, `n`, `no` and `off` are strings, not booleans. A
   decoder that expects a `Bool` suggests `true` or `false`.
 - `.5`, `+.5`, `.inf`, `-.Inf`, `.NaN` and similar values are floats. The
-  yaml package reads a number only in the syntax of JSON, apart from the
-  `0x` and `0o` prefixes. It reads such values as strings and writes such
-  strings without quotes, although YAML 1.1 reads them as floats too. A
-  yamlet decoder that expects a string suggests quotes.
+  yaml package reads a number only if a digit comes first, after an
+  optional sign, e.g. `1`, `+1`, `007` or `0x1F`. It reads such values as
+  strings and writes such strings without quotes, although YAML 1.1 reads
+  them as floats too. A yamlet decoder that expects a string suggests
+  quotes.
+- A scalar with a tag that is not of the core schema is a string, e.g.
+  `!secret 123` is the string `123`. The yaml package ignores such a tag
+  and reads `123` as a number.
 - `<<` is an ordinary key. The yaml package merges the entries of a `<<`
   key into its mapping, as YAML 1.1 does.
 - U+2028 and U+2029 in a string are ordinary characters. In a string that
@@ -36,6 +40,16 @@ yamlet follows YAML 1.2 where the yaml package does not:
   that yamlet reads back keeps the spaces of the indentation.
 - The keys of a mapping must be unique, so two equal keys are an error. The
   yaml package keeps the value of the last one.
+- Every line of a flow collection or of a quoted scalar must be indented
+  more than the key or the `-` of its entry, the closing bracket too. The
+  yaml package also reads lines with less indentation, e.g. a `}` at the
+  start of a line:
+
+  ```yaml
+  server: {
+    port: 80
+  }
+  ```
 
 ## Types
 
@@ -81,6 +95,12 @@ yamlet does not convert values to the types of JSON:
   constructor, e.g. `Unit`. aeson writes `[]`.
 - With the encoding `SingleField`, a constructor without fields is its
   name, e.g. `Dot`. aeson writes `{Dot: []}`.
+- A constructor with several fields without names is a compile error.
+  aeson writes the fields as a list. Give the fields names.
+- A type cannot mix a constructor with named fields and a constructor with
+  one field without a name, except with the encoding `SingleField`. Such a
+  type is a compile error. aeson writes the field without a name under the
+  key `contents`.
 
 The documentation of the instances in
 [Yamlet.Decode](https://hackage.haskell.org/package/yamlet-1.0.0.0/candidate/docs/Yamlet-Decode.html)

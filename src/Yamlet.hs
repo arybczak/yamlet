@@ -191,8 +191,9 @@ import Yamlet.Value
 decode :: FromYaml a => BS.ByteString -> Either (NE.NonEmpty Error) a
 decode bs = single (decodeInput bs) >>= decodeText
 
--- | Decode every document of a stream. The errors are those of the first
--- document that fails, as for 'decode'.
+-- | Decode every document of a stream. The errors are as for 'decode', from
+-- the first document that fails. The parser reads the whole stream first, so
+-- a syntax error in any document comes before the errors of the others.
 --
 -- >>> decodeAll @Int "1\n---\n2\n"
 -- Right [1,2]
@@ -211,7 +212,9 @@ decodeText input = do
 
 -- | Decode a stream with one document as 'decodeText' does, and give the
 -- document too, e.g. for 'documentErrors' or to write the file back with its
--- comments. An empty stream is a document with null.
+-- comments. An empty stream is a document with null. A stream of only
+-- comments is empty too, so the document does not keep them, as the section
+-- [Comments]("Yamlet.Syntax#comments") says.
 decodeWithDocument :: FromYaml a => T.Text -> Either (NE.NonEmpty Error) (a, S.Document)
 decodeWithDocument input =
   single (parseStream input) >>= \case

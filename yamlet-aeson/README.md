@@ -69,8 +69,9 @@ A YAML document converts to an aeson `Value` as follows:
 - `.inf` and `-.inf` are the strings `"+inf"` and `"-inf"`, and `.nan` is
   null, which the instances of aeson for `Double` and `Float` read and
   write.
-- A tag that is not of the core schema does not matter, e.g. `!secret abc`
-  is the string `"abc"`.
+- A tag that is not of the core schema makes a scalar a string, e.g.
+  `!secret 123` is the string `"123"`. The yaml package reads it as the
+  number 123. On a collection, such a tag does not matter.
 
 An instance of aeson can convert two different keys to the same key and then
 keep only one of the pairs, as it does for JSON, e.g. `1` and `1.0` for a

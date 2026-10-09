@@ -59,8 +59,9 @@ defaultRenderOptions =
 -- * A flow collection with comments inside becomes a block collection, so
 --   that every comment has a line.
 --
--- * A flow collection without comments is on one line, so the empty lines
---   inside it go away.
+-- * A flow collection without comments is on one line, apart from the line
+--   breaks of its multi-line scalars, so the empty lines between its entries
+--   go away.
 --
 -- * A key of more than 1024 characters in a flow mapping becomes an explicit
 --   key, e.g. @{? key : value}@, because YAML 1.1 parsers reject a longer
