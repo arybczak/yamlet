@@ -226,7 +226,8 @@ data Comments = Comments
   { before :: ![Line]
   -- ^ The lines above the node.
   , inline :: !(Maybe T.Text)
-  -- ^ The comment at the end of the first line of the node. The renderer
+  -- ^ The comment at the end of the line where the node ends, or of the
+  -- first line of a block collection or a block scalar. The renderer
   -- writes each line break in it as a space. The line breaks are the
   -- characters that 'CommentLine' lists.
   , after :: ![Line]
@@ -252,8 +253,8 @@ withComments c n = Node n.offset n.endOffset n.props c n.content
 --
 -- * 'Yamlet.Syntax.before': the lines above the entry,
 --
--- * 'Yamlet.Syntax.inline': the comment at the end of the first line of the
---   entry,
+-- * 'Yamlet.Syntax.inline': the comment at the end of the line of the key,
+--   or of the line where a value on several lines ends,
 --
 -- * 'Yamlet.Syntax.after': the lines after the value, e.g. after the last
 --   entry of a collection.
