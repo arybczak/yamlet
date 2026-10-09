@@ -847,7 +847,7 @@ inline opts pos indent n lineComment = case n.content of
     flowEntry (k, v)
       | fits && not (isEmpty k) =
           mconcat
-            [ inline opts InFlowKey indent k Nothing
+            [ key
             , if endsWithName k then " : " else ": "
             , flowValue v
             ]
@@ -855,21 +855,30 @@ inline opts pos indent n lineComment = case n.content of
       | otherwise =
           mconcat
             [ "? "
-            , inline opts InFlowKey indent k Nothing
+            , key
             , if
                 | isEmpty v -> afterTag k
                 | isEmpty k -> ": " <> flowValue v
                 | otherwise -> " : " <> flowValue v
             ]
       where
-        -- A short scalar without properties fits even in two quotes with each
-        -- character as the longest escape, \U and its digits, and then the
-        -- check renders nothing.
+        -- The key is rendered at most once, so that a key inside a key does
+        -- not double the time with each level.
         fits :: Bool
-        fits = case (k.props, k.content) of
+        key :: B.Builder
+        (fits, key) = case (k.props, k.content) of
+          -- A short scalar without properties fits even in two quotes with
+          -- each character as the longest escape, \U and its digits.
           (Props Nothing NoTag, ScalarContent _ t)
-            | T.compareLength t ((maxImplicitKeyLength - 2) `div` (2 + bigUEscapeDigits)) /= GT -> True
-          _ -> T.compareLength (B.runBuilder (inline opts InFlowKey indent k Nothing)) maxImplicitKeyLength /= GT
+            | T.compareLength t ((maxImplicitKeyLength - 2) `div` (2 + bigUEscapeDigits)) /= GT -> (True, rendered)
+          _
+            | longerThan maxImplicitKeyLength k -> (False, rendered)
+            | otherwise ->
+                let t = B.runBuilder rendered
+                in (T.compareLength t maxImplicitKeyLength /= GT, B.fromText t)
+
+        rendered :: B.Builder
+        rendered = inline opts InFlowKey indent k Nothing
 
     flowValue :: Node -> B.Builder
     flowValue x = inline opts itemPos indent x Nothing <> afterTag x
@@ -901,6 +910,42 @@ inline opts pos indent n lineComment = case n.content of
       where
         inFlow :: Bool
         inFlow = pos == InFlow || pos == InFlowKey
+
+-- | The node in a flow key has more characters than the limit. The count is
+-- a lower bound, so that it needs no rendering: a character for each node
+-- inside, at least that of a bracket, a comma or a colon, and the characters
+-- of the scalars, the anchors, the aliases and the tags, each tag as if it
+-- were a core tag written with !!. The count stops at the limit, so a node
+-- inside many keys does not add time to each of them.
+longerThan :: Int -> Node -> Bool
+longerThan limit n0 = go (limit + 1) [n0] < 0
+  where
+    -- The characters left before the limit, after the nodes.
+    go :: Int -> [Node] -> Int
+    go left = \case
+      _ | left < 0 -> left
+      [] -> left
+      n : rest -> case n.content of
+        ScalarContent _ t -> go (own n - upTo left t) rest
+        AliasContent name -> go (left - 1 - upTo left name) rest
+        SequenceContent _ xs -> go (own n) (xs ++ rest)
+        MappingContent _ kvs -> go (own n) (concatMap (\(k, v) -> [k, v]) kvs ++ rest)
+        where
+          own :: Node -> Int
+          own x = left - 1 - maybe 0 (upTo left) x.props.anchor - tagChars x.props.tag
+
+          tagChars :: Tag -> Int
+          tagChars = \case
+            Tag t -> max 0 (upTo (left + coreShortening) t - coreShortening)
+            _ -> 0
+
+    -- The length of the text, up to one past the count.
+    upTo :: Int -> T.Text -> Int
+    upTo count t = T.length (T.take (count + 1) t)
+
+    -- A core tag loses its prefix and gains !!.
+    coreShortening :: Int
+    coreShortening = T.length coreTagPrefix - 2
 
 -- | A key on one line, or 'Nothing' if it needs an explicit entry.
 implicitKey :: RenderOptions -> Node -> Maybe B.Builder

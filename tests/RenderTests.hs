@@ -25,6 +25,7 @@ renderTests =
     , testCase "lines of scalars" test_scalarLines
     , slow $ testCase "many invalid anchor names" test_manyAnchors
     , slow $ testCase "deep comment" test_deepComment
+    , slow $ testCase "nested keys" test_nestedKeys
     , slow $ testCase "comments above nesting" test_commentsAboveNesting
     , slow $ testCase "many escaped line breaks" test_escapedBreaks
     , testGroup
@@ -373,6 +374,16 @@ test_deepComment =
 
     indent :: T.Text
     indent = T.replicate (2 * (depth - 1)) " "
+
+-- | The time to render keys inside keys of flow mappings is linear in the
+-- depth.
+test_nestedKeys :: Assertion
+test_nestedKeys = do
+  rendersBack "implicit keys" (T.replicate 30 "{" <> "a: b" <> T.replicate 30 "}: b" <> "\n")
+  -- The keys inside become implicit as long as they fit.
+  case renderSyntax defaultRenderOptions <$> parseDocumentsText (T.replicate 20000 "{? " <> "a" <> T.replicate 20000 "}" <> "\n") of
+    Right output -> rendersBack "explicit keys" output
+    Left err -> assertFailure (show err)
 
 -- | The time to attach the comment lines above nested lists, each on its own
 -- line, is linear in the number of lines, not in the number of lines times
