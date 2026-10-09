@@ -70,6 +70,11 @@ defaultRenderOptions =
 --   e.g. the lines above the value of a key go above the key if the value
 --   is on the line of the key.
 --
+-- * In the text of a comment, a character that YAML does not allow becomes
+--   U+FFFD, and the white space at the end goes away. A line break starts a
+--   new comment in a 'Yamlet.Syntax.CommentLine', and becomes a space in an
+--   inline comment, also one that moves to a line of its own.
+--
 -- * An anchor name with a character that YAML does not allow in it, e.g. a
 --   space, or that YAML 1.1 reads as a line break, e.g. U+2028, becomes a
 --   new name in the anchor and in its aliases. Other names stay, also those
@@ -218,7 +223,7 @@ renderSyntax opts = emptyLines . B.runBuilder . go True
         -- collection goes below it if the document has one too.
         (markerComment, rootLines) = case (doc.docComments.inline, r.comments.inline) of
           (dc, _) | isJust propsLine -> (dc, r.comments.before)
-          (Just dc, Just rc) | isBlock opts r -> (Just dc, Comment rc : r.comments.before)
+          (Just dc, Just rc) | isBlock opts r -> (Just dc, inlineLine rc : r.comments.before)
           (dc, rc) -> (dc <|> (if isBlock opts r then rc else Nothing), r.comments.before)
 
         startMarker :: B.Builder
@@ -425,7 +430,7 @@ writesEnd opts next nextLines doc =
 -- it if the document has one too.
 emptyRootLines :: Document -> (Maybe T.Text, [Line])
 emptyRootLines doc = case (doc.docComments.inline, doc.root.comments.inline) of
-  (Just dc, Just rc) -> (Just dc, doc.root.comments.before ++ [Comment rc])
+  (Just dc, Just rc) -> (Just dc, doc.root.comments.before ++ [inlineLine rc])
   (dc, rc) -> (dc <|> rc, doc.root.comments.before)
 
 -- | The lines have a comment below an empty line.
@@ -753,14 +758,14 @@ splitAtLastEmptyLine ls =
 entryComments :: RenderOptions -> Node -> Node -> ([Line], Maybe T.Text, [Line])
 entryComments opts k v
   | isBlock opts v = case (k.comments.inline, v.comments.inline) of
-      (Just kc, Just vc) -> (k.comments.before, Just kc, keyAfter ++ [Comment vc])
+      (Just kc, Just vc) -> (k.comments.before, Just kc, keyAfter ++ [inlineLine vc])
       (kc, vc) -> (k.comments.before, kc <|> vc, keyAfter)
   -- For a scalar value, only the place of the lines after the key differs.
   | not (isScalarLike v) || not (null keyAfter) && isBlockScalarNode v = case (k.comments.inline, v.comments.inline) of
-      (Just kc, Just vc) -> (k.comments.before ++ keyAfter ++ v.comments.before ++ [Comment kc], Just vc, [])
+      (Just kc, Just vc) -> (k.comments.before ++ keyAfter ++ v.comments.before ++ [inlineLine kc], Just vc, [])
       (kc, vc) -> (k.comments.before ++ keyAfter ++ v.comments.before, vc <|> kc, [])
   | otherwise = case (k.comments.inline, v.comments.inline) of
-      (Just kc, Just vc) -> (k.comments.before ++ v.comments.before ++ [Comment kc], Just vc, keyAfter)
+      (Just kc, Just vc) -> (k.comments.before ++ v.comments.before ++ [inlineLine kc], Just vc, keyAfter)
       (kc, vc) -> (k.comments.before ++ v.comments.before, vc <|> kc, keyAfter)
   where
     keyAfter :: [Line]
@@ -1048,10 +1053,18 @@ props n = case n.content of
 comment :: Maybe T.Text -> B.Builder
 comment = \case
   Nothing -> mempty
-  Just t -> " #" <> text (T.stripEnd (T.map (\c -> if isCommentBreak c then ' ' else c) (printable t)))
+  Just t -> " #" <> text (T.stripEnd (printable (breaksAsSpaces t)))
   where
     text :: T.Text -> B.Builder
     text t = if T.null t then mempty else " " <> B.fromText t
+
+-- | An inline comment on a line of its own. It stays one comment, as at the
+-- end of a line.
+inlineLine :: T.Text -> Line
+inlineLine = Comment . breaksAsSpaces
+
+breaksAsSpaces :: T.Text -> T.Text
+breaksAsSpaces = T.map $ \c -> if isCommentBreak c then ' ' else c
 
 -- | Lines of comments at the given indentation.
 lines_ :: Int -> [Line] -> B.Builder

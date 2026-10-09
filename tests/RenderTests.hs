@@ -1043,6 +1043,10 @@ test_movedComments = do
     "# k\na: 1 # v\n"
     (render (mappingNode [(withInline "k" (plainNode "a"), withInline "v" (plainNode "1"))]))
   assertEqual
+    "two comments on one line, one with a line break"
+    "# k l\na: 1 # v\n"
+    (render (mappingNode [(withInline "k\nl" (plainNode "a"), withInline "v" (plainNode "1"))]))
+  assertEqual
     "comment in a flow sequence"
     "a:\n- 1 # c\n- 2\n"
     (render (mappingNode [(plainNode "a", contentNode (SequenceContent Flow [withInline "c" (plainNode "1"), plainNode "2"]))]))
