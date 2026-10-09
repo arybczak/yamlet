@@ -492,7 +492,14 @@ mistakeIn e flow i
     -- quote, so the quote closes a quoted scalar. A colon there ends a key.
     afterQuote :: Word8 -> Bool
     afterQuote q =
-      byteBefore e i == q && isNsChar w && not (isFlowIndicator w) && w /= COLON
+      byteBefore e i == q && isNsChar w && not (isFlowIndicator w) && w /= COLON && not quoteInTag
+
+    -- A quote can be a character of a tag, as in "!'".
+    quoteInTag :: Bool
+    quoteInTag = byteBefore e (tagStart i) == EXCL
+      where
+        tagStart :: Int -> Int
+        tagStart j = if isTagChar (byteBefore e j) then tagStart (j - 1) else j
 
 -- | The index after the content of the line from the content at the index,
 -- before its comment.

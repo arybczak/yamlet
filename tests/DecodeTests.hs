@@ -1023,6 +1023,7 @@ test_syntaxErrors = do
     "quote in a single-quoted scalar"
     (1, 10, "unexpected 's' after a single-quoted scalar, write '' for a quote inside it")
     "msg: 'it's here'\n"
+  check "quote in a tag" (1, 6, "unexpected '!'") "&b !'!str ' x '\n"
   check
     "quote in a double-quoted scalar"
     (1, 12, "unexpected 'h' after a double-quoted scalar, write \\\" for a quote inside it")
