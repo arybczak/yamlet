@@ -12,8 +12,8 @@ core=${CORE:-2}
 inputs=(config json text)
 libraries=(yamlet HsYAML yaml)
 
-cabal build -v0 bench:bench
-bench=$(cabal list-bin bench:bench)
+cabal build -v0 yamlet:bench:bench
+bench=$(cabal list-bin yamlet:bench:bench)
 out=$(mktemp -d)
 trap 'rm -rf "$out"' EXIT
 
