@@ -562,6 +562,10 @@ test_record = do
     "field with a default and a key that is not a string"
     (Just (1, 1, "the key true is a boolean, not a string"))
     (errorOf (decodeText @DefaultSwitch "true: 1\n"))
+  assertEqual
+    "key that is not a string, as the input writes it"
+    (Just (1, 1, "the key True is a boolean, not a string"))
+    (errorOf (decodeText @Switch "True: 1\n"))
   assertEqual "quoted key" (Right (Switch (Just 1))) (decodeText "'true': 1\n")
   roundTrip "round trip" (Server "a" 1 (Just ["x", "y"]))
 

@@ -750,11 +750,18 @@ findKey :: Object -> T.Text -> Parser (Maybe (S.Node, S.Node))
 findKey o key = case M.lookup key o.index of
   Just entry -> pure (Just entry)
   Nothing -> case L.find (\(_, v) -> v == plain) o.otherKeys of
-    Just (k, v) -> failAt k $ "the key " ++ T.unpack key ++ " is " ++ describe v ++ ", not a string"
+    Just (k, v) -> failAt k $ "the key " ++ T.unpack (written k) ++ " is " ++ describe v ++ ", not a string"
     Nothing -> pure Nothing
   where
     plain :: Value
     plain = resolvePlain key
+
+    -- The text of the key in the input can differ from the key, e.g. True
+    -- for true.
+    written :: S.Node -> T.Text
+    written k = case k.content of
+      S.ScalarLinesContent _ t _ -> t
+      _ -> key
 
 -- | The error for a string key that 'lookupKey' does not find. As for
 -- 'findKey', a key with the same text that is not a string is the error
