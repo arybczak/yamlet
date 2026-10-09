@@ -136,7 +136,9 @@
 -- fields.
 --
 -- Another shape is a compile error that names the constructors, e.g. a
--- constructor with several fields without names. Give such fields names.
+-- constructor with several fields without names. Give such fields names, or
+-- with 'TaggedFlat', put them in a record type and make it the one field of
+-- the constructor.
 --
 -- = Missing keys
 --
@@ -638,11 +640,11 @@ instance (KnownSymbol name, GFields f) => GConstructors (C1 (MetaCons name fixit
 class GEncoding (e :: SumEncodingKind) f where
   gEncoding :: SumEncodingKind
 
-instance ValidShape (GShape f) => GEncoding TaggedObject f where
-  gEncoding = validShape @(GShape f) `seq` TaggedObject
+instance ValidShape (GShape TaggedObject f) => GEncoding TaggedObject f where
+  gEncoding = validShape @(GShape TaggedObject f) `seq` TaggedObject
 
-instance ValidShape (FlatShape (GShape f)) => GEncoding TaggedFlat f where
-  gEncoding = validShape @(FlatShape (GShape f)) `seq` TaggedFlat
+instance ValidShape (GShape TaggedFlat f) => GEncoding TaggedFlat f where
+  gEncoding = validShape @(GShape TaggedFlat f) `seq` TaggedFlat
 
 instance ValidShape (SingleShape f) => GEncoding SingleField f where
   gEncoding = validShape @(SingleShape f) `seq` SingleField
@@ -656,22 +658,35 @@ data Shape
   | -- | Named fields, in the constructor with the name.
     NamedFields Symbol
 
--- | The shape of the constructors. A constructor with several fields without
--- names, and a type that mixes named fields with a field without a name, are
--- type errors.
-type family GShape (f :: Type -> Type) :: Shape where
-  GShape (f :+: g) = CombineShapes (GShape f) (GShape g)
-  GShape (C1 (MetaCons name fixity True) f) = NamedFields name
-  GShape (C1 (MetaCons name fixity False) U1) = NoFields
-  GShape (C1 (MetaCons name fixity False) (S1 m f)) = UnnamedField name
-  GShape (C1 (MetaCons name fixity False) (f :*: g)) =
+-- | The shape of the constructors with the sum encoding. A constructor with
+-- several fields without names, named fields with 'TaggedFlat', and a type
+-- that mixes named fields with a field without a name, are type errors.
+type family GShape (e :: SumEncodingKind) (f :: Type -> Type) :: Shape where
+  GShape e (f :+: g) = CombineShapes (GShape e f) (GShape e g)
+  GShape TaggedFlat (C1 (MetaCons name fixity True) f) =
+    TypeError
+      ( Text "TaggedFlat needs constructors with one field without a name, but the constructor "
+          :<>: Text name
+          :<>: Text " has named fields."
+          :$$: FlatFieldsFix
+      )
+  GShape e (C1 (MetaCons name fixity True) f) = NamedFields name
+  GShape e (C1 (MetaCons name fixity False) U1) = NoFields
+  GShape e (C1 (MetaCons name fixity False) (S1 m f)) = UnnamedField name
+  GShape e (C1 (MetaCons name fixity False) (f :*: g)) =
     TypeError
       ( Text "The constructor "
           :<>: Text name
           :<>: Text " has several fields without names."
-          :$$: Text "Give the fields names."
+          :$$: SeveralFieldsFix e
       )
-  GShape V1 = TypeError NoConstructors
+  GShape e V1 = TypeError NoConstructors
+
+type family SeveralFieldsFix (e :: SumEncodingKind) :: ErrorMessage where
+  SeveralFieldsFix TaggedFlat = FlatFieldsFix
+  SeveralFieldsFix e = Text "Give the fields names."
+
+type FlatFieldsFix = Text "Put the fields in a record type, and make it the one field of the constructor."
 
 type family CombineShapes (a :: Shape) (b :: Shape) :: Shape where
   CombineShapes NoFields b = b
@@ -707,7 +722,7 @@ instance ValidShape (NamedFields name) where validShape = ()
 -- shapes, so that GHC reduces both and reports their type errors.
 type family SingleShape (f :: Type -> Type) :: Shape where
   SingleShape (f :+: g) = EitherShape (SingleShape f) (SingleShape g)
-  SingleShape f = GShape f
+  SingleShape f = GShape SingleField f
 
 type family EitherShape (a :: Shape) (b :: Shape) :: Shape where
   EitherShape NoFields b = b
@@ -716,16 +731,6 @@ type family EitherShape (a :: Shape) (b :: Shape) :: Shape where
   EitherShape (NamedFields a) (UnnamedField _) = NamedFields a
   EitherShape (UnnamedField a) (NamedFields _) = UnnamedField a
   EitherShape (UnnamedField a) (UnnamedField _) = UnnamedField a
-
--- | The shape, if 'TaggedFlat' has fields to flatten in it.
-type family FlatShape (s :: Shape) :: Shape where
-  FlatShape (NamedFields name) =
-    TypeError
-      ( Text "TaggedFlat needs constructors with one field without a name, but the constructor "
-          :<>: Text name
-          :<>: Text " has named fields."
-      )
-  FlatShape s = s
 
 isTagged :: forall f. GConstructors f => YamlOptions -> Bool
 isTagged opts = opts.tagSingleConstructors || gConstructorCount @f > 1

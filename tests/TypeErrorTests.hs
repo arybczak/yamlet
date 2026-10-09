@@ -19,6 +19,7 @@ typeErrorTests =
     [ testCase "several fields without names" $ do
         rejects "The constructor Pair has several fields without names." (encodeText (Pair 1 "a"))
         rejects "The constructor Pair has several fields without names." (decodeText @Pair "[1, a]")
+        rejects "Give the fields names." (encodeText (Pair 1 "a"))
     , testCase "several fields without names in a sum" $
         rejects "The constructor Line has several fields without names." (encodeText (Line 1 2))
     , testCase "named fields and a field without a name" $ do
@@ -26,10 +27,19 @@ typeErrorTests =
           "The constructor Circle has named fields and the constructor Label has one field without a name."
           (encodeText (Label "x"))
         rejects "use the sum encoding SingleField" (encodeText (Label "x"))
-    , testCase "flat named fields" $
+    , testCase "flat named fields" $ do
         rejects
           "TaggedFlat needs constructors with one field without a name, but the constructor Jump has named fields."
           (encodeText (Jump 1))
+        rejects flatFieldsFix (encodeText (Jump 1))
+    , testCase "flat several fields without names" $ do
+        rejects "The constructor Leap has several fields without names." (encodeText (Leap 1 2))
+        rejects flatFieldsFix (encodeText (Leap 1 2))
+    , testCase "flat named fields and a field without a name" $ do
+        rejects
+          "TaggedFlat needs constructors with one field without a name, but the constructor Run has named fields."
+          (encodeText (Wait 1))
+        rejects flatFieldsFix (encodeText (Wait 1))
     , testCase "several fields without names in a single field" $
         rejects "The constructor Coords has several fields without names." (encodeText (Coords 1 2))
     , testCase "no constructors" $
@@ -57,6 +67,23 @@ data FlatNamed = Jump {height :: Int} | Halt
 
 instance GenericYamlOptions FlatNamed where
   type SumEncoding FlatNamed = TaggedFlat
+
+data FlatPair = Leap Int Int | Rest
+  deriving stock (Generic)
+  deriving (FromYaml, ToYaml) via GenericYaml FlatPair
+
+instance GenericYamlOptions FlatPair where
+  type SumEncoding FlatPair = TaggedFlat
+
+data FlatMixed = Run {speed :: Int} | Wait Int | Idle
+  deriving stock (Generic)
+  deriving (FromYaml, ToYaml) via GenericYaml FlatMixed
+
+instance GenericYamlOptions FlatMixed where
+  type SumEncoding FlatMixed = TaggedFlat
+
+flatFieldsFix :: String
+flatFieldsFix = "Put the fields in a record type, and make it the one field of the constructor."
 
 data Place = Coords Double Double | Nowhere
   deriving stock (Generic)
