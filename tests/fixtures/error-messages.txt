@@ -161,7 +161,7 @@
 # X4QW: Comment without whitespace after block scalar indicator
 1:8: invalid block scalar header
 # Y79Y/000: Tabs in various contexts
-3:1: unexpected 'b'
+2:1: tabs cannot be used for indentation
 # Y79Y/003: Tabs in various contexts
 2:1: tabs cannot be used for indentation
 # Y79Y/004: Tabs in various contexts

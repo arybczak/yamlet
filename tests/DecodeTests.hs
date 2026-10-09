@@ -969,6 +969,10 @@ test_syntaxErrors = do
   check "tab before a second key" (3, 1, "tabs cannot be used for indentation") "a:\n  b: 1\n\tc: 2\n"
   check "tab before a second item" (3, 1, "tabs cannot be used for indentation") "a:\n  - 1\n\t- 2\n"
   check "tab below a comment" (5, 1, "tabs cannot be used for indentation") "a:\n  b: 1\n  # c\n\n\tc: 2\n"
+  check "tab on a blank line of a block scalar" (3, 1, "tabs cannot be used for indentation") "a: |\n  x\n\t\n  y\n"
+  check "tab before a comment below a block scalar" (3, 1, "tabs cannot be used for indentation") "a: |\n  x\n\t# c\nb: 1\n"
+  check "tab on a blank line of a plain scalar" (2, 1, "tabs cannot be used for indentation") "a: b\n\t\n c\n"
+  check "tab on a blank line above a line indented too much" (3, 3, "unexpected indentation") "a: 1\n\t\n  b: 2\n"
   -- With spaces in place of the tab, the parser fails at the same place.
   check "tab before an indicator" (1, 2, "unexpected '@', a plain scalar cannot start with it, quote the value") "\t@\n"
   check "tab before a bracket" (1, 2, "unexpected ']'") "\t]\n"
@@ -991,6 +995,7 @@ test_syntaxErrors = do
   check "tab in a flow sequence" (2, 1, "tabs cannot be used for indentation") "a: [\n\tb\n]\n"
   check "tab in a double-quoted scalar" (2, 1, "tabs cannot be used for indentation") "a: \"x\n\ty\"\n"
   check "tab after a blank line in a single-quoted scalar" (3, 1, "tabs cannot be used for indentation") "a: 'x\n\n\ty'\n"
+  check "tab on a blank line of a double-quoted scalar" (2, 1, "tabs cannot be used for indentation") "a: \"x\n\t\n y\"\n"
   check
     "block scalar in a flow sequence"
     (1, 2, "unexpected '|', a block scalar cannot be inside a flow collection")

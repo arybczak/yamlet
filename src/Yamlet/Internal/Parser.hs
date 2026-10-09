@@ -75,13 +75,17 @@ parseStream input@(T.Text arr off len) = case prescan of
     furthestError :: [Int] -> Env -> Int -> (Int, String)
     furthestError markers de i = case unexpected de i of
       (Just tab, _) | tabCause -> (tab, tabMessage)
-      (_, other) -> other
+      (_, other)
+        | Just tab <- tabAbove
+        , parsesPast (lineEndAt e i) blankStart (withSpaces (T.Text arr blankStart (s - blankStart))) s ->
+            (tab, tabMessage)
+        | otherwise -> other
       where
         tabCause :: Bool
         tabCause =
-          parsesFurther (T.map (\c -> if c == '\t' then ' ' else c) (T.Text arr s (i - s))) i
+          parsesPast i s (withSpaces (T.Text arr s (i - s))) i
             || or
-              [ parsesFurther (T.replicate n " ") indentEnd
+              [ parsesPast i s (T.replicate n " ") indentEnd
               | indentEnd <= i
               , isJust (firstTab e s indentEnd)
               , Just above <- [contentLineAbove e s]
@@ -92,18 +96,35 @@ parseStream input@(T.Text arr off len) = case prescan of
         s = lineStartAt e i
         indentEnd = skipWhites e s
 
-        -- The parser gets past the failure with the text in place of the
-        -- input from the start of the line to the index.
-        parsesFurther :: T.Text -> Int -> Bool
-        parsesFurther replacement upto = case runParser spaced (moved start) (lYamlStream (map moved markers)) of
-          Left (ParseError j _) -> j > moved i
-          Left (UnexpectedParseError _ j) -> j > moved i
-          Right (Nothing, _, j) -> j > moved i
+        -- A blank line or a comment line with a tab can end a scalar above
+        -- it, as in "|\n  a\n\t\n  b", so that the parser fails on the next
+        -- line. The tab is the cause if the line parses with spaces.
+        blankStart :: Int
+        blankStart = maybe s (nextLineStart e) (contentLineAbove e s)
+
+        tabAbove :: Maybe Int
+        tabAbove =
+          listToMaybe
+            [ tab
+            | l <- takeWhile (< s) (iterate (nextLineStart e) blankStart)
+            , Just tab <- [firstTab e l (skipWhites e l)]
+            ]
+
+        withSpaces :: T.Text -> T.Text
+        withSpaces = T.map (\c -> if c == '\t' then ' ' else c)
+
+        -- The parser gets past the first index with the text in place of the
+        -- input from the second index to the third.
+        parsesPast :: Int -> Int -> T.Text -> Int -> Bool
+        parsesPast target from replacement upto = case runParser spaced (moved start) (lYamlStream (map moved markers)) of
+          Left (ParseError j _) -> j > moved target
+          Left (UnexpectedParseError _ j) -> j > moved target
+          Right (Nothing, _, j) -> j > moved target
           Right (Just _, _, _) -> True
           where
             T.Text _ _ replacementLen = replacement
             T.Text spacedArr spacedOff spacedLen =
-              T.copy $ T.concat [T.Text arr off (s - off), replacement, T.Text arr upto (off + len - upto)]
+              T.copy $ T.concat [T.Text arr off (from - off), replacement, T.Text arr upto (off + len - upto)]
 
             spaced :: Env
             spaced = e {array = spacedArr, base = spacedOff, end = spacedOff + spacedLen, streamEnd = spacedOff + spacedLen}
@@ -112,7 +133,7 @@ parseStream input@(T.Text arr off len) = case prescan of
             moved :: Int -> Int
             moved j
               | j < upto = j - off + spacedOff
-              | otherwise = j - upto + spacedOff + (s - off) + replacementLen
+              | otherwise = j - upto + spacedOff + (from - off) + replacementLen
 
     -- A byte order mark at the start of the line of an error is the likely
     -- cause if the parser fails before the content of the line, unless a
@@ -902,7 +923,7 @@ cQuoted style n c props = withScan $ \e p ->
       badIndent i
         | nextContent i >= e.end = endOfDocument i
         | not (hasClosingQuote (nextContent i)) = unterminated
-        | Just tab <- firstTab e (skipBlankLines i) (nextContent i) = Failed tab tabMessage
+        | Just tab <- firstTab e (foldStop i) (skipWhites e (foldStop i)) = Failed tab tabMessage
         | otherwise =
             Failed
               (nextContent i)
@@ -910,6 +931,17 @@ cQuoted style n c props = withScan $ \e p ->
 
       nextContent :: Int -> Int
       nextContent i = skipWhites e (skipBlankLines i)
+
+      -- The start of the line at which 'flowFold' stops after the line break
+      -- at the index. A blank line can stop it with a tab before the
+      -- indentation, as in "\"a\n\t\n  b\"".
+      foldStop :: Int -> Int
+      foldStop i =
+        let l = breakEnd e i
+            s = skipSpaces e l
+        in if l < e.end && (s - l >= n || isBreak (byteAt e s))
+             then foldStop (lineEndAt e s)
+             else l
 
       -- Skip the line break at the index and the blank lines after it.
       skipBlankLines :: Int -> Int
