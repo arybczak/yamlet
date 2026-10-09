@@ -13,6 +13,7 @@ module Yamlet.Internal.Parser.Scan
   , isStartOfLine
   , lineStartAt
   , previousLineStart
+  , contentLineAbove
   , markerLength
   , isMarker
   , isStartMarker
@@ -67,6 +68,17 @@ previousLineStart e i = lineStartAt e (breakStart (i - 1))
     breakStart j
       | j > e.base && byteBefore e j == CR && byteAt e j == LF = j - 1
       | otherwise = j
+
+-- | The start of the closest line above the line that starts at the index
+-- with content other than a comment. Byte order marks at the start of a line
+-- do not count as content.
+contentLineAbove :: Env -> Int -> Maybe Int
+contentLineAbove e start
+  | start <= e.base = Nothing
+  | otherwise =
+      let prev = previousLineStart e start
+          b = byteAt e (skipWhites e (skipBoms e prev))
+      in if isBreak b || b == HASH then contentLineAbove e prev else Just prev
 
 -- | The number of characters of a @---@ or @...@ marker.
 markerLength :: Int

@@ -73,21 +73,19 @@ parseStream input@(T.Text arr off len) = case prescan of
     -- a space for each tab, or the indentation of the line above in place
     -- of the indentation with tabs.
     furthestError :: [Int] -> Env -> Int -> (Int, String)
-    furthestError markers de i
-      | snd withTabs == tabMessage && not tabCause = unexpected False de i
-      | otherwise = withTabs
+    furthestError markers de i = case unexpected de i of
+      (Just tab, _) | tabCause -> (tab, tabMessage)
+      (_, other) -> other
       where
-        withTabs :: (Int, String)
-        withTabs = unexpected True de i
-
         tabCause :: Bool
         tabCause =
           parsesFurther (T.map (\c -> if c == '\t' then ' ' else c) (T.Text arr s (i - s))) i
             || or
               [ parsesFurther (T.replicate n " ") indentEnd
               | indentEnd <= i
-              , TAB `elem` map (byteAt e) [s .. indentEnd - 1]
-              , Just n <- [indentationAbove s]
+              , isJust (firstTab e s indentEnd)
+              , Just above <- [contentLineAbove e s]
+              , let n = skipSpaces e above - above
               ]
 
         s, indentEnd :: Int
@@ -116,19 +114,6 @@ parseStream input@(T.Text arr off len) = case prescan of
               | j < upto = j - off + spacedOff
               | otherwise = j - upto + spacedOff + (s - off) + replacementLen
 
-        -- The indentation of the nearest line above with content other than
-        -- a comment. A line in the prefix of a document can start with a byte
-        -- order mark.
-        indentationAbove :: Int -> Maybe Int
-        indentationAbove k
-          | k <= off = Nothing
-          | otherwise =
-              let p = previousLineStart e k
-                  c = skipWhites e (skipBoms e p)
-              in if isBreak (byteAt e c) || byteAt e c == HASH
-                   then indentationAbove p
-                   else Just (skipSpaces e p - p)
-
     -- A byte order mark at the start of the line of an error is the likely
     -- cause if the parser fails before the content of the line, unless a
     -- document without a marker can start on the line. A failure after the
@@ -147,13 +132,7 @@ parseStream input@(T.Text arr off len) = case prescan of
     -- and the start of the stream or a @...@ marker, so the line is in the
     -- prefix of a document, which can start with a byte order mark.
     inPrefix :: Int -> Bool
-    inPrefix s
-      | s <= off = True
-      | otherwise =
-          let prev = previousLineStart e s
-              j = skipBoms e prev
-              b = byteAt e (skipWhites e j)
-          in if isBreak b || b == HASH then inPrefix prev else isEndMarker e j
+    inPrefix s = maybe True (isEndMarker e . skipBoms e) (contentLineAbove e s)
 
     -- A byte order mark can start a line between documents, or be a
     -- character of a quoted scalar. The other restricted characters can only

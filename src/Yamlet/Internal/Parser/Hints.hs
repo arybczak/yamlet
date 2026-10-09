@@ -30,50 +30,50 @@ import Yamlet.Internal.Parser.Scan
 import Yamlet.Internal.Utils
 
 -- | The location and the message of the error for the furthest position at
--- which the parser failed. The flag tells if a tab before the position on its
--- line can be the cause.
-unexpected :: Bool -> Env -> Int -> (Int, String)
-unexpected tabs input i = case if tabs then indentationTab (i - 1) Nothing else Nothing of
-  Just tab -> (tab, tabMessage)
-  Nothing
-    | tabs
-    , byteAt e i == COLON && firstColon
-    , Just tab <- tabBeforeContent ->
-        (tab, tabMessage)
-  Nothing
-    | Just start <- propertiesLine ->
-        (start, "an anchor or a tag cannot be on a line of its own here, write it after the key or the '-'")
-  Nothing | Just r <- blockMistake -> r
-  Nothing | afterComment -> (i, "a comment ends a plain scalar, so this line cannot continue it")
-  Nothing
-    | Just colon <- aliasColon ->
-        (colon, "the name of the alias includes the ':', write a space before ':' if the alias is a key")
-  Nothing -> (i,) $ case byteAt e i of
-    w
-      | byteBefore e i == STAR && not (isAnchorChar w) -> "expected an alias name after '*'"
-      | byteBefore e i == AMP && not (isAnchorChar w) -> "expected an anchor name after '&'"
-      | w == 0 -> "unexpected end of input"
-      | indented, Just msg <- indentationMistake -> msg
-      | indented, Just msg <- mistakeIn e False i -> msg
-      | indented, not alignedWithEntry -> "unexpected indentation"
-      | isBreak w -> "unexpected end of line"
-      | i > e.base && isBreak (byteBefore e i), Just msg <- indentationMistake -> msg
-      | w == COLON && firstColon && not (fitsKey e entryStart i) -> keyLengthMessage
-      | w == COLON && multiLineKey -> "unexpected ':', a key must be on a single line"
-      | w == COLON && firstColon && valueColon && onStartMarkerLine ->
-          "unexpected ':', a mapping cannot start on the line of '---'"
-      -- A colon on the first line of a key does not fail, so the scalar
-      -- before this one started on a line above.
-      | w == COLON && firstColon && valueColon && isJust (lineAbove (lineStartAt e i)) ->
-          "unexpected ':', this line continues the scalar from the line above, check the indentation and the line above"
-      | w == COLON && valueColon ->
-          "unexpected ':', quote the value if it contains \": \""
-      | itemAfterKey -> "unexpected '-', a list cannot start on the line of its key"
-      | itemAfterProperty -> "unexpected '-', a list cannot start on the line of its anchor or tag"
-      | Just msg <- mistakeIn e False i -> msg
-      | Just node <- endBefore -> unexpectedChar e i ++ " after the end of " ++ node
-      | otherwise -> unexpectedChar e i
+-- which the parser failed, and a tab before the position on its line that
+-- can be the cause instead, with 'tabMessage'.
+unexpected :: Env -> Int -> (Maybe Int, (Int, String))
+unexpected input i = (tabCause, other)
   where
+    tabCause :: Maybe Int
+    tabCause = case indentationTab (i - 1) Nothing of
+      Nothing | byteAt e i == COLON && firstColon -> tabBeforeContent
+      t -> t
+
+    other :: (Int, String)
+    other
+      | Just start <- propertiesLine =
+          (start, "an anchor or a tag cannot be on a line of its own here, write it after the key or the '-'")
+      | Just r <- blockMistake = r
+      | afterComment = (i, "a comment ends a plain scalar, so this line cannot continue it")
+      | Just colon <- aliasColon =
+          (colon, "the name of the alias includes the ':', write a space before ':' if the alias is a key")
+      | otherwise = (i,) $ case byteAt e i of
+          w
+            | byteBefore e i == STAR && not (isAnchorChar w) -> "expected an alias name after '*'"
+            | byteBefore e i == AMP && not (isAnchorChar w) -> "expected an anchor name after '&'"
+            | w == 0 -> "unexpected end of input"
+            | indented, Just msg <- indentationMistake -> msg
+            | indented, Just msg <- mistakeIn e False i -> msg
+            | indented, not alignedWithEntry -> "unexpected indentation"
+            | isBreak w -> "unexpected end of line"
+            | i > e.base && isBreak (byteBefore e i), Just msg <- indentationMistake -> msg
+            | w == COLON && firstColon && not (fitsKey e entryStart i) -> keyLengthMessage
+            | w == COLON && multiLineKey -> "unexpected ':', a key must be on a single line"
+            | w == COLON && firstColon && valueColon && onStartMarkerLine ->
+                "unexpected ':', a mapping cannot start on the line of '---'"
+            -- A colon on the first line of a key does not fail, so the scalar
+            -- before this one started on a line above.
+            | w == COLON && firstColon && valueColon && isJust (lineAbove (lineStartAt e i)) ->
+                "unexpected ':', this line continues the scalar from the line above, check the indentation and the line above"
+            | w == COLON && valueColon ->
+                "unexpected ':', quote the value if it contains \": \""
+            | itemAfterKey -> "unexpected '-', a list cannot start on the line of its key"
+            | itemAfterProperty -> "unexpected '-', a list cannot start on the line of its anchor or tag"
+            | Just msg <- mistakeIn e False i -> msg
+            | Just node <- endBefore -> unexpectedChar e i ++ " after the end of " ++ node
+            | otherwise -> unexpectedChar e i
+
     e :: Env
     e = afterBoms input
 
@@ -423,13 +423,7 @@ unexpected tabs input i = case if tabs then indentationTab (i - 1) Nothing else 
     -- The first content of the closest line above the line that starts at the
     -- index. Blank lines and comment lines do not count.
     lineAbove :: Int -> Maybe Int
-    lineAbove start
-      | start <= e.base = Nothing
-      | otherwise =
-          let prev = previousLineStart e start
-              k = skipSpaces e prev
-              b = byteAt e k
-          in if isBreak b || b == HASH then lineAbove prev else Just k
+    lineAbove start = skipSpaces e <$> contentLineAbove e start
 
     -- The index after the "- " indicators at the index, as in "- - key: value".
     skipListItems :: Int -> Int
