@@ -10,6 +10,7 @@ module Yamlet.Internal.Utils
   , textIsPrefixOf
   , maxImplicitKeyLength
   , maxVersion
+  , minExpansion
   , coreTagPrefix
   , picoDecimals
   , decimalPlaces
@@ -81,6 +82,16 @@ maxImplicitKeyLength = 1024
 -- and a number below it times 10 fits in 32 bits.
 maxVersion :: Int
 maxVersion = 1000000
+
+-- | The size that an expansion of a small input can always add: the visits
+-- that aliases add to a traversal, or the bytes that the prefixes of @%TAG@
+-- directives add to the tags. A larger input can add as much as it has.
+--
+-- A traversal of 100000 nodes takes about 5 ms and 6 MB, measured with a
+-- copy of the nodes. go-yaml allows about 400000 nodes from aliases in a
+-- small document.
+minExpansion :: Int
+minExpansion = 100000
 
 -- | The prefix of the tags of the core schema, and of the @!!@ handle.
 coreTagPrefix :: T.Text

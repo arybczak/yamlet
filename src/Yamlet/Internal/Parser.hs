@@ -28,6 +28,7 @@ import Data.Text qualified as T
 import Data.Text.Array qualified as A
 import Data.Text.Encoding qualified as T
 import Data.Text.Internal qualified as T
+import Data.Text.Unsafe qualified as T
 import Data.Word
 
 import Yamlet.Error
@@ -783,9 +784,19 @@ cNsTagProperty = do
         throwAt r ("expected the rest of the tag after " ++ T.unpack handle)
       guardP (r > q)
       case M.lookup handle e.handles of
-        Just prefix -> case percentDecode (prefix <> slice e q r) of
-          Just t -> pure (Tag t)
-          Nothing -> throwAt p "the escapes of the tag are not valid UTF-8"
+        Just prefix -> do
+          -- Each tag has its own copy of the prefix. The default prefixes
+          -- are short, but a long prefix of a directive with many tags would
+          -- take memory quadratic in the size of the input.
+          unless (M.lookup handle defaultHandles == Just prefix) $ do
+            added <- addTagBytes (T.lengthWord8 prefix)
+            let limit = max minExpansion (e.streamEnd - e.base)
+            when (added > limit)
+              $ throwAt p
+              $ "the prefixes of %TAG directives add more than " ++ show limit ++ " bytes to the tags"
+          case percentDecode (prefix <> slice e q r) of
+            Just t -> pure (Tag t)
+            Nothing -> throwAt p "the escapes of the tag are not valid UTF-8"
         Nothing -> throwAt p $ "undefined tag handle " ++ T.unpack handle
 
     -- Skip ns-tag-char*.

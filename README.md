@@ -175,9 +175,11 @@ benchmarks.
   spaces between tokens.
 - Limits for untrusted input. The aliases of a stream can add at most
   100000 nodes and characters, or as many as the stream has if it has
-  more. A float with an exponent beyond the range from -1000 to 1000 is an
-  error, e.g. `1e1001`. The library does not limit the size of the input,
-  so a program that reads untrusted input must limit it.
+  more. The prefixes of `%TAG` directives can add at most 100000 bytes to
+  the tags of a stream, or as many as the stream has. A float with an
+  exponent beyond the range from -1000 to 1000 is an error, e.g. `1e1001`.
+  The library does not limit the size of the input, so a program that
+  reads untrusted input must limit it.
 - No deriving with Template Haskell. The generic instances optimize well for
   the common shapes of data types, and a second way to derive instances
   would double what the tests must cover.

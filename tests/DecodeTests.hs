@@ -60,6 +60,7 @@ decodeTests =
     , slow $ testCase "nested duplicates" test_nestedDuplicates
     , slow $ testCase "alias keys" test_aliasKeys
     , slow $ testCase "alias limit" test_aliasLimit
+    , testCase "tag prefix limit" test_tagPrefixLimit
     , slow $ testCase "long numbers" test_longNumbers
     , -- 0.2 s with the check of the lengths, 8 s without it.
       localOption (mkTimeout 2000000) $ testCase "long unknown names" test_longUnknownNames
@@ -1612,6 +1613,25 @@ test_aliasLimit = do
         (errorOf (decodeDocuments @Value (stream 5) docs))
       assertEqual "a parsed document on its own" Nothing (errorOf (traverse (decodeDocument @Value (stream 5)) docs))
     Left err -> assertFailure (show err)
+
+-- | The prefixes of %TAG directives can add 100000 bytes to the tags of a
+-- small input, and as many bytes as the input has to a large one.
+test_tagPrefixLimit :: Assertion
+test_tagPrefixLimit = do
+  let uses :: T.Text -> Int -> T.Text
+      uses prefix k = T.unlines ("%TAG !e! " <> prefix : "---" : replicate k "- !e!a 1")
+  assertEqual "short prefix" Nothing (errorOf (decodeText @[Value] (uses "tag:x:" 1000)))
+  let long = "tag:" <> T.replicate 100000 "x" <> ":"
+  assertEqual "long prefix with one use" Nothing (errorOf (decodeText @[Value] (uses long 1)))
+  assertEqual
+    "long prefix with two uses"
+    (Just (4, 3, "the prefixes of %TAG directives add more than 100037 bytes to the tags"))
+    (errorOf (decodeText @[Value] (uses long 2)))
+  -- Each tag adds 18 bytes, more than the 10 bytes of its line.
+  assertEqual
+    "default prefix"
+    Nothing
+    (errorOf (decodeText @[T.Text] (T.unlines (replicate 20000 "- !!str a"))))
 
 -- | Anchors a0 to ak, where each anchor after a0 has ten aliases to the one
 -- before it, and the alias *ak expands to about 10^(k+1) nodes.

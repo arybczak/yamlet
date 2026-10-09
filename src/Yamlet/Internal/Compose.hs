@@ -52,13 +52,7 @@ prepareWithin limit added root
 -- its size. The documents of a stream share the limit, so that many small
 -- documents cannot add the minimum each.
 aliasLimit :: [S.Node] -> Int
-aliasLimit roots = max smallLimit (sum (map syntaxSize roots))
-  where
-    -- A traversal of 100000 nodes takes about 5 ms and 6 MB, measured with
-    -- a copy of the nodes. go-yaml allows about 400000 nodes from aliases in
-    -- a small document.
-    smallLimit :: Int
-    smallLimit = 100000
+aliasLimit roots = max minExpansion (sum (map syntaxSize roots))
 
 -- | The visits of a traversal of a node without aliases.
 syntaxSize :: S.Node -> Int
