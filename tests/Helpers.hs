@@ -1,6 +1,7 @@
 -- | The helpers that several test modules use.
 module Helpers
-  ( errorOf
+  ( errorPlace
+  , errorOf
   , errorsOf
   , roundTrip
   , slow
@@ -23,17 +24,21 @@ import Yamlet
 slow :: TestTree -> TestTree
 slow = localOption (mkTimeout 10000000)
 
+-- | The line, the column and the message of an error.
+errorPlace :: Error -> (Int, Int, String)
+errorPlace err = (err.location.line, err.location.column, err.message)
+
 -- | The line, the column and the message of the only error.
 errorOf :: Either (NE.NonEmpty Error) a -> Maybe (Int, Int, String)
 errorOf = \case
-  Left (err NE.:| []) -> Just (err.location.line, err.location.column, err.message)
+  Left (err NE.:| []) -> Just (errorPlace err)
   Left errs -> error $ "expected one error, but got " ++ show (map (.message) (NE.toList errs))
   Right _ -> Nothing
 
 -- | The line, the column and the message of each error.
 errorsOf :: Either (NE.NonEmpty Error) a -> [(Int, Int, String)]
 errorsOf = \case
-  Left errs -> [(err.location.line, err.location.column, err.message) | err <- NE.toList errs]
+  Left errs -> map errorPlace (NE.toList errs)
   Right _ -> []
 
 -- | Encoding a value and decoding the result gives the same value.

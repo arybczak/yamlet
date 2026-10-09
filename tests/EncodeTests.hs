@@ -600,9 +600,9 @@ test_commentedKeys = do
       nestedItem = [[Commented @Int 1 above]]
       firstKey = [M.fromList @T.Text [("a", Commented @Int 1 above), ("b", Commented 2 noComments)]]
   assertEqual "lines above a nested first item" "# c\n-\n  - 1\n" (encodeText nestedItem)
-  assertEqual "lines above a nested first item read back" (Right nestedItem) (decodeText (encodeText nestedItem))
+  roundTrip "lines above a nested first item read back" nestedItem
   assertEqual "lines above a first key" "# c\n-\n  a: 1\n  b: 2\n" (encodeText firstKey)
-  assertEqual "lines above a first key read back" (Right firstKey) (decodeText (encodeText firstKey))
+  roundTrip "lines above a first key read back" firstKey
 
 -- | The faster renderer of the encoder gives the same output as the renderer
 -- of syntax trees.

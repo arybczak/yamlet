@@ -844,12 +844,9 @@ test_byteOrderMarks = do
 -- | The line, the column and the message of the only error and of its note.
 errorWithNote :: Either (NE.NonEmpty Error) a -> Maybe ((Int, Int, String), (Int, Int, String))
 errorWithNote = \case
-  Left (err NE.:| [note]) -> Just (place err, place note)
+  Left (err NE.:| [note]) -> Just (errorPlace err, errorPlace note)
   Left errs -> error $ "expected an error and a note, but got " ++ show (map (.message) (NE.toList errs))
   Right _ -> Nothing
-  where
-    place :: Error -> (Int, Int, String)
-    place e = (e.location.line, e.location.column, e.message)
 
 test_syntaxErrors :: Assertion
 test_syntaxErrors = do

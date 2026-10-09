@@ -65,12 +65,10 @@ findCases dir = do
 checkErrorMessages :: FilePath -> [FilePath] -> Assertion
 checkErrorMessages root paths = do
   actual <- fmap (unlines . concat) . forM paths $ \path -> do
-    isError <- doesFileExist (path </> "error")
+    (name, input, isError) <- readCase path
     if not isError
       then pure []
       else do
-        name <- T.strip . T.decodeUtf8 <$> BS.readFile (path </> "===")
-        input <- T.decodeUtf8 <$> BS.readFile (path </> "in.yaml")
         let message = case parseDocumentsText input of
               Left err -> show err.location.line ++ ":" ++ show err.location.column ++ ": " ++ err.message
               Right _ -> "no error"
@@ -102,11 +100,17 @@ checkErrorMessages root paths = do
           header : message : rest -> (header, message) : pairs rest
           _ -> []
 
-runTest :: FilePath -> Assertion
-runTest path = do
+-- | The name of a case, its input and whether the input is invalid.
+readCase :: FilePath -> IO (T.Text, T.Text, Bool)
+readCase path = do
+  name <- T.strip . T.decodeUtf8 <$> BS.readFile (path </> "===")
   input <- T.decodeUtf8 <$> BS.readFile (path </> "in.yaml")
   isError <- doesFileExist (path </> "error")
-  name <- T.strip . T.decodeUtf8 <$> BS.readFile (path </> "===")
+  pure (name, input, isError)
+
+runTest :: FilePath -> Assertion
+runTest path = do
+  (name, input, isError) <- readCase path
   let preface = T.unpack name ++ "\n" ++ T.unpack input
   case parseDocumentsText input of
     Left err
