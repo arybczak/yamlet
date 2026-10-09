@@ -17,6 +17,11 @@ no instances of yamlet, e.g. the types of other libraries.
   `toEncoding`, e.g. with `genericToEncoding`.
 - The package also has the instances of yamlet for the `Value` of aeson.
 
+A program that uses the yaml package can switch to yamlet in steps with this
+package. The document
+[Coming from the yaml package](https://github.com/arybczak/yamlet/blob/master/docs/coming-from-yaml.md)
+shows how, and lists the differences between the two.
+
 ## Example
 
 ```haskell
