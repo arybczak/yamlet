@@ -49,6 +49,7 @@ encodeTests =
       -- explicit entry. 10000 cases take about 0.2 s.
       localOption (QuickCheckTests 10000) $ testProperty "fast renderer" prop_fastRenderer
     , testProperty "fast renderer of several documents" prop_fastRendererAll
+    , localOption (QuickCheckTests 10000) $ testProperty "fast renderer of syntax trees" prop_fastRendererNodes
     , testCase "containers" test_containers
     , testCase "base" test_base
     , testCase "time" test_time
@@ -616,6 +617,58 @@ prop_fastRendererAll docs =
   where
     ns :: [Value]
     ns = [n | Doc n <- docs]
+
+-- | The same for syntax trees that the faster renderer takes, with what the
+-- trees of values do not have: tags on keys and on collections, scalar keys
+-- in each style and keys of more than 1024 characters.
+prop_fastRendererNodes :: SimpleNode -> Property
+prop_fastRendererNodes (SimpleNode n) =
+  encodeText n === S.renderSyntax S.defaultRenderOptions [S.document n]
+
+-- | A tree without comments, anchors, aliases and flow collections, with
+-- scalars on one line in the styles of the encoder.
+newtype SimpleNode = SimpleNode S.Node
+  deriving stock (Show)
+
+instance Arbitrary SimpleNode where
+  arbitrary = SimpleNode <$> sized genNode
+    where
+      genNode :: Int -> Gen S.Node
+      genNode size
+        | size <= 1 = genScalar
+        | otherwise =
+            frequency
+              [ (3, genScalar)
+              , (1, collection S.sequenceNode (genNode (size `div` 3)))
+              , (1, collection S.mappingNode ((,) <$> genNode (size `div` 3) <*> genNode (size `div` 3)))
+              , (1, elements [S.sequenceNode [], S.mappingNode []] >>= withTag)
+              ]
+
+      collection :: ([a] -> S.Node) -> Gen a -> Gen S.Node
+      collection node item = do
+        k <- choose (1, 3)
+        xs <- vectorOf k item
+        withTag (node xs)
+
+      genScalar :: Gen S.Node
+      genScalar = do
+        style <- elements [S.Plain, S.SingleQuoted, S.DoubleQuoted, S.Literal]
+        t <- genText
+        -- The faster renderer does not take an empty plain scalar.
+        withTag (S.scalarNode style (if style == S.Plain && T.null t then "x" else t))
+
+      withTag :: S.Node -> Gen S.Node
+      withTag n = do
+        tag <- frequency [(4, pure S.NoTag), (1, S.Tag <$> elements ["!t", "xy", "tag:yaml.org,2002:str", "", "a#b"])]
+        pure n {S.props = S.Props Nothing tag}
+
+      genText :: Gen T.Text
+      genText =
+        oneof
+          [ elements ["", " ", " a", "\ta", "a\n", "\n", " lead\nx", "-", "a: b", "#", "yes", "x'y", "a\x2028b", "a\x01", "---", "a\n\n"]
+          , T.pack <$> listOf (elements "ab :#\n\t'\"-")
+          , pure (T.replicate 1030 "k")
+          ]
 
 -- | Encoding a value and decoding the result gives the same value.
 prop_roundTrip :: Doc -> Property
