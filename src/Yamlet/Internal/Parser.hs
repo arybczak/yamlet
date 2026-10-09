@@ -616,7 +616,11 @@ directives = go Nothing defaultHandles Set.empty
       separator "expected a tag handle and a prefix after %TAG, e.g. %TAG !e! tag:example.com,2000:"
       h <- pos
       handle <- cTagHandle <|> throwAt h "invalid tag handle"
-      separator noPrefix
+      w <- peek
+      let lineEnd = w == 0 || isBreak w
+      -- A named handle without its closing '!' reads as the primary handle.
+      when (handle == "!" && not (lineEnd || isWhite w)) $ throwAt h "invalid tag handle"
+      separator (if lineEnd then noPrefix else "expected a space after the tag handle")
       q <- pos
       first <- peek
       when (first == 0 || isBreak first || first == HASH) $ throwAt q noPrefix
@@ -988,13 +992,47 @@ cQuoted style n c props = withScan $ \e p ->
 -- the JSON input allocates more.
 {-# INLINE cQuoted #-}
 
--- | A document marker ends the document, and the byte is in the input after
--- it, e.g. the closing quote of a scalar that the marker cuts. Return the
--- index of the marker.
+-- | A document marker ends the document, and the input after it has the
+-- closing byte without a pair of its own, e.g. the closing quote of a scalar
+-- that the marker cuts. Return the index of the marker.
 cutByMarker :: Env -> Word8 -> Maybe Int
 cutByMarker e w
-  | e.end < e.streamEnd && any (\j -> A.unsafeIndex e.array j == w) [e.end .. e.streamEnd - 1] = Just e.end
+  | e.end < e.streamEnd, unpaired = Just e.end
   | otherwise = Nothing
+  where
+    unpaired :: Bool
+    unpaired
+      | w == RBRACKET || w == RBRACE = unmatchedClosing e w e.end e.streamEnd
+      | otherwise = odd (quotes e.end 0)
+
+    -- A backslash escapes a double quote.
+    quotes :: Int -> Int -> Int
+    quotes i !k
+      | i >= e.streamEnd = k
+      | b == w = quotes (i + 1) (k + 1)
+      | b == BACKSLASH && w == DQUOTE = quotes (i + 2) k
+      | otherwise = quotes (i + 1) k
+      where
+        b :: Word8
+        b = A.unsafeIndex e.array i
+
+-- | A closing bracket without an opening bracket of its own is in the input
+-- from the first index to the second.
+unmatchedClosing :: Env -> Word8 -> Int -> Int -> Bool
+unmatchedClosing e w from to = go 0 from
+  where
+    go :: Int -> Int -> Bool
+    go depth i
+      | i >= to = False
+      | b == w = depth == 0 || go (depth - 1) (i + 1)
+      | b == opening = go (depth + 1) (i + 1)
+      | otherwise = go depth (i + 1)
+      where
+        b :: Word8
+        b = A.unsafeIndex e.array i
+
+    opening :: Word8
+    opening = if w == RBRACKET then LBRACKET else LBRACE
 
 -- | The error for the document marker that ends the document inside the
 -- node.
@@ -1282,20 +1320,7 @@ closing c start w kind entries msg = do
     -- A closing bracket without an opening bracket of its own follows in the
     -- document, so the collection likely continues there.
     closedLater :: Env -> Int -> Bool
-    closedLater e = go 0
-      where
-        go :: Int -> Int -> Bool
-        go depth i
-          | i >= e.end = False
-          | b == w = depth == 0 || go (depth - 1) (i + 1)
-          | b == opening = go (depth + 1) (i + 1)
-          | otherwise = go depth (i + 1)
-          where
-            b :: Word8
-            b = byteAt e i
-
-        opening :: Word8
-        opening = if w == RBRACKET then LBRACKET else LBRACE
+    closedLater e q = unmatchedClosing e w q e.end
 
     -- A '-' that cannot start a plain scalar, e.g. "- " as in a block
     -- sequence.
