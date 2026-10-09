@@ -46,11 +46,11 @@ prepareWithin limit added root
 
 -- | The limit of the visits of a traversal that the aliases of the documents
 -- can add together: as many visits as the documents have, or a fixed minimum
--- for small documents. A node is one visit and each character of a scalar is
--- one more, because the decoder copies the text of each alias. Without a
--- limit, the visits of a small input can be exponential in its size. The
--- documents of a stream share the limit, so that many small documents cannot
--- add the minimum each.
+-- for small documents. A node is one visit and each character of its scalar,
+-- tag and anchor is one more, because the decoder copies the texts of each
+-- alias. Without a limit, the visits of a small input can be exponential in
+-- its size. The documents of a stream share the limit, so that many small
+-- documents cannot add the minimum each.
 aliasLimit :: [S.Node] -> Int
 aliasLimit roots = max smallLimit (sum (map syntaxSize roots))
   where
@@ -62,14 +62,28 @@ aliasLimit roots = max smallLimit (sum (map syntaxSize roots))
 
 -- | The visits of a traversal of a node without aliases.
 syntaxSize :: S.Node -> Int
-syntaxSize n = case n.content of
-  S.ScalarContent _ t -> scalarVisits t
-  S.SequenceContent _ xs -> 1 + sum (map syntaxSize xs)
-  S.MappingContent _ kvs -> 1 + sum [syntaxSize k + syntaxSize v | (k, v) <- kvs]
-  S.AliasContent _ -> 1
+syntaxSize n =
+  ownVisits n + case n.content of
+    S.SequenceContent _ xs -> sum (map syntaxSize xs)
+    S.MappingContent _ kvs -> sum [syntaxSize k + syntaxSize v | (k, v) <- kvs]
+    _ -> 0
 
-scalarVisits :: T.Text -> Int
-scalarVisits t = 1 + T.length t
+-- | The visits of a node without the nodes inside it.
+ownVisits :: S.Node -> Int
+ownVisits n = 1 + anchorChars + tagChars + scalarChars
+  where
+    anchorChars :: Int
+    anchorChars = maybe 0 T.length n.props.anchor
+
+    tagChars :: Int
+    tagChars = case n.props.tag of
+      S.Tag t -> T.length t
+      _ -> 0
+
+    scalarChars :: Int
+    scalarChars = case n.content of
+      S.ScalarContent _ t -> T.length t
+      _ -> 0
 
 -- | The checks of 'prepareWithin' for a node with aliases or collection keys,
 -- which compare by the numbers of their values, and the visits that the
@@ -102,20 +116,22 @@ numberWithin limit added root = do
                  $ "undefined alias *" ++ T.unpack name
            S.ScalarContent style t -> do
              v <- scalar off props style t
-             let visits = scalarVisits t
+             let visits = ownVisits sn
              Right $ number props v (ScalarShape v) visits visits (open props st)
            S.SequenceContent _ xs -> do
              tag <- collectionTag off props seqTag
              (vs, st') <- goList (open props st) xs
              let v = withTag tag (Sequence (map fst vs))
-             Right $ number props v (SequenceShape tag (map snd vs)) 1 (st'.visits - st.visits + 1) st'
+             let own = ownVisits sn
+             Right $ number props v (SequenceShape tag (map snd vs)) own (st'.visits - st.visits + own) st'
            S.MappingContent _ kvs -> do
              tag <- collectionTag off props mapTag
              (entries, st') <- goPairs (open props st) kvs
              checkUniqueNumbers entries
              let v = withTag tag (Mapping [(k, x) | (_, (k, _), (x, _)) <- entries])
                  shape = MappingShape tag (L.sort [(i, j) | (_, (_, i), (_, j)) <- entries])
-             Right $ number props v shape 1 (st'.visits - st.visits + 1) st'
+                 own = ownVisits sn
+             Right $ number props v shape own (st'.visits - st.visits + own) st'
 
     -- The values are in reverse until the end, so that the stack does not
     -- grow with the number of items.
@@ -157,7 +173,8 @@ numberWithin limit added root = do
 
     -- Give the value the number of its shape, and define its anchor. The
     -- own visits are those of the node alone, and the visits are those of the
-    -- node and of everything inside it. A node inside with the same anchor
+    -- node and of everything inside it. The copy at an alias has no anchor,
+    -- so its visits leave out the anchor. A node inside with the same anchor
     -- comes later in the document, so its definition stays.
     number :: S.Props -> Value -> Shape -> Int -> Int -> Numbering -> ((Value, Int), Numbering)
     number props v shape own visits st = ((v, i), st {anchors = anchors', shapes = shapes', visits = st.visits + own})
@@ -170,7 +187,7 @@ numberWithin limit added root = do
 
         anchors' :: M.Map T.Text (Maybe (Value, Int, Int))
         anchors' = case props.anchor of
-          Just a | Just Nothing <- M.lookup a st.anchors -> M.insert a (Just (v, i, visits)) st.anchors
+          Just a | Just Nothing <- M.lookup a st.anchors -> M.insert a (Just (v, i, visits - T.length a)) st.anchors
           _ -> st.anchors
 
     -- Unlike in 'duplicate', comparing all pairs is not faster for few keys.

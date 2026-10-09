@@ -14,9 +14,10 @@
 -- Right (Mapping [(String "base",Sequence [Int 1,Int 2]),(String "copy",Sequence [Int 1,Int 2])])
 --
 -- A small input with many aliases can give a large value. To prevent this,
--- the decoder limits the aliases. Each node and each character of a scalar
--- counts as one unit. The aliases can add 100000 units to a document. For a
--- document with more units, they can add as many units as the document has.
+-- the decoder limits the aliases. Each node and each character of a scalar,
+-- a tag or an anchor counts as one unit. The aliases can add 100000 units to
+-- a document. For a document with more units, they can add as many units as
+-- the document has.
 -- The documents of a stream share the limit, as if they were one document.
 -- A document beyond the limit is an error.
 module Yamlet.Value

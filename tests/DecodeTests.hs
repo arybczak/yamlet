@@ -1554,7 +1554,7 @@ test_aliasKeys = do
 
 -- | Aliases can add 100000 visits to a traversal of a small document, and as
 -- many visits as the document has to a large one. Each node and each
--- character of a scalar is a visit.
+-- character of its scalar, tag and anchor is a visit.
 test_aliasLimit :: Assertion
 test_aliasLimit = do
   assertEqual "small expansion" Nothing (errorOf (decodeAllText @Value (laughs 3)))
@@ -1568,7 +1568,7 @@ test_aliasLimit = do
   assertEqual "large document with one copy" Nothing (errorOf (decodeAllText @Value (copies 1)))
   assertEqual
     "large document with two copies"
-    (Just (3, 3, "the aliases add more than 400004 nodes and characters"))
+    (Just (3, 3, "the aliases add more than 400005 nodes and characters"))
     (errorOf (decodeAllText @Value (copies 2)))
   let long = T.replicate 100000 "x"
       textCopies :: Int -> T.Text
@@ -1576,8 +1576,22 @@ test_aliasLimit = do
   assertEqual "long scalar with one copy" Nothing (errorOf (decodeAllText @Value (textCopies 1)))
   assertEqual
     "long scalar with many copies"
-    (Just (3, 3, "the aliases add more than 101002 nodes and characters"))
+    (Just (3, 3, "the aliases add more than 101003 nodes and characters"))
     (errorOf (decodeAllText @Value (textCopies 1000)))
+  let tagCopies :: Int -> T.Text
+      tagCopies k = T.unlines ("- &a !" <> long <> " x" : replicate k "- *a")
+  assertEqual "long tag with one copy" Nothing (errorOf (decodeAllText @Value (tagCopies 1)))
+  assertEqual
+    "long tag with many copies"
+    (Just (3, 3, "the aliases add more than 101005 nodes and characters"))
+    (errorOf (decodeAllText @Value (tagCopies 1000)))
+  let anchorCopies :: Int -> T.Text
+      anchorCopies k = T.unlines ("- &a [&" <> long <> " x]" : replicate k "- *a")
+  assertEqual "long anchor inside with one copy" Nothing (errorOf (decodeAllText @S.Node (anchorCopies 1)))
+  assertEqual
+    "long anchor inside with many copies"
+    (Just (3, 3, "the aliases add more than 101005 nodes and characters"))
+    (errorOf (decodeAllText @S.Node (anchorCopies 1000)))
   -- The documents of a stream share the limit.
   let stream :: Int -> T.Text
       stream k = T.concat (replicate k ("---\n" <> laughs 3))
