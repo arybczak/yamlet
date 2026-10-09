@@ -9,6 +9,7 @@ module Yamlet.Internal.Schema
   , resolveTagged
   , resolvePlainExact
   , resolveTaggedExact
+  , startsNumber
   , isPlainString
   , isPlainSafe
   , isPlainPortable
@@ -62,10 +63,15 @@ resolvePlainExact t = case T.uncons t of
   Just (c, _)
     | c == '~' || c == 'n' || c == 'N' -> Right $ if isNull t then Null else String t
     | c == 't' || c == 'T' || c == 'f' || c == 'F' -> Right $ maybe (String t) Bool (readBool t)
-    | isDigit c || c == '-' || c == '+' || c == '.' -> case readInt t of
+    | startsNumber c -> case readInt t of
         Just i -> Right (Int i)
         Nothing -> maybe (Right (String t)) (bimap Float Float) (readFloat t)
     | otherwise -> Right (String t)
+
+-- | A plain scalar that starts with the character can be a number. Only such
+-- a scalar can have a value that is not exact.
+startsNumber :: Char -> Bool
+startsNumber c = isDigit c || c == '-' || c == '+' || c == '.'
 
 -- | The value of a scalar with a tag, 'Left' if the value is not exact.
 resolveTaggedExact :: T.Text -> T.Text -> Maybe (Either Value Value)

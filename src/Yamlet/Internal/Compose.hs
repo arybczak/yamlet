@@ -14,7 +14,6 @@ module Yamlet.Internal.Compose
   ) where
 
 import Control.Monad
-import Data.Char
 import Data.Foldable
 import Data.IntMap.Strict qualified as IM
 import Data.List qualified as L
@@ -267,9 +266,7 @@ check sn =
        S.AliasContent _ -> Left $ failure off "unexpected alias"
   where
     maybeNumber :: T.Text -> Bool
-    maybeNumber t = case T.uncons t of
-      Just (c, _) -> isDigit c || c == '-' || c == '+' || c == '.'
-      Nothing -> False
+    maybeNumber t = maybe False (startsNumber . fst) (T.uncons t)
 
     key :: S.Node -> Either Failure (S.Node, Value)
     key k = case k.content of

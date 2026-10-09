@@ -229,19 +229,13 @@ attachComments e first hasNext start marker rootEnd end doc
 -- a comment or a @...@ marker. The index is the start of a line.
 gapEnd :: Env -> Int -> Int
 gapEnd e i
-  | i < e.end && isEndMarker e b = gapEnd e (nextLine b)
-  | i < e.end && byteAt e (skipWhites e b) == HASH = gapEnd e (nextLine b)
+  | i < e.end && isEndMarker e b = gapEnd e (nextLineStart e b)
+  | i < e.end && byteAt e (skipWhites e b) == HASH = gapEnd e (nextLineStart e b)
   | otherwise = i
   where
     -- A byte order mark can start a line between documents.
     b :: Int
     b = skipBoms e i
-
-    nextLine :: Int -> Int
-    nextLine k
-      | k >= e.end = k
-      | isBreak (byteAt e k) = breakEnd e k
-      | otherwise = nextLine (k + 1)
 
 -- | The documents with the lines above the first one.
 linesAbove :: [Line] -> [Document] -> [Document]
@@ -538,7 +532,7 @@ skipRanges e root = go root []
     go n acc = case n.content of
       ScalarContent style _
         | isBlockScalar style ->
-            let s = nextLine (offsetOf n.offset + e.base)
+            let s = nextLineStart e (offsetOf n.offset + e.base)
             in if s < en then (s, en) : acc else acc
         | offsetOf n.offset + e.base < en -> (offsetOf n.offset + e.base, en) : acc
         where
@@ -547,9 +541,3 @@ skipRanges e root = go root []
       SequenceContent _ xs -> foldr go acc xs
       MappingContent _ kvs -> foldr (\(k, v) a -> go k (go v a)) acc kvs
       _ -> acc
-
-    nextLine :: Int -> Int
-    nextLine i
-      | i >= e.end = i
-      | isBreak (A.unsafeIndex e.array i) = i + 1
-      | otherwise = nextLine (i + 1)

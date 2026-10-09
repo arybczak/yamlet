@@ -1600,7 +1600,7 @@ blockLines e indent = go 0 []
                -- start of a line.
                | s - i == indent
                , not (startsPrefix e s) ->
-                   let t = lineEnd s
+                   let t = lineEndAt e s
                        acc' = BlockLine empties (slice e s t) : acc
                    in if t >= e.end
                         then (reverse acc', 0, t)
@@ -1615,11 +1615,6 @@ blockLines e indent = go 0 []
         loop j
           | j - i < indent && byteAt e j == SPACE = loop (j + 1)
           | otherwise = j
-
-    lineEnd :: Int -> Int
-    lineEnd j
-      | j < e.end && not (isBreak (byteAt e j)) = lineEnd (j + 1)
-      | otherwise = j
 
 -- | The text of a folded block scalar and the positions where its lines
 -- start.

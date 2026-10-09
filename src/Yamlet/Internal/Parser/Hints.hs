@@ -100,7 +100,7 @@ unexpected input i = (tabCause, other)
       i == skipSpaces e (lineStartAt e i)
         && isNsChar (byteAt e i)
         && not (isListItem i)
-        && not (any isKeyColon [i .. lineEnd i - 1])
+        && not (any isKeyColon [i .. lineEndAt e i - 1])
         && isNothing (mistakeIn e False i)
         && commentAbove (lineStartAt e i)
         && maybe False endsPlain (lineAbove (lineStartAt e i))
@@ -152,13 +152,10 @@ unexpected input i = (tabCause, other)
               in if isBreak (byteAt e k) then commentAbove prev else hasComment k
 
         hasComment :: Int -> Bool
-        hasComment j = byteAt e j == HASH || any comment [j + 1 .. lineEnd j - 1]
+        hasComment j = byteAt e j == HASH || any comment [j + 1 .. lineEndAt e j - 1]
 
         comment :: Int -> Bool
         comment j = byteAt e j == HASH && isWhite (byteBefore e j)
-
-        lineEnd :: Int -> Int
-        lineEnd j = if byteAt e j == 0 || isBreak (byteAt e j) then j else lineEnd (j + 1)
 
     -- The start of the line of the index if the line has only anchors and
     -- tags, as in "&anchor".

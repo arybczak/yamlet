@@ -13,6 +13,8 @@ module Yamlet.Internal.Parser.Scan
   , isStartOfLine
   , lineStartAt
   , previousLineStart
+  , lineEndAt
+  , nextLineStart
   , contentLineAbove
   , markerLength
   , isMarker
@@ -68,6 +70,18 @@ previousLineStart e i = lineStartAt e (breakStart (i - 1))
     breakStart j
       | j > e.base && byteBefore e j == CR && byteAt e j == LF = j - 1
       | otherwise = j
+
+-- | The index of the line break that ends the line of the index, or the end
+-- of the input.
+lineEndAt :: Env -> Int -> Int
+lineEndAt e i
+  | i < e.end && not (isBreak (byteAt e i)) = lineEndAt e (i + 1)
+  | otherwise = i
+
+-- | The start of the line below the line of the index, or the end of the
+-- input.
+nextLineStart :: Env -> Int -> Int
+nextLineStart e i = let j = lineEndAt e i in if j < e.end then breakEnd e j else j
 
 -- | The start of the closest line above the line that starts at the index
 -- with content other than a comment. Byte order marks at the start of a line
