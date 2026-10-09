@@ -8,7 +8,7 @@
 -- in subsequent releases.
 module Yamlet.Internal.Parser.Hints
   ( unexpected
-  , mistake
+  , flowMistake
   , codePointName
   , firstTab
   , tabMessage
@@ -437,10 +437,10 @@ unexpected input i = (tabCause, other)
     isListItem :: Int -> Bool
     isListItem j = byteAt e j == MINUS && (let b = byteAt e (j + 1) in b == 0 || isWhite b || isBreak b)
 
--- | The error for a common mistake at the index, if the character there shows
--- one. The flag tells if the index is inside a flow collection.
-mistake :: Env -> Bool -> Int -> Maybe String
-mistake = mistakeIn . afterBoms
+-- | The error for a common mistake at the index inside a flow collection, if
+-- the character there shows one.
+flowMistake :: Env -> Int -> Maybe String
+flowMistake e = mistakeIn (afterBoms e) True
 
 -- | The input without the byte order marks at its start. The hints look at
 -- the content of the lines around an error, and the marks are not content
@@ -448,6 +448,7 @@ mistake = mistakeIn . afterBoms
 afterBoms :: Env -> Env
 afterBoms e = e {base = skipBoms e e.base}
 
+-- | The flag tells if the index is inside a flow collection.
 mistakeIn :: Env -> Bool -> Int -> Maybe String
 mistakeIn e flow i
   -- Inside a plain scalar, a '#' after other content does not stop the

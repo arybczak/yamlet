@@ -28,6 +28,7 @@ import Data.Set qualified as Set
 import Data.Text qualified as T
 import Data.Text.Array qualified as A
 import Data.Text.Internal qualified as T
+import Data.Text.Unsafe qualified as T
 import GHC.Generics
 
 import Yamlet.Internal.Chars
@@ -362,7 +363,7 @@ errorAt input off msg
   | otherwise =
       let (loc, index, _) = locateFrom input (startScan input) off
           sourceLine = T.copy (lineAt input off)
-      in force $ Error loc msg sourceLine (min (lengthWord8 sourceLine) index) Root
+      in force $ Error loc msg sourceLine (min (T.lengthWord8 sourceLine) index) Root
 
 -- | Create errors at the given offsets of a document, with their paths, in the
 -- order of the list. The text is the input of the document, e.g. for the
@@ -389,7 +390,7 @@ errorsAt input errs =
                 sourceLine = case prev of
                   Just (ln, t) | ln == loc.line -> t
                   _ -> T.copy (lineAt input off)
-            in (i, force $ Error loc msg sourceLine (min (lengthWord8 sourceLine) index) Root) : go s' (Just (loc.line, sourceLine)) rest
+            in (i, force $ Error loc msg sourceLine (min (T.lengthWord8 sourceLine) index) Root) : go s' (Just (loc.line, sourceLine)) rest
 
 -- | Compute the line and the column of an offset. The byte order marks at the
 -- start of a line are not columns, because they are not content. For
@@ -398,9 +399,6 @@ locate :: T.Text -> Offset -> Location
 locate input off
   | off == noOffset = Location {offset = off, line = 0, column = 0}
   | otherwise = let (loc, _, _) = locateFrom input (startScan input) off in loc
-
-lengthWord8 :: T.Text -> Int
-lengthWord8 (T.Text _ _ len) = len
 
 -- | A scan of the input: the index, the line, the start of the columns of
 -- the line, and an index on the line with its column. The columns of a line
@@ -449,10 +447,6 @@ locateFrom (T.Text arr base len) s0 (Offset off0) = go s0
     countChars i0 i1 =
       length
         [() | i <- [i0 .. i1 - 1], isCharStart (A.unsafeIndex arr i)]
-
--- | The index after the byte order marks at the index.
-skipBomsIn :: A.Array -> Int -> Int -> Int
-skipBomsIn arr end i = if isBomIn arr end i then skipBomsIn arr end (i + bomLength) else i
 
 -- | The line of the input that contains the offset, without the line break
 -- and without the byte order marks at its start.

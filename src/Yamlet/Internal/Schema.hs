@@ -15,7 +15,6 @@ module Yamlet.Internal.Schema
   , isYaml11Bool
   , isYaml11NonString
   , isYaml11Timestamp
-  , maxExponent
   , exponentOutOfRange
   ) where
 

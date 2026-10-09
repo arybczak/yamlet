@@ -31,7 +31,7 @@ isBom :: Env -> Int -> Bool
 isBom e = isBomIn e.array e.end
 
 skipBoms :: Env -> Int -> Int
-skipBoms e i = if isBom e i then skipBoms e (i + bomLength) else i
+skipBoms e = skipBomsIn e.array e.end
 
 skipSpaces :: Env -> Int -> Int
 skipSpaces e i = if byteAt e i == SPACE then skipSpaces e (i + 1) else i

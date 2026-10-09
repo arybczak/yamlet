@@ -63,6 +63,7 @@ module Yamlet.Internal.Chars
   , isAnchorChar
   , bomLength
   , isBomIn
+  , skipBomsIn
   ) where
 
 import Data.Bits
@@ -231,3 +232,8 @@ isBomIn arr end i =
     && A.unsafeIndex arr i == 0xEF
     && A.unsafeIndex arr (i + 1) == 0xBB
     && A.unsafeIndex arr (i + 2) == 0xBF
+
+-- | The index after the byte order marks at the index of the array, before
+-- the end index.
+skipBomsIn :: A.Array -> Int -> Int -> Int
+skipBomsIn arr end i = if isBomIn arr end i then skipBomsIn arr end (i + bomLength) else i

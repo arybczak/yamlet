@@ -533,7 +533,8 @@ toSyntax = \case
     | otherwise -> toSyntax v
   v -> scalar v
 
--- | A scalar in a style that reads back as the value. A collection is empty.
+-- | A scalar in a style that reads back as the value. For a collection or a
+-- tagged value, use 'toSyntax'.
 scalar :: Value -> S.Node
 scalar = \case
   String t -> string t
@@ -556,8 +557,7 @@ string t
   | isPlainString t && not (isYaml11NonString t) = S.plainNode t
   | otherwise = S.scalarNode S.SingleQuoted t
 
--- | The text of a value without quotes, or an empty collection in the flow
--- style.
+-- | The text of a scalar value without quotes.
 plainText :: Value -> T.Text
 plainText = \case
   Null -> "null"

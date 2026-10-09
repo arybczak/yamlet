@@ -6,8 +6,7 @@
 -- This module is intended for internal use only, and may change without warning
 -- in subsequent releases.
 module Yamlet.Internal.Compose
-  ( prepare
-  , prepareWithin
+  ( prepareWithin
   , aliasLimit
   , representPrepared
   , Failure
@@ -33,12 +32,10 @@ import Yamlet.Value
 -- mapping are unique, and replace each alias with the node that it refers
 -- to. The result has no aliases. A node without aliases comes back
 -- unchanged.
-prepare :: S.Node -> Either Failure S.Node
-prepare root = firstOfResult $ prepareWithin (aliasLimit [root]) 0 root
-
--- | 'prepare' with the limit of the visits that the aliases can add, see
+--
+-- The arguments are the limit of the visits that the aliases can add, see
 -- 'aliasLimit', and the visits that the aliases of the documents before
--- added. It also gives the visits that the aliases added with this
+-- added. The result also gives the visits that the aliases added with this
 -- document.
 prepareWithin :: Int -> Int -> S.Node -> Either Failure (S.Node, Int)
 prepareWithin limit added root
@@ -210,7 +207,7 @@ numberWithin limit added root = do
             Just first -> Left $ duplicateKey (kn, k) first
             Nothing -> loop (IM.insert i (kn, k) seen) rest
 
--- | The value of a node that passed 'prepare', so it has no aliases and its
+-- | The value of a node that passed 'prepareWithin', so it has no aliases and its
 -- keys are unique already.
 representPrepared :: S.Node -> Either Failure Value
 representPrepared = go

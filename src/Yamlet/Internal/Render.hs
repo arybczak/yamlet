@@ -419,7 +419,7 @@ writesEnd opts next nextLines doc =
     endsWithKeep n
       | hasCommentLine n.comments.after = False
       | otherwise = case n.content of
-          ScalarContent Literal t -> isJust (literalBlock True 0 t) && hasKeepIndicator t
+          ScalarContent Literal t -> isJust (literalBlock 0 t) && hasKeepIndicator t
           SequenceContent _ xs | isBlock opts n, x : _ <- reverse xs -> endsWithKeep x
           MappingContent _ kvs | isBlock opts n, (_, v) : _ <- reverse kvs -> endsWithKeep v
           _ -> False
@@ -777,7 +777,7 @@ entryComments opts k v
 -- text that a block scalar cannot hold goes in double quotes.
 isBlockScalarNode :: Node -> Bool
 isBlockScalarNode n = case n.content of
-  ScalarContent Literal t -> isJust (literalBlock True 0 t)
+  ScalarContent Literal t -> isJust (literalBlock 0 t)
   ScalarContent Folded t -> isJust (foldedBlock 0 [] t)
   _ -> False
 
@@ -816,7 +816,7 @@ inline opts pos indent n lineComment = case n.content of
     -- The comment goes on the line of the header.
     blockScalar :: ScalarStyle -> T.Text -> [Int] -> B.Builder
     blockScalar style t starts = case style of
-      Literal | Just (h, b) <- literalBlock True indent t -> h <> comment lineComment <> b
+      Literal | Just (h, b) <- literalBlock indent t -> h <> comment lineComment <> b
       Folded | Just (h, b) <- foldedBlock indent starts t -> h <> comment lineComment <> b
       _ -> doubleQuotedLines indent starts t <> comment lineComment
 

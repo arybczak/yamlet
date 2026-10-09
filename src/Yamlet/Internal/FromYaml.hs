@@ -240,11 +240,11 @@ runParserWithin limit added f n0 = case prepareWithin limit added n0 of
       (Just "<<", S.SequenceContent {}) -> Set.singleton v.offset
       _ -> Set.empty
 
--- | Run a parser on a node that passed 'prepare'.
+-- | Run a parser on a node that passed 'prepareWithin'.
 runChecked :: (S.Node -> Parser a) -> S.Node -> Result a
 runChecked f n = let Parser g = parseNode f n in g n.offset
 
--- | The value of a parser on a node that passed 'prepare', if it has no
+-- | The value of a parser on a node that passed 'prepareWithin', if it has no
 -- errors.
 succeeds :: (S.Node -> Parser a) -> S.Node -> Maybe a
 succeeds f n = case runChecked f n of
@@ -982,7 +982,7 @@ instance FromYaml a => FromYaml (S.Located a) where
 instance FromYaml Value where
   parseYaml n = case representPrepared n of
     -- The value is built lazily. The copy visits a node once per alias of
-    -- it, as the limit of 'prepare' allows.
+    -- it, as the limit of 'prepareWithin' allows.
     Right r -> pure $! copy r
     Left ((off, msg) NE.:| notes) -> Parser $ \_ -> Result (OneError off msg notes) failed
     where

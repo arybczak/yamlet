@@ -1216,7 +1216,7 @@ closing c start w kind entries msg = do
       , Node {offset = Offset o} : _ <- reverse entries
       , not (fitsKey e (o + e.base) p) ->
           throwAt p keyLengthMessage
-      | otherwise -> throwAt p (fromMaybe msg (mistake e True p))
+      | otherwise -> throwAt p (fromMaybe msg (flowMistake e p))
   where
     -- The separation after an entry goes on to the next line if the
     -- collection can continue there. If it stops at the end of a line, the

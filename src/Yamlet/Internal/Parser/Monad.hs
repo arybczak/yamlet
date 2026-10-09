@@ -9,11 +9,10 @@
 -- in subsequent releases.
 module Yamlet.Internal.Parser.Monad
   ( -- * Parser
-    P (..)
+    P
   , Env (..)
   , ParseError (..)
   , runParser
-  , runP
 
     -- * Combinators
   , (<|>)

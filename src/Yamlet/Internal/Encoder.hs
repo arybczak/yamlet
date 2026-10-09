@@ -39,8 +39,8 @@ renderDocuments docs
 
     topLevel :: S.Node -> B.Builder
     topLevel n = case n.content of
-      S.SequenceContent _ (_ : _) -> tagLine n <> blockSequence 0 True n
-      S.MappingContent _ (_ : _) -> tagLine n <> blockMapping 0 True n
+      S.SequenceContent _ xs@(_ : _) -> tagLine n <> blockSequence 0 True xs
+      S.MappingContent _ kvs@(_ : _) -> tagLine n <> blockMapping 0 True kvs
       S.ScalarContent S.Literal t | needsIndentIndicator t -> withTag n (doubleQuoted t) <> "\n"
       _ -> inlineValue indentStep n <> "\n"
 
@@ -72,12 +72,10 @@ simple n =
       S.MappingContent style kvs -> (style == S.Block || null kvs) && all (\(k, v) -> simple k && simple v) kvs
       S.AliasContent _ -> False
 
--- | A block sequence of a 'simple' node. The first entry does not start with
--- indentation if the sequence continues a line.
-blockSequence :: Int -> Bool -> S.Node -> B.Builder
-blockSequence indent atLineStart n = case n.content of
-  S.SequenceContent _ xs -> mconcat $ zipWith entry [0 :: Int ..] xs
-  _ -> mempty
+-- | A block sequence of the items of a 'simple' node. The first entry does
+-- not start with indentation if the sequence continues a line.
+blockSequence :: Int -> Bool -> [S.Node] -> B.Builder
+blockSequence indent atLineStart = mconcat . zipWith entry [0 :: Int ..]
   where
     entry :: Int -> S.Node -> B.Builder
     entry i x = (if i > 0 || atLineStart then spaces indent else mempty) <> "-" <> afterIndicator indent x
@@ -87,8 +85,8 @@ blockSequence indent atLineStart n = case n.content of
 -- line of the indicator, unless it has a tag.
 afterIndicator :: Int -> S.Node -> B.Builder
 afterIndicator indent x = case x.content of
-  S.SequenceContent _ (_ : _) -> collection $ blockSequence (indent + indentStep) False x
-  S.MappingContent _ (_ : _) -> collection $ blockMapping (indent + indentStep) False x
+  S.SequenceContent _ xs@(_ : _) -> collection $ blockSequence (indent + indentStep) False xs
+  S.MappingContent _ kvs@(_ : _) -> collection $ blockMapping (indent + indentStep) False kvs
   _ -> " " <> inlineValue (indent + indentStep) x <> "\n"
   where
     collection :: B.Builder -> B.Builder
@@ -96,12 +94,10 @@ afterIndicator indent x = case x.content of
       Just t -> " " <> t <> "\n" <> spaces (indent + indentStep) <> body
       Nothing -> " " <> body
 
--- | A block mapping of a 'simple' node. The first entry does not start with
--- indentation if the mapping continues a line.
-blockMapping :: Int -> Bool -> S.Node -> B.Builder
-blockMapping indent atLineStart n = case n.content of
-  S.MappingContent _ kvs -> mconcat $ zipWith entry [0 :: Int ..] kvs
-  _ -> mempty
+-- | A block mapping of the entries of a 'simple' node. The first entry does
+-- not start with indentation if the mapping continues a line.
+blockMapping :: Int -> Bool -> [(S.Node, S.Node)] -> B.Builder
+blockMapping indent atLineStart = mconcat . zipWith entry [0 :: Int ..]
   where
     entry :: Int -> (S.Node, S.Node) -> B.Builder
     entry i (k, v) =
@@ -111,8 +107,8 @@ blockMapping indent atLineStart n = case n.content of
 
     value :: S.Node -> B.Builder
     value v = case v.content of
-      S.SequenceContent _ (_ : _) -> tagged v <> "\n" <> blockSequence indent True v
-      S.MappingContent _ (_ : _) -> tagged v <> "\n" <> blockMapping (indent + indentStep) True v
+      S.SequenceContent _ xs@(_ : _) -> tagged v <> "\n" <> blockSequence indent True xs
+      S.MappingContent _ kvs@(_ : _) -> tagged v <> "\n" <> blockMapping (indent + indentStep) True kvs
       _ -> " " <> inlineValue (indent + indentStep) v <> "\n"
 
     tagged :: S.Node -> B.Builder
@@ -142,7 +138,7 @@ inlineValue :: Int -> S.Node -> B.Builder
 inlineValue indent n = withTag n $ case n.content of
   S.SequenceContent _ _ -> "[]"
   S.MappingContent _ _ -> "{}"
-  S.ScalarContent S.Literal t | Just (h, b) <- literalBlock True indent t -> h <> b
+  S.ScalarContent S.Literal t | Just (h, b) <- literalBlock indent t -> h <> b
   S.ScalarContent style t -> scalarText style t
   S.AliasContent _ -> mempty
 

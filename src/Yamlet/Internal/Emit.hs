@@ -283,11 +283,10 @@ splitLines = go 0
       [] -> [s]
 
 -- | The header and the content lines of a literal block scalar, with the
--- content at the given indentation. The flag allows the keep indicator for
--- trailing empty lines.
-literalBlock :: Bool -> Int -> T.Text -> Maybe (B.Builder, B.Builder)
-literalBlock allowKeep indent t = do
-  (header, body, trailing) <- blockParts allowKeep t
+-- content at the given indentation.
+literalBlock :: Int -> T.Text -> Maybe (B.Builder, B.Builder)
+literalBlock indent t = do
+  (header, body, trailing) <- blockParts True t
   let content
         -- The line break of the header comes first, and each empty line
         -- below it is one line break of the text.
@@ -369,7 +368,8 @@ hasKeepIndicator t = trailing > 1 || T.null body && trailing > 0
     trailing = T.length t - T.length body
 
 -- | The header of a block scalar, its content without the trailing line breaks
--- and the number of these line breaks.
+-- and the number of these line breaks. The flag allows the keep indicator for
+-- trailing empty lines.
 blockParts :: Bool -> T.Text -> Maybe (B.Builder, T.Text, Int)
 blockParts allowKeep t
   | not (T.all (\c -> c == '\n' || c == '\t' || isScalarChar c) t) = Nothing
