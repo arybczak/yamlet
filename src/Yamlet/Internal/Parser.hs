@@ -406,6 +406,7 @@ lYamlStream markers0 = do
     -- document start.
     documents :: [Int] -> Bool -> Int -> P [Document]
     documents markers afterEnd prefix = do
+      s <- pos
       -- A byte order mark can come before a marker after a bare document.
       lDocumentPrefix
       e <- env
@@ -423,7 +424,17 @@ lYamlStream markers0 = do
               throwAt q "expected a document start marker (---) after the directives"
             document markers version hs prefix
         | afterEnd -> bareDocument markers prefix
+        -- A byte order mark on an empty line or a comment line ends a bare
+        -- document, so it is the likely mistake.
+        | Just b <- bomLine e s p -> throwAt b "unexpected byte order mark"
         | otherwise -> throwAt p "expected a document start marker (---)"
+
+    -- The first line between the indices that starts with a byte order mark.
+    bomLine :: Env -> Int -> Int -> Maybe Int
+    bomLine e i j
+      | i >= j = Nothing
+      | isBom e i = Just i
+      | otherwise = bomLine e (nextLineStart e i) j
 
     document :: [Int] -> Maybe YamlVersion -> M.Map T.Text T.Text -> Int -> P [Document]
     document markers version hs prefix = do

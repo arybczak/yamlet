@@ -813,6 +813,10 @@ test_byteOrderMarks = do
   bom "BOM in a flow sequence" (2, 1) "a: [x,\n\xFEFF y]\n"
   bom "BOM in a flow mapping" (2, 1) "a: {x: 1,\n\xFEFF\&y: 2}\n"
   bom "BOM before a closing bracket" (2, 1) "a: [x,\n\xFEFF]\n"
+  bom "BOM before a comment inside a mapping" (2, 1) "a: 1\n\xFEFF# c\nb: 2\n"
+  bom "BOM on an empty line inside a mapping" (2, 1) "a: 1\n\xFEFF\nb: 2\n"
+  bom "BOM before a comment inside a list" (3, 1) "a:\n  - 1\n\xFEFF  # c\n  - 2\n"
+  bom "second BOM line inside a mapping" (3, 1) "a: 1\n# c\n\xFEFF# d\n\xFEFF\nb: 2\n"
   let errorAfter :: String -> (Int, Int, String) -> T.Text -> Assertion
       errorAfter preface expected input = assertEqual preface (Just expected) (errorOf (decodeAllText @Value input))
   errorAfter
@@ -1094,6 +1098,7 @@ test_syntaxErrors = do
     (1, 9, "unexpected '-', a list cannot start on the line of its anchor or tag")
     "&anchor - sequence entry\n"
   check "list on the line of its key" (1, 4, "unexpected '-', a list cannot start on the line of its key") "a: - b\n"
+  check "list on the line of a start marker" (1, 5, "unexpected '-', a list cannot start on the line of '---'") "--- - a\n"
   check
     "line of a block scalar"
     (3, 3, "unexpected indentation, the line has less indentation than the block scalar above it")

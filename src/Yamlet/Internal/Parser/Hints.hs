@@ -70,6 +70,7 @@ unexpected input i = (tabCause, other)
                 "unexpected ':', quote the value if it contains \": \""
             | itemAfterKey -> "unexpected '-', a list cannot start on the line of its key"
             | itemAfterProperty -> "unexpected '-', a list cannot start on the line of its anchor or tag"
+            | itemAfterStartMarker -> "unexpected '-', a list cannot start on the line of '---'"
             | Just msg <- mistakeIn e False i -> msg
             | Just node <- endBefore -> unexpectedChar e i ++ " after the end of " ++ node
             | otherwise -> unexpectedChar e i
@@ -243,6 +244,10 @@ unexpected input i = (tabCause, other)
       let j = skipBackWhites e i
           b = byteAt e (wordStart e j)
       in isListItem i && j < i && (b == AMP || b == EXCL)
+
+    itemAfterStartMarker :: Bool
+    itemAfterStartMarker =
+      isListItem i && onStartMarkerLine && skipBackWhites e i == lineStartAt e i + markerLength
 
     -- A colon that ends a word and precedes white space, as in an unquoted
     -- value like "Error: file not found".
