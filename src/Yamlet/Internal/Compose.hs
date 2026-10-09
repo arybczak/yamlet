@@ -43,6 +43,20 @@ prepareWithin :: Int -> Int -> S.Node -> Either Failure (S.Node, Int)
 prepareWithin limit added root
   | needsNumbering root = (expandAliases root,) <$> numberWithin limit added root
   | otherwise = (root, added) <$ check root
+  where
+    -- The node has an alias or a collection key inside it.
+    needsNumbering :: S.Node -> Bool
+    needsNumbering n = case n.content of
+      S.ScalarContent {} -> False
+      S.SequenceContent _ xs -> any needsNumbering xs
+      S.MappingContent _ kvs -> any (\(k, v) -> isCollection k || needsNumbering k || needsNumbering v) kvs
+      S.AliasContent {} -> True
+      where
+        isCollection :: S.Node -> Bool
+        isCollection k = case k.content of
+          S.SequenceContent {} -> True
+          S.MappingContent {} -> True
+          _ -> False
 
 -- | The limit of the visits of a traversal that the aliases of the documents
 -- can add together: as many visits as the documents have, or a fixed minimum
@@ -264,6 +278,39 @@ check sn =
       S.ScalarContent style t -> (k,) <$> scalar k.offset k.props style t
       _ -> Left $ failure k.offset "unexpected collection key"
 
+    -- The keys come with their nodes.
+    checkUniqueKeys :: [(S.Node, Value)] -> Either Failure ()
+    checkUniqueKeys keys = case duplicate of
+      Just (k, first) -> Left $ duplicateKey k first
+      Nothing -> Right ()
+      where
+        -- The first scalar key that is equal to an earlier one, and the
+        -- earlier one. A document with a collection key gets numbers for its
+        -- keys instead.
+        duplicate :: Maybe ((S.Node, Value), (S.Node, Value))
+        duplicate = case drop maxPairwise keys of
+          _ : _ -> viaMap M.empty keys
+          [] -> pairwise [] keys
+
+        -- Comparing all pairs is faster for 16 keys or fewer, by a
+        -- measurement.
+        maxPairwise :: Int
+        maxPairwise = 16
+
+        viaMap :: M.Map Value S.Node -> [(S.Node, Value)] -> Maybe ((S.Node, Value), (S.Node, Value))
+        viaMap seen = \case
+          [] -> Nothing
+          k@(n, v) : ks -> case M.lookup v seen of
+            Just first -> Just (k, (first, v))
+            Nothing -> viaMap (M.insert v n seen) ks
+
+        pairwise :: [(S.Node, Value)] -> [(S.Node, Value)] -> Maybe ((S.Node, Value), (S.Node, Value))
+        pairwise seen = \case
+          [] -> Nothing
+          k@(_, v) : ks -> case L.find ((== v) . snd) seen of
+            Just first -> Just (k, first)
+            Nothing -> pairwise (k : seen) ks
+
 -- | Replace each alias with a copy of the node that it refers to. The copy
 -- has the offsets and the comments of the alias, and no anchor. The nodes
 -- inside the copy have the offsets of the alias too, so that an error inside
@@ -386,37 +433,6 @@ collectionTag off props def = case props.tag of
     isCoreTag :: T.Text -> Bool
     isCoreTag tag = tag `elem` [nullTag, boolTag, intTag, floatTag, strTag, seqTag, mapTag]
 
--- | The keys come with their nodes.
-checkUniqueKeys :: [(S.Node, Value)] -> Either Failure ()
-checkUniqueKeys keys = case duplicate of
-  Just (k, first) -> Left $ duplicateKey k first
-  Nothing -> Right ()
-  where
-    -- The first scalar key that is equal to an earlier one, and the earlier
-    -- one. A document with a collection key gets numbers for its keys instead.
-    duplicate :: Maybe ((S.Node, Value), (S.Node, Value))
-    duplicate = case drop maxPairwise keys of
-      _ : _ -> viaMap M.empty keys
-      [] -> pairwise [] keys
-
-    -- Comparing all pairs is faster for 16 keys or fewer, by a measurement.
-    maxPairwise :: Int
-    maxPairwise = 16
-
-    viaMap :: M.Map Value S.Node -> [(S.Node, Value)] -> Maybe ((S.Node, Value), (S.Node, Value))
-    viaMap seen = \case
-      [] -> Nothing
-      k@(n, v) : ks -> case M.lookup v seen of
-        Just first -> Just (k, (first, v))
-        Nothing -> viaMap (M.insert v n seen) ks
-
-    pairwise :: [(S.Node, Value)] -> [(S.Node, Value)] -> Maybe ((S.Node, Value), (S.Node, Value))
-    pairwise seen = \case
-      [] -> Nothing
-      k@(_, v) : ks -> case L.find ((== v) . snd) seen of
-        Just first -> Just (k, first)
-        Nothing -> pairwise (k : seen) ks
-
 -- | The error at a key, with a note at the first key that is equal to it.
 duplicateKey :: (S.Node, Value) -> (S.Node, Value) -> Failure
 duplicateKey (kn, k) (firstNode, first) = (kn.offset, message) NE.:| [(firstNode.offset, note)]
@@ -469,17 +485,3 @@ data Shape
   | SequenceShape !T.Text ![Int]
   | MappingShape !T.Text ![(Int, Int)]
   deriving stock (Eq, Ord)
-
--- | The node has an alias or a collection key inside it.
-needsNumbering :: S.Node -> Bool
-needsNumbering n = case n.content of
-  S.ScalarContent {} -> False
-  S.SequenceContent _ xs -> any needsNumbering xs
-  S.MappingContent _ kvs -> any (\(k, v) -> isCollection k || needsNumbering k || needsNumbering v) kvs
-  S.AliasContent {} -> True
-  where
-    isCollection :: S.Node -> Bool
-    isCollection k = case k.content of
-      S.SequenceContent {} -> True
-      S.MappingContent {} -> True
-      _ -> False

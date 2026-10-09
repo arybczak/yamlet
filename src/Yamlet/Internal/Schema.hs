@@ -141,6 +141,7 @@ isYaml11NonString t = case T.uncons t of
     | c == ':' -> T.compareLength t 1 == GT
     | isDigit c || c == '-' || c == '+' || c == '.' ->
         matches (alt [int, float, timestamp]) t || matches goNumber (T.filter (/= '_') t)
+    -- Psych merges a quoted << too, only !!str << stays a key there.
     | otherwise ->
         t `elem` ["y", "Y", "n", "N", "~", "<<", "="]
           -- Psych ignores the case of these words.

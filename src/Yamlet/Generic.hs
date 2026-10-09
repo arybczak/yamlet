@@ -524,8 +524,9 @@ defaultField x = case unsafeDupablePerformIO (uninterruptibleMask_ (try (evaluat
   Right _ -> Just x
 
 -- | An error if the 'yamlDefault' of the type has a 'requiredField' in a
--- strict field or in the field of a newtype. Without the check, each field would look required, and a
--- missing key would give the error of a field that has a default.
+-- strict field or in the field of a newtype. Without the check, each field
+-- would look required, and a missing key would give the error of a field
+-- that has a default.
 checkDefault :: forall a. (GenericYamlOptions a, GDatatype (Rep a)) => ()
 checkDefault = case yamlDefault @a of
   Just d
