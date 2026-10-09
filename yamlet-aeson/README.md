@@ -74,6 +74,10 @@ A YAML document converts to an aeson `Value` as follows:
 - `.inf` and `-.inf` are the strings `"+inf"` and `"-inf"`, and `.nan` is
   null, which the instances of aeson for `Double` and `Float` read and
   write.
+- `-0.0` is the number 0, because a `Scientific` has no negative zero.
+- A number whose exponent in scientific notation is beyond the range
+  from -1000 to 1000, e.g. `1e1001`, is an error, as in yamlet. A `Number`
+  with such an exponent converts to YAML, but does not read back.
 - A tag that is not of the core schema makes a scalar a string, e.g.
   `!secret 123` is the string `"123"`. The yaml package reads it as the
   number 123. On a collection, such a tag does not matter.

@@ -88,7 +88,7 @@
 --       os: [linux, macos]
 --       ghc: ['9.10', '9.12']
 --
--- The record types of the library, e.g. 'Error' and 'YamlOptions', have no
+-- The record types of the library, e.g. t'Error' and t'YamlOptions', have no
 -- field selectors. Read a field with the @OverloadedRecordDot@ extension,
 -- e.g. @err.message@, and set one with the record syntax, e.g.
 -- @defaultYamlOptions {fieldLabelModifier = snakeCase}@, or with the generic
