@@ -136,8 +136,7 @@
 -- fields.
 --
 -- Another shape is a compile error that names the constructors, e.g. a
--- constructor with several fields without names. Give such fields names, or
--- put them in a tuple.
+-- constructor with several fields without names. Give such fields names.
 --
 -- = Missing keys
 --
@@ -670,7 +669,7 @@ type family GShape (f :: Type -> Type) :: Shape where
       ( Text "The constructor "
           :<>: Text name
           :<>: Text " has several fields without names."
-          :$$: Text "Give the fields names, or use a tuple."
+          :$$: Text "Give the fields names."
       )
   GShape V1 = TypeError NoConstructors
 
