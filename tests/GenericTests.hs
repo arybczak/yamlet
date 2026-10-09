@@ -773,10 +773,16 @@ test_flatten = do
   assertEqual "missing field" (Right (Ahead (Distance Nothing))) (decodeText "step: Ahead\n")
   let flatNote :: Int -> (Int, Int, String)
       flatNote column = (1, column, "without the key \"contents\", the other keys of this mapping are the field")
+      onlyTagNote :: Int -> (Int, Int, String)
+      onlyTagNote column = (1, column, "the mapping has no key \"contents\" and no other keys for the field")
   assertEqual
     "error in a field"
-    [(1, 1, "missing key \"speed\""), flatNote 7]
+    [(1, 1, "missing key \"speed\""), onlyTagNote 7]
     (errorsOf (decodeText @Step "step: Accelerate\n"))
+  assertEqual
+    "only the tag for a field that is not a mapping"
+    [(1, 1, "expected an integer, but got a mapping"), onlyTagNote 7]
+    (errorsOf (decodeText @Step "step: Wait\n"))
   assertEqual
     "misspelled field"
     [(1, 1, "missing key \"speed\""), flatNote 7, (2, 1, "unknown key \"sped\", did you mean \"speed\"?")]
@@ -824,7 +830,7 @@ test_flatten = do
   assertEqual
     "duplicate tag keys reported once"
     [ (1, 1, "missing key \"step\"")
-    , flatNote 7
+    , onlyTagNote 7
     , (2, 4, "duplicate key \"step\"")
     , (1, 1, "the first key \"step\"")
     , (3, 4, "duplicate key \"step\"")
