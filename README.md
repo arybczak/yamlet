@@ -26,6 +26,13 @@ A YAML 1.2.2 library written in Haskell. Main features:
 
 The library supports GHC 9.2 and later.
 
+The record types of the library, e.g. `Error` and `YamlOptions`, have no
+field selectors. Read a field with the `OverloadedRecordDot` extension, e.g.
+`err.message`, and set one with the record syntax, e.g.
+`defaultYamlOptions {fieldLabelModifier = snakeCase}`, or with the generic
+optics of [optics-core](https://hackage.haskell.org/package/optics-core),
+e.g. `defaultYamlOptions & #fieldLabelModifier .~ snakeCase`.
+
 ## Example
 
 A configuration type derives its decoder. The decoder rejects unknown keys,
