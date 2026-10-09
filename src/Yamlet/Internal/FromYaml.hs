@@ -1254,13 +1254,8 @@ insertUnique node item key insert start msg note xs = Parser $ \off -> go off st
     duplicateError fs (c, n) =
       OneError n.offset (msg (text n)) [(first.offset, note (text first)) | Just first <- [M.lookup c fs]]
 
-    -- The scalar as the input writes it, a string in quotes.
     text :: S.Node -> String
-    text n = case n.content of
-      S.ScalarContent _ t
-        | Just s <- stringValue n -> ' ' : showText s
-        | not (T.null t) -> ' ' : T.unpack t
-      _ -> ""
+    text = maybe "" (' ' :) . inputText
 
     -- A second pass finds the first items, only if there are duplicates. It
     -- skips the failed items, because an item with a duplicate inside would

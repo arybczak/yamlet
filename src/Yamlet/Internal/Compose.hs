@@ -26,6 +26,7 @@ import Data.Text qualified as T
 import Yamlet.Internal.Schema
 import Yamlet.Internal.Syntax qualified as S
 import Yamlet.Internal.Utils
+import Yamlet.Internal.View
 import Yamlet.Value
 
 -- | Check that the tags of a node are valid and that the keys of every
@@ -435,26 +436,17 @@ collectionTag off props def = case props.tag of
 
 -- | The error at a key, with a note at the first key that is equal to it.
 duplicateKey :: (S.Node, Value) -> (S.Node, Value) -> Failure
-duplicateKey (kn, k) (firstNode, first) = (kn.offset, message) NE.:| [(firstNode.offset, note)]
+duplicateKey (kn, k) (firstNode, _) = (kn.offset, message) NE.:| [(firstNode.offset, note)]
   where
     message :: String
-    message = case (k, keyText kn k, keyText firstNode first) of
+    message = case (k, inputText kn, inputText firstNode) of
       (String "<<", _, _) -> "duplicate key \"<<\"" ++ noMergeKeys
       (_, Just t, Just f) | t /= f -> "duplicate key " ++ t ++ ", the same value as the first key"
       (_, Just t, _) -> "duplicate key " ++ t
       (_, Nothing, _) -> "duplicate key"
 
     note :: String
-    note = "the first key" ++ maybe "" (' ' :) (keyText firstNode first)
-
-    -- The key as the input writes it, a string in quotes. A collection and an
-    -- empty scalar have no text.
-    keyText :: S.Node -> Value -> Maybe String
-    keyText n v = case (n.content, v) of
-      (S.AliasContent name, _) -> Just ('*' : T.unpack name)
-      (S.ScalarContent {}, String t) -> Just (showText t)
-      (S.ScalarContent _ t, _) | not (T.null t) -> Just (T.unpack t)
-      _ -> Nothing
+    note = "the first key" ++ maybe "" (' ' :) (inputText firstNode)
 
 -- | The hint after the message of an error at a key @<<@. YAML 1.1 used it to
 -- merge mappings, and some tools still do, but in YAML 1.2 it is a string.

@@ -11,6 +11,7 @@ module Yamlet.Internal.View
   , describeNode
   , isNullNode
   , stringValue
+  , inputText
   ) where
 
 import Data.Maybe
@@ -19,6 +20,7 @@ import GHC.Generics
 
 import Yamlet.Internal.Schema
 import Yamlet.Internal.Syntax qualified as S
+import Yamlet.Internal.Utils
 import Yamlet.Value
 
 -- | The value of a node with its tag resolved. The items and the entries of a
@@ -90,6 +92,17 @@ isNullNode n = case view n of
 stringValue :: S.Node -> Maybe T.Text
 stringValue n = case view n of
   StringView t -> Just t
+  _ -> Nothing
+
+-- | A key or an item as the input writes it, for an error: a string in
+-- quotes, an alias with its @*@ and another scalar as it is. A collection
+-- and an empty scalar have no text.
+inputText :: S.Node -> Maybe String
+inputText n = case n.content of
+  S.AliasContent name -> Just ('*' : T.unpack name)
+  S.ScalarContent _ t
+    | Just s <- stringValue n -> Just (showText s)
+    | not (T.null t) -> Just (T.unpack t)
   _ -> Nothing
 
 -- $setup

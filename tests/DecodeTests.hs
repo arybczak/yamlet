@@ -1513,6 +1513,10 @@ test_keyErrors = do
     (Just ((2, 1, "duplicate key ~, the same value as the first key"), (1, 1, "the first key null")))
     (errorWithNote (decodeAllText @Value "null: 1\n~: 2\n"))
   assertEqual
+    "duplicate string key with a tag"
+    (Just ((2, 4, "duplicate key \"1\""), (1, 4, "the first key \"1\"")))
+    (errorWithNote (decodeAllText @Value "!t 1: a\n!t 1: b\n"))
+  assertEqual
     "duplicate among many scalar keys"
     (Just ((21, 1, "duplicate key \"k1\""), (1, 1, "the first key \"k1\"")))
     (errorWithNote (decodeAllText @Value (T.unlines [T.pack ("k" ++ show i ++ ": 1") | i <- [1 .. 20 :: Int] ++ [1]])))
