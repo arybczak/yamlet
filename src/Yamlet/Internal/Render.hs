@@ -75,13 +75,12 @@ defaultRenderOptions =
 -- * In the text of a comment, a character that YAML does not allow becomes
 --   U+FFFD, and the white space at the end goes away. A line break starts a
 --   new comment in a 'Yamlet.Syntax.CommentLine', and becomes a space in an
---   inline comment, also one that moves to a line of its own.
+--   inline comment.
 --
 -- * An anchor name with a character that YAML does not allow in it, e.g. a
---   space, or that YAML 1.1 reads as a line break, e.g. U+2028, becomes a
---   new name in the anchor and in its aliases. Other names stay, also those
---   that libyaml and PyYAML reject, e.g. @a:@ or @é@, because they accept
---   only ASCII letters, digits, @-@ and @_@.
+--   space, or that YAML 1.1 reads as a line break, becomes a new name in the
+--   anchor and in its aliases. Names that only some parsers reject stay,
+--   e.g. @é@, which libyaml rejects.
 --
 -- * A version that the parser does not support, e.g. 2.0, has no @%YAML@
 --   directive.
