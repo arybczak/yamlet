@@ -26,7 +26,7 @@ main =
     testGroup
       "yamlet-aeson"
       [ testGroup
-          "Decode"
+          "decode"
           [ testCase "scalar keys" test_scalarKeys
           , testCase "keys with the same text" test_sameText
           , testCase "collection keys" test_collectionKeys
@@ -43,7 +43,7 @@ main =
           , testCase "types of aeson" test_aesonTypes
           ]
       , testGroup
-          "Encode"
+          "encode"
           [ testCase "order of fields" test_fieldOrder
           , testCase "polymorphic value" test_polymorphic
           , testCase "keys that look like numbers" test_numberKeys

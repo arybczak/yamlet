@@ -11,7 +11,7 @@ import Yamlet.Test.Render.Styles
 renderTests :: TestTree
 renderTests =
   testGroup
-    "Render"
+    "render"
     [ styleTests
     , documentTests
     , attachmentTests

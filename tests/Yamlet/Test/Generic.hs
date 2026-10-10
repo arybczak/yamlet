@@ -20,7 +20,7 @@ import Yamlet.Test.Helpers
 genericTests :: TestTree
 genericTests =
   testGroup
-    "Generic"
+    "generic"
     [ testCase "record" test_record
     , testCase "types with a parameter" test_parameters
     , testCase "collected errors" test_collectedErrors

@@ -15,7 +15,7 @@ import Yamlet
 typeErrorTests :: TestTree
 typeErrorTests =
   testGroup
-    "Type errors"
+    "type errors"
     [ testCase "several fields without names" $ do
         rejects
           "The constructor Pair has several fields without names."

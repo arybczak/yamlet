@@ -12,7 +12,7 @@ import Yamlet.Test.Decode.Values
 decodeTests :: TestTree
 decodeTests =
   testGroup
-    "Decode"
+    "decode"
     [ scalarTests
     , valueTests
     , inputTests

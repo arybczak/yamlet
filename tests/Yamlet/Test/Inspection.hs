@@ -24,7 +24,7 @@ import Yamlet.Test.Inspection.Obligations
 inspectionTests :: TestTree
 inspectionTests =
   testGroup
-    "Inspection"
+    "inspection"
     [ testGroup
         "Server"
         [ testCase "encode" $

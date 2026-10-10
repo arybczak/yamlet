@@ -9,7 +9,7 @@ import Yamlet.Test.Encode.Values
 encodeTests :: TestTree
 encodeTests =
   testGroup
-    "Encode"
+    "encode"
     [ valueTests
     , commentTests
     , propertyTests
