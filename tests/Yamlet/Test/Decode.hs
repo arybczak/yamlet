@@ -1,4 +1,4 @@
-module DecodeTests (decodeTests) where
+module Yamlet.Test.Decode (decodeTests) where
 
 import Control.Exception
 import Control.Monad
@@ -31,12 +31,12 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck hiding (Fixed)
 
-import Helpers
-import Thunks
 import Yamlet
 import Yamlet.Internal.Parser.Monad qualified as P
 import Yamlet.Schema
 import Yamlet.Syntax qualified as S
+import Yamlet.Test.Helpers
+import Yamlet.Test.Thunks
 
 decodeTests :: TestTree
 decodeTests =

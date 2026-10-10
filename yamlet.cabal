@@ -156,15 +156,15 @@ test-suite test
     type:           exitcode-stdio-1.0
     main-is:        Main.hs
 
-    other-modules:  DecodeTests
-                    EncodeTests
-                    Events
-                    GenericTests
-                    Helpers
-                    RenderTests
-                    TestSuite
-                    Thunks
-                    TypeErrorTests
+    other-modules:  Yamlet.Test.Decode
+                    Yamlet.Test.Encode
+                    Yamlet.Test.Generic
+                    Yamlet.Test.Helpers
+                    Yamlet.Test.Render
+                    Yamlet.Test.Thunks
+                    Yamlet.Test.TypeError
+                    Yamlet.Test.YamlTestSuite
+                    Yamlet.Test.YamlTestSuite.Events
 
 test-suite retention
     import:         language
@@ -184,7 +184,7 @@ test-suite retention
     type:           exitcode-stdio-1.0
     main-is:        Main.hs
 
-    other-modules:  Thunks
+    other-modules:  Yamlet.Test.Thunks
 
 test-suite inspection
     import:         language

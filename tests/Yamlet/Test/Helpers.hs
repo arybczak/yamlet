@@ -1,5 +1,5 @@
 -- | The helpers that several test modules use.
-module Helpers
+module Yamlet.Test.Helpers
   ( errorPlace
   , errorOf
   , errorsOf

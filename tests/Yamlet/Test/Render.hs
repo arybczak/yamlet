@@ -1,4 +1,4 @@
-module RenderTests (renderTests) where
+module Yamlet.Test.Render (renderTests) where
 
 import Control.Monad
 import Data.List qualified as L
@@ -8,10 +8,10 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 
-import Helpers
-import Thunks
 import Yamlet hiding (Commented (..))
 import Yamlet.Syntax
+import Yamlet.Test.Helpers
+import Yamlet.Test.Thunks
 
 renderTests :: TestTree
 renderTests =

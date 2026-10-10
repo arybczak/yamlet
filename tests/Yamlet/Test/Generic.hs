@@ -1,4 +1,4 @@
-module GenericTests (genericTests) where
+module Yamlet.Test.Generic (genericTests) where
 
 import Control.Concurrent
 import Control.Exception
@@ -13,9 +13,9 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 
-import Helpers
 import Yamlet
 import Yamlet.Syntax qualified as S
+import Yamlet.Test.Helpers
 
 genericTests :: TestTree
 genericTests =

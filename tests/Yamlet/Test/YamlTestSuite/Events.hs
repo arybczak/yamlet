@@ -1,6 +1,6 @@
 -- | A YAML stream as a sequence of events, the representation that the YAML
 -- specification uses to describe the result of parsing.
-module Events
+module Yamlet.Test.YamlTestSuite.Events
   ( Event (..)
   , toEvents
   ) where

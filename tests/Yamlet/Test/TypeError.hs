@@ -2,7 +2,7 @@
 
 -- | The type errors of the generic instances. The module defers type errors,
 -- so an instance with a type error compiles, and using it throws the error.
-module TypeErrorTests (typeErrorTests) where
+module Yamlet.Test.TypeError (typeErrorTests) where
 
 import Control.Exception
 import Data.List qualified as L

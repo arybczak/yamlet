@@ -1,5 +1,5 @@
 -- | The official YAML test suite, https://github.com/yaml/yaml-test-suite.
-module TestSuite (testSuiteTests) where
+module Yamlet.Test.YamlTestSuite (testSuiteTests) where
 
 import Control.Applicative
 import Control.Monad
@@ -21,10 +21,10 @@ import System.FilePath
 import Test.Tasty
 import Test.Tasty.HUnit
 
-import Events
 import Yamlet qualified as Y
 import Yamlet.Error
 import Yamlet.Syntax
+import Yamlet.Test.YamlTestSuite.Events
 
 -- | The tests of the suite. The directory with the data branch of the
 -- repository is in @YAML_TEST_SUITE@, or in

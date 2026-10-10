@@ -1,4 +1,4 @@
-module EncodeTests (encodeTests) where
+module Yamlet.Test.Encode (encodeTests) where
 
 import Data.Either
 import Data.Fixed
@@ -26,9 +26,9 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck hiding (Fixed)
 
-import Helpers
 import Yamlet
 import Yamlet.Syntax qualified as S
+import Yamlet.Test.Helpers
 
 encodeTests :: TestTree
 encodeTests =

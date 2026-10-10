@@ -42,8 +42,8 @@ import System.Exit
 import System.IO
 import System.Mem
 
-import Thunks
 import Yamlet
+import Yamlet.Test.Thunks
 
 -- | Run the checks, and fail if one of them fails.
 main :: IO ()

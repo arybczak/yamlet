@@ -2,12 +2,12 @@ module Main (main) where
 
 import Test.Tasty
 
-import DecodeTests
-import EncodeTests
-import GenericTests
-import RenderTests
-import TestSuite
-import TypeErrorTests
+import Yamlet.Test.Decode
+import Yamlet.Test.Encode
+import Yamlet.Test.Generic
+import Yamlet.Test.Render
+import Yamlet.Test.TypeError
+import Yamlet.Test.YamlTestSuite
 
 main :: IO ()
 main = do
