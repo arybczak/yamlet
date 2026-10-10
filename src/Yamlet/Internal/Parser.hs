@@ -1054,18 +1054,24 @@ cutByMarker e w
     unpaired :: Bool
     unpaired
       | w == RBRACKET || w == RBRACE = unmatchedClosing e w e.end e.streamEnd
-      | otherwise = odd (quotes e.end 0)
+      | otherwise = closes e.end
 
-    -- A backslash escapes a double quote.
-    quotes :: Int -> Int -> Int
-    quotes i !k
-      | i >= e.streamEnd = k
-      | b == w = quotes (i + 1) (k + 1)
-      | b == BACKSLASH && w == DQUOTE = quotes (i + 2) k
-      | otherwise = quotes (i + 1) k
+    -- The scalar continues after the marker up to a closing quote. Content
+    -- right after that quote shows that it is not the closing quote, e.g.
+    -- the quote in "it's" of a plain scalar in the next document.
+    closes :: Int -> Bool
+    closes i
+      | i >= stream.end = False
+      | b == w && w == SQUOTE && byteAt stream (i + 1) == SQUOTE = closes (i + 2)
+      | b == w = canEndQuoted stream (i + 1)
+      | b == BACKSLASH && w == DQUOTE = closes (i + 2)
+      | otherwise = closes (i + 1)
       where
         b :: Word8
-        b = A.unsafeIndex e.array i
+        b = byteAt stream i
+
+    stream :: Env
+    stream = e {end = e.streamEnd}
 
 -- | A closing bracket without an opening bracket of its own is in the input
 -- from the first index to the second.

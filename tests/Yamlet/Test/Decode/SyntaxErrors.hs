@@ -467,6 +467,10 @@ test_syntaxErrors = do
     (1, 7, "unterminated single-quoted scalar")
     "name: 'web\n---\nname: 'it''s'\n"
   check
+    "single-quoted scalar before a document with a quote in a plain scalar"
+    (1, 4, "unterminated single-quoted scalar")
+    "a: 'oops\n---\nb: it's here\n"
+  check
     "escaped quote after a marker"
     (2, 1, "unexpected '---' in a double-quoted scalar, indent the line")
     "a: \"x\n---\n  y \\\"z\"\n"
