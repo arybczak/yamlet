@@ -259,6 +259,8 @@ single = first (NE.:| [])
 --
 -- * an undefined alias,
 --
+-- * an alias inside the node that it refers to, e.g. @&a [*a]@,
+--
 -- * aliases beyond the limit in "Yamlet.Value",
 --
 -- * a value that is not valid for its tag,

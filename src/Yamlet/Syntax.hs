@@ -316,22 +316,27 @@ foldedNode ls = contentNode (ScalarLinesContent Folded t starts)
 -- they read back as the lines of the node below, or of the end of an outer
 -- collection.
 --
--- Below a scalar or an alias key after @?@, such a line belongs to the value,
--- as a line above it. A list or a mapping as the key keeps it. E.g. the value
--- of @a@ gets @# b@, and the list key gets @# d@.
+-- Below a scalar or an alias key after @?@, such a line belongs to the value:
+-- as a line above it if the @:@ of the value follows, and as a line after it
+-- if the key has no value. A list or a mapping as the key keeps it. E.g. the
+-- value of @a@ gets @# b@ above it, the empty value of @e@ gets @# f@ after
+-- it, and the list key gets @# d@.
 --
--- >>> input = "? a\n  # b\n: x\n? - c\n  # d\n: y\n"
+-- >>> input = "? a\n  # b\n: x\n? e\n  # f\n? - c\n  # d\n: y\n"
 --
 -- >>> T.putStr input
 -- ? a
 --   # b
 -- : x
+-- ? e
+--   # f
 -- ? - c
 --   # d
 -- : y
 --
 -- >>> printComments input
 -- root.a (value) before: [Comment "b"]
+-- root.e (value) after: [Comment "f"]
 -- root.? (key) after: [Comment "d"]
 --
 -- Thus the text has no place for the lines after a scalar or an alias key.
