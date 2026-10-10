@@ -569,9 +569,11 @@ objectEntries o = o.entries
 objectKeys :: Object -> [T.Text]
 objectKeys o = [c | (k, _) <- o.entries, Just t <- [stringValue k], let !c = T.copy t]
 
--- | The value of a string key.
-lookupKey :: T.Text -> Object -> Maybe S.Node
-lookupKey key o = snd <$> M.lookup key o.index
+-- | The value of a key, or 'Nothing' if the key is missing. As for
+-- 'parseField', a key with the same text that is not a string, e.g. @404@,
+-- is an error, so that its value does not go away.
+lookupKey :: Object -> T.Text -> Parser (Maybe S.Node)
+lookupKey o key = fmap snd <$> findKey o key
 
 -- | The value of a key. It is an error if the key is missing.
 parseField :: FromYaml a => Object -> T.Text -> Parser a
@@ -777,7 +779,7 @@ findKey o key = case M.lookup key o.index of
       S.ScalarContent _ t -> t == key
       _ -> False
 
--- | The error for a string key that 'lookupKey' does not find. As for
+-- | The error for a key that is not in the index of string keys. As for
 -- 'findKey', a key with the same text that is not a string is the error
 -- instead.
 missingKey :: Object -> T.Text -> Parser a
@@ -797,7 +799,8 @@ missingKey o key = Parser $ \off ->
 -- for a value written as @{}@.
 --
 -- A key that is not a string, but has the text of a known key, e.g. @true@,
--- is left to the lookup of that key, e.g. 'parseField', which reports it.
+-- is left to the lookup of that key, e.g. 'parseField' or 'lookupKey',
+-- which reports it.
 rejectUnknownKeys :: [T.Text] -> Object -> Parser ()
 rejectUnknownKeys known o
   -- The index has the text of each string key, so the keys are not viewed

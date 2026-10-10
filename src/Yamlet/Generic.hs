@@ -1132,9 +1132,9 @@ gParseYaml opts enc def k n
   | otherwise = gFromUntagged opts def k n
   where
     tagged :: Object -> Parser a
-    tagged o = case lookupKey opts.tagKey o of
+    tagged o = case M.lookup opts.tagKey o.index of
       Nothing -> missingKey o opts.tagKey
-      Just tn -> do
+      Just (_, tn) -> do
         t <- withName tags pure tn
         fromMaybe (unknown tn "tag" t) (gFromTagged opts (enc == TaggedFlat) def k t o)
 
@@ -1327,7 +1327,7 @@ fromObject opts flat keys def o
         merged
       where
         tag :: Maybe S.Node
-        tag = lookupKey opts.tagKey o
+        tag = snd <$> M.lookup opts.tagKey o.index
 
         constructorName :: S.Node -> String
         constructorName n = case n.content of

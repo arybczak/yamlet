@@ -509,6 +509,29 @@ test_keyErrors = do
     "string key that is missing"
     (Just "missing key \"a\"")
     (lookupError "a" "b: 1\n")
+  let lookupResult :: T.Text -> T.Text -> Either [String] (Maybe Value)
+      lookupResult key input =
+        either (Left . map (.message) . toList) id $ do
+          v <- decodeText input
+          pure
+            . first (map snd . toList)
+            . runParser
+              ( withMapping $ \o ->
+                  rejectUnknownKeys [key] o *> (traverse parseYaml =<< lookupKey o key)
+              )
+            $ v
+  assertEqual
+    "lookup of a key"
+    (Right (Just (String "not found")))
+    (lookupResult "404" "'404': not found\n")
+  assertEqual
+    "lookup of a missing key"
+    (Right Nothing)
+    (lookupResult "404" "{}\n")
+  assertEqual
+    "lookup of a key that is not a string, with the unknown keys rejected"
+    (Left ["the key 404 is an integer, not a string"])
+    (lookupResult "404" "404: not found\n")
   assertEqual
     "key that is not a string with the value of the key"
     (Just "missing key \"3.10\"")
