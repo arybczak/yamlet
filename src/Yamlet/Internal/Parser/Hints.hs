@@ -491,8 +491,8 @@ unexpected input i = (tabCause, other)
       byteAt e j == MINUS
         && (let b = byteAt e (j + 1) in b == 0 || isWhite b || isBreak b)
 
--- | The ':' that ends an alias name before the index, as in "*x: 1". An
--- alias name can contain ':'.
+-- | The colon that ends an alias name before the index, as in @*x: 1@. An
+-- alias name can contain a colon.
 aliasColon :: Env -> Int -> Maybe Int
 aliasColon e i =
   let j = skipBackWhites e i
