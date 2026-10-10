@@ -124,7 +124,10 @@ A YAML document converts to an aeson `Value` as follows:
 - `-0.0` is the number 0, because a `Scientific` has no negative zero.
 - A number whose exponent in scientific notation is beyond the range
   from -1000 to 1000, e.g. `1e1001`, is an error, as in yamlet. A `Number`
-  with such an exponent converts to YAML, but does not read back.
+  with such an exponent converts to YAML, but does not read back, e.g.
+  `1e1025` and `1e-1001`. The exception is a number that aeson writes in
+  JSON as an integer, i.e. one whose `base10Exponent` is from 0 to 1024,
+  e.g. `1e1001`. It converts to an integer, which reads back.
 - A tag that is not of the core schema makes a scalar a string, e.g.
   `!secret 123` is the string `"123"`. The yaml package reads it as the
   number 123. A collection with such a tag converts as without it, e.g.

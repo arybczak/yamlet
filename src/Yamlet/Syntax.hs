@@ -114,7 +114,8 @@ parseDocuments bs = decodeInput bs >>= parseStream
 parseDocumentsText :: T.Text -> Either Error [Document]
 parseDocumentsText = parseStream
 
--- | A folded block scalar (@>-@) with the given lines.
+-- | A folded block scalar (@>-@) with the given lines. The empty lines at the
+-- end are dropped, because @>-@ strips them.
 --
 -- >>> T.putStr (renderSyntax defaultRenderOptions [document (mappingNode [(plainNode "options", foldedNode ["--health-cmd pg_isready", "--health-interval 5s"])])])
 -- options: >-

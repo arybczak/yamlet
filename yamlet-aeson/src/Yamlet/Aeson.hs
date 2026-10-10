@@ -130,7 +130,10 @@
 -- * A number whose exponent in scientific notation is beyond the range
 --   from -1000 to 1000, e.g. @1e1001@, is an error, as in yamlet. A
 --   'Data.Aeson.Number' with such an exponent converts to YAML, but does not
---   read back.
+--   read back, e.g. @1e1025@ and @1e-1001@. The exception is a number that
+--   aeson writes in JSON as an integer, i.e. one whose
+--   'Data.Scientific.base10Exponent' is from 0 to 1024, e.g. @1e1001@. It
+--   converts to an integer, which reads back.
 --
 -- * A tag that is not of the core schema makes a scalar a string, e.g.
 --   @!secret 123@ is the string @"123"@. The yaml package reads it as the
