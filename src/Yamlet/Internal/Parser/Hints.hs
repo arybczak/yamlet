@@ -169,11 +169,23 @@ unexpected input i = (tabCause, other)
                   k = skipWhites e prev
               in if isBreak (byteAt e k) then commentAbove prev else hasComment k
 
+        -- A quoted scalar can contain " #", as in "\"x #y\"", so a quote
+        -- that can close a scalar after the '#' shows that the '#' may not
+        -- start a comment.
         hasComment :: Int -> Bool
-        hasComment j = byteAt e j == HASH || any comment [j + 1 .. lineEndAt e j - 1]
+        hasComment j = case L.find startsComment [j .. end - 1] of
+          Just h -> not (any closingQuote [h + 1 .. end - 1])
+          Nothing -> False
+          where
+            end :: Int
+            end = lineEndAt e j
 
-        comment :: Int -> Bool
-        comment j = byteAt e j == HASH && isWhite (byteBefore e j)
+            startsComment :: Int -> Bool
+            startsComment k = byteAt e k == HASH && (k == j || isWhite (byteBefore e k))
+
+        closingQuote :: Int -> Bool
+        closingQuote k =
+          let b = byteAt e k in (b == SQUOTE || b == DQUOTE) && canEndQuoted e (k + 1)
 
     -- The start of the line of the index if the line has only anchors and
     -- tags, as in "&anchor".

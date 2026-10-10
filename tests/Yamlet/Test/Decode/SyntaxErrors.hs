@@ -97,6 +97,21 @@ test_syntaxErrors = do
         (line, 3, "unexpected indentation")
         input
   forM_
+    [ ("double-quoted scalar", 2, "a: \"x #y\"\n  b\n")
+    , ("single-quoted scalar", 2, "a: 'see #3'\n  b\n")
+    , ("quoted scalar in a flow sequence", 2, "a: [x, \"y #z\"]\n  b\n")
+    , ("multi-line quoted scalar", 3, "a: \"x\n  y #z\"\n  b\n")
+    ]
+    $ \(node, line, input) ->
+      check
+        ("line below a '#' in a " ++ node)
+        (line, 3, "unexpected indentation")
+        input
+  check
+    "line after a comment with a quote"
+    (2, 3, "a comment ends a plain scalar, so this line cannot continue it")
+    "a: x # it's\n  b\n"
+  forM_
     [ ("list item", "- # c\nfoo\n")
     , ("list item with an anchor", "- &x # c\nfoo\n")
     , ("list item with a tag", "- !t # c\nfoo\n")
