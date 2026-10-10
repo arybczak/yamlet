@@ -53,6 +53,7 @@ module Yamlet.Internal.FromYaml
   , findKey
   , missingKey
   , unknownName
+  , unquotedName
   , succeeds
   , withNote
   , nullNode
@@ -376,14 +377,21 @@ withText f = parseNode $ \n -> case view n of
 -- another node, the error suggests quotes only if the quoted text is a name,
 -- e.g. not for @null@. Otherwise it lists the names.
 withName :: [T.Text] -> (T.Text -> Parser a) -> S.Node -> Parser a
-withName names f = parseNode $ \n -> case (view n, n.content) of
-  (StringView t, _) -> f t
-  (_, S.ScalarContent S.Plain t)
-    | S.NoTag <- n.props.tag
-    , t `elem` names ->
-        failAt n (stringMismatch n)
+withName names f = parseNode $ \n -> case view n of
+  StringView t -> f t
+  _ | Just msg <- unquotedName names n -> failAt n msg
   _ | null names -> failAt n "no value is accepted"
   _ -> typeMismatch ("one of: " ++ L.intercalate ", " (map T.unpack names)) n
+
+-- | The error for a plain scalar without a tag that is one of the names, but
+-- not a string, e.g. @true@. Quotes would make it the name.
+unquotedName :: [T.Text] -> S.Node -> Maybe String
+unquotedName names n = case n.content of
+  S.ScalarContent S.Plain t
+    | S.NoTag <- n.props.tag
+    , t `elem` names ->
+        Just (stringMismatch n)
+  _ -> Nothing
 
 -- | The value that goes with the string in the list of pairs, e.g. for names
 -- that the program knows only at run time. An empty list rejects every value.

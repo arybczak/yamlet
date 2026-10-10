@@ -1144,6 +1144,7 @@ gParseYaml opts enc def k n
     single = case view n of
       StringView t -> fromMaybe (withoutValue t) (gFromTag opts k n t)
       _ | S.MappingContent {} <- n.content -> withMapping singleEntry n
+      _ | Just msg <- unquotedName tags n -> failAt n msg
       _ -> typeMismatch "a string or a mapping with one key" n
 
     singleEntry :: Object -> Parser a

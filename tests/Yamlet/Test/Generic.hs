@@ -117,6 +117,15 @@ data Gauge = Gauge {level :: Int} | Off
 instance GenericYamlOptions Gauge where
   type SumEncoding Gauge = SingleField
 
+-- | A tag that is a boolean without quotes.
+data Lamp = Dimmed Int | Dark
+  deriving stock (Eq, Show, Generic)
+  deriving (FromYaml) via GenericYaml Lamp
+
+instance GenericYamlOptions Lamp where
+  type SumEncoding Lamp = SingleField
+  yamlOptions = defaultYamlOptions {constructorTagModifier = \case "Dark" -> "false"; t -> t}
+
 data Memo = Memo (Commented T.Text) | NoMemo
   deriving stock (Eq, Show, Generic)
   deriving (FromYaml, ToYaml) via GenericYaml Memo
@@ -932,6 +941,14 @@ test_singleField = do
     "neither a string nor a mapping"
     (Just (1, 1, "expected a string or a mapping with one key, but got an integer"))
     (errorOf (decodeText @Figure "1"))
+  assertEqual
+    "constructor that needs quotes"
+    (Just (1, 1, "expected a string, but got a boolean, quote the value, e.g. 'false'"))
+    (errorOf (decodeText @Lamp "false"))
+  assertEqual
+    "quoted constructor"
+    (Right Dark)
+    (decodeText "'false'")
   assertEqual
     "unknown field in the value"
     (Just (2, 3, "unknown key \"lvl\", did you mean \"level\"?"))
