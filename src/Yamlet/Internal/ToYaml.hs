@@ -106,9 +106,8 @@ instance ToYaml S.Node where toYaml = id
 instance ToYaml Value where toYaml = toSyntax
 
 -- | The value with the comments of its entry. The lines above and the comment
--- of the first line go on the key, where the renderer writes them at the same
--- places as on a value. Without a key, they go on the value. The lines after
--- the value replace its own.
+-- of the first line go on the key, or on the value without a key. The lines
+-- after the value replace its own.
 instance ToYaml a => ToYaml (S.Commented a) where
   toYaml c =
     let v = withLinesAfter c.comments.after (toYaml c.value)
