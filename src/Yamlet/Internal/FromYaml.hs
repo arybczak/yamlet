@@ -476,10 +476,8 @@ parseItems p xs0 = Parser $ \off -> go off NoErrors [] xs0
 -- not matter, so two string keys with the same text are an error, e.g. @a@
 -- and @!foo a@.
 --
--- The comments of the mapping stay with it, not with its first key. The parser
--- gives a mapping the lines up to the last empty line above its first key,
--- e.g. a comment at the top of a file, and the comment on its first line, e.g.
--- after its tag. A record has no place for them.
+-- The comments of the mapping stay with it, not with its first key, e.g. a
+-- comment at the top of a file. A record has no place for them.
 withMapping :: (Object -> Parser a) -> S.Node -> Parser a
 withMapping f = parseNode $ \n -> case n.content of
   S.MappingContent _ kvs -> case mkObject n kvs of
@@ -794,9 +792,8 @@ missingKey o key = Parser $ \off ->
 
 -- | Fail at each key that is not in the list. If a key in the list is close
 -- to an unknown key, e.g. "host" to "hots", its error suggests it. Otherwise
--- the first such error of the mapping lists the known keys, and the others
--- do not repeat the list. An empty list accepts only an empty mapping, e.g.
--- for a value written as @{}@.
+-- the error lists the known keys. An empty list accepts only an empty
+-- mapping, e.g. for a value written as @{}@.
 --
 -- A key that is not a string, but has the text of a known key, e.g. @true@,
 -- is left to the lookup of that key, e.g. 'parseField' or 'lookupKey',
