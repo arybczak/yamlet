@@ -436,8 +436,9 @@ errorsAt input errs =
                  : go s' (Just (loc.line, sourceLine)) rest
 
 -- | Compute the line and the column of an offset. The byte order marks at the
--- start of a line are not columns, because they are not content. For an
--- offset without a position, see 'noPosition', the line and the column are 0.
+-- start of a line are not columns, because they are not content. For
+-- 'noOffset' or an offset beyond the end of the input, the line and the
+-- column are 0.
 locate :: T.Text -> Offset -> Location
 locate input off
   | noPosition input off = Location {offset = off, line = 0, column = 0}
