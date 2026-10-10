@@ -430,16 +430,16 @@ data SumEncodingKind
     -- constructors must have one field without a name or no fields,
     -- otherwise the derived instances are a type error.
     --
-    -- The field must encode as a mapping with a key and without an anchor,
-    -- and no key can be the tag key or the contents key. Otherwise the
-    -- constructor encodes as with 'TaggedObject'. Thus the field of a type
-    -- with the same tag key stays under the contents key, and so does a
-    -- mapping with an anchor that an alias can refer to.
+    -- The field must encode as a mapping with a key and without an anchor or
+    -- a tag, and no key can be the tag key or the contents key. Otherwise
+    -- the constructor encodes as with 'TaggedObject'. Thus the field of a
+    -- type with the same tag key stays under the contents key, and so do a
+    -- mapping with an anchor that an alias can refer to and a
+    -- v'Yamlet.Value.Tagged' value.
     --
-    -- Only the entries of the mapping go next to the tag. The tag and the
-    -- comments of the mapping are lost, e.g. the tag of a
-    -- v'Yamlet.Value.Tagged' value or the comments of a t'Yamlet.Commented'
-    -- value. 'TaggedObject' keeps them.
+    -- Only the entries of the mapping go next to the tag. The comments of the
+    -- mapping are lost, e.g. the comments of a t'Yamlet.Commented' value.
+    -- 'TaggedObject' keeps them.
     --
     -- The decoder reads a mapping with the contents key as with
     -- 'TaggedObject', and the other keys are unknown keys. Without the
@@ -956,14 +956,15 @@ instance
       -- The entries of a field next to the tag, if the decoder can read them
       -- back. The field must be a mapping with a key, and no key can be the
       -- tag key or the contents key. The decoder reads a mapping with the
-      -- contents key as the other form. An alias elsewhere can refer to the
-      -- anchor of the mapping, so a mapping with an anchor keeps it under the
-      -- contents key.
+      -- contents key as the other form. A mapping with an anchor or a tag
+      -- keeps it under the contents key, because an alias elsewhere can refer
+      -- to the anchor, and the tag is part of the value.
       flatEntries :: S.Node -> Maybe [(S.Node, S.Node)]
       flatEntries v = case v.content of
         S.MappingContent _ kvs
           | null kvs -> Nothing
           | isJust v.props.anchor -> Nothing
+          | v.props.tag /= S.NoTag -> Nothing
           | any (\(k, _) -> isKey opts.tagKey k || isKey opts.contentsKey k) kvs ->
               Nothing
           | otherwise -> Just kvs

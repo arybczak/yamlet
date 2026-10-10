@@ -1060,6 +1060,15 @@ test_flatten = do
     "tag and anchor of the mapping, not of the field"
     (Right (Just S.noProps))
     (fieldProps <$> decodeText "!foo &x {tag: Shared, k: v}\n")
+  let tagged = entry {S.props = S.noProps {S.tag = S.Tag "!foo"}}
+  assertEqual
+    "mapping with a tag"
+    "tag: Shared\ncontents: !foo\n  k: v\n"
+    (encodeText (Shared tagged))
+  assertEqual
+    "mapping with a tag read back"
+    (Right (Just S.noProps {S.tag = S.Tag "!foo"}))
+    (fieldProps <$> decodeText (encodeText (Shared tagged)))
   assertEqual
     "other key next to the contents key"
     [(3, 1, "unknown key \"extra\", expected one of: step, contents")]
