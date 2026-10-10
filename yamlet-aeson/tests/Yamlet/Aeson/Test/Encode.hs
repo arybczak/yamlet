@@ -93,21 +93,34 @@ test_duplicateKeys =
 
 test_invalidEncoding :: Assertion
 test_invalidEncoding = do
-  assertInvalid "an incomplete value" (Raw "{")
-  assertInvalid "content after the value" (Raw "{\"a\":1}}")
-  assertInvalid "an invalid value in a list" [Raw "1", Raw "x"]
+  -- The messages of the lexer of aeson can change between its versions, so
+  -- only their start is fixed.
+  assertInvalid
+    "an incomplete value"
+    "Unexpected"
+    (Raw "{")
+  assertInvalid
+    "content after the value"
+    "unexpected \"} [2]\" after the value"
+    (Raw "{\"a\":1}} [2]")
+  assertInvalid
+    "an invalid value in a list"
+    "Unexpected"
+    [Raw "1", Raw "x"]
   assertEqual
     "spaces after the value"
     "a: 1\n"
     (encodeText (ViaAeson (Raw "{\"a\":1} \n")))
   where
-    assertInvalid :: A.ToJSON a => String -> a -> Assertion
-    assertInvalid preface x =
+    -- The message starts with the prefix of all such errors and the given
+    -- text.
+    assertInvalid :: A.ToJSON a => String -> String -> a -> Assertion
+    assertInvalid preface expected x =
       try (evaluate (encodeText (ViaAeson x))) >>= \case
         Left (ErrorCall msg) ->
           assertBool
             (preface ++ ": the error of the encoding: " ++ msg)
-            (prefix `L.isPrefixOf` msg)
+            ((prefix ++ expected) `L.isPrefixOf` msg)
         Right out -> assertFailure (preface ++ ": no error, the output is " ++ show out)
       where
         prefix :: String

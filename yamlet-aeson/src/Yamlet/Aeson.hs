@@ -253,7 +253,7 @@ instance A.ToJSON a => ToYaml (ViaAeson a) where
     Left err -> invalid err
     Right (v, rest)
       | LBS8.all (`elem` jsonSpace) rest -> v
-      | otherwise -> invalid "unexpected content after the value"
+      | otherwise -> invalid $ "unexpected " ++ show (LBS8.unpack rest) ++ " after the value"
     where
       -- The whitespace of RFC 8259.
       jsonSpace :: String
