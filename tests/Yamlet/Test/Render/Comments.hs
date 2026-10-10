@@ -21,8 +21,33 @@ commentTests =
     , testCase "moved comments" test_movedComments
     , testCase "lines after a list" test_linesAfterList
     , testCase "lines below an indicator" test_linesBelowIndicator
+    , testCase "byte order mark" test_byteOrderMark
     , testCase "no thunks" test_noThunks
     ]
+
+-- | A byte order mark at the start of a line does not change the comments of
+-- the document after it.
+test_byteOrderMark :: Assertion
+test_byteOrderMark =
+  sequence_
+    [ assertEqual
+        (preface ++ " " ++ show input)
+        (comments (above <> input))
+        (comments (above <> "\xFEFF" <> input))
+    | input <- inputs
+    , (preface, above) <- [("first document", ""), ("after an end marker", "a\n...\n")]
+    ]
+  where
+    inputs :: [T.Text]
+    inputs =
+      [ "a: | # c\n  b\nd:\n- e\n"
+      , "a: x\n  # c\nb:\n  c: d\n  # e\nf: g\n"
+      , "- a: 1\n  # c\n- b\n"
+      , "--- a # c\n"
+      ]
+
+    comments :: T.Text -> Either String [[(String, String, T.Text)]]
+    comments t = either (Left . show) (Right . map commentsOf) (parseDocumentsText t)
 
 -- | The parser returns documents with comments without thunks, as it does for
 -- documents without comments.

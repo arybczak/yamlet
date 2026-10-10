@@ -92,7 +92,7 @@ attachComments e first hasNext start marker rootEnd end doc
 
     rootStart, rootLine :: Int
     rootStart = offsetOf doc.root.offset
-    rootLine = lineStartAt e (rootStart + e.base) - e.base
+    rootLine = skipBoms e (lineStartAt e (rootStart + e.base)) - e.base
 
     -- The comment on the line of the marker, unless the root starts there.
     (markerComment, rest) = case (marker, afterMarker) of
@@ -584,10 +584,11 @@ attachNode e limit minColumn known above n items0 = node `seq` items5 `seq` (nod
       Comment t -> Just t
       EmptyLine -> Nothing
 
-    -- The offset of the start of the line with the second offset. The walk
-    -- stops at the first offset of the pair, and the pair gives the start of
-    -- its line. Without it, each nested block collection of a long line would
-    -- walk back to the start of the line, and the time would be quadratic.
+    -- The offset of the start of the line with the second offset, after the
+    -- byte order marks, as for the items. The walk stops at the first offset
+    -- of the pair, and the pair gives the start of its line. Without it, each
+    -- nested block collection of a long line would walk back to the start of
+    -- the line, and the time would be quadratic.
     lineFrom :: (Int, Int) -> Int -> Int
     lineFrom (p, ls) o = go (o + e.base)
       where
@@ -595,7 +596,7 @@ attachNode e limit minColumn known above n items0 = node `seq` items5 `seq` (nod
         go i
           | i == p + e.base = ls
           | i > e.base && not (isBreak (A.unsafeIndex e.array (i - 1))) = go (i - 1)
-          | otherwise = i - e.base
+          | otherwise = skipBoms e i - e.base
 
 -- | The ranges of the scalars, which cannot contain comments, in the order of
 -- the input. The range of a block scalar starts after its header.
