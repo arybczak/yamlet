@@ -22,7 +22,7 @@ module Yamlet.Internal.Parser.Scan
   , isEndMarker
   , startsPrefix
   , bomBeforeContent
-  , canEndQuoted
+  , canEndFlowNode
   , fitsKey
   ) where
 
@@ -130,10 +130,11 @@ bomBeforeContent :: Env -> Int -> Bool
 bomBeforeContent e i =
   isBom e i && let j = skipBoms e i in not (isMarker e j || byteAt e j == PERCENT)
 
--- | A quoted scalar can end before the index: white space, a comment, a line
--- break, the end of the input, a colon or the end of a flow entry follows.
-canEndQuoted :: Env -> Int -> Bool
-canEndQuoted e i =
+-- | A quoted scalar or a flow collection can end before the index: white
+-- space, a comment, a line break, the end of the input, a colon or the end
+-- of a flow entry follows.
+canEndFlowNode :: Env -> Int -> Bool
+canEndFlowNode e i =
   let j = skipWhites e i
       w = byteAt e j
   in w == 0

@@ -481,6 +481,16 @@ test_syntaxErrors = do
     "flow mapping before a document with its own"
     (1, 7, "unterminated flow mapping")
     "args: {a: b\n---\nx: {c: d}\n"
+  forM_
+    [ ("flow sequence", "flow sequence", "a: [x, y\nb: a]b\n")
+    , ("flow mapping", "flow mapping", "a: {x: 1\nb: a}b\n")
+    , ("flow sequence before a document", "flow sequence", "a: [x,\n---\nb: a]b\n")
+    ]
+    $ \(name, node, input) ->
+      check
+        (name ++ " with a bracket in a plain scalar below")
+        (1, 4, "unterminated " ++ node)
+        input
   check
     "double-quoted scalar before a document with its own"
     (1, 7, "unterminated double-quoted scalar")

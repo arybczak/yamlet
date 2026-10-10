@@ -1066,7 +1066,7 @@ cutByMarker e w
     closes i
       | i >= stream.end = False
       | b == w && w == SQUOTE && byteAt stream (i + 1) == SQUOTE = closes (i + 2)
-      | b == w = canEndQuoted stream (i + 1)
+      | b == w = canEndFlowNode stream (i + 1)
       | b == BACKSLASH && w == DQUOTE = closes (i + 2)
       | otherwise = closes (i + 1)
       where
@@ -1077,19 +1077,23 @@ cutByMarker e w
     stream = e {end = e.streamEnd}
 
 -- | A closing bracket without an opening bracket of its own is in the input
--- from the first index to the second.
+-- from the first index to the second. Content right after a closing bracket
+-- shows that it is a character of a plain scalar, e.g. in "a]b".
 unmatchedClosing :: Env -> Word8 -> Int -> Int -> Bool
 unmatchedClosing e w from to = go 0 from
   where
     go :: Int -> Int -> Bool
     go depth i
       | i >= to = False
-      | b == w = depth == 0 || go (depth - 1) (i + 1)
+      | b == w && canEndFlowNode range (i + 1) = depth == 0 || go (depth - 1) (i + 1)
       | b == opening = go (depth + 1) (i + 1)
       | otherwise = go depth (i + 1)
       where
         b :: Word8
         b = A.unsafeIndex e.array i
+
+    range :: Env
+    range = e {end = to}
 
     opening :: Word8
     opening = if w == RBRACKET then LBRACKET else LBRACE

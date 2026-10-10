@@ -179,7 +179,7 @@ unexpected input i = (tabCause, other)
 
         closingQuote :: Int -> Bool
         closingQuote k =
-          let b = byteAt e k in (b == SQUOTE || b == DQUOTE) && canEndQuoted e (k + 1)
+          let b = byteAt e k in (b == SQUOTE || b == DQUOTE) && canEndFlowNode e (k + 1)
 
     -- The start of the line of the index if the line has only anchors and
     -- tags, as in "&anchor".
