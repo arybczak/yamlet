@@ -313,8 +313,9 @@ withComments c n =
 --
 -- * The lines above the first item of a list or the first key of a mapping
 --   that end with an empty line read back as the lines of the list or the
---   mapping. A t'Commented' list or mapping keeps them, under a key the inner
---   one of two nested t'Commented' values as above. Otherwise they are lost.
+--   mapping. A t'Commented' list or mapping keeps them. Under a key, the
+--   inner of two nested t'Commented' values keeps them, as above. Otherwise
+--   they are lost.
 --
 -- A comment is lost if its node has no place for it, i.e. if the node does
 -- not decode into a node or a t'Commented' value:
