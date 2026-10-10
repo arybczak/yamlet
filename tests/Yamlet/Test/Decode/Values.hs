@@ -477,11 +477,28 @@ test_syntaxTree = do
         (decodeDocument input changed)
     r -> assertFailure (show r)
   case S.parseDocumentsText "name: x\njobs: many\n" of
-    Right [doc] ->
+    Right [doc] -> do
       assertEqual
         "type error"
         (Just (2, 7, "expected an integer, but got a string"))
         (errorOf (decodeDocument @Config "name: x\njobs: many\n" doc))
+      let firstLines :: Either (NE.NonEmpty Error) Config -> [String]
+          firstLines =
+            either (map (takeWhile (/= '\n') . prettyError "f.yaml") . NE.toList) (const [])
+      case doc.root.content of
+        S.MappingContent _ [_, (_, jobs)] -> do
+          let mixed =
+                S.document
+                  (S.mappingNode [(S.plainNode "name", S.plainNode "y"), (S.plainNode "jobs", jobs)])
+          assertEqual
+            "parsed node in a built document, with its input"
+            ["f.yaml:2:7: jobs: expected an integer, but got a string"]
+            (firstLines (decodeDocument "name: x\njobs: many\n" mixed))
+          assertEqual
+            "parsed node in a built document, without its input"
+            ["f.yaml: jobs: expected an integer, but got a string"]
+            (firstLines (decodeDocument "" mixed))
+        c -> assertFailure (show c)
     r -> assertFailure (show r)
   let key = S.plainNode "a"
       built = S.document (S.mappingNode [(key, key), (key, key)])

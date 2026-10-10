@@ -269,8 +269,9 @@ single = first (NE.:| [])
 --   from -1000 to 1000.
 --
 -- The text is the input of the document. An error takes its line from the
--- text. For a document that the program built, the text can be empty. The
--- errors are as for 'decode'.
+-- text. For a document that the program built, the text can be empty. If
+-- such a document contains the nodes of a parsed input, pass that input, so
+-- that their errors get their lines. The errors are as for 'decode'.
 --
 -- The document has the limit of the aliases to itself. For the documents of
 -- a stream, use 'decodeDocuments', so that they share the limit.

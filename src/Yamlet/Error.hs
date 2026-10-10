@@ -110,7 +110,8 @@ instance NFData PathElement where
 
 -- | A position in the input. Lines and columns count from 1, and a column
 -- counts characters, not bytes. Line 0 and column 0 mean that the error has
--- no position, e.g. because it comes from a node that a program built.
+-- no position, e.g. because it comes from a node that a program built, or
+-- from a parsed node that is decoded without its input.
 data Location = Location
   { offset :: !Offset
   , line :: !Int
@@ -364,8 +365,13 @@ nodePaths offs root = map (\off -> M.findWithDefault Root off found) offs
           Set.takeWhileAntitone (\o -> o < k.endOffset || o == k.offset) $
             Set.dropWhileAntitone (< k.offset) wanted
 
+    -- A node that a program built has no offsets, but it can contain the
+    -- nodes of a parsed input.
     within :: Node -> Set.Set Offset -> Set.Set Offset
-    within n = Set.takeWhileAntitone (<= n.endOffset) . Set.dropWhileAntitone (< n.offset)
+    within n
+      | n.offset == noOffset = id
+      | otherwise =
+          Set.takeWhileAntitone (<= n.endOffset) . Set.dropWhileAntitone (< n.offset)
 
     -- The texts of a parsed tree are slices of the input, which an error
     -- would keep alive.
@@ -378,7 +384,7 @@ nodePaths offs root = map (\off -> M.findWithDefault Root off found) offs
 -- | Create an error at the given offset of the input.
 errorAt :: T.Text -> Offset -> String -> Error
 errorAt input off msg
-  | off == noOffset = errorOnLine (locate input off) msg T.empty 0
+  | noPosition input off = errorOnLine (locate input off) msg T.empty 0
   | otherwise =
       let (loc, index, _) = locateFrom input (startScan input) off
       in errorOnLine loc msg (T.copy (lineAt input off)) index
@@ -419,7 +425,7 @@ errorsAt input errs =
     go s prev = \case
       [] -> []
       (i, (off, msg)) : rest
-        | off == noOffset ->
+        | noPosition input off ->
             (i, errorOnLine (locate input off) msg T.empty 0) : go s prev rest
         | otherwise ->
             let (loc, index, s') = locateFrom input s off
@@ -430,12 +436,18 @@ errorsAt input errs =
                  : go s' (Just (loc.line, sourceLine)) rest
 
 -- | Compute the line and the column of an offset. The byte order marks at the
--- start of a line are not columns, because they are not content. For
--- 'noOffset', the line and the column are 0.
+-- start of a line are not columns, because they are not content. For an
+-- offset without a position, see 'noPosition', the line and the column are 0.
 locate :: T.Text -> Offset -> Location
 locate input off
-  | off == noOffset = Location {offset = off, line = 0, column = 0}
+  | noPosition input off = Location {offset = off, line = 0, column = 0}
   | otherwise = let (loc, _, _) = locateFrom input (startScan input) off in loc
+
+-- | The offset has no position in the input: it is 'noOffset', or it is
+-- beyond the end of the input, e.g. the offset of a parsed node in a
+-- document that a program built, decoded with another text.
+noPosition :: T.Text -> Offset -> Bool
+noPosition (T.Text _ _ len) (Offset off) = off < 0 || off > len
 
 -- | A scan of the input: the index, the line, the start of the columns of
 -- the line, and an index on the line with its column. The columns of a line
