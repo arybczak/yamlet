@@ -45,7 +45,7 @@ libraryBenchmarks =
         name
         [ bench "yamlet" $ nf (either (error . show) id . decode @a) bs
         , bench "yamlet-aeson" $
-            nf (either (error . show) (\(ViaAeson a) -> a) . decode @(ViaAeson a)) bs
+            nf (either (error . show) (.value) . decode @(ViaAeson a)) bs
         , bench "yaml" $ nf (either (error . show) id . Y.decodeEither' @a) bs
         ]
 

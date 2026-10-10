@@ -74,7 +74,7 @@ test_specialFloats = do
   assertEqual
     "the doubles"
     (Right ["Infinity", "-Infinity", "NaN", "0.0"])
-    ((\(ViaAeson ds) -> map (show @Double) ds) <$> decodeText "[.inf, -.inf, .nan, -0.0]")
+    (map show . (.value) <$> decodeText @(ViaAeson [Double]) "[.inf, -.inf, .nan, -0.0]")
 
 test_tags :: Assertion
 test_tags =

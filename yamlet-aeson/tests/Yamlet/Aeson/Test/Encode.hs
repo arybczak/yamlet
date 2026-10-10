@@ -74,8 +74,8 @@ test_encodeSpecialFloats = do
   assertEqual
     "the values read back as from JSON"
     (Right (map show <$> A.decode @[Double] (A.encode ds)))
-    $ (\(ViaAeson xs) -> Just (map (show @Double) xs))
-      <$> decodeText (encodeText (ViaAeson ds))
+    $ Just . map show . (.value)
+      <$> decodeText @(ViaAeson [Double]) (encodeText (ViaAeson ds))
 
 test_zeros :: Assertion
 test_zeros =

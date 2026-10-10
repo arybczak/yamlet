@@ -23,7 +23,7 @@
 -- :}
 --
 -- >>> decodeText @(ViaAeson Server) "port: 80\nhost: localhost\n"
--- Right (ViaAeson (Server {port = 80, host = "localhost"}))
+-- Right (ViaAeson {value = Server {port = 80, host = "localhost"}})
 --
 -- >>> T.putStr (encodeText (ViaAeson (Server 80 "localhost")))
 -- port: 80
@@ -94,7 +94,7 @@
 -- for a @Map Int@. The instances of yamlet for maps reject such keys.
 --
 -- >>> decodeText @(ViaAeson (M.Map Int T.Text)) "1: a\n1.0: b\n"
--- Right (ViaAeson (fromList [(1,"a")]))
+-- Right (ViaAeson {value = fromList [(1,"a")]})
 --
 -- An aeson t'A.Value' converts to YAML as aeson writes it in JSON, e.g. the
 -- keys of a @Map Int@ are strings, which the encoder quotes because they
@@ -122,7 +122,7 @@
 --   parseYaml = withMapping $ \o ->
 --     Servers
 --       <$> traverse
---         (\(k, v) -> (,) <$> parseYaml k <*> fmap (\(ViaAeson s) -> s) (parseYaml v))
+--         (\(k, v) -> (,) <$> parseYaml k <*> fmap (.value) (parseYaml @(ViaAeson Server) v))
 --         (objectEntries o)
 -- :}
 --
@@ -152,8 +152,10 @@ import Data.Vector qualified as V
 import Yamlet
 import Yamlet.Syntax qualified as S
 
--- | A value that decodes and encodes with its instances of aeson.
-newtype ViaAeson a = ViaAeson a
+-- | A value that decodes and encodes with its instances of aeson. The field
+-- has no selector function, so read it with record dot syntax, e.g.
+-- @(.value)@, or with a pattern.
+newtype ViaAeson a = ViaAeson {value :: a}
   deriving stock (Eq, Ord, Show)
 
 -- | The value of a node, converted as the section
