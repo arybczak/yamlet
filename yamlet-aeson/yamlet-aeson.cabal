@@ -88,6 +88,11 @@ test-suite test
     type:           exitcode-stdio-1.0
     main-is:        Main.hs
 
+    other-modules:  Yamlet.Aeson.Test.Decode
+                    Yamlet.Aeson.Test.Encode
+                    Yamlet.Aeson.Test.Helpers
+                    Yamlet.Aeson.Test.RoundTrip
+
 test-suite retention
     import:         language
 
