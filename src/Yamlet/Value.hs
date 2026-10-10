@@ -67,19 +67,25 @@ data Value
     -- e.g. @!point {x: 1}@. A scalar with a tag that the schema does not
     -- know is a v'String' inside, e.g. @!secret abc@.
     --
-    -- The encoder writes the tag. A value with its own tag of the core
-    -- schema reads back without 'Tagged', e.g. @Tagged intTag (Int 1)@ reads
-    -- back as @Int 1@. A value that does not fit a tag of the core schema,
-    -- e.g. a v'String' with 'intTag', does not read back. A scalar other than
-    -- a v'String' with a tag that the schema does not know reads back as a
-    -- v'String', e.g. @Tagged "!x" (Int 5)@ reads back as
-    -- @Tagged "!x" (String "5")@. YAML has no syntax for the empty tag or a
-    -- tag of one character, e.g. @x@ or @!@. The encoder drops such a tag,
-    -- so the value reads back without it, e.g. @Tagged "" (Int 1)@ reads back
-    -- as @Int 1@. A node has one tag, so the encoder writes only the
-    -- outermost tag that it does not drop, e.g.
-    -- @Tagged "!a" (Tagged "!b" (Sequence []))@ reads back as
-    -- @Tagged "!a" (Sequence [])@.
+    -- The encoder writes the tag. Some values read back with a change:
+    --
+    -- * A value with its own tag of the core schema reads back without
+    --   'Tagged', e.g. @Tagged intTag (Int 1)@ as @Int 1@.
+    --
+    -- * A value that does not fit a tag of the core schema does not read
+    --   back, e.g. a v'String' with 'intTag'.
+    --
+    -- * A scalar other than a v'String' with a tag that the schema does not
+    --   know reads back as a v'String', e.g. @Tagged "!x" (Int 5)@ as
+    --   @Tagged "!x" (String "5")@.
+    --
+    -- * YAML has no syntax for the empty tag or a tag of one character, e.g.
+    --   @x@ or @!@. The encoder drops such a tag, e.g. @Tagged "" (Int 1)@
+    --   reads back as @Int 1@.
+    --
+    -- * A node has one tag, so the encoder writes only the outermost tag that
+    --   it does not drop, e.g. @Tagged "!a" (Tagged "!b" (Sequence []))@
+    --   reads back as @Tagged "!a" (Sequence [])@.
     Tagged !T.Text !Value
   deriving stock (Eq, Ord, Show, Generic)
 
