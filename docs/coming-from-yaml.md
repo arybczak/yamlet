@@ -12,7 +12,9 @@ decodes and encodes a type with its instances of aeson, wrapped in
 `ViaAeson`, e.g. `decodeFile @(ViaAeson Config)`. A program can switch to
 the parser of yamlet first and derive the instances of yamlet later, one
 type at a time. A field whose type has only instances of aeson derives its
-instances of yamlet via `ViaAeson`.
+instances of yamlet via `ViaAeson`. A program that reads and writes both
+JSON and YAML can keep the instances of aeson as the only ones, e.g. with
+`deriving (FromYaml, ToYaml) via ViaAeson Config`.
 
 Through `ViaAeson`, the rules of YAML 1.2 below apply, but the types follow
 the instances of aeson, e.g. `1.0` is an `Int`.

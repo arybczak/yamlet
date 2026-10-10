@@ -1,7 +1,8 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
--- | The benchmarks that compare the instances of aeson through 'ViaAeson'
--- with the instances of yamlet and with the yaml package.
+-- | The benchmarks that compare the t'Data.Aeson.FromJSON' and
+-- t'Data.Aeson.ToJSON' instances through 'ViaAeson' with written 'FromYaml'
+-- and 'ToYaml' instances and with the yaml package.
 module Yamlet.Aeson.Bench.Libraries
   ( libraryBenchmarks
   ) where

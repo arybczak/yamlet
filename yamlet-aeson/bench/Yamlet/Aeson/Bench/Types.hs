@@ -1,5 +1,6 @@
--- | The types that the inputs decode into, with written instances of yamlet
--- and aeson, the same as in the benchmarks of yamlet.
+-- | The types that the inputs decode into, with written 'FromYaml', 'ToYaml',
+-- t'Data.Aeson.FromJSON' and t'Data.Aeson.ToJSON' instances, the same as in
+-- the benchmarks of yamlet.
 module Yamlet.Aeson.Bench.Types
   ( Config (..)
   , Nested (..)

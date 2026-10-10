@@ -7,14 +7,16 @@ license-file:       LICENSE
 category:           Text, Data, JSON
 maintainer:         andrzej@rybczak.net
 author:             Andrzej Rybczak
-synopsis:           Decode and encode YAML with yamlet and the instances of aeson.
+synopsis:           Use the FromJSON and ToJSON instances of aeson with yamlet.
 
 description:
   Instances of @FromYaml@ and @ToYaml@ of
   <https://hackage.haskell.org/package/yamlet yamlet> for the types that have
-  instances of aeson, e.g. the types of other libraries. Errors point to the
-  node of the input that caused them, and the encoder keeps the order of the
-  fields of a type whose instance defines @toEncoding@.
+  @FromJSON@ and @ToJSON@ instances of
+  <https://hackage.haskell.org/package/aeson aeson>, e.g. in a program that
+  moves from the yaml package to yamlet. Errors point to the node of the input
+  that caused them, and the encoder keeps the order of the fields of a type
+  whose instance defines @toEncoding@.
 
 extra-doc-files:
   CHANGELOG.md

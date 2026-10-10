@@ -2,8 +2,9 @@
 -- define them, because yamlet and this package have the same author.
 {-# OPTIONS_GHC -Wno-orphans #-}
 
--- | Decoding and encoding with the instances of aeson, for a type that has no
--- instances of yamlet, e.g. a type of another library.
+-- | Use the t'Data.Aeson.FromJSON' and t'Data.Aeson.ToJSON' instances of aeson
+-- with yamlet, for a type that has no 'FromYaml' and 'ToYaml' instances yet,
+-- e.g. in a program that moves from the yaml package to yamlet.
 --
 -- The examples use these external imports:
 --
@@ -12,7 +13,8 @@
 -- >>> import Data.Text qualified as T
 -- >>> import Data.Text.IO qualified as T
 --
--- A value in t'ViaAeson' decodes and encodes with the instances of aeson:
+-- A value in t'ViaAeson' decodes and encodes with the
+-- t'Data.Aeson.FromJSON' and t'Data.Aeson.ToJSON' instances:
 --
 -- >>> :{
 -- data Server = Server {port :: Int, host :: T.Text}
@@ -22,15 +24,19 @@
 --   toEncoding = A.genericToEncoding A.defaultOptions
 -- :}
 --
--- >>> decodeText @(ViaAeson Server) "port: 80\nhost: localhost\n"
--- Right (ViaAeson {value = Server {port = 80, host = "localhost"}})
+-- >>> Right (ViaAeson server) = decodeText @(ViaAeson Server) "port: 80\nhost: localhost\n"
 --
--- >>> T.putStr (encodeText (ViaAeson (Server 80 "localhost")))
+-- >>> server
+-- Server {port = 80, host = "localhost"}
+--
+-- >>> T.putStr (encodeText (ViaAeson server))
 -- port: 80
 -- host: localhost
 --
--- A type with instances of aeson gets instances of yamlet via t'ViaAeson',
--- e.g. to be a field of a type with instances of yamlet:
+-- A type with t'Data.Aeson.FromJSON' and t'Data.Aeson.ToJSON' instances can
+-- derive its 'FromYaml' and 'ToYaml' instances via t'ViaAeson', e.g. in a
+-- program that reads and writes both JSON and YAML and keeps one set of
+-- instances. Such a type can be a field of a type with instances of its own:
 --
 -- >>> :{
 -- newtype Address = Address T.Text
@@ -48,23 +54,63 @@
 --
 -- An error of a decoder of aeson points to the node that caused it:
 --
--- >>> either printErrors print (decodeText @(ViaAeson [Server]) "- port: 80\n  host: a\n- port: http\n  host: b\n")
+-- >>> input = "- port: 80\n  host: a\n- port: http\n  host: b\n"
+--
+-- >>> T.putStr input
+-- - port: 80
+--   host: a
+-- - port: http
+--   host: b
+--
+-- >>> either printErrors print (decodeText @(ViaAeson [Server]) input)
 -- input.yaml:3:9: [1].port: parsing Int failed, expected Number, but encountered String
 --   |
 -- 3 | - port: http
 --   |         ^
 --
--- The module also has the instances of yamlet for an aeson t'A.Value', e.g.
--- for a field that holds any data. They convert as the section
--- [Conversion]("Yamlet.Aeson#conversion") says:
+-- The module also has the 'FromYaml' and 'ToYaml' instances for an aeson
+-- t'Data.Aeson.Value', e.g. for a field that holds any data. They convert as
+-- the section [Conversion]("Yamlet.Aeson#conversion") says:
 --
 -- >>> decodeText @A.Value "name: a\nports: [80, 443]\n"
 -- Right (Object (fromList [("name",String "a"),("ports",Array [Number 80.0,Number 443.0])]))
 --
+-- = Order of keys
+--
+-- The encoder writes the keys of a mapping in the order of
+-- 'Data.Aeson.toEncoding'. That is the order of the fields if the instance
+-- defines 'Data.Aeson.toEncoding', e.g. with 'Data.Aeson.genericToEncoding' as
+-- @Server@ above, or with 'Data.Aeson.TH.deriveJSON'. The default
+-- 'Data.Aeson.toEncoding' goes through 'Data.Aeson.toJSON', so the keys come
+-- in the order of an aeson object, which is sorted by default.
+--
+-- 'Data.Aeson.parseJSON' gets the keys in no order, because an aeson object
+-- has none. To keep the order of a mapping, decode the mapping with a decoder
+-- of yamlet. Its values can still decode via t'ViaAeson':
+--
+-- >>> :{
+-- newtype Servers = Servers [(T.Text, Server)]
+--   deriving stock (Show)
+-- instance FromYaml Servers where
+--   parseYaml = withMapping $ \o ->
+--     Servers
+--       <$> traverse
+--         ( \(k, v) ->
+--             (,) <$> parseYaml k <*> fmap (.value) (parseYaml @(ViaAeson Server) v)
+--         )
+--         (objectEntries o)
+-- :}
+--
+-- >>> decodeText @Servers "web: {port: 80, host: a}\napi: {port: 81, host: b}\n"
+-- Right (Servers [("web",Server {port = 80, host = "a"}),("api",Server {port = 81, host = "b"})])
+--
+-- 'Yamlet.decodeWithDocument' keeps the whole document with the decoded
+-- value, e.g. to write the document back with a change.
+--
 -- = Conversion
 --
 -- #conversion#
--- A YAML document converts to an aeson t'A.Value' as follows:
+-- A YAML document converts to an aeson t'Data.Aeson.Value' as follows:
 --
 -- * A key is the text of its scalar, e.g. @"0x10"@ for @0x10@ and @"~"@ for
 --   @~@, as in the yaml package. Two keys with the same text are an error,
@@ -75,62 +121,36 @@
 --   not supported.
 --
 -- * @.inf@ and @-.inf@ are the strings @"+inf"@ and @"-inf"@, and @.nan@ is
---   null. The instances of aeson for t'Double' and t'Float' read and write
---   these values.
+--   null. The t'Data.Aeson.FromJSON' and t'Data.Aeson.ToJSON' instances for
+--   t'Double' and t'Float' read and write these values.
 --
--- * @-0.0@ is the number 0, because a 'Sci.Scientific' has no negative zero.
+-- * @-0.0@ is the number 0, because a t'Data.Scientific.Scientific' has no
+--   negative zero.
 --
 -- * A number whose exponent in scientific notation is beyond the range
 --   from -1000 to 1000, e.g. @1e1001@, is an error, as in yamlet. A
---   'A.Number' with such an exponent converts to YAML, but does not read
---   back.
+--   'Data.Aeson.Number' with such an exponent converts to YAML, but does not
+--   read back.
 --
 -- * A tag that is not of the core schema makes a scalar a string, e.g.
 --   @!secret 123@ is the string @"123"@. The yaml package reads it as the
---   number 123. On a collection, such a tag does not matter.
+--   number 123. A collection with such a tag converts as without it, e.g.
+--   @!point {x: 1}@ is the object @{"x": 1}@.
 --
--- An instance of aeson can convert two different keys to the same key and
--- then keep only one of the pairs, as it does for JSON, e.g. @1@ and @1.0@
--- for a @Map Int@. The instances of yamlet for maps reject such keys.
+-- A t'Data.Aeson.FromJSON' instance can convert two different keys to the
+-- same key and then keep only one of the pairs, as it does for JSON, e.g. @1@
+-- and @1.0@ for a @Map Int@. The 'FromYaml' instances for maps reject such
+-- keys.
 --
 -- >>> decodeText @(ViaAeson (M.Map Int T.Text)) "1: a\n1.0: b\n"
 -- Right (ViaAeson {value = fromList [(1,"a")]})
 --
--- An aeson t'A.Value' converts to YAML as aeson writes it in JSON, e.g. the
--- keys of a @Map Int@ are strings, which the encoder quotes because they
--- look like numbers:
+-- An aeson t'Data.Aeson.Value' converts to YAML as aeson writes it in JSON,
+-- e.g. the keys of a @Map Int@ are strings, which the encoder quotes because
+-- they look like numbers:
 --
 -- >>> T.putStr (encodeText (ViaAeson (M.fromList @Int @T.Text [(1, "a")])))
 -- '1': a
---
--- = Order of keys
---
--- The encoder writes the keys of a mapping in the order of 'A.toEncoding'.
--- That is the order of the fields if the instance defines 'A.toEncoding',
--- e.g. with 'A.genericToEncoding' as @Server@ above, or with the Template
--- Haskell of aeson. The default 'A.toEncoding' goes through 'A.toJSON', so
--- the keys come in the order of an aeson object, which is sorted by default.
---
--- 'A.parseJSON' gets the keys in no order, because an aeson object has none.
--- To keep the order of a mapping, decode the mapping with a decoder of
--- yamlet. Its values can still decode via t'ViaAeson':
---
--- >>> :{
--- newtype Servers = Servers [(T.Text, Server)]
---   deriving stock (Show)
--- instance FromYaml Servers where
---   parseYaml = withMapping $ \o ->
---     Servers
---       <$> traverse
---         (\(k, v) -> (,) <$> parseYaml k <*> fmap (.value) (parseYaml @(ViaAeson Server) v))
---         (objectEntries o)
--- :}
---
--- >>> decodeText @Servers "web: {port: 80, host: a}\napi: {port: 81, host: b}\n"
--- Right (Servers [("web",Server {port = 80, host = "a"}),("api",Server {port = 81, host = "b"})])
---
--- 'Yamlet.decodeWithDocument' keeps the whole document with the decoded
--- value, e.g. to write the document back with a change.
 module Yamlet.Aeson
   ( ViaAeson (..)
   ) where
@@ -152,9 +172,9 @@ import Data.Vector qualified as V
 import Yamlet
 import Yamlet.Syntax qualified as S
 
--- | A value that decodes and encodes with its instances of aeson. The field
--- has no selector function, so read it with record dot syntax, e.g.
--- @(.value)@, or with a pattern.
+-- | A value that decodes and encodes with its t'Data.Aeson.FromJSON' and
+-- t'Data.Aeson.ToJSON' instances. The field has no selector function, so read
+-- it with record dot syntax, e.g. @(.value)@, or with a pattern.
 newtype ViaAeson a = ViaAeson {value :: a}
   deriving stock (Eq, Ord, Show)
 
@@ -193,9 +213,10 @@ instance FromYaml A.Value where
 instance ToYaml A.Value where
   toYaml = toYaml . aesonValue
 
--- | The value with the instance of aeson. An error of 'A.parseJSON' points
--- to the node at its path. If the node has no such path, the error points to
--- the deepest node of the path and names the rest of it.
+-- | The value with the t'Data.Aeson.FromJSON' instance. An error of
+-- 'Data.Aeson.parseJSON' points to the node at its path. If the node has no
+-- such path, the error points to the deepest node of the path and names the
+-- rest of it.
 --
 -- An error of a key of a map points to the value of the key, because aeson
 -- gives it the same path as an error of the value. The path at the start of
@@ -236,9 +257,9 @@ instance A.FromJSON a => FromYaml (ViaAeson a) where
         A.Key key -> Key (K.toText key)
         A.Index i -> Index i
 
--- | The value with the instance of aeson, with the keys of each mapping in
--- the order of 'A.toEncoding'. Of two equal keys, the first one stays, as
--- when aeson decodes JSON.
+-- | The value with the t'Data.Aeson.ToJSON' instance, with the keys of each
+-- mapping in the order of 'Data.Aeson.toEncoding'. Of two equal keys, the
+-- first one stays, as when aeson decodes JSON.
 --
 -- If the encoding is not valid JSON, which only
 -- 'Data.Aeson.Encoding.unsafeToEncoding' can cause, the conversion throws an
