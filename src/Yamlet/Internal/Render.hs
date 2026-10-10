@@ -51,7 +51,8 @@ defaultRenderOptions =
 --   it.
 --
 -- * A scalar keeps its style if the style can hold its text, otherwise it
---   gets quotes.
+--   gets quotes. A block scalar at the root gets quotes in a few more
+--   cases, e.g. if its text starts with a space.
 --
 -- * The empty lines from the comments right after a block scalar with the
 --   @+@ indicator go away, because they would become part of the scalar.
