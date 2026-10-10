@@ -273,7 +273,14 @@ data Settings = Settings
   deriving (FromYaml, ToYaml) via GenericYaml Settings
 
 instance GenericYamlOptions Settings where
-  yamlDefault = Just (Settings "app" 3 (Just "proxy") (Limits 10 20))
+  yamlDefault =
+    Just
+      Settings
+        { name = "app"
+        , retries = 3
+        , proxy = Just "proxy"
+        , limits = Limits 10 20
+        }
 
 data Limits = Limits {soft :: Int, hard :: Int}
   deriving stock (Eq, Show, Generic)
@@ -302,7 +309,7 @@ data Profile = Profile {user :: T.Text, proxy :: Maybe T.Text, note :: Maybe T.T
 
 instance GenericYamlOptions Profile where
   yamlOptions = defaultYamlOptions {omitNullFields = True}
-  yamlDefault = Just (Profile "app" (Just "proxy") Nothing)
+  yamlDefault = Just Profile {user = "app", proxy = Just "proxy", note = Nothing}
 
 data Remark = Remark {user :: T.Text, note :: Commented (Maybe T.Text)}
   deriving stock (Eq, Show, Generic)
@@ -319,7 +326,8 @@ data Account = Account {user :: T.Text, shell :: T.Text, home :: Maybe T.Text}
 
 instance GenericYamlOptions Account where
   yamlOptions = defaultYamlOptions {omitNullFields = True}
-  yamlDefault = Just (Account requiredField "/bin/sh" requiredField)
+  yamlDefault =
+    Just Account {user = requiredField, shell = "/bin/sh", home = requiredField}
 
 data Task = Once Int | Never
   deriving stock (Eq, Show, Generic)
@@ -564,7 +572,7 @@ shapes =
         "speed: 1\n"
     , shape
         "named fields"
-        (Server "a" 1 Nothing)
+        Server {host = "a", port = 1, tags = Nothing}
         "host: a\nport: 1\ntags: null\n"
     , shape
         "named fields with a tag"
@@ -655,11 +663,11 @@ test_record :: Assertion
 test_record = do
   assertEqual
     "optional field"
-    (Right (Server "a" 1 Nothing))
+    (Right Server {host = "a", port = 1, tags = Nothing})
     (decodeText "host: a\nport: 1\n")
   assertEqual
     "all fields"
-    (Right (Server "a" 1 (Just ["x"])))
+    (Right Server {host = "a", port = 1, tags = Just ["x"]})
     (decodeText "host: a\nport: 1\ntags: [x]\n")
   assertEqual
     "missing field"
@@ -681,7 +689,7 @@ test_record = do
     "quoted key"
     (Right (Switch (Just 1)))
     (decodeText "'true': 1\n")
-  roundTrip "round trip" (Server "a" 1 (Just ["x", "y"]))
+  roundTrip "round trip" Server {host = "a", port = 1, tags = Just ["x", "y"]}
 
 test_parameters :: Assertion
 test_parameters = do
@@ -719,7 +727,7 @@ test_parameters = do
     "null field with a comment"
     "name: a\n# b\nextra: null\n"
     . encodeText
-    $ Sparse "a" (Commented (Nothing @Int) (Comments [Comment "b"] Nothing []))
+    $ Sparse "a" (Commented (Nothing @Int) noComments {before = [Comment "b"]})
   assertEqual
     "null field without comments left out"
     "name: a\n"
@@ -1063,19 +1071,47 @@ test_default :: Assertion
 test_default = do
   assertEqual
     "all keys missing"
-    (Right (Settings "app" 3 (Just "proxy") (Limits 10 20)))
+    ( Right
+        Settings
+          { name = "app"
+          , retries = 3
+          , proxy = Just "proxy"
+          , limits = Limits 10 20
+          }
+    )
     (decodeText "{}")
   assertEqual
     "some keys missing"
-    (Right (Settings "app" 5 (Just "proxy") (Limits 10 20)))
+    ( Right
+        Settings
+          { name = "app"
+          , retries = 5
+          , proxy = Just "proxy"
+          , limits = Limits 10 20
+          }
+    )
     (decodeText "retries: 5")
   assertEqual
     "explicit null"
-    (Right (Settings "app" 3 Nothing (Limits 10 20)))
+    ( Right
+        Settings
+          { name = "app"
+          , retries = 3
+          , proxy = Nothing
+          , limits = Limits 10 20
+          }
+    )
     (decodeText "proxy: null")
   assertEqual
     "default of the inner type"
-    (Right (Settings "app" 3 (Just "proxy") (Limits 7 2)))
+    ( Right
+        Settings
+          { name = "app"
+          , retries = 3
+          , proxy = Just "proxy"
+          , limits = Limits 7 2
+          }
+    )
     (decodeText "limits: {soft: 7}")
   assertEqual
     "constructor of the default"
@@ -1089,12 +1125,16 @@ test_default = do
     "missing contents"
     (Right (Run 3))
     (decodeText "tag: Run\n")
-  roundTrip "round trip" (Settings "x" 1 Nothing (Limits 3 4))
+  roundTrip
+    "round trip"
+    Settings {name = "x", retries = 1, proxy = Nothing, limits = Limits 3 4}
   assertEqual
     "null fields left out only if the default is null"
     "user: x\nproxy: null\n"
-    (encodeText (Profile "x" Nothing Nothing))
-  roundTrip "round trip of null fields" (Profile "x" Nothing Nothing)
+    (encodeText Profile {user = "x", proxy = Nothing, note = Nothing})
+  roundTrip
+    "round trip of null fields"
+    Profile {user = "x", proxy = Nothing, note = Nothing}
   assertEqual
     "null fields left out only if the default has no comments"
     "user: x\nnote: null\n"
@@ -1107,7 +1147,7 @@ test_requiredField :: Assertion
 test_requiredField = do
   assertEqual
     "present"
-    (Right (Account "x" "/bin/sh" (Just "/home/x")))
+    (Right Account {user = "x", shell = "/bin/sh", home = Just "/home/x"})
     (decodeText "user: x\nhome: /home/x\n")
   assertEqual
     "missing"
@@ -1115,7 +1155,7 @@ test_requiredField = do
     (errorOf (decodeText @Account "shell: /bin/zsh\nhome: null\n"))
   assertEqual
     "explicit null"
-    (Right (Account "x" "/bin/sh" Nothing))
+    (Right Account {user = "x", shell = "/bin/sh", home = Nothing})
     (decodeText "user: x\nhome: null\n")
   assertEqual
     "missing field that accepts null"
@@ -1124,9 +1164,13 @@ test_requiredField = do
   assertEqual
     "null field kept"
     "user: x\nshell: /bin/sh\nhome: null\n"
-    (encodeText (Account "x" "/bin/sh" Nothing))
-  roundTrip "round trip of a null field" (Account "x" "/bin/sh" Nothing)
-  roundTrip "round trip" (Account "x" "/bin/zsh" (Just "/home/x"))
+    (encodeText Account {user = "x", shell = "/bin/sh", home = Nothing})
+  roundTrip
+    "round trip of a null field"
+    Account {user = "x", shell = "/bin/sh", home = Nothing}
+  roundTrip
+    "round trip"
+    Account {user = "x", shell = "/bin/zsh", home = Just "/home/x"}
   assertEqual
     "present contents"
     (Right (Once 2))

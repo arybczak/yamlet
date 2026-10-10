@@ -83,7 +83,7 @@ test_keptNodes = do
       assertEqual
         "output"
         expected
-        (encodeText (Workflow w.name 8 w.matrix))
+        (encodeText Workflow {name = w.name, jobs = 8, matrix = w.matrix})
   assertEqual
     "kept nodes in a list"
     (Right "- ['9.10', \"9.12\"] # versions\n- {a: 1}\n")
@@ -230,7 +230,7 @@ test_commentedKeys = do
     (encodeText <$> decodeText @(M.Map T.Text (Commented Node)) nodes)
   assertEqual
     "list items"
-    (Right [S.Comments [S.Comment "c"] Nothing [], S.Comments [] (Just "d") []])
+    (Right [noComments {before = [Comment "c"]}, noComments {inline = Just "d"}])
     (map (.comments) <$> decodeText @[Commented Int] "# c\n- 1\n- 2 # d\n")
   -- The comment after the list belongs to the entry, and the comment above
   -- the first item belongs to the item.

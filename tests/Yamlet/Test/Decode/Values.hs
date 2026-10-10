@@ -161,11 +161,11 @@ test_record :: Assertion
 test_record = do
   assertEqual
     "full"
-    (Right (Config "x" ["a", "b"] 4))
+    (Right Config {name = "x", paths = ["a", "b"], jobs = 4})
     (decodeText "name: x\npaths: [a, b]\njobs: 4\n")
   assertEqual
     "defaults"
-    (Right (Config "x" [] 1))
+    (Right Config {name = "x", paths = [], jobs = 1})
     (decodeText "name: x\npaths:\n")
   assertEqual
     "keys of a map that convert to the same key"
@@ -442,11 +442,12 @@ test_located = do
         ( Nothing
         , S.document $
             S.Node
-              (Offset 0)
-              (Offset 0)
-              S.noProps
-              S.noComments
-              (S.ScalarContent S.Plain "")
+              { S.offset = Offset 0
+              , S.endOffset = Offset 0
+              , S.props = S.noProps
+              , S.comments = S.noComments
+              , S.content = S.ScalarContent S.Plain ""
+              }
         )
     )
     (decodeWithDocument @(Maybe Int) "")
@@ -467,12 +468,12 @@ test_syntaxTree = do
     Right [doc] -> do
       assertEqual
         "parsed"
-        (Right (Config "x" [] 4))
+        (Right Config {name = "x", paths = [], jobs = 4})
         (decodeDocument input doc)
       let changed = doc {S.root = S.mappingNode [(S.plainNode "name", S.plainNode "y")]}
       assertEqual
         "changed"
-        (Right (Config "y" [] 1))
+        (Right Config {name = "y", paths = [], jobs = 1})
         (decodeDocument input changed)
     r -> assertFailure (show r)
   case S.parseDocumentsText "name: x\njobs: many\n" of

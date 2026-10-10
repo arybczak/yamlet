@@ -375,7 +375,7 @@ data Config = Config {paths :: [T.Text], jobs :: Int, verbose :: Maybe Bool}
 -- can leave out a null field.
 instance GenericYamlOptions Config where
   yamlOptions = defaultYamlOptions {omitNullFields = True}
-  yamlDefault = Just (Config ["."] 1 Nothing)
+  yamlDefault = Just Config {paths = ["."], jobs = 1, verbose = Nothing}
 
 -- Without 'omitNullFields', the encoder does not use the default.
 data Preset = Preset {paths :: [T.Text], jobs :: Int, verbose :: Maybe Bool}
@@ -383,7 +383,7 @@ data Preset = Preset {paths :: [T.Text], jobs :: Int, verbose :: Maybe Bool}
   deriving (FromYaml, ToYaml) via GenericYaml Preset
 
 instance GenericYamlOptions Preset where
-  yamlDefault = Just (Preset ["."] 1 Nothing)
+  yamlDefault = Just Preset {paths = ["."], jobs = 1, verbose = Nothing}
 
 ----------------------------------------
 -- Sums
