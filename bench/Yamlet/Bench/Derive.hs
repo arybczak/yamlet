@@ -1,7 +1,7 @@
 -- | The benchmarks that compare generic instances with written ones.
 module Yamlet.Bench.Derive
   ( checkDerived
-  , derived
+  , deriveBenchmarks
   ) where
 
 import Control.DeepSeq
@@ -26,8 +26,8 @@ checkDerived = do
 
 -- | The benchmarks of each format, grouped by the operation, so that the
 -- times of the two versions are next to each other.
-derived :: Benchmark
-derived =
+deriveBenchmarks :: Benchmark
+deriveBenchmarks =
   bgroup
     "derive"
     [ format "contents" G.mkX M.mkX

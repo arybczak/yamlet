@@ -135,4 +135,5 @@ benchmark bench
     main-is:        Main.hs
 
     other-modules:  Yamlet.Aeson.Bench.Inputs
+                    Yamlet.Aeson.Bench.Libraries
                     Yamlet.Aeson.Bench.Types

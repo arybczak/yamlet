@@ -1,15 +1,22 @@
 -- | The generated YAML inputs of the benchmarks.
 module Yamlet.Bench.Inputs
-  ( config
-  , json
-  , text
+  ( inputs
+  , configInput
+  , jsonInput
+  , textInput
   ) where
 
+import Data.ByteString qualified as BS
 import Data.Text qualified as T
+import Data.Text.Encoding qualified as T
+
+-- | The inputs of the benchmarks that do not decode to a type.
+inputs :: [(String, BS.ByteString)]
+inputs = [("config", configInput), ("json", jsonInput), ("text", textInput)]
 
 -- | A block sequence of block mappings, as in a configuration file.
-config :: Int -> T.Text
-config n = T.concat $ map record [1 .. n]
+configInput :: BS.ByteString
+configInput = T.encodeUtf8 . T.concat $ map record [1 .. 5000]
   where
     record :: Int -> T.Text
     record i =
@@ -29,8 +36,8 @@ config n = T.concat $ map record [1 .. n]
         ]
 
 -- | JSON-like flow collections.
-json :: Int -> T.Text
-json n = "[" <> T.intercalate ",\n " (map record [1 .. n]) <> "]\n"
+jsonInput :: BS.ByteString
+jsonInput = T.encodeUtf8 $ "[" <> T.intercalate ",\n " (map record [1 .. 5000]) <> "]\n"
   where
     record :: Int -> T.Text
     record i =
@@ -43,8 +50,8 @@ json n = "[" <> T.intercalate ",\n " (map record [1 .. n]) <> "]\n"
         ]
 
 -- | Block scalars and multi-line plain scalars.
-text :: Int -> T.Text
-text n = T.concat $ map entry [1 .. n]
+textInput :: BS.ByteString
+textInput = T.encodeUtf8 . T.concat $ map entry [1 .. 2000]
   where
     entry :: Int -> T.Text
     entry i =

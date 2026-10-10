@@ -1,15 +1,17 @@
 -- | The generated YAML inputs of the benchmarks, the same as in the
 -- benchmarks of yamlet.
 module Yamlet.Aeson.Bench.Inputs
-  ( config
-  , json
+  ( configInput
+  , jsonInput
   ) where
 
+import Data.ByteString qualified as BS
 import Data.Text qualified as T
+import Data.Text.Encoding qualified as T
 
 -- | A block sequence of block mappings, as in a configuration file.
-config :: Int -> T.Text
-config n = T.concat $ map record [1 .. n]
+configInput :: BS.ByteString
+configInput = T.encodeUtf8 . T.concat $ map record [1 .. 5000]
   where
     record :: Int -> T.Text
     record i =
@@ -29,8 +31,8 @@ config n = T.concat $ map record [1 .. n]
         ]
 
 -- | JSON-like flow collections.
-json :: Int -> T.Text
-json n = "[" <> T.intercalate ",\n " (map record [1 .. n]) <> "]\n"
+jsonInput :: BS.ByteString
+jsonInput = T.encodeUtf8 $ "[" <> T.intercalate ",\n " (map record [1 .. 5000]) <> "]\n"
   where
     record :: Int -> T.Text
     record i =
