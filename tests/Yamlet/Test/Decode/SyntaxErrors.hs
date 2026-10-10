@@ -274,6 +274,14 @@ test_syntaxErrors = do
     , "the name of the alias includes the ':', write a space before ':' if the alias is a key"
     )
     "a: &x 1\n*x: 2\n"
+  forM_ [("flow mapping", "{*a: b}\n"), ("flow sequence", "[*a: b]\n")] $ \(node, input) ->
+    check
+      ("colon after an alias in a " ++ node)
+      ( 1
+      , 4
+      , "the name of the alias includes the ':', write a space before ':' if the alias is a key"
+      )
+      input
   check
     "alias without a name in a flow sequence"
     (1, 2, "expected an alias name after '*'")

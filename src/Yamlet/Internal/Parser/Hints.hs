@@ -8,7 +8,7 @@
 -- in subsequent releases.
 module Yamlet.Internal.Parser.Hints
   ( unexpected
-  , flowMistake
+  , flowError
   , codePointName
   , firstTab
   , tabMessage
@@ -51,10 +51,7 @@ unexpected input i = (tabCause, other)
       | Just r <- blockMistake = r
       | afterComment =
           (i, "a comment ends a plain scalar, so this line cannot continue it")
-      | Just colon <- aliasColon =
-          ( colon
-          , "the name of the alias includes the ':', write a space before ':' if the alias is a key"
-          )
+      | Just colon <- aliasColon e i = (colon, aliasColonMessage)
       | otherwise = (i,) $ case byteAt e i of
           w
             | byteBefore e i == STAR && not (isAnchorChar w) ->
@@ -204,16 +201,6 @@ unexpected input i = (tabCause, other)
 
         wordEnd :: Int -> Int
         wordEnd j = if isNsChar (byteAt e j) then wordEnd (j + 1) else j
-
-    -- The ':' that ends an alias name before the index, as in "*x: 1". An
-    -- alias name can contain ':'.
-    aliasColon :: Maybe Int
-    aliasColon =
-      let j = skipBackWhites e i
-          start = wordStart e j
-      in if j > start && byteBefore e j == COLON && byteAt e start == STAR
-           then Just (j - 1)
-           else Nothing
 
     -- A key before the index that started on a line above. A key that ends
     -- here on one line does not fail.
@@ -502,10 +489,27 @@ unexpected input i = (tabCause, other)
       byteAt e j == MINUS
         && (let b = byteAt e (j + 1) in b == 0 || isWhite b || isBreak b)
 
--- | The error for a common mistake at the index inside a flow collection, if
--- the character there shows one.
-flowMistake :: Env -> Int -> Maybe String
-flowMistake e = mistakeIn (afterBoms e) True
+-- | The ':' that ends an alias name before the index, as in "*x: 1". An
+-- alias name can contain ':'.
+aliasColon :: Env -> Int -> Maybe Int
+aliasColon e i =
+  let j = skipBackWhites e i
+      start = wordStart e j
+  in if j > start && byteBefore e j == COLON && byteAt e start == STAR
+       then Just (j - 1)
+       else Nothing
+
+aliasColonMessage :: String
+aliasColonMessage =
+  "the name of the alias includes the ':', write a space before ':' if the alias is a key"
+
+-- | The location and the message of the error at the index inside a flow
+-- collection: a common mistake if the input there shows one, or else the
+-- index and the given message.
+flowError :: Env -> Int -> String -> (Int, String)
+flowError e i msg = case aliasColon e i of
+  Just colon -> (colon, aliasColonMessage)
+  Nothing -> (i, fromMaybe msg (mistakeIn (afterBoms e) True i))
 
 -- | The input without the byte order marks at its start. The hints look at
 -- the content of the lines around an error, and the marks are not content
