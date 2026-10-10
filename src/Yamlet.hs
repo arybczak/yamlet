@@ -221,11 +221,12 @@ decodeWithDocument input =
     [] ->
       withDocument . S.document $
         S.Node
-          (S.Offset 0)
-          (S.Offset 0)
-          S.noProps
-          S.noComments
-          (S.ScalarContent S.Plain "")
+          { S.offset = S.Offset 0
+          , S.endOffset = S.Offset 0
+          , S.props = S.noProps
+          , S.comments = S.noComments
+          , S.content = S.ScalarContent S.Plain ""
+          }
     [doc] -> withDocument doc
     docs@(_ : doc : _) -> do
       let limit = aliasLimit (map (.root) docs)

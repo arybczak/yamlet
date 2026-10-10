@@ -352,11 +352,12 @@ expandAliases = fst . go M.empty
       S.AliasContent name -> case M.lookup name anchors of
         Just (tag, content) ->
           ( S.Node
-              sn.offset
-              sn.endOffset
-              (S.Props Nothing tag)
-              sn.comments
-              (copyAt sn content)
+              { S.offset = sn.offset
+              , S.endOffset = sn.endOffset
+              , S.props = S.Props Nothing tag
+              , S.comments = sn.comments
+              , S.content = copyAt sn content
+              }
           , anchors
           )
         Nothing -> (sn, anchors)
@@ -369,7 +370,14 @@ expandAliases = fst . go M.empty
         in close (withContent (S.MappingContent style kvs')) anchors'
       where
         withContent :: S.Content -> S.Node
-        withContent = S.Node sn.offset sn.endOffset sn.props sn.comments
+        withContent c =
+          S.Node
+            { S.offset = sn.offset
+            , S.endOffset = sn.endOffset
+            , S.props = sn.props
+            , S.comments = sn.comments
+            , S.content = c
+            }
 
         -- No alias inside refers to the anchor, so its old definition can
         -- go. A node inside with the same anchor comes later in the
@@ -404,11 +412,12 @@ expandAliases = fst . go M.empty
         node :: S.Node -> S.Node
         node n =
           S.Node
-            alias.offset
-            alias.endOffset
-            n.props
-            S.noComments
-            (copyAt alias n.content)
+            { S.offset = alias.offset
+            , S.endOffset = alias.endOffset
+            , S.props = n.props
+            , S.comments = S.noComments
+            , S.content = copyAt alias n.content
+            }
 
     goList
       :: M.Map T.Text (S.Tag, S.Content)

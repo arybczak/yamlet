@@ -133,15 +133,16 @@ attachComments e first hasNext start marker rootEnd end doc
       | holdsLines =
           let c = root'.comments
           in Node
-               root'.offset
-               root'.endOffset
-               root'.props
-               ( strictComments
-                   c.before
-                   c.inline
-                   (if doc.explicitEnd then endLines else atEnd endLines)
-               )
-               root'.content
+               { offset = root'.offset
+               , endOffset = root'.endOffset
+               , props = root'.props
+               , comments =
+                   strictComments
+                     c.before
+                     c.inline
+                     (if doc.explicitEnd then endLines else atEnd endLines)
+               , content = root'.content
+               }
       | otherwise = root'
 
     -- Only the lines below a @...@ marker can be at the end of the stream.
@@ -192,7 +193,15 @@ attachComments e first hasNext start marker rootEnd end doc
             | isEmptyLine i
             , i.at + e.base == breakEnd e (skipWhites e (lastAt + e.base)) ->
                 run i0 (n + 1) i.at is
-          is -> Item i0.at i0.lineStart True EmptyLine n : runs is
+          is ->
+            Item
+              { at = i0.at
+              , lineStart = i0.lineStart
+              , own = True
+              , line = EmptyLine
+              , count = n
+              }
+              : runs is
 
         -- The flag tells if the line has something other than white space.
         go :: Int -> Int -> Bool -> [(Int, Int)] -> [Item]
@@ -217,7 +226,13 @@ attachComments e first hasNext start marker rootEnd end doc
                             then i + 2
                             else i + 1
                         item =
-                          [ Item (ls - e.base) (ls - e.base) True EmptyLine 1
+                          [ Item
+                              { at = ls - e.base
+                              , lineStart = ls - e.base
+                              , own = True
+                              , line = EmptyLine
+                              , count = 1
+                              }
                           | not content
                           ]
                     in item ++ go j j False ranges
@@ -228,11 +243,12 @@ attachComments e first hasNext start marker rootEnd end doc
                         textStart = if content then i + 1 else hashesEnd i
                         text = T.stripEnd . dropSpace $ slice e textStart eol
                     in Item
-                         (i - e.base)
-                         (ls - e.base)
-                         (not content)
-                         (CommentLine (textStart - i) text)
-                         1
+                         { at = i - e.base
+                         , lineStart = ls - e.base
+                         , own = not content
+                         , line = CommentLine (textStart - i) text
+                         , count = 1
+                         }
                          : go eol ls True ranges
                 | isWhite w -> go (i + 1) ls content ranges
                 | otherwise -> go (i + 1) ls True ranges
@@ -283,7 +299,8 @@ linesAbove ls = \case
 -- | Comments with their lists evaluated. The parser returns a document
 -- without thunks, and a lazy list would keep the items of the input alive.
 strictComments :: [Line] -> Maybe T.Text -> [Line] -> Comments
-strictComments before inline after = Comments (force before) inline (force after)
+strictComments before inline after =
+  Comments {before = force before, inline = inline, after = force after}
 
 isEmptyLine :: Item -> Bool
 isEmptyLine i = case i.line of

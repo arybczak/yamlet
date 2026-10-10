@@ -242,12 +242,19 @@ data Comments = Comments
 
 -- | No comments and no empty lines.
 noComments :: Comments
-noComments = Comments [] Nothing []
+noComments = Comments {before = [], inline = Nothing, after = []}
 
 -- | The node with the comments in place of its own. A record update of the
 -- field is ambiguous where t'Commented' is in scope.
 withComments :: Comments -> Node -> Node
-withComments c n = Node n.offset n.endOffset n.props c n.content
+withComments c n =
+  Node
+    { offset = n.offset
+    , endOffset = n.endOffset
+    , props = n.props
+    , comments = c
+    , content = n.content
+    }
 
 -- | A value with the comments of its mapping entry:
 --

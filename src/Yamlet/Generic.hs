@@ -1341,11 +1341,12 @@ fromObject opts flat keys def o
             _ -> S.Block
       in gFromValue $
            S.Node
-             n.offset
-             n.endOffset
-             n.props
-             S.noComments
-             (S.MappingContent style others)
+             { S.offset = n.offset
+             , S.endOffset = n.endOffset
+             , S.props = n.props
+             , S.comments = S.noComments
+             , S.content = S.MappingContent style others
+             }
 
     -- The duplicates of a key go too. The mapping has their errors, and a
     -- field of a recursive type would give them again at each level.

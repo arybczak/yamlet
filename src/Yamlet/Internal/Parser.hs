@@ -1850,7 +1850,14 @@ cLBlockMapExplicitEntry n = do
     -- The key took the comments and the empty lines below it, so the position
     -- of the parser is after them. A value there would take them.
     missingValue :: Env -> Node -> Node
-    missingValue e k = Node k.endOffset k.endOffset noProps noComments (emptyContent e)
+    missingValue e k =
+      Node
+        { offset = k.endOffset
+        , endOffset = k.endOffset
+        , props = noProps
+        , comments = noComments
+        , content = emptyContent e
+        }
 
     lBlockMapExplicitValue :: P Node
     lBlockMapExplicitValue = do

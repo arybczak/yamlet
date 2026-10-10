@@ -1001,7 +1001,11 @@ instance FromYaml a => FromYaml (S.Commented a) where
     flip S.Commented (S.copyComments v.comments)
       <$!> parseYaml (S.withComments S.noComments v)
   parseYamlField k v =
-    flip S.Commented (S.copyComments (S.Comments before inline v.comments.after))
+    flip
+      S.Commented
+      ( S.copyComments
+          (S.Comments {S.before = before, S.inline = inline, S.after = v.comments.after})
+      )
       <$!> parseYaml value
     where
       -- The lines above a value on the line of its key or in the flow style go
@@ -1028,7 +1032,12 @@ instance FromYaml a => FromYaml (S.Commented a) where
       -- The value without the comments of the entry.
       value :: S.Node
       value =
-        let rest = S.Comments (if block then v.comments.before else []) Nothing []
+        let rest =
+              S.Comments
+                { S.before = if block then v.comments.before else []
+                , S.inline = Nothing
+                , S.after = []
+                }
         in S.withComments rest v
 
 -- | The value with the offset of its node. The key of an entry goes to the

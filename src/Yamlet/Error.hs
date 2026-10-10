@@ -387,7 +387,14 @@ errorAt input off msg
 -- the location in the bytes of the line.
 errorOnLine :: Location -> String -> T.Text -> Int -> Error
 errorOnLine loc msg sourceLine index =
-  force $ Error loc msg sourceLine (min (T.lengthWord8 sourceLine) index) Root
+  force $
+    Error
+      { location = loc
+      , message = msg
+      , sourceLine = sourceLine
+      , sourceIndex = min (T.lengthWord8 sourceLine) index
+      , path = Root
+      }
 
 -- | Create errors at the given offsets of a document, with their paths, in the
 -- order of the list. The text is the input of the document, e.g. for the

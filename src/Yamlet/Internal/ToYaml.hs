@@ -124,7 +124,12 @@ instance ToYaml a => ToYaml (S.Commented a) where
       key :: S.Node
       key =
         S.withComments
-          (S.Comments c.comments.before c.comments.inline k.comments.after)
+          ( S.Comments
+              { S.before = c.comments.before
+              , S.inline = c.comments.inline
+              , S.after = k.comments.after
+              }
+          )
           k
 
 -- | The value alone. The key of an entry goes to the value inside, e.g. for a
