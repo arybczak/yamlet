@@ -60,7 +60,11 @@ test_scalarKeys :: Assertion
 test_scalarKeys =
   assertEqual
     "the text of each key"
-    (Right (A.object ["0x10" A..= 'a', "true" A..= 'b', "~" A..= 'c', "" A..= 'd', "1.0" A..= 'e']))
+    ( Right
+        ( A.object
+            ["0x10" A..= 'a', "true" A..= 'b', "~" A..= 'c', "" A..= 'd', "1.0" A..= 'e']
+        )
+    )
     (decodeText @A.Value "0x10: a\ntrue: b\n~: c\n'': d\n'1.0': e\n")
 
 test_sameText :: Assertion
@@ -78,7 +82,9 @@ test_collectionKeys :: Assertion
 test_collectionKeys =
   assertEqual
     "an error at each key"
-    [(1, 3, "expected a scalar key, but got a list"), (3, 3, "expected a scalar key, but got a mapping")]
+    [ (1, 3, "expected a scalar key, but got a list")
+    , (3, 3, "expected a scalar key, but got a mapping")
+    ]
     (errorsOf (decodeText @A.Value "? [1]\n: a\n? {b: c}\n: d\n"))
 
 test_specialFloats :: Assertion
@@ -96,7 +102,11 @@ test_tags :: Assertion
 test_tags =
   assertEqual
     "the values without tags"
-    (Right (A.object ["x" A..= ("abc" :: T.Text), "y" A..= ("1" :: T.Text), "z" A..= (2 :: Int)]))
+    ( Right
+        ( A.object
+            ["x" A..= ("abc" :: T.Text), "y" A..= ("1" :: T.Text), "z" A..= (2 :: Int)]
+        )
+    )
     (decodeText @A.Value "!point {x: !secret abc, y: !!str 1, z: !!int 2}")
 
 test_aliases :: Assertion
@@ -115,12 +125,16 @@ test_mergeKey =
 
 test_errorLocation :: Assertion
 test_errorLocation = do
-  let result = decodeText @(ViaAeson [Server]) "- port: 80\n  host: a\n- port: http\n  host: b\n"
+  let result =
+        decodeText @(ViaAeson [Server]) "- port: 80\n  host: a\n- port: http\n  host: b\n"
   assertEqual
     "the error at the value"
     [(3, 9, "parsing Int failed, expected Number, but encountered String")]
     (errorsOf result)
-  assertEqual "the path of the value" ["[1].port"] (pathsOf result)
+  assertEqual
+    "the path of the value"
+    ["[1].port"]
+    (pathsOf result)
   where
     pathsOf :: Either (NE.NonEmpty Error) a -> [String]
     pathsOf = \case
@@ -176,8 +190,14 @@ test_derivedField = do
 
 test_aesonTypes :: Assertion
 test_aesonTypes = do
-  assertEqual "a float for an Int" (Right (ViaAeson @Int 1)) (decodeText "1.0")
-  assertEqual "yes of YAML 1.2" (Right (ViaAeson @T.Text "yes")) (decodeText "yes")
+  assertEqual
+    "a float for an Int"
+    (Right (ViaAeson @Int 1))
+    (decodeText "1.0")
+  assertEqual
+    "yes of YAML 1.2"
+    (Right (ViaAeson @T.Text "yes"))
+    (decodeText "yes")
 
 test_fieldOrder :: Assertion
 test_fieldOrder = do
@@ -191,7 +211,11 @@ test_fieldOrder = do
     (encodeText (ViaAeson [Unordered 80 "localhost"]))
 
 test_polymorphic :: Assertion
-test_polymorphic = assertEqual "the output" "- 1\n" (encodeAny @[Int] [1])
+test_polymorphic =
+  assertEqual
+    "the output"
+    "- 1\n"
+    (encodeAny @[Int] [1])
   where
     encodeAny :: A.ToJSON a => a -> T.Text
     encodeAny = encodeText . ViaAeson
@@ -199,17 +223,28 @@ test_polymorphic = assertEqual "the output" "- 1\n" (encodeAny @[Int] [1])
 test_numberKeys :: Assertion
 test_numberKeys = do
   let m = M.fromList @Int @Char [(1, 'a'), (2, 'b')]
-  assertEqual "the keys in quotes" "'1': a\n'2': b\n" (encodeText (ViaAeson m))
-  assertEqual "the keys read back" (Right (ViaAeson m)) (decodeText (encodeText (ViaAeson m)))
+  assertEqual
+    "the keys in quotes"
+    "'1': a\n'2': b\n"
+    (encodeText (ViaAeson m))
+  assertEqual
+    "the keys read back"
+    (Right (ViaAeson m))
+    (decodeText (encodeText (ViaAeson m)))
 
 test_encodeSpecialFloats :: Assertion
 test_encodeSpecialFloats = do
   let ds = [1 / 0, -(1 / 0), 0 / 0, -0.0, 1.0 :: Double]
-  assertEqual "the values of aeson" "- +inf\n- -inf\n- null\n- 0.0\n- 1.0\n" (encodeText (ViaAeson ds))
+  assertEqual
+    "the values of aeson"
+    "- +inf\n- -inf\n- null\n- 0.0\n- 1.0\n"
+    (encodeText (ViaAeson ds))
   assertEqual
     "the values read back as from JSON"
     (Right (map show <$> A.decode @[Double] (A.encode ds)))
-    ((\(ViaAeson xs) -> Just (map (show @Double) xs)) <$> decodeText (encodeText (ViaAeson ds)))
+    ( (\(ViaAeson xs) -> Just (map (show @Double) xs))
+        <$> decodeText (encodeText (ViaAeson ds))
+    )
 
 test_zeros :: Assertion
 test_zeros =
@@ -220,14 +255,20 @@ test_zeros =
 
 test_duplicateKeys :: Assertion
 test_duplicateKeys =
-  assertEqual "the first key stays" "a: 1\nb: 3\n" (encodeText (ViaAeson Twice))
+  assertEqual
+    "the first key stays"
+    "a: 1\nb: 3\n"
+    (encodeText (ViaAeson Twice))
 
 test_invalidEncoding :: Assertion
 test_invalidEncoding = do
   assertInvalid "an incomplete value" (Raw "{")
   assertInvalid "content after the value" (Raw "{\"a\":1}}")
   assertInvalid "an invalid value in a list" [Raw "1", Raw "x"]
-  assertEqual "spaces after the value" "a: 1\n" (encodeText (ViaAeson (Raw "{\"a\":1} \n")))
+  assertEqual
+    "spaces after the value"
+    "a: 1\n"
+    (encodeText (ViaAeson (Raw "{\"a\":1} \n")))
   where
     assertInvalid :: A.ToJSON a => String -> a -> Assertion
     assertInvalid preface x =
@@ -285,7 +326,8 @@ genValue = sized go
 -- | The line, the column and the message of each error.
 errorsOf :: Either (NE.NonEmpty Error) a -> [(Int, Int, String)]
 errorsOf = \case
-  Left errs -> [(err.location.line, err.location.column, err.message) | err <- NE.toList errs]
+  Left errs ->
+    [(err.location.line, err.location.column, err.message) | err <- NE.toList errs]
   Right _ -> []
 
 data Server = Server {port :: Int, host :: T.Text}
@@ -306,7 +348,8 @@ newtype Nested = Nested Int
   deriving stock (Show)
 
 instance A.FromJSON Nested where
-  parseJSON v = Nested <$> A.parseJSON v A.<?> A.Key "inner" A.<?> A.Index 0 A.<?> A.Key "outer"
+  parseJSON v =
+    Nested <$> A.parseJSON v A.<?> A.Key "inner" A.<?> A.Index 0 A.<?> A.Key "outer"
 
 newtype Port = Port Int
   deriving stock (Show)
@@ -329,7 +372,8 @@ data Twice = Twice
 
 instance A.ToJSON Twice where
   toJSON _ = A.object ["a" A..= (1 :: Int), "b" A..= (3 :: Int)]
-  toEncoding _ = A.pairs ("a" A..= (1 :: Int) <> "a" A..= (2 :: Int) <> "b" A..= (3 :: Int))
+  toEncoding _ =
+    A.pairs ("a" A..= (1 :: Int) <> "a" A..= (2 :: Int) <> "b" A..= (3 :: Int))
 
 -- | An encoding of the given text.
 newtype Raw = Raw String

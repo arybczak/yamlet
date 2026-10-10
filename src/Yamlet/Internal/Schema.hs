@@ -62,7 +62,8 @@ resolvePlainExact t = case T.uncons t of
   Nothing -> Right Null
   Just (c, _)
     | c == '~' || c == 'n' || c == 'N' -> Right $ if isNull t then Null else String t
-    | c == 't' || c == 'T' || c == 'f' || c == 'F' -> Right $ maybe (String t) Bool (readBool t)
+    | c == 't' || c == 'T' || c == 'f' || c == 'F' ->
+        Right $ maybe (String t) Bool (readBool t)
     | startsNumber c -> case readInt t of
         Just i -> Right (Int i)
         Nothing -> maybe (Right (String t)) (bimap Float Float) (readFloat t)
@@ -130,7 +131,8 @@ readBool = \case
 -- @yes@ or @off@.
 isYaml11Bool :: T.Text -> Bool
 isYaml11Bool t =
-  t `elem` ["y", "Y", "yes", "Yes", "YES", "n", "N", "no", "No", "NO", "on", "On", "ON", "off", "Off", "OFF"]
+  t `elem` ["y", "Y", "yes", "Yes", "YES", "on", "On", "ON"]
+    || t `elem` ["n", "N", "no", "No", "NO", "off", "Off", "OFF"]
 
 -- | A common YAML 1.1 parser reads a plain scalar with the text as a value
 -- that is not a string, e.g. the boolean @yes@, the base-60 number @12:30@ or
@@ -150,7 +152,9 @@ isYaml11NonString t = case T.uncons t of
     | otherwise ->
         t `elem` ["y", "Y", "n", "N", "~", "<<", "="]
           -- Psych ignores the case of these words.
-          || (T.compareLength t 5 /= GT && T.toLower t `elem` ["yes", "no", "true", "false", "on", "off", "null"])
+          || ( T.compareLength t 5 /= GT
+                 && T.toLower t `elem` ["yes", "no", "true", "false", "on", "off", "null"]
+             )
   where
     matches :: (T.Text -> [T.Text]) -> T.Text -> Bool
     matches m s = any T.null (m s)
@@ -171,10 +175,18 @@ isYaml11NonString t = case T.uncons t of
     float =
       sign
         >=> alt
-          [ digit >=> many (separatorOr isDigit) >=> one (== '.') >=> many (underscoreOr isDigit) >=> opt exponentPart
+          [ digit
+              >=> many (separatorOr isDigit)
+              >=> one (== '.')
+              >=> many (underscoreOr isDigit)
+              >=> opt exponentPart
           , one (== '.') >=> some (underscoreOr isDigit) >=> opt exponentPart
           , one (== '.') >=> exponentPart
-          , digit >=> many (underscoreOr isDigit) >=> sexagesimal >=> one (== '.') >=> many (underscoreOr isDigit)
+          , digit
+              >=> many (underscoreOr isDigit)
+              >=> sexagesimal
+              >=> one (== '.')
+              >=> many (underscoreOr isDigit)
           , one (== '.') >=> caseless "inf"
           , one (== '.') >=> caseless "nan"
           ]
@@ -196,7 +208,15 @@ isYaml11NonString t = case T.uncons t of
             >=> one (== ':')
             >=> digits 2
             >=> opt (one (== '.') >=> many digit)
-            >=> opt (many blank >=> alt [one (== 'Z'), one (`elem` ['+', '-']) >=> oneOrTwoDigits >=> opt (opt (one (== ':')) >=> digits 2)])
+            >=> opt
+              ( many blank
+                  >=> alt
+                    [ one (== 'Z')
+                    , one (`elem` ['+', '-'])
+                        >=> oneOrTwoDigits
+                        >=> opt (opt (one (== ':')) >=> digits 2)
+                    ]
+              )
         ]
 
     -- The numbers of go-yaml v2, which removes the underscores first: the
@@ -207,11 +227,24 @@ isYaml11NonString t = case T.uncons t of
       alt
         [ sign
             >=> alt
-              [ one (== '0') >=> one (`elem` ['x', 'X']) >=> some (one isHexDigit)
-              , one (== '0') >=> one (`elem` ['o', 'O']) >=> some (one isOctDigit)
-              , one (== '0') >=> one (`elem` ['b', 'B']) >=> some (one (`elem` ['0', '1']))
-              , alt [one (== '.') >=> some digit, some digit >=> opt (one (== '.') >=> many digit)]
-                  >=> opt (one (`elem` ['e', 'E']) >=> opt (one (`elem` ['+', '-'])) >=> some digit)
+              [ one (== '0')
+                  >=> one (`elem` ['x', 'X'])
+                  >=> some (one isHexDigit)
+              , one (== '0')
+                  >=> one (`elem` ['o', 'O'])
+                  >=> some (one isOctDigit)
+              , one (== '0')
+                  >=> one (`elem` ['b', 'B'])
+                  >=> some (one (`elem` ['0', '1']))
+              , alt
+                  [ one (== '.') >=> some digit
+                  , some digit >=> opt (one (== '.') >=> many digit)
+                  ]
+                  >=> opt
+                    ( one (`elem` ['e', 'E'])
+                        >=> opt (one (`elem` ['+', '-']))
+                        >=> some digit
+                    )
               ]
         , str "0b" >=> one (`elem` ['+', '-']) >=> some (one (`elem` ['0', '1']))
         ]
@@ -269,7 +302,8 @@ isYaml11NonString t = case T.uncons t of
     separatorOr p = one (\x -> x == '_' || x == ',' || p x)
 
     caseless :: T.Text -> T.Text -> [T.Text]
-    caseless w s = [rest | let (prefix, rest) = T.splitAt (T.length w) s, T.toLower prefix == w]
+    caseless w s =
+      [rest | let (prefix, rest) = T.splitAt (T.length w) s, T.toLower prefix == w]
 
     sexagesimal :: T.Text -> [T.Text]
     sexagesimal = some (one (== ':') >=> opt (one (`elem` ['0' .. '5'])) >=> digit)
@@ -315,7 +349,10 @@ isYaml11Timestamp t =
       | T.null s = True
       | otherwise = case T.splitOn ":" (T.takeWhile (\c -> isDigit c || c == ':') s) of
           h : _ : sec : _ ->
-            number h < 24 && number (T.take 2 sec) < 60 && validZone (T.dropWhile (\c -> isDigit c || c `elem` [':', '.', ' ', '\t']) s)
+            number h < 24
+              && number (T.take 2 sec) < 60
+              && validZone
+                (T.dropWhile (\c -> isDigit c || c `elem` [':', '.', ' ', '\t']) s)
           _ -> False
 
     -- The hours of a zone are the digits before the last two, unless the
@@ -351,7 +388,8 @@ digitsValue radix t0 = go (T.length t0) t0
   where
     go :: Int -> T.Text -> Integer
     go n t
-      | n <= maxFoldDigits = T.foldl' (\acc d -> acc * radix + toInteger (digitToInt d)) 0 t
+      | n <= maxFoldDigits =
+          T.foldl' (\acc d -> acc * radix + toInteger (digitToInt d)) 0 t
       | otherwise =
           let k = n `div` 2
               (hi, lo) = T.splitAt (n - k) t

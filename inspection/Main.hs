@@ -179,7 +179,9 @@ main =
       , testGroup
           "Shape"
           [ testCase "encode" $
-              assertFailureIf (ghcVersion < (9, 12)) $(inspectTest $ hasNoGenericRep 'encodeShape)
+              assertFailureIf
+                (ghcVersion < (9, 12))
+                $(inspectTest $ hasNoGenericRep 'encodeShape)
           , testCase "decode" $
               assertSuccess $(inspectTest $ hasNoGenericRep 'decodeShape)
           , testCase "encode a list" $

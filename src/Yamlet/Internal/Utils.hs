@@ -137,7 +137,8 @@ fromSurrogates hi lo = 0x10000 + (hi - 0xD800) * 0x400 + (lo - 0xDC00)
 -- | A code point that a character can have: in the range of Unicode, and not a
 -- surrogate.
 isScalarValue :: Int -> Bool
-isScalarValue c = c >= 0 && c <= ord maxBound && not (isHighSurrogate c || isLowSurrogate c)
+isScalarValue c =
+  c >= 0 && c <= ord maxBound && not (isHighSurrogate c || isLowSurrogate c)
 
 -- | The number of hex digits of the @\\x@, @\\u@ and @\\U@ escapes of a
 -- double-quoted scalar.

@@ -49,7 +49,16 @@ itemLines i = replicate i.count i.line
 -- one and if another one follows it. The indices are the start of the lines
 -- that belong to the document, its @---@ marker, the end of its root and its
 -- end.
-attachComments :: Env -> Bool -> Bool -> Int -> Maybe Int -> Int -> Int -> Document -> (Document, [Line])
+attachComments
+  :: Env
+  -> Bool
+  -> Bool
+  -> Int
+  -> Maybe Int
+  -> Int
+  -> Int
+  -> Document
+  -> (Document, [Line])
 attachComments e first hasNext start marker rootEnd end doc
   | not mayHaveItems = (doc, [])
   | null items = (doc, [])
@@ -57,7 +66,9 @@ attachComments e first hasNext start marker rootEnd end doc
       ( doc
           { docComments =
               strictComments
-                ((if first then dropWhile (== EmptyLine) else id) (concatMap itemLines docItems))
+                ( (if first then dropWhile (== EmptyLine) else id)
+                    (concatMap itemLines docItems)
+                )
                 markerComment
                 docEnd
           , root = root''
@@ -68,9 +79,12 @@ attachComments e first hasNext start marker rootEnd end doc
     -- Nothing is above the first document, so the empty lines at its start
     -- separate it from nothing.
     items :: [Item]
-    items =
-      (if isJust marker || not first then id else dropWhile (\i -> isEmptyLine i && i.at < rootStart)) $
-        scanItems (skipRanges e doc.root)
+    items
+      | isJust marker || not first = scanned
+      | otherwise = dropWhile (\i -> isEmptyLine i && i.at < rootStart) scanned
+      where
+        scanned :: [Item]
+        scanned = scanItems (skipRanges e doc.root)
 
     (docItems, afterMarker) = case marker of
       Just m -> span (\i -> i.at < m - e.base) items
@@ -90,7 +104,8 @@ attachComments e first hasNext start marker rootEnd end doc
             (Just t, is)
       _ -> (Nothing, afterMarker)
 
-    (root', leftover) = attachNode e (rootEnd - e.base) 0 (rootStart, rootLine) [] doc.root rest
+    (root', leftover) =
+      attachNode e (rootEnd - e.base) 0 (rootStart, rootLine) [] doc.root rest
 
     (below, afterEnd) = span (\i -> i.at < rootEnd - e.base) leftover
 
@@ -110,13 +125,23 @@ attachComments e first hasNext start marker rootEnd end doc
       | otherwise = break (== EmptyLine) rootLines
       where
         rootLines :: [Line]
-        rootLines = (if holdsLines then root'.comments.after else []) ++ concatMap itemLines below
+        rootLines =
+          (if holdsLines then root'.comments.after else []) ++ concatMap itemLines below
 
     root'' :: Node
     root''
       | holdsLines =
           let c = root'.comments
-          in Node root'.offset root'.endOffset root'.props (strictComments c.before c.inline (if doc.explicitEnd then endLines else atEnd endLines)) root'.content
+          in Node
+               root'.offset
+               root'.endOffset
+               root'.props
+               ( strictComments
+                   c.before
+                   c.inline
+                   (if doc.explicitEnd then endLines else atEnd endLines)
+               )
+               root'.content
       | otherwise = root'
 
     -- Only the lines below a @...@ marker can be at the end of the stream.
@@ -191,7 +216,10 @@ attachComments e first hasNext start marker rootEnd end doc
                           if w == CR && i + 1 < end && A.unsafeIndex e.array (i + 1) == LF
                             then i + 2
                             else i + 1
-                        item = [Item (ls - e.base) (ls - e.base) True EmptyLine 1 | not content]
+                        item =
+                          [ Item (ls - e.base) (ls - e.base) True EmptyLine 1
+                          | not content
+                          ]
                     in item ++ go j j False ranges
                 | w == HASH && (i == ls || isWhite (A.unsafeIndex e.array (i - 1))) ->
                     let eol = lineEnd i
@@ -199,7 +227,12 @@ attachComments e first hasNext start marker rootEnd end doc
                         -- the first #, because 'Comments' has no count for it.
                         textStart = if content then i + 1 else hashesEnd i
                         text = T.stripEnd . dropSpace $ slice e textStart eol
-                    in Item (i - e.base) (ls - e.base) (not content) (CommentLine (textStart - i) text) 1
+                    in Item
+                         (i - e.base)
+                         (ls - e.base)
+                         (not content)
+                         (CommentLine (textStart - i) text)
+                         1
                          : go eol ls True ranges
                 | isWhite w -> go (i + 1) ls content ranges
                 | otherwise -> go (i + 1) ls True ranges
@@ -268,13 +301,18 @@ offsetOf (Offset o) = o
 -- are not in the items, so that a chain of nested first entries passes them
 -- down without a walk over them at each level, which would make the time
 -- quadratic.
-attachNode :: Env -> Int -> Int -> (Int, Int) -> [Item] -> Node -> [Item] -> (Node, [Item])
+attachNode
+  :: Env -> Int -> Int -> (Int, Int) -> [Item] -> Node -> [Item] -> (Node, [Item])
 attachNode e limit minColumn known above n items0 = node `seq` items5 `seq` (node, items5)
   where
     node :: Node
     node =
       n
-        { comments = strictComments [l | i <- pre, isJust own || not (isFallback i), l <- itemLines i] (own <|> fallback) afterLines
+        { comments =
+            strictComments
+              [l | i <- pre, isJust own || not (isFallback i), l <- itemLines i]
+              (own <|> fallback)
+              afterLines
         , content = content'
         }
 
@@ -345,9 +383,11 @@ attachNode e limit minColumn known above n items0 = node `seq` items5 `seq` (nod
 
     (content', items3) = case n.content of
       SequenceContent style xs ->
-        let !(xs', is) = sequenceItems style xs items2 in (SequenceContent style xs', is)
+        let !(xs', is) = sequenceItems style xs items2
+        in (SequenceContent style xs', is)
       MappingContent style kvs ->
-        let !(kvs', is) = mappingEntries style kvs items2 in (MappingContent style kvs', is)
+        let !(kvs', is) = mappingEntries style kvs items2
+        in (MappingContent style kvs', is)
       c -> (c, items2)
 
     -- The lines before the closing bracket come before the comment after it.
@@ -388,7 +428,13 @@ attachNode e limit minColumn known above n items0 = node `seq` items5 `seq` (nod
     -- The lines after the last entry, indented deep enough, and the empty
     -- lines between them.
     blockAfter :: [Item] -> ([Line], [Item])
-    blockAfter = takeLines (\i -> i.at < limit && i.own && (isEmptyLine i || i.at - i.lineStart >= max column minColumn))
+    blockAfter =
+      takeLines
+        ( \i ->
+            i.at < limit
+              && i.own
+              && (isEmptyLine i || i.at - i.lineStart >= max column minColumn)
+        )
 
     -- The lines of the items from the start that pass the check, without the
     -- empty lines at their end, which stay with the next items.
@@ -414,11 +460,13 @@ attachNode e limit minColumn known above n items0 = node `seq` items5 `seq` (nod
         go acc _ [] is = let !xs = reverse acc in (xs, is)
         go acc xAbove (x : rest) is =
           let next = nextStart x rest
-              !(x', is') = attachNode e next (entryColumn style) (s, lineStart) xAbove x is
+              !(x', is') =
+                attachNode e next (entryColumn style) (s, lineStart) xAbove x is
               !(x'', is'')
                 -- A list without indentation has no column of its own for the
                 -- lines after its last item, so they stay with the list.
-                | style == Block && not (null rest && minColumn > column) = linesBelow next x' is'
+                | style == Block && not (null rest && minColumn > column) =
+                    linesBelow next x' is'
                 | otherwise = (x', is')
           in go (x'' : acc) [] rest is''
 
@@ -429,15 +477,22 @@ attachNode e limit minColumn known above n items0 = node `seq` items5 `seq` (nod
             | otherwise -> offsetOf y.offset
           [] -> if style == Flow then en else limit
 
-    mappingEntries :: CollectionStyle -> [(Node, Node)] -> [Item] -> ([(Node, Node)], [Item])
+    mappingEntries
+      :: CollectionStyle -> [(Node, Node)] -> [Item] -> ([(Node, Node)], [Item])
     mappingEntries style = go [] toEntry
       where
         -- The entries are in reverse, as in 'sequenceItems'.
-        go :: [(Node, Node)] -> [Item] -> [(Node, Node)] -> [Item] -> ([(Node, Node)], [Item])
+        go
+          :: [(Node, Node)]
+          -> [Item]
+          -> [(Node, Node)]
+          -> [Item]
+          -> ([(Node, Node)], [Item])
         go acc _ [] is = let !kvs = reverse acc in (kvs, is)
         go acc kAbove ((k, v) : rest) is =
           let next = nextStart v rest
-              !(k', is') = attachNode e (keyLimit k v) (entryColumn style) (s, lineStart) kAbove k is
+              !(k', is') =
+                attachNode e (keyLimit k v) (entryColumn style) (s, lineStart) kAbove k is
               !(v', is'') = attachNode e next (entryColumn style) (s, lineStart) [] v is'
               !(v'', is''')
                 | style == Block = linesBelow next v' is''
@@ -455,7 +510,10 @@ attachNode e limit minColumn known above n items0 = node `seq` items5 `seq` (nod
         -- lines below it, e.g. in ": &a".
         keyLimit :: Node -> Node -> Int
         keyLimit k v
-          | style == Block = lineEnd (offsetOf v.offset) (entryStart (offsetOf k.endOffset) (offsetOf v.offset))
+          | style == Block =
+              lineEnd
+                (offsetOf v.offset)
+                (entryStart (offsetOf k.endOffset) (offsetOf v.offset))
           | otherwise = offsetOf v.offset
 
     -- The start of the next entry of a block collection, between the end of
@@ -472,7 +530,8 @@ attachNode e limit minColumn known above n items0 = node `seq` items5 `seq` (nod
               w
                 | isBreak w -> go (i + 1) (i + 1)
                 | isWhite w -> go (i + 1) ls
-                | w == HASH && (i == ls || isWhite (A.unsafeIndex e.array (i + e.base - 1))) -> go (lineEnd to i) ls
+                | w == HASH && (i == ls || isWhite (A.unsafeIndex e.array (i + e.base - 1))) ->
+                    go (lineEnd to i) ls
                 | otherwise -> i
 
     -- The end of the line of the second offset, or the first offset if it

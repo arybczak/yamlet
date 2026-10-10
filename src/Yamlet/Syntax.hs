@@ -533,9 +533,16 @@ foldedNode ls = contentNode (ScalarLinesContent Folded t starts)
 --       report (path <> role) n.comments
 --       case n.content of
 --         SequenceContent _ items ->
---           sequence_ [node (path <> "[" <> show i <> "]") "" item | (i, item) <- zip [0 :: Int ..] items]
+--           sequence_
+--             [ node (path <> "[" <> show i <> "]") "" item
+--             | (i, item) <- zip [0 :: Int ..] items
+--             ]
 --         MappingContent _ entries ->
---           sequence_ [node (path <> "." <> name k) " (key)" k >> node (path <> "." <> name k) " (value)" v | (k, v) <- entries]
+--           sequence_
+--             [ node (path <> "." <> name k) " (key)" k
+--                 >> node (path <> "." <> name k) " (value)" v
+--             | (k, v) <- entries
+--             ]
 --         _ -> pure ()
 --     name :: Node -> String
 --     name k = case k.content of

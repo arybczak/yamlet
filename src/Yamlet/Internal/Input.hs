@@ -64,7 +64,9 @@ decodeInput bs = case map (BS.indexMaybe bs) [0 .. 3] of
         go i
           | i + 2 > BS.length input = i
           | isHighSurrogate u =
-              if i + 4 <= BS.length input && isLowSurrogate (unit input (i + 2)) then go (i + 4) else i
+              if i + 4 <= BS.length input && isLowSurrogate (unit input (i + 2))
+                then go (i + 4)
+                else i
           | isLowSurrogate u = i
           | otherwise = go (i + 2)
           where

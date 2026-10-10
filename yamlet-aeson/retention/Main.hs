@@ -75,7 +75,10 @@ retains name doc = Check name $ do
       ref <- newIORef v
       performMajorGC
       kept <- isJust <$> deRefWeak weak
-      failure <- if kept then Just <$> (keptAlive "the value" weak =<< readIORef ref) else pure Nothing
+      failure <-
+        if kept
+          then Just <$> (keptAlive "the value" weak =<< readIORef ref)
+          else pure Nothing
       _ <- evaluate =<< readIORef ref
       pure failure
 
@@ -92,7 +95,10 @@ errorRetains name doc = Check name $ do
       ref <- newIORef errs
       performMajorGC
       kept <- isJust <$> deRefWeak weak
-      failure <- if kept then Just <$> (keptAlive "the errors" weak =<< readIORef ref) else pure Nothing
+      failure <-
+        if kept
+          then Just <$> (keptAlive "the errors" weak =<< readIORef ref)
+          else pure Nothing
       _ <- evaluate =<< readIORef ref
       pure failure
     Right _ -> pure (Just "the decode succeeded")

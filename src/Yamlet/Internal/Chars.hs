@@ -192,7 +192,8 @@ isDecDigit :: Word8 -> Bool
 isDecDigit w = w >= DIGIT_0 && w <= DIGIT_9
 
 isHexDigit' :: Word8 -> Bool
-isHexDigit' w = isDecDigit w || (w >= UPPER_A && w <= UPPER_F) || (w >= LOWER_A && w <= LOWER_F)
+isHexDigit' w =
+  isDecDigit w || (w >= UPPER_A && w <= UPPER_F) || (w >= LOWER_A && w <= LOWER_F)
 
 hexValue :: Word8 -> Int
 hexValue w

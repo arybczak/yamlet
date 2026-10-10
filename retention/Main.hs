@@ -125,7 +125,9 @@ checks =
   , retains @[Figure] "single field record" "- Round:\n    label: a"
   , retains @[Figure] "single field contents" "- Sign: a"
   , errorRetains @(M.Map T.Text T.Text) "error with a key in the path" "k: [1]"
-  , errorRetains @(T.Text, M.Map T.Text T.Text) "error with an alias in the path" "- &a k\n- *a : [1]"
+  , errorRetains @(T.Text, M.Map T.Text T.Text)
+      "error with an alias in the path"
+      "- &a k\n- *a : [1]"
   , errorRetains @Closed "error with a key in the message" "title: a\nhots: 1"
   ]
 
@@ -142,7 +144,10 @@ retains name doc = Check name $ do
       ref <- newIORef v
       performMajorGC
       kept <- isJust <$> deRefWeak weak
-      failure <- if kept then Just <$> (keptAlive "the value" weak =<< readIORef ref) else pure Nothing
+      failure <-
+        if kept
+          then Just <$> (keptAlive "the value" weak =<< readIORef ref)
+          else pure Nothing
       _ <- evaluate =<< readIORef ref
       pure failure
 
@@ -159,7 +164,10 @@ errorRetains name doc = Check name $ do
       ref <- newIORef errs
       performMajorGC
       kept <- isJust <$> deRefWeak weak
-      failure <- if kept then Just <$> (keptAlive "the errors" weak =<< readIORef ref) else pure Nothing
+      failure <-
+        if kept
+          then Just <$> (keptAlive "the errors" weak =<< readIORef ref)
+          else pure Nothing
       _ <- evaluate =<< readIORef ref
       pure failure
     Right _ -> pure (Just "the decode succeeded")
@@ -244,7 +252,8 @@ newtype Keys = Keys [T.Text]
 
 -- The list is lazy, and its unevaluated rest would keep the object.
 instance FromYaml Keys where
-  parseYaml = withMapping $ \o -> let keys = objectKeys o in length keys `seq` pure (Keys keys)
+  parseYaml = withMapping $ \o ->
+    let keys = objectKeys o in length keys `seq` pure (Keys keys)
 
 newtype Choice = Choice Int
 

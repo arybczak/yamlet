@@ -73,7 +73,8 @@ instance NFData Path where
   rnf = rwhnf
 
 instance Show Path where
-  showsPrec d p = showParen (d > 10) $ showString "pathFromElements " . shows (pathElements p)
+  showsPrec d p =
+    showParen (d > 10) $ showString "pathFromElements " . shows (pathElements p)
 
 -- | The steps of a path, from the root.
 pathElements :: Path -> [PathElement]
@@ -218,7 +219,8 @@ prettyError file err
 
     charStart :: Int -> Int
     charStart i
-      | i > lineStart && i < lineEnd && not (isCharStart (A.unsafeIndex arr i)) = charStart (i - 1)
+      | i > lineStart && i < lineEnd && not (isCharStart (A.unsafeIndex arr i)) =
+          charStart (i - 1)
       | otherwise = i
 
     -- Step over at most the given number of characters before or from the
@@ -238,7 +240,10 @@ prettyError file err
           | otherwise = go (charEnd (i + 1)) (k + 1) (n - 1)
 
         charEnd :: Int -> Int
-        charEnd i = if i < lineEnd && not (isCharStart (A.unsafeIndex arr i)) then charEnd (i + 1) else i
+        charEnd i =
+          if i < lineEnd && not (isCharStart (A.unsafeIndex arr i))
+            then charEnd (i + 1)
+            else i
 
     -- A tab before the column keeps the caret aligned in a terminal, and a
     -- combining mark takes no cell. A wide character, e.g. of CJK, takes two
@@ -293,7 +298,10 @@ renderPath path = case pathElements path of
 
     key :: T.Text -> String
     key k
-      | not (T.null k) && T.all plain k && not (T.isPrefixOf "?" k || T.isPrefixOf "*" k) = T.unpack k
+      | not (T.null k)
+          && T.all plain k
+          && not (T.isPrefixOf "?" k || T.isPrefixOf "*" k) =
+          T.unpack k
       | otherwise = showText k
       where
         plain :: Char -> Bool
@@ -321,8 +329,18 @@ nodePaths offs root = map (\off -> M.findWithDefault Root off found) offs
     walk wanted path n acc
       | Set.null inside = here
       | otherwise = case n.content of
-          SequenceContent _ xs -> L.foldl' (\a (i, x) -> walk inside (Child path (Index i)) x a) here (zip [0 ..] xs)
-          MappingContent _ kvs -> L.foldl' (\a (k, v) -> walk inside (Child path (keyElement k)) v (key inside path k a)) here kvs
+          SequenceContent _ xs ->
+            L.foldl'
+              (\a (i, x) -> walk inside (Child path (Index i)) x a)
+              here
+              (zip [0 ..] xs)
+          MappingContent _ kvs ->
+            L.foldl'
+              ( \a (k, v) ->
+                  walk inside (Child path (keyElement k)) v (key inside path k a)
+              )
+              here
+              kvs
           _ -> here
       where
         here :: M.Map Offset Path
@@ -336,7 +354,8 @@ nodePaths offs root = map (\off -> M.findWithDefault Root off found) offs
     -- Every node of a key has the path of the mapping. An index or a key
     -- inside the key would read as a step into the mapping.
     key :: Set.Set Offset -> Path -> Node -> M.Map Offset Path -> M.Map Offset Path
-    key wanted path k acc = Set.foldl' (\a off -> M.insertWith (\_ old -> old) off path a) acc offsets
+    key wanted path k acc =
+      Set.foldl' (\a off -> M.insertWith (\_ old -> old) off path a) acc offsets
       where
         -- A value can start at the end of its key, e.g. the empty value in
         -- "{a}", so the end is not a node of the key, unless the key is empty.
@@ -367,34 +386,41 @@ errorAt input off msg
 -- | An error at the location, with the line that contains it and the index of
 -- the location in the bytes of the line.
 errorOnLine :: Location -> String -> T.Text -> Int -> Error
-errorOnLine loc msg sourceLine index = force $ Error loc msg sourceLine (min (T.lengthWord8 sourceLine) index) Root
+errorOnLine loc msg sourceLine index =
+  force $ Error loc msg sourceLine (min (T.lengthWord8 sourceLine) index) Root
 
 -- | Create errors at the given offsets of a document, with their paths, in the
 -- order of the list. The text is the input of the document, e.g. for the
 -- offsets of t'Located' values.
 documentErrors :: T.Text -> Document -> [(Offset, String)] -> [Error]
 documentErrors input doc errs =
-  zipWith (\err p -> force err {path = p}) (errorsAt input errs) (nodePaths (map fst errs) doc.root)
+  zipWith
+    (\err p -> force err {path = p})
+    (errorsAt input errs)
+    (nodePaths (map fst errs) doc.root)
 
 -- | Create errors at the given offsets of the input, in the order of the
 -- list. One scan of the input locates all of them, and the errors on one
 -- line share the copy of the line.
 errorsAt :: T.Text -> [(Offset, String)] -> [Error]
 errorsAt input errs =
-  map snd . L.sortOn fst $ go (startScan input) Nothing (L.sortOn (fst . snd) (zip [0 :: Int ..] errs))
+  map snd . L.sortOn fst $
+    go (startScan input) Nothing (L.sortOn (fst . snd) (zip [0 :: Int ..] errs))
   where
     -- The line of the previous error, with the copy of its text.
     go :: Scan -> Maybe (Int, T.Text) -> [(Int, (Offset, String))] -> [(Int, Error)]
     go s prev = \case
       [] -> []
       (i, (off, msg)) : rest
-        | off == noOffset -> (i, errorOnLine (locate input off) msg T.empty 0) : go s prev rest
+        | off == noOffset ->
+            (i, errorOnLine (locate input off) msg T.empty 0) : go s prev rest
         | otherwise ->
             let (loc, index, s') = locateFrom input s off
                 sourceLine = case prev of
                   Just (ln, t) | ln == loc.line -> t
                   _ -> T.copy (lineAt input off)
-            in (i, errorOnLine loc msg sourceLine index) : go s' (Just (loc.line, sourceLine)) rest
+            in (i, errorOnLine loc msg sourceLine index)
+                 : go s' (Just (loc.line, sourceLine)) rest
 
 -- | Compute the line and the column of an offset. The byte order marks at the
 -- start of a line are not columns, because they are not content. For
@@ -433,16 +459,20 @@ locateFrom (T.Text arr base len) s0 (Offset off0) = go s0
             -- An offset before the start of the columns is in a byte order
             -- mark.
             then (location ln (if off == ci then col else 1), max 0 (off - ls), s)
-            else let col' = col + countChars ci off in (location ln col', off - ls, Scan i ln ls off col')
+            else
+              let col' = col + countChars ci off
+              in (location ln col', off - ls, Scan i ln ls off col')
       | otherwise = case A.unsafeIndex arr i of
           LF -> newLine (i + 1)
           CR
-            | i + 1 < end && A.unsafeIndex arr (i + 1) == LF -> go (Scan (i + 1) ln ls ci col)
+            | i + 1 < end && A.unsafeIndex arr (i + 1) == LF ->
+                go (Scan (i + 1) ln ls ci col)
             | otherwise -> newLine (i + 1)
           _ -> go (Scan (i + 1) ln ls ci col)
       where
         newLine :: Int -> (Location, Int, Scan)
-        newLine j = let start' = skipBomsIn arr end j in go (Scan j (ln + 1) start' start' 1)
+        newLine j =
+          let start' = skipBomsIn arr end j in go (Scan j (ln + 1) start' start' 1)
 
     location :: Int -> Int -> Location
     location ln col = Location {offset = Offset (off - base), line = ln, column = col}
@@ -464,7 +494,11 @@ lineAt (T.Text arr base len) (Offset off0) = T.Text arr start (stop - start)
     -- An offset between the characters of a CRLF line break is on the line
     -- before the break.
     off
-      | i0 > base && i0 < end && A.unsafeIndex arr i0 == LF && A.unsafeIndex arr (i0 - 1) == CR = i0 - 1
+      | i0 > base
+          && i0 < end
+          && A.unsafeIndex arr i0 == LF
+          && A.unsafeIndex arr (i0 - 1) == CR =
+          i0 - 1
       | otherwise = i0
     start = skipBomsIn arr end (findStart off)
     stop = max start (findStop off)

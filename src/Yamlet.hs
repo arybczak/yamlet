@@ -218,14 +218,26 @@ decodeText input = do
 decodeWithDocument :: FromYaml a => T.Text -> Either (NE.NonEmpty Error) (a, S.Document)
 decodeWithDocument input =
   single (parseStream input) >>= \case
-    [] -> withDocument (S.document (S.Node (S.Offset 0) (S.Offset 0) S.noProps S.noComments (S.ScalarContent S.Plain "")))
+    [] ->
+      withDocument
+        ( S.document
+            ( S.Node
+                (S.Offset 0)
+                (S.Offset 0)
+                S.noProps
+                S.noComments
+                (S.ScalarContent S.Plain "")
+            )
+        )
     [doc] -> withDocument doc
     docs@(_ : doc : _) -> do
       let limit = aliasLimit (map (.root) docs)
           check :: Int -> S.Document -> Either (NE.NonEmpty Error) Int
-          check added d = snd <$> first (decoderErrors input d) (prepareWithin limit added d.root)
+          check added d =
+            snd <$> first (decoderErrors input d) (prepareWithin limit added d.root)
       foldM_ check 0 docs
-      single . Left $ errorAt input doc.root.offset "expected a single document, but got a second one"
+      single . Left $
+        errorAt input doc.root.offset "expected a single document, but got a second one"
   where
     withDocument :: FromYaml a => S.Document -> Either (NE.NonEmpty Error) (a, S.Document)
     withDocument doc = do
@@ -263,7 +275,8 @@ single = first (NE.:| [])
 -- The document has the limit of the aliases to itself. For the documents of
 -- a stream, use 'decodeDocuments', so that they share the limit.
 decodeDocument :: FromYaml a => T.Text -> S.Document -> Either (NE.NonEmpty Error) a
-decodeDocument input doc = firstOfResult $ decodeDocumentWithin (aliasLimit [doc.root]) 0 input doc
+decodeDocument input doc =
+  firstOfResult $ decodeDocumentWithin (aliasLimit [doc.root]) 0 input doc
 
 -- | Decode the documents of a syntax tree as 'decodeDocument' does, e.g. the
 -- documents of a stream from 'Yamlet.Syntax.parseDocumentsText'. The
@@ -283,7 +296,9 @@ decodeDocuments input docs = go 0 docs
         (a :) <$> go added' ds
 
 -- | 'decodeDocument' with the visits of the aliases as for 'prepareWithin'.
-decodeDocumentWithin :: FromYaml a => Int -> Int -> T.Text -> S.Document -> Either (NE.NonEmpty Error) (a, Int)
+decodeDocumentWithin
+  :: FromYaml a
+  => Int -> Int -> T.Text -> S.Document -> Either (NE.NonEmpty Error) (a, Int)
 decodeDocumentWithin limit added input doc =
   first (decoderErrors input doc) (runParserWithin limit added parseYaml root)
   where
@@ -305,13 +320,15 @@ decodeDocumentWithin limit added input doc =
     comments :: S.Comments
     comments =
       S.Comments
-        { S.before = dc.before ++ [S.Comment c | Just c <- [dc.inline]] ++ r.comments.before
+        { S.before =
+            dc.before ++ [S.Comment c | Just c <- [dc.inline]] ++ r.comments.before
         , S.inline = r.comments.inline
         , S.after = r.comments.after ++ dc.after
         }
 
 -- | The errors of the decoder in the document, with their paths.
-decoderErrors :: T.Text -> S.Document -> NE.NonEmpty (S.Offset, String) -> NE.NonEmpty Error
+decoderErrors
+  :: T.Text -> S.Document -> NE.NonEmpty (S.Offset, String) -> NE.NonEmpty Error
 decoderErrors input doc = NE.fromList . documentErrors input doc . NE.toList
 
 -- | Encode a value as a document.

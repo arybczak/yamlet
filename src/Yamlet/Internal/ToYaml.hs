@@ -113,11 +113,19 @@ instance ToYaml a => ToYaml (S.Commented a) where
   toYaml c =
     let v = withLinesAfter c.comments.after (toYaml c.value)
         vc = v.comments
-    in S.withComments vc {S.before = c.comments.before ++ vc.before, S.inline = c.comments.inline <|> vc.inline} v
+    in S.withComments
+         vc
+           { S.before = c.comments.before ++ vc.before
+           , S.inline = c.comments.inline <|> vc.inline
+           }
+         v
   toYamlField k c = (key, withLinesAfter c.comments.after (toYaml c.value))
     where
       key :: S.Node
-      key = S.withComments (S.Comments c.comments.before c.comments.inline k.comments.after) k
+      key =
+        S.withComments
+          (S.Comments c.comments.before c.comments.inline k.comments.after)
+          k
 
 -- | The value alone. The key of an entry goes to the value inside, e.g. for a
 -- 'Yamlet.Commented' value.
@@ -185,17 +193,21 @@ instance ToYaml LocalTime where toYaml = timestamp localTime
 -- | The decoder accepts an offset of less than 24 hours, so a larger offset,
 -- e.g. @+25:00@, does not read back. Neither does a year of more than 15
 -- digits.
-instance ToYaml ZonedTime where toYaml = timestamp (\(ZonedTime t z) -> localTime t <> buildTimeZone z)
+instance ToYaml ZonedTime where
+  toYaml = timestamp (\(ZonedTime t z) -> localTime t <> buildTimeZone z)
 
 -- | The decoder accepts a year of at most 15 digits, so a larger year does
 -- not read back.
-instance ToYaml UTCTime where toYaml = timestamp (\(UTCTime d s) -> localTime (LocalTime d (timeToTimeOfDay s)) <> "Z")
+instance ToYaml UTCTime where
+  toYaml =
+    timestamp (\(UTCTime d s) -> localTime (LocalTime d (timeToTimeOfDay s)) <> "Z")
 
 -- | The time of day without the trailing zeros of the fraction, e.g.
 -- @12:30:15.5@, as in aeson. text-iso8601 writes the fraction in groups of
 -- three digits.
 timeOfDay :: TimeOfDay -> TLB.Builder
-timeOfDay (TimeOfDay h m (MkFixed ps)) = buildTimeOfDay (TimeOfDay h m (MkFixed (ps - frac))) <> fraction
+timeOfDay (TimeOfDay h m (MkFixed ps)) =
+  buildTimeOfDay (TimeOfDay h m (MkFixed (ps - frac))) <> fraction
   where
     frac :: Integer
     frac = ps `rem` (10 ^ picoDecimals)
@@ -203,7 +215,13 @@ timeOfDay (TimeOfDay h m (MkFixed ps)) = buildTimeOfDay (TimeOfDay h m (MkFixed 
     fraction :: TLB.Builder
     fraction
       | frac == 0 = mempty
-      | otherwise = "." <> TLB.fromText (T.dropWhileEnd (== '0') (T.justifyRight picoDecimals '0' (T.pack (show frac))))
+      | otherwise =
+          "."
+            <> TLB.fromText
+              ( T.dropWhileEnd
+                  (== '0')
+                  (T.justifyRight picoDecimals '0' (T.pack (show frac)))
+              )
 
 localTime :: LocalTime -> TLB.Builder
 localTime (LocalTime d t) = buildDay d <> "T" <> timeOfDay t
@@ -418,7 +436,10 @@ instance (ToYaml a1, ToYaml a2, ToYaml a3, ToYaml a4) => ToYaml (a1, a2, a3, a4)
       , toYaml a4
       ]
 
-instance (ToYaml a1, ToYaml a2, ToYaml a3, ToYaml a4, ToYaml a5) => ToYaml (a1, a2, a3, a4, a5) where
+instance
+  (ToYaml a1, ToYaml a2, ToYaml a3, ToYaml a4, ToYaml a5)
+  => ToYaml (a1, a2, a3, a4, a5)
+  where
   toYaml (a1, a2, a3, a4, a5) =
     S.sequenceNode
       [ toYaml a1
@@ -474,7 +495,16 @@ instance
       ]
 
 instance
-  (ToYaml a1, ToYaml a2, ToYaml a3, ToYaml a4, ToYaml a5, ToYaml a6, ToYaml a7, ToYaml a8, ToYaml a9)
+  ( ToYaml a1
+  , ToYaml a2
+  , ToYaml a3
+  , ToYaml a4
+  , ToYaml a5
+  , ToYaml a6
+  , ToYaml a7
+  , ToYaml a8
+  , ToYaml a9
+  )
   => ToYaml (a1, a2, a3, a4, a5, a6, a7, a8, a9)
   where
   toYaml (a1, a2, a3, a4, a5, a6, a7, a8, a9) =
@@ -588,7 +618,15 @@ plainText = \case
             let (int, frac) = T.splitAt integerDigits digits
             in T.concat [sign, T.justifyLeft integerDigits '0' int, ".", orZero frac]
         -- YAML 1.1 reads an exponent without a sign as a string.
-        | otherwise -> T.concat [sign, T.singleton d, ".", orZero rest, if ex < 0 then "e" else "e+", decimal ex]
+        | otherwise ->
+            T.concat
+              [ sign
+              , T.singleton d
+              , "."
+              , orZero rest
+              , if ex < 0 then "e" else "e+"
+              , decimal ex
+              ]
       where
         c :: Integer
         c = Sci.coefficient s

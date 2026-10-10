@@ -120,7 +120,10 @@
 --   deriving stock (Show)
 -- instance FromYaml Servers where
 --   parseYaml = withMapping $ \o ->
---     Servers <$> traverse (\(k, v) -> (,) <$> parseYaml k <*> fmap (\(ViaAeson s) -> s) (parseYaml v)) (objectEntries o)
+--     Servers
+--       <$> traverse
+--         (\(k, v) -> (,) <$> parseYaml k <*> fmap (\(ViaAeson s) -> s) (parseYaml v))
+--         (objectEntries o)
 -- :}
 --
 -- >>> decodeText @Servers "web: {port: 80, host: a}\napi: {port: 81, host: b}\n"
@@ -212,12 +215,14 @@ instance A.FromJSON a => FromYaml (ViaAeson a) where
       failAtPath path msg node = case (path, node.content) of
         ([], _) -> failAt node msg
         (A.Key key : rest, S.MappingContent _ kvs)
-          | Just (_, v) <- L.find (isKey (K.toText key) . fst) kvs -> failAtPath rest msg v
+          | Just (_, v) <- L.find (isKey (K.toText key) . fst) kvs ->
+              failAtPath rest msg v
         (A.Index i : rest, S.SequenceContent _ xs)
           | i >= 0
           , x : _ <- drop i xs ->
               failAtPath rest msg x
-        _ -> failAt node (msg ++ " at " ++ renderPath (pathFromElements (map element path)))
+        _ ->
+          failAt node (msg ++ " at " ++ renderPath (pathFromElements (map element path)))
 
       isKey :: T.Text -> S.Node -> Bool
       isKey key k = case k.content of

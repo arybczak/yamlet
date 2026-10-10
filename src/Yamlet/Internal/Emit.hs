@@ -155,7 +155,8 @@ quotedPlain = quotedPlainLines 0 []
 quotedPlainLines :: Int -> [Int] -> T.Text -> B.Builder
 quotedPlainLines indent starts t
   | T.any (== '\t') t = doubleQuotedLines indent starts t
-  | otherwise = fromMaybe (doubleQuotedLines indent starts t) (singleQuotedLines indent starts t)
+  | otherwise =
+      fromMaybe (doubleQuotedLines indent starts t) (singleQuotedLines indent starts t)
 
 -- | A double-quoted scalar with escapes for the characters that need them.
 doubleQuoted :: T.Text -> B.Builder
@@ -166,7 +167,10 @@ doubleQuoted t = "\"" <> doubleQuotedText t <> "\""
 doubleQuotedLines :: Int -> [Int] -> T.Text -> B.Builder
 doubleQuotedLines indent starts t
   | null starts = doubleQuoted t
-  | otherwise = "\"" <> onLines indent doubleQuotedText (flowLines True True (== ' ') starts t) <> "\""
+  | otherwise =
+      "\""
+        <> onLines indent doubleQuotedText (flowLines True True (== ' ') starts t)
+        <> "\""
 
 -- | The text of a double-quoted scalar, with escapes for the characters that
 -- need them.
@@ -213,7 +217,8 @@ doubleQuotedText = B.Builder . go
 -- The first flag allows an empty first and last line, e.g. for a quoted
 -- scalar. The second flag allows escaped line breaks. The parser drops a
 -- white character at the start or the end of a line.
-flowLines :: Bool -> Bool -> (Char -> Bool) -> [Int] -> T.Text -> (T.Text, [(Maybe Int, T.Text)])
+flowLines
+  :: Bool -> Bool -> (Char -> Bool) -> [Int] -> T.Text -> (T.Text, [(Maybe Int, T.Text)])
 flowLines quoted escapes white starts t = case splitLines starts t of
   first : rest -> go True first rest
   [] -> (t, [])
@@ -262,7 +267,8 @@ flowLines quoted escapes white starts t = case splitLines starts t of
 -- | The flow scalar on its lines, with each line after the first one at the
 -- given indentation.
 onLines :: Int -> (T.Text -> B.Builder) -> (T.Text, [(Maybe Int, T.Text)]) -> B.Builder
-onLines indent text (first, rest) = text first <> mconcat [lineBreak end <> spaces indent <> text l | (end, l) <- rest]
+onLines indent text (first, rest) =
+  text first <> mconcat [lineBreak end <> spaces indent <> text l | (end, l) <- rest]
   where
     lineBreak :: Maybe Int -> B.Builder
     lineBreak = \case
@@ -305,7 +311,9 @@ foldedBlock :: Int -> [Int] -> T.Text -> Maybe (B.Builder, B.Builder)
 foldedBlock indent starts t = do
   (header, body, _) <- blockParts False t
   let (leading, rest) = span T.null (if T.null body then [] else T.splitOn "\n" body)
-      content = mconcat (replicate (length leading) "\n") <> go Nothing (length leading) starts (groups rest)
+      content =
+        mconcat (replicate (length leading) "\n")
+          <> go Nothing (length leading) starts (groups rest)
   Just (">" <> header, content)
   where
     -- The lines with content, each with the number of empty lines before it.
@@ -331,7 +339,8 @@ foldedBlock indent starts t = do
             lineEnd = lineStart + T.length l
             (inLine, ss') = span (< lineEnd) (dropWhile (<= lineStart) ss)
         in separator
-             <> mconcat (map (line indent) (lineParts (map (subtract lineStart) inLine) l))
+             <> mconcat
+               (map (line indent) (lineParts (map (subtract lineStart) inLine) l))
              <> go (Just l) (lineEnd + 1) ss' ls
 
     -- The parts of a line of the text that start at the positions. A line
@@ -434,7 +443,13 @@ tagText tag
     -- a %XX escape, which the parser decodes. So does #, which YAML allows,
     -- but libyaml, PyYAML and go-yaml reject.
     shorthand :: T.Text -> B.Builder
-    shorthand = T.foldr (\x b -> (if x /= '#' && asciiChar isTagChar x then B.fromChar x else percentEscape x) <> b) mempty
+    shorthand =
+      T.foldr
+        ( \x b ->
+            (if x /= '#' && asciiChar isTagChar x then B.fromChar x else percentEscape x)
+              <> b
+        )
+        mempty
 
 -- | The handles for the tags of the node and the nodes in it that are not
 -- valid URIs, each once.
@@ -443,10 +458,11 @@ tagHandles n0 = nubOrd (go n0 [])
   where
     go :: Node -> [Char] -> [Char]
     go n acc =
-      (case n.props.tag of Tag t -> maybe id (:) (tagHandle t); _ -> id) $ case n.content of
-        SequenceContent _ xs -> foldr go acc xs
-        MappingContent _ kvs -> foldr (\(k, v) -> go k . go v) acc kvs
-        _ -> acc
+      (case n.props.tag of Tag t -> maybe id (:) (tagHandle t); _ -> id) $
+        case n.content of
+          SequenceContent _ xs -> foldr go acc xs
+          MappingContent _ kvs -> foldr (\(k, v) -> go k . go v) acc kvs
+          _ -> acc
 
     -- The character whose handle a tag needs, if the tag needs a directive.
     tagHandle :: T.Text -> Maybe Char
@@ -472,18 +488,26 @@ handleText c = "!t" <> B.fromText (T.pack (showHex (ord c) "")) <> "!"
 -- starts an escape, and libyaml, PyYAML and go-yaml reject a #, so a tag with
 -- a % or a # goes in a shorthand tag, with escapes.
 isVerbatim :: T.Text -> Bool
-isVerbatim tag = hasScheme && T.all (\c -> c /= '%' && c /= '#' && asciiChar isUriChar c) tag
+isVerbatim tag =
+  hasScheme && T.all (\c -> c /= '%' && c /= '#' && asciiChar isUriChar c) tag
   where
     hasScheme :: Bool
     hasScheme = case T.break (== ':') tag of
       (scheme, rest) -> case T.uncons scheme of
         Just (c, cs) ->
-          isAscii c && isAlpha c && T.all (\x -> isAscii x && (isAlphaNum x || elem @[] x "+-.")) cs && not (T.null rest)
+          isAscii c
+            && isAlpha c
+            && T.all (\x -> isAscii x && (isAlphaNum x || elem @[] x "+-.")) cs
+            && not (T.null rest)
         Nothing -> False
 
 -- | The %XX escapes of the UTF-8 bytes of a character.
 percentEscape :: Char -> B.Builder
-percentEscape c = mconcat [B.fromText (T.pack ('%' : upperHex percentDigits (fromIntegral w))) | w <- BS.unpack (T.encodeUtf8 (T.singleton c))]
+percentEscape c =
+  mconcat
+    [ B.fromText (T.pack ('%' : upperHex percentDigits (fromIntegral w)))
+    | w <- BS.unpack (T.encodeUtf8 (T.singleton c))
+    ]
 
 -- | The number in uppercase hex digits, with zeros in front up to the given
 -- number of digits.

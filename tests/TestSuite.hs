@@ -36,7 +36,8 @@ testSuiteTests = do
   if not exists
     then
       pure . testCase "yaml-test-suite" $
-        assertFailure "The test suite is missing, run scripts/fetch-test-suite.sh or set YAML_TEST_SUITE"
+        assertFailure
+          "The test suite is missing, run scripts/fetch-test-suite.sh or set YAML_TEST_SUITE"
     else do
       paths <- findCases dir
       pure . testGroup "yaml-test-suite" $
@@ -70,7 +71,12 @@ checkErrorMessages root paths = do
       then pure []
       else do
         let message = case parseDocumentsText input of
-              Left err -> show err.location.line ++ ":" ++ show err.location.column ++ ": " ++ err.message
+              Left err ->
+                show err.location.line
+                  ++ ":"
+                  ++ show err.location.column
+                  ++ ": "
+                  ++ err.message
               Right _ -> "no error"
         pure ["# " ++ makeRelative root path ++ ": " ++ T.unpack name, message]
   accept <- lookupEnv "YAMLET_ACCEPT_ERRORS"
@@ -83,7 +89,10 @@ checkErrorMessages root paths = do
             | ((header, old), (_, new)) <- zip (entries expected) (entries actual)
             , old /= new
             ]
-          preface = "the error messages differ from " ++ file ++ ", set YAMLET_ACCEPT_ERRORS to update it"
+          preface =
+            "the error messages differ from "
+              ++ file
+              ++ ", set YAMLET_ACCEPT_ERRORS to update it"
       when (length (entries expected) /= length (entries actual)) $
         assertFailure (preface ++ ": the number of invalid inputs changed")
       unless (null changes) $ assertFailure (preface ++ ":\n" ++ unlines changes)
@@ -115,7 +124,8 @@ runTest path = do
   case parseDocumentsText input of
     Left err
       | isError -> pure ()
-      | otherwise -> assertFailure $ preface ++ "\nunexpected error: " ++ prettyError "in.yaml" err
+      | otherwise ->
+          assertFailure $ preface ++ "\nunexpected error: " ++ prettyError "in.yaml" err
     Right docs
       | isError ->
           assertFailure $
@@ -123,34 +133,67 @@ runTest path = do
               ++ "\nexpected an error, got:\n"
               ++ unlines (map renderEvent (toEvents docs))
       | otherwise -> do
-          expected <- lines . T.unpack . T.decodeUtf8 <$> BS.readFile (path </> "test.event")
-          assertEqual preface expected (map renderEvent (toEvents docs))
-          forM_ [("rendered", defaultRenderOptions), ("rendered in block style", defaultRenderOptions {forceBlock = True})] $ \(label, options) -> do
+          expected <-
+            lines . T.unpack . T.decodeUtf8 <$> BS.readFile (path </> "test.event")
+          assertEqual
+            preface
+            expected
+            (map renderEvent (toEvents docs))
+          let styles =
+                [ ("rendered", defaultRenderOptions)
+                , ("rendered in block style", defaultRenderOptions {forceBlock = True})
+                ]
+          forM_ styles $ \(label, options) -> do
             let out = renderSyntax options docs
             case parseDocumentsText out of
-              Left err -> assertFailure $ preface ++ "\n" ++ label ++ ":\n" ++ T.unpack out ++ "\nerror: " ++ prettyError "out.yaml" err
+              Left err ->
+                assertFailure $
+                  preface
+                    ++ "\n"
+                    ++ label
+                    ++ ":\n"
+                    ++ T.unpack out
+                    ++ "\nerror: "
+                    ++ prettyError "out.yaml" err
               Right docs' -> do
                 assertEqual
                   (preface ++ "\n" ++ label ++ ":\n" ++ T.unpack out)
                   (rendered (toEvents docs))
                   (rendered (toEvents docs'))
-                assertEqual (preface ++ "\n" ++ label ++ " again") out (renderSyntax options docs')
+                assertEqual
+                  (preface ++ "\n" ++ label ++ " again")
+                  out
+                  (renderSyntax options docs')
           hasJson <- doesFileExist (path </> "in.json")
           case Y.decodeAllText @Y.Value input of
             Left err
               -- The decoder rejects duplicate keys, which the syntax allows.
-              | not hasJson && "duplicate key" `L.isPrefixOf` (NE.head err).message -> pure ()
-              | otherwise -> assertFailure $ preface ++ "\nunexpected error: " ++ prettyError "in.yaml" (NE.head err)
+              | not hasJson && "duplicate key" `L.isPrefixOf` (NE.head err).message ->
+                  pure ()
+              | otherwise ->
+                  assertFailure $
+                    preface
+                      ++ "\nunexpected error: "
+                      ++ prettyError "in.yaml" (NE.head err)
             Right nodes -> do
               when hasJson $ do
                 json <- BS.readFile (path </> "in.json")
                 expectedValues <- case A.parseOnly jsonValues json of
                   Right vs -> pure vs
                   Left err -> assertFailure $ "invalid in.json: " ++ err
-                assertEqual (preface ++ "\nvalues") expectedValues (map toJson nodes)
+                assertEqual
+                  (preface ++ "\nvalues")
+                  expectedValues
+                  (map toJson nodes)
               let encoded = Y.encodeAllText nodes
               case Y.decodeAllText @Y.Value encoded of
-                Left err -> assertFailure $ preface ++ "\nencoded:\n" ++ T.unpack encoded ++ "\nerror: " ++ prettyError "out.yaml" (NE.head err)
+                Left err ->
+                  assertFailure $
+                    preface
+                      ++ "\nencoded:\n"
+                      ++ T.unpack encoded
+                      ++ "\nerror: "
+                      ++ prettyError "out.yaml" (NE.head err)
                 Right nodes' ->
                   assertEqual
                     (preface ++ "\nencoded:\n" ++ T.unpack encoded)
@@ -164,7 +207,8 @@ runTest path = do
     -- document after the first one.
     rendered :: [Event] -> [Event]
     rendered = \case
-      DocumentEnd explicit : DocumentStart _ : rest -> DocumentEnd explicit : DocumentStart True : rendered rest
+      DocumentEnd explicit : DocumentStart _ : rest ->
+        DocumentEnd explicit : DocumentStart True : rendered rest
       e : rest -> withoutStyle e : rendered rest
       [] -> []
 

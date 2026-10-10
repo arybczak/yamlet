@@ -32,7 +32,8 @@ errorPlace err = (err.location.line, err.location.column, err.message)
 errorOf :: Either (NE.NonEmpty Error) a -> Maybe (Int, Int, String)
 errorOf = \case
   Left (err NE.:| []) -> Just (errorPlace err)
-  Left errs -> error $ "expected one error, but got " ++ show (map (.message) (NE.toList errs))
+  Left errs ->
+    error $ "expected one error, but got " ++ show (map (.message) (NE.toList errs))
   Right _ -> Nothing
 
 -- | The line, the column and the message of each error.
@@ -43,7 +44,11 @@ errorsOf = \case
 
 -- | Encoding a value and decoding the result gives the same value.
 roundTrip :: (Eq a, Show a, ToYaml a, FromYaml a) => String -> a -> Assertion
-roundTrip preface x = assertEqual preface (Right x) (decodeText (encodeText x))
+roundTrip preface x =
+  assertEqual
+    preface
+    (Right x)
+    (decodeText (encodeText x))
 
 -- | A resolution of 1/40, which needs three places after the point.
 data Fortieths

@@ -55,17 +55,24 @@ parseStream input@(T.Text arr off len) = case prescan of
   Left i -> Left $ invalidCharacter i
   Right (markers, restricted) -> case runParser e start (lYamlStream markers) of
     Left (ParseError i msg) -> Left $ parseError restricted i msg
-    Left (UnexpectedParseError de i) -> Left $ uncurry (parseError restricted) (furthestError markers de i)
+    Left (UnexpectedParseError de i) ->
+      Left $ uncurry (parseError restricted) (furthestError markers de i)
     Right (Just docs, _, _) ->
       let ranges = scalarRanges docs
       in case filter (not . allowed ranges) restricted of
-           BomRestricted i _ : _ -> Left $ errorAt input (toOffset e i) "unexpected byte order mark"
+           BomRestricted i _ : _ ->
+             Left $ errorAt input (toOffset e i) "unexpected byte order mark"
            QuotedRestricted i : _ -> Left $ invalidCharacter i
            [] -> Right docs
-    Right (Nothing, _, fu) -> Left $ uncurry (parseError restricted) (furthestError markers e fu)
+    Right (Nothing, _, fu) ->
+      Left $ uncurry (parseError restricted) (furthestError markers e fu)
   where
     invalidCharacter :: Int -> Error
-    invalidCharacter i = errorAt input (toOffset e i) ("invalid character " ++ codePointName (T.head (slice e i e.end)))
+    invalidCharacter i =
+      errorAt
+        input
+        (toOffset e i)
+        ("invalid character " ++ codePointName (T.head (slice e i e.end)))
 
     -- The error for the furthest failure, with the environment of its
     -- document. A tab before the failure on its line is the likely cause,
@@ -77,7 +84,11 @@ parseStream input@(T.Text arr off len) = case prescan of
       (Just tab, _) | tabCause -> (tab, tabMessage)
       (_, other)
         | Just tab <- tabAbove
-        , parsesPast (lineEndAt e i) blankStart (withSpaces (T.Text arr blankStart (s - blankStart))) s ->
+        , parsesPast
+            (lineEndAt e i)
+            blankStart
+            (withSpaces (T.Text arr blankStart (s - blankStart)))
+            s ->
             (tab, tabMessage)
         | otherwise -> other
       where
@@ -116,18 +127,30 @@ parseStream input@(T.Text arr off len) = case prescan of
         -- The parser gets past the first index with the text in place of the
         -- input from the second index to the third.
         parsesPast :: Int -> Int -> T.Text -> Int -> Bool
-        parsesPast target from replacement upto = case runParser spaced (moved start) (lYamlStream (map moved markers)) of
-          Left (ParseError j _) -> j > moved target
-          Left (UnexpectedParseError _ j) -> j > moved target
-          Right (Nothing, _, j) -> j > moved target
-          Right (Just _, _, _) -> True
+        parsesPast target from replacement upto =
+          case runParser spaced (moved start) (lYamlStream (map moved markers)) of
+            Left (ParseError j _) -> j > moved target
+            Left (UnexpectedParseError _ j) -> j > moved target
+            Right (Nothing, _, j) -> j > moved target
+            Right (Just _, _, _) -> True
           where
             T.Text _ _ replacementLen = replacement
             T.Text spacedArr spacedOff spacedLen =
-              T.copy $ T.concat [T.Text arr off (from - off), replacement, T.Text arr upto (off + len - upto)]
+              T.copy $
+                T.concat
+                  [ T.Text arr off (from - off)
+                  , replacement
+                  , T.Text arr upto (off + len - upto)
+                  ]
 
             spaced :: Env
-            spaced = e {array = spacedArr, base = spacedOff, end = spacedOff + spacedLen, streamEnd = spacedOff + spacedLen}
+            spaced =
+              e
+                { array = spacedArr
+                , base = spacedOff
+                , end = spacedOff + spacedLen
+                , streamEnd = spacedOff + spacedLen
+                }
 
             -- The index in the input with the replacement.
             moved :: Int -> Int
@@ -141,7 +164,8 @@ parseStream input@(T.Text arr off len) = case prescan of
     -- content shows that the mark is in a quoted scalar.
     parseError :: [Restricted] -> Int -> String -> Error
     parseError restricted i msg
-      | any (\case QuotedRestricted j -> j == i; _ -> False) restricted = invalidCharacter i
+      | any (\case QuotedRestricted j -> j == i; _ -> False) restricted =
+          invalidCharacter i
       | let s = lineStartAt e i
       , bomBeforeContent e s
       , i <= skipWhites e (skipBoms e s)
@@ -175,7 +199,9 @@ parseStream input@(T.Text arr off len) = case prescan of
       where
         ranges :: Node -> [(Offset, (Offset, Bool))] -> [(Offset, (Offset, Bool))]
         ranges n acc = case n.content of
-          ScalarContent style _ -> (n.offset, (n.endOffset, style == SingleQuoted || style == DoubleQuoted)) : acc
+          ScalarContent style _ ->
+            (n.offset, (n.endOffset, style == SingleQuoted || style == DoubleQuoted))
+              : acc
           SequenceContent _ xs -> foldr ranges acc xs
           MappingContent _ kvs -> foldr (\(k, v) -> ranges k . ranges v) acc kvs
           AliasContent _ -> acc
@@ -229,7 +255,11 @@ parseStream input@(T.Text arr off len) = case prescan of
                        go (i + 1) ls acc (QuotedRestricted i : rs)
                    | w == 0xEF && isBom e i ->
                        let next = i + bomLength
-                       in go next (if i == ls then next else ls) acc (BomRestricted i (i == ls) : rs)
+                       in go
+                            next
+                            (if i == ls then next else ls)
+                            acc
+                            (BomRestricted i (i == ls) : rs)
                    | otherwise -> go (i + 1) ls acc rs
 
 -- | The index after the byte order mark at the start of the input.
@@ -624,7 +654,8 @@ directives = go Nothing defaultHandles Set.empty
     tagDirective :: P (T.Text, T.Text)
     tagDirective = do
       e <- env
-      separator "expected a tag handle and a prefix after %TAG, e.g. %TAG !e! tag:example.com,2000:"
+      separator
+        "expected a tag handle and a prefix after %TAG, e.g. %TAG !e! tag:example.com,2000:"
       h <- pos
       handle <- cTagHandle <|> throwAt h "invalid tag handle"
       w <- peek
@@ -680,7 +711,8 @@ percentEscapeLength :: Int
 percentEscapeLength = 1 + percentDigits
 
 isPercentEscape :: Env -> Int -> Bool
-isPercentEscape e i = byteAt e i == PERCENT && all (isHexDigit' . byteAt e) [i + 1 .. i + percentDigits]
+isPercentEscape e i =
+  byteAt e i == PERCENT && all (isHexDigit' . byteAt e) [i + 1 .. i + percentDigits]
 
 -- | Stop with an error if a @%@ without two hexadecimal digits after it is at
 -- the index, after the valid characters of a tag.
@@ -760,7 +792,8 @@ cNsTagProperty = do
       r <- pos
       w <- peek
       let t = slice e q r
-      when (w /= GREATER || not (isLocal t || isGlobal t)) $ throwAt p "invalid verbatim tag"
+      when (w /= GREATER || not (isLocal t || isGlobal t)) $
+        throwAt p "invalid verbatim tag"
       advance 1
       case percentDecode t of
         Just decoded -> pure (Tag decoded)
@@ -808,7 +841,9 @@ cNsTagProperty = do
             let limit = max minExpansion (e.streamEnd - e.base)
             when (added > limit)
               $ throwAt p
-              $ "the prefixes of %TAG directives add more than " ++ show limit ++ " bytes to the tags"
+              $ "the prefixes of %TAG directives add more than "
+                ++ show limit
+                ++ " bytes to the tags"
           case percentDecode (prefix <> slice e q r) of
             Just t -> pure (Tag t)
             Nothing -> throwAt p "the escapes of the tag are not valid UTF-8"
@@ -825,7 +860,8 @@ cNsTagProperty = do
     -- UTF-8.
     percentDecode :: T.Text -> Maybe T.Text
     percentDecode t
-      | T.any (== '%') t = either (const Nothing) Just . T.decodeUtf8' . BS.pack $ go (T.unpack t)
+      | T.any (== '%') t =
+          either (const Nothing) Just . T.decodeUtf8' . BS.pack $ go (T.unpack t)
       | otherwise = Just t
       where
         go :: String -> [Word8]
@@ -898,7 +934,8 @@ cQuoted style n c props = withScan $ \e p ->
           fold contentEnd brk acc'
             | isKeyCtx c = NoMatch brk
             | otherwise = case flowFold e n (breakEnd e brk) of
-                Just (k, j) -> go j j [] (newLine (foldText k : slice e seg contentEnd : acc') ls)
+                Just (k, j) ->
+                  go j j [] (newLine (foldText k : slice e seg contentEnd : acc') ls)
                 Nothing -> badIndent brk
 
       backslash :: Int -> Int -> [T.Text] -> Lines -> Scanned Content
@@ -907,7 +944,8 @@ cQuoted style n c props = withScan $ \e p ->
             if isKeyCtx c
               then NoMatch i
               else case flowFold e n (breakEnd e (i + 1)) of
-                Just (k, j) -> go j j [] (newLine (T.replicate k "\n" : slice e seg i : acc) ls)
+                Just (k, j) ->
+                  go j j [] (newLine (T.replicate k "\n" : slice e seg i : acc) ls)
                 Nothing -> badIndent (i + 1)
         | i + 1 >= e.end = endOfDocument i
         | otherwise = case escape e (i + 1) of
@@ -932,13 +970,15 @@ cQuoted style n c props = withScan $ \e p ->
         | elem @[] (chr (fromIntegral (byteAt e (i + 1)))) "xuU"
         , isHexDigit (chr (fromIntegral (byteAt e (i + 2)))) =
             "invalid escape sequence"
-        | otherwise = "invalid escape sequence, write \\\\ for a backslash or use single quotes"
+        | otherwise =
+            "invalid escape sequence, write \\\\ for a backslash or use single quotes"
 
       badIndent :: Int -> Scanned Content
       badIndent i
         | nextContent i >= e.end = endOfDocument i
         | not (hasClosingQuote (nextContent i)) = unterminated
-        | Just tab <- firstTab e (foldStop i) (skipWhites e (foldStop i)) = Failed tab tabMessage
+        | Just tab <- firstTab e (foldStop i) (skipWhites e (foldStop i)) =
+            Failed tab tabMessage
         | otherwise =
             Failed
               (nextContent i)
@@ -989,7 +1029,8 @@ cQuoted style n c props = withScan $ \e p ->
       -- The scalar from the pieces of its last line, and the pieces and the
       -- starts of the lines before it, all in reverse order.
       severalLines :: [T.Text] -> [T.Text] -> [Int] -> Content
-      severalLines acc ps starts = ScalarLinesContent style (finish (acc ++ ps)) (reverse starts)
+      severalLines acc ps starts =
+        ScalarLinesContent style (finish (acc ++ ps)) (reverse starts)
 
       finish :: [T.Text] -> T.Text
       finish = \case
@@ -1147,12 +1188,14 @@ nsPlain n c props = withScan $ \e p ->
        else
          let q = plainLine e c (p + 1)
              first = slice e p q
-             node end t ls = mkNode e p (toOffset e end) props (ScalarLinesContent Plain t ls)
+             node end t ls =
+               mkNode e p (toOffset e end) props (ScalarLinesContent Plain t ls)
          in if isKeyCtx c
               then Done q (node q first [])
               else case plainNextLines e n c q of
                 ([], _) -> Done q (node q first [])
-                (ts, r) -> Done r (node r (T.concat (first : ts)) (lineStarts (T.length first) ts))
+                (ts, r) ->
+                  Done r (node r (T.concat (first : ts)) (lineStarts (T.length first) ts))
 
 -- | The end of the plain scalar content on the current line.
 plainLine :: Env -> Ctx -> Int -> Int
@@ -1283,16 +1326,25 @@ closing c start w kind entries msg = do
       | c == FlowKey -> failure
       | atLineEnd e p -> case nextContent e p of
           Just (lineStart, q)
-            | bomBeforeContent e lineStart -> throwAt lineStart "unexpected byte order mark"
+            | bomBeforeContent e lineStart ->
+                throwAt lineStart "unexpected byte order mark"
             | Just tab <- firstTab e lineStart q -> throwAt tab tabMessage
             | byteAt e q == w ->
-                throwAt q ("'" ++ [chr (fromIntegral w)] ++ "' is indented too little to end the " ++ kind)
+                throwAt
+                  q
+                  ( "'"
+                      ++ [chr (fromIntegral w)]
+                      ++ "' is indented too little to end the "
+                      ++ kind
+                  )
             | closedLater e q ->
                 throwAt q ("the line is indented too little to continue the " ++ kind)
           Nothing | Just m <- cutByMarker e w -> throwAt m (markerInside e kind)
           _ -> throwAt start ("unterminated " ++ kind)
       | dash e p ->
-          throwAt p "unexpected '-', a list item cannot be inside a flow collection, quote '-' if it is a string"
+          throwAt
+            p
+            "unexpected '-', a list item cannot be inside a flow collection, quote '-' if it is a string"
       | byteAt e p == COLON
       , Node {offset = Offset o} : _ <- reverse entries
       , not (fitsKey e (o + e.base) p) ->
@@ -1584,7 +1636,10 @@ cLBlockScalar n props = do
               w = byteAt e s
           in if
                | isBreak w || (s >= e.end && k > 0) ->
-                   go (max maxEmpty k) (if k > maxEmpty then Just s else maxAt) (breakEnd e s)
+                   go
+                     (max maxEmpty k)
+                     (if k > maxEmpty then Just s else maxAt)
+                     (breakEnd e s)
                | s >= e.end || k <= n -> Right (max (n + 1) (max maxEmpty 1))
                | maxEmpty > k, Just j <- maxAt -> Left j
                | otherwise -> Right k
@@ -1746,7 +1801,9 @@ sLBlockIndented n c = compact <|> sLBlockNode n c <|> (eNode <* sLComments)
       advance m
       p <- pos
       if mayStartEntry e p
-        then nsLCompactSequence (n + 1 + m) noProps <|> nsLCompactMapping (n + 1 + m) noProps
+        then
+          nsLCompactSequence (n + 1 + m) noProps
+            <|> nsLCompactMapping (n + 1 + m) noProps
         else nsLCompactSequence (n + 1 + m) noProps
 
     -- An entry of a mapping has an explicit key or a colon on its first line.

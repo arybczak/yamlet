@@ -427,7 +427,9 @@ instance Show Line where
   showsPrec d = \case
     EmptyLine -> showString "EmptyLine"
     CommentLine 1 t -> showParen (d > 10) $ showString "Comment " . showsPrec 11 t
-    CommentLine n t -> showParen (d > 10) $ showString "CommentLine " . showsPrec 11 n . showChar ' ' . showsPrec 11 t
+    CommentLine n t ->
+      showParen (d > 10) $
+        showString "CommentLine " . showsPrec 11 n . showChar ' ' . showsPrec 11 t
 
 instance NFData Line where
   rnf = rwhnf
@@ -476,14 +478,22 @@ copyNode n =
     , content = case n.content of
         ScalarLinesContent style t ls -> ScalarLinesContent style (T.copy t) ls
         SequenceContent style xs -> SequenceContent style (strictMap copyNode xs)
-        MappingContent style kvs -> MappingContent style (strictMap (\(k, v) -> strictPair (copyNode k) (copyNode v)) kvs)
+        MappingContent style kvs ->
+          MappingContent
+            style
+            (strictMap (\(k, v) -> strictPair (copyNode k) (copyNode v)) kvs)
         AliasContent name -> AliasContent (T.copy name)
     }
 
 copyComments :: Comments -> Comments
 copyComments c = case c of
   Comments [] Nothing [] -> c
-  _ -> Comments {before = strictMap copyLine c.before, inline = copyMaybe c.inline, after = strictMap copyLine c.after}
+  _ ->
+    Comments
+      { before = strictMap copyLine c.before
+      , inline = copyMaybe c.inline
+      , after = strictMap copyLine c.after
+      }
   where
     copyLine :: Line -> Line
     copyLine = \case

@@ -36,7 +36,8 @@ main = do
     ]
   where
     printSize :: String -> BS.ByteString -> IO ()
-    printSize name bs = putStrLn $ name ++ ": " ++ show (BS.length bs `div` 1024) ++ " KiB"
+    printSize name bs =
+      putStrLn $ name ++ ": " ++ show (BS.length bs `div` 1024) ++ " KiB"
 
     -- The inputs of the benchmarks that do not decode to a type.
     inputs :: [(String, BS.ByteString)]

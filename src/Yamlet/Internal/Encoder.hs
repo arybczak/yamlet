@@ -32,7 +32,11 @@ renderDocuments docs
     document :: Int -> S.Node -> B.Builder
     document i n
       | null handles = (if i > 0 then "---\n" else mempty) <> topLevel n
-      | otherwise = (if i > 0 then "...\n" else mempty) <> foldMap tagDirective handles <> "---\n" <> topLevel n
+      | otherwise =
+          (if i > 0 then "...\n" else mempty)
+            <> foldMap tagDirective handles
+            <> "---\n"
+            <> topLevel n
       where
         handles :: [Char]
         handles = tagHandles n
@@ -41,7 +45,8 @@ renderDocuments docs
     topLevel n = case n.content of
       S.SequenceContent _ xs@(_ : _) -> tagLine n <> blockSequence 0 True xs
       S.MappingContent _ kvs@(_ : _) -> tagLine n <> blockMapping 0 True kvs
-      S.ScalarContent S.Literal t | needsIndentIndicator t -> withTag n (doubleQuoted t) <> "\n"
+      S.ScalarContent S.Literal t
+        | needsIndentIndicator t -> withTag n (doubleQuoted t) <> "\n"
       _ -> inlineValue indentStep n <> "\n"
 
     -- A tag of a block collection takes a line of its own.
@@ -69,7 +74,8 @@ simple n =
       S.ScalarContent S.Literal _ -> True
       S.ScalarContent _ _ -> False
       S.SequenceContent style xs -> (style == S.Block || null xs) && all simple xs
-      S.MappingContent style kvs -> (style == S.Block || null kvs) && all (\(k, v) -> simple k && simple v) kvs
+      S.MappingContent style kvs ->
+        (style == S.Block || null kvs) && all (\(k, v) -> simple k && simple v) kvs
       S.AliasContent _ -> False
 
 -- | A block sequence of the items of a 'simple' node. The first entry does
@@ -78,15 +84,20 @@ blockSequence :: Int -> Bool -> [S.Node] -> B.Builder
 blockSequence indent atLineStart = mconcat . zipWith entry [0 :: Int ..]
   where
     entry :: Int -> S.Node -> B.Builder
-    entry i x = (if i > 0 || atLineStart then spaces indent else mempty) <> "-" <> afterIndicator indent x
+    entry i x =
+      (if i > 0 || atLineStart then spaces indent else mempty)
+        <> "-"
+        <> afterIndicator indent x
 
 -- | A node after the indicator of a sequence item or an explicit entry at the
 -- given indentation, with the line break. A block collection starts on the
 -- line of the indicator, unless it has a tag.
 afterIndicator :: Int -> S.Node -> B.Builder
 afterIndicator indent x = case x.content of
-  S.SequenceContent _ xs@(_ : _) -> collection $ blockSequence (indent + indentStep) False xs
-  S.MappingContent _ kvs@(_ : _) -> collection $ blockMapping (indent + indentStep) False kvs
+  S.SequenceContent _ xs@(_ : _) ->
+    collection $ blockSequence (indent + indentStep) False xs
+  S.MappingContent _ kvs@(_ : _) ->
+    collection $ blockMapping (indent + indentStep) False kvs
   _ -> " " <> inlineValue (indent + indentStep) x <> "\n"
   where
     collection :: B.Builder -> B.Builder
@@ -103,12 +114,18 @@ blockMapping indent atLineStart = mconcat . zipWith entry [0 :: Int ..]
     entry i (k, v) =
       (if i > 0 || atLineStart then spaces indent else mempty) <> case implicitKey k of
         Just key -> key <> ":" <> value v
-        Nothing -> "?" <> afterIndicator indent k <> spaces indent <> ":" <> afterIndicator indent v
+        Nothing ->
+          "?"
+            <> afterIndicator indent k
+            <> spaces indent
+            <> ":"
+            <> afterIndicator indent v
 
     value :: S.Node -> B.Builder
     value v = case v.content of
       S.SequenceContent _ xs@(_ : _) -> tagged v <> "\n" <> blockSequence indent True xs
-      S.MappingContent _ kvs@(_ : _) -> tagged v <> "\n" <> blockMapping (indent + indentStep) True kvs
+      S.MappingContent _ kvs@(_ : _) ->
+        tagged v <> "\n" <> blockMapping (indent + indentStep) True kvs
       _ -> " " <> inlineValue (indent + indentStep) v <> "\n"
 
     tagged :: S.Node -> B.Builder
@@ -131,7 +148,8 @@ blockMapping indent atLineStart = mconcat . zipWith entry [0 :: Int ..]
       _ -> Nothing
       where
         fits :: B.Builder -> Maybe B.Builder
-        fits key = if T.length (B.runBuilder key) > maxImplicitKeyLength then Nothing else Just key
+        fits key =
+          if T.length (B.runBuilder key) > maxImplicitKeyLength then Nothing else Just key
 
 -- | A scalar, or an empty collection in the flow style.
 inlineValue :: Int -> S.Node -> B.Builder

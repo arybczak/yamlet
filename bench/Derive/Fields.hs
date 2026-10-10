@@ -9,7 +9,18 @@ import Data.Text qualified as T
 -- | The fields of a record of the benchmarks for the number, given to its
 -- constructor. The records have the same field types.
 fields
-  :: (T.Text -> Maybe Int -> Int -> T.Text -> Maybe Int -> Int -> T.Text -> Maybe Int -> Int -> T.Text -> r)
+  :: ( T.Text
+       -> Maybe Int
+       -> Int
+       -> T.Text
+       -> Maybe Int
+       -> Int
+       -> T.Text
+       -> Maybe Int
+       -> Int
+       -> T.Text
+       -> r
+     )
   -> Int
   -> r
 fields con i =

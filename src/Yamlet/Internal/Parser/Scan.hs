@@ -133,7 +133,9 @@ bomBeforeContent e i =
 fitsKey :: Env -> Int -> Int -> Bool
 fitsKey e p q =
   q - p <= maxImplicitKeyLength
-    || (q - p <= maxImplicitKeyLength * maxCharBytes && countChars <= maxImplicitKeyLength)
+    || ( q - p <= maxImplicitKeyLength * maxCharBytes
+           && countChars <= maxImplicitKeyLength
+       )
   where
     -- The longest UTF-8 encoding of a character.
     maxCharBytes :: Int

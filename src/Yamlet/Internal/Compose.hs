@@ -46,7 +46,8 @@ prepareWithin limit added root
     needsNumbering n = case n.content of
       S.ScalarContent {} -> False
       S.SequenceContent _ xs -> any needsNumbering xs
-      S.MappingContent _ kvs -> any (\(k, v) -> isCollection k || needsNumbering k || needsNumbering v) kvs
+      S.MappingContent _ kvs ->
+        any (\(k, v) -> isCollection k || needsNumbering k || needsNumbering v) kvs
       S.AliasContent {} -> True
       where
         isCollection :: S.Node -> Bool
@@ -109,8 +110,14 @@ numberWithin limit added root = do
                | st.added + visits > limit ->
                    Left
                      $ failure off
-                     $ "the aliases add more than " ++ show limit ++ " nodes and characters"
-               | otherwise -> Right ((v, i), st {visits = st.visits + visits, added = st.added + visits})
+                     $ "the aliases add more than "
+                       ++ show limit
+                       ++ " nodes and characters"
+               | otherwise ->
+                   Right
+                     ( (v, i)
+                     , st {visits = st.visits + visits, added = st.added + visits}
+                     )
              Just Nothing ->
                Left
                  $ failure off
@@ -128,13 +135,21 @@ numberWithin limit added root = do
              (vs, st') <- goList (open props st) xs
              let v = withTag tag (Sequence (map fst vs))
              let own = ownVisits sn
-             Right $ number props v (SequenceShape tag (map snd vs)) own (st'.visits - st.visits + own) st'
+             Right $
+               number
+                 props
+                 v
+                 (SequenceShape tag (map snd vs))
+                 own
+                 (st'.visits - st.visits + own)
+                 st'
            S.MappingContent _ kvs -> do
              tag <- collectionTag off props mapTag
              (entries, st') <- goPairs (open props st) kvs
              checkUniqueNumbers entries
              let v = withTag tag (Mapping [(k, x) | (_, (k, _), (x, _)) <- entries])
-                 shape = MappingShape tag (L.sort [(i, j) | (_, (_, i), (_, j)) <- entries])
+                 shape =
+                   MappingShape tag (L.sort [(i, j) | (_, (_, i), (_, j)) <- entries])
                  own = ownVisits sn
              Right $ number props v shape own (st'.visits - st.visits + own) st'
 
@@ -143,7 +158,11 @@ numberWithin limit added root = do
     goList :: Numbering -> [S.Node] -> Either Failure ([(Value, Int)], Numbering)
     goList = loop []
       where
-        loop :: [(Value, Int)] -> Numbering -> [S.Node] -> Either Failure ([(Value, Int)], Numbering)
+        loop
+          :: [(Value, Int)]
+          -> Numbering
+          -> [S.Node]
+          -> Either Failure ([(Value, Int)], Numbering)
         loop acc st = \case
           [] -> Right (reverse acc, st)
           x : xs -> case go st x of
@@ -181,8 +200,10 @@ numberWithin limit added root = do
     -- node and of everything inside it. The copy at an alias has no anchor,
     -- so its visits leave out the anchor. A node inside with the same anchor
     -- comes later in the document, so its definition stays.
-    number :: S.Props -> Value -> Shape -> Int -> Int -> Numbering -> ((Value, Int), Numbering)
-    number props v shape own visits st = ((v, i), st {anchors = anchors', shapes = shapes', visits = st.visits + own})
+    number
+      :: S.Props -> Value -> Shape -> Int -> Int -> Numbering -> ((Value, Int), Numbering)
+    number props v shape own visits st =
+      ((v, i), st {anchors = anchors', shapes = shapes', visits = st.visits + own})
       where
         i :: Int
         shapes' :: M.Map Shape Int
@@ -192,14 +213,19 @@ numberWithin limit added root = do
 
         anchors' :: M.Map T.Text (Maybe (Value, Int, Int))
         anchors' = case props.anchor of
-          Just a | Just Nothing <- M.lookup a st.anchors -> M.insert a (Just (v, i, visits - T.length a)) st.anchors
+          Just a
+            | Just Nothing <- M.lookup a st.anchors ->
+                M.insert a (Just (v, i, visits - T.length a)) st.anchors
           _ -> st.anchors
 
     -- Unlike in 'duplicate', comparing all pairs is not faster for few keys.
     checkUniqueNumbers :: [(S.Node, (Value, Int), (Value, Int))] -> Either Failure ()
     checkUniqueNumbers = loop IM.empty
       where
-        loop :: IM.IntMap (S.Node, Value) -> [(S.Node, (Value, Int), (Value, Int))] -> Either Failure ()
+        loop
+          :: IM.IntMap (S.Node, Value)
+          -> [(S.Node, (Value, Int), (Value, Int))]
+          -> Either Failure ()
         loop seen = \case
           [] -> Right ()
           (kn, (k, i), _) : rest -> case IM.lookup i seen of
@@ -292,14 +318,20 @@ check sn =
         maxPairwise :: Int
         maxPairwise = 16
 
-        viaMap :: M.Map Value S.Node -> [(S.Node, Value)] -> Maybe ((S.Node, Value), (S.Node, Value))
+        viaMap
+          :: M.Map Value S.Node
+          -> [(S.Node, Value)]
+          -> Maybe ((S.Node, Value), (S.Node, Value))
         viaMap seen = \case
           [] -> Nothing
           k@(n, v) : ks -> case M.lookup v seen of
             Just first -> Just (k, (first, v))
             Nothing -> viaMap (M.insert v n seen) ks
 
-        pairwise :: [(S.Node, Value)] -> [(S.Node, Value)] -> Maybe ((S.Node, Value), (S.Node, Value))
+        pairwise
+          :: [(S.Node, Value)]
+          -> [(S.Node, Value)]
+          -> Maybe ((S.Node, Value), (S.Node, Value))
         pairwise seen = \case
           [] -> Nothing
           k@(_, v) : ks -> case L.find ((== v) . snd) seen of
@@ -316,10 +348,21 @@ check sn =
 expandAliases :: S.Node -> S.Node
 expandAliases = fst . go M.empty
   where
-    go :: M.Map T.Text (S.Tag, S.Content) -> S.Node -> (S.Node, M.Map T.Text (S.Tag, S.Content))
+    go
+      :: M.Map T.Text (S.Tag, S.Content)
+      -> S.Node
+      -> (S.Node, M.Map T.Text (S.Tag, S.Content))
     go anchors sn = case sn.content of
       S.AliasContent name -> case M.lookup name anchors of
-        Just (tag, content) -> (S.Node sn.offset sn.endOffset (S.Props Nothing tag) sn.comments (copyAt sn content), anchors)
+        Just (tag, content) ->
+          ( S.Node
+              sn.offset
+              sn.endOffset
+              (S.Props Nothing tag)
+              sn.comments
+              (copyAt sn content)
+          , anchors
+          )
         Nothing -> (sn, anchors)
       S.ScalarContent {} -> define sn anchors
       S.SequenceContent style xs ->
@@ -338,12 +381,18 @@ expandAliases = fst . go M.empty
         open :: M.Map T.Text (S.Tag, S.Content) -> M.Map T.Text (S.Tag, S.Content)
         open = maybe id M.delete sn.props.anchor
 
-        close :: S.Node -> M.Map T.Text (S.Tag, S.Content) -> (S.Node, M.Map T.Text (S.Tag, S.Content))
+        close
+          :: S.Node
+          -> M.Map T.Text (S.Tag, S.Content)
+          -> (S.Node, M.Map T.Text (S.Tag, S.Content))
         close n anchors' = case sn.props.anchor of
           Just a | M.member a anchors' -> (n, anchors')
           _ -> define n anchors'
 
-    define :: S.Node -> M.Map T.Text (S.Tag, S.Content) -> (S.Node, M.Map T.Text (S.Tag, S.Content))
+    define
+      :: S.Node
+      -> M.Map T.Text (S.Tag, S.Content)
+      -> (S.Node, M.Map T.Text (S.Tag, S.Content))
     define sn anchors = case sn.props.anchor of
       Just a -> (sn, M.insert a (sn.props.tag, sn.content) anchors)
       Nothing -> (sn, anchors)
@@ -352,13 +401,23 @@ expandAliases = fst . go M.empty
     copyAt :: S.Node -> S.Content -> S.Content
     copyAt alias = \case
       S.SequenceContent style xs -> S.SequenceContent style (map node xs)
-      S.MappingContent style kvs -> S.MappingContent style [(node k, node v) | (k, v) <- kvs]
+      S.MappingContent style kvs ->
+        S.MappingContent style [(node k, node v) | (k, v) <- kvs]
       c -> c
       where
         node :: S.Node -> S.Node
-        node n = S.Node alias.offset alias.endOffset n.props S.noComments (copyAt alias n.content)
+        node n =
+          S.Node
+            alias.offset
+            alias.endOffset
+            n.props
+            S.noComments
+            (copyAt alias n.content)
 
-    goList :: M.Map T.Text (S.Tag, S.Content) -> [S.Node] -> ([S.Node], M.Map T.Text (S.Tag, S.Content))
+    goList
+      :: M.Map T.Text (S.Tag, S.Content)
+      -> [S.Node]
+      -> ([S.Node], M.Map T.Text (S.Tag, S.Content))
     goList anchors = \case
       [] -> ([], anchors)
       x : xs ->
@@ -366,7 +425,10 @@ expandAliases = fst . go M.empty
             (xs', anchors'') = goList anchors' xs
         in (x' : xs', anchors'')
 
-    goPairs :: M.Map T.Text (S.Tag, S.Content) -> [(S.Node, S.Node)] -> ([(S.Node, S.Node)], M.Map T.Text (S.Tag, S.Content))
+    goPairs
+      :: M.Map T.Text (S.Tag, S.Content)
+      -> [(S.Node, S.Node)]
+      -> ([(S.Node, S.Node)], M.Map T.Text (S.Tag, S.Content))
     goPairs anchors = \case
       [] -> ([], anchors)
       (k, v) : kvs ->
@@ -391,14 +453,22 @@ scalar off props style t = case props.tag of
         -- a string. A node that a program built has no input to quote.
         Left _
           | off == S.noOffset -> Left $ failure off exponentOutOfRange
-          | otherwise -> Left $ failure off $ exponentOutOfRange ++ ", quote the value if it is a string, e.g. '" ++ T.unpack t ++ "'"
+          | otherwise ->
+              Left
+                $ failure off
+                $ exponentOutOfRange
+                  ++ ", quote the value if it is a string, e.g. '"
+                  ++ T.unpack t
+                  ++ "'"
     | otherwise -> Right (String t)
   S.NonSpecificTag -> Right (String t)
   S.Tag tag
     | tag == seqTag || tag == mapTag ->
         Left
           $ failure off
-          $ "the tag !!" ++ T.unpack (T.drop (T.length coreTagPrefix) tag) ++ " cannot be used on a scalar"
+          $ "the tag !!"
+            ++ T.unpack (T.drop (T.length coreTagPrefix) tag)
+            ++ " cannot be used on a scalar"
     | otherwise -> case resolveTaggedExact tag t of
         Just (Right v) -> Right (withTag tag v)
         Just (Left _) -> Left $ failure off exponentOutOfRange
@@ -426,16 +496,19 @@ collectionTag off props def = case props.tag of
             ++ (if def == seqTag then "sequence" else "mapping")
   where
     isCoreTag :: T.Text -> Bool
-    isCoreTag tag = tag `elem` [nullTag, boolTag, intTag, floatTag, strTag, seqTag, mapTag]
+    isCoreTag tag =
+      tag `elem` [nullTag, boolTag, intTag, floatTag, strTag, seqTag, mapTag]
 
 -- | The error at a key, with a note at the first key that is equal to it.
 duplicateKey :: (S.Node, Value) -> (S.Node, Value) -> Failure
-duplicateKey (kn, k) (firstNode, _) = (kn.offset, message) NE.:| [(firstNode.offset, note)]
+duplicateKey (kn, k) (firstNode, _) =
+  (kn.offset, message) NE.:| [(firstNode.offset, note)]
   where
     message :: String
     message = case (k, inputText kn, inputText firstNode) of
       (String "<<", _, _) -> "duplicate key \"<<\"" ++ noMergeKeys
-      (_, Just t, Just f) | t /= f -> "duplicate key " ++ t ++ ", the same value as the first key"
+      (_, Just t, Just f)
+        | t /= f -> "duplicate key " ++ t ++ ", the same value as the first key"
       (_, Just t, _) -> "duplicate key " ++ t
       (_, Nothing, _) -> "duplicate key"
 

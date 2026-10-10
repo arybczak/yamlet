@@ -133,10 +133,13 @@ renderSyntax opts = emptyLines . B.runBuilder . go True
         let nextLines = case docs of
               next : _ -> not (null next.docComments.before)
               [] -> False
-            prepared = validAnchors doc {root = topLevel nextLines (commentedBlocks doc.root)}
+            prepared =
+              validAnchors doc {root = topLevel nextLines (commentedBlocks doc.root)}
             -- Directives need an end marker above them. The document above
             -- writes it, so that its lines go where they read back from.
-            ends = any hasDirectives (take 1 docs) || writesEnd opts (not (null docs)) nextLines prepared
+            ends =
+              any hasDirectives (take 1 docs)
+                || writesEnd opts (not (null docs)) nextLines prepared
         in document atStart ends prepared <> go False docs
 
     -- A block scalar without content at the top level would take the lines
@@ -148,7 +151,8 @@ renderSyntax opts = emptyLines . B.runBuilder . go True
     topLevel nextLines n = case n.content of
       ScalarLinesContent style t starts
         | isBlockScalar style
-        , needsIndentIndicator t || T.all (== '\n') t && (not (null n.comments.after) || nextLines) ->
+        , needsIndentIndicator t
+            || T.all (== '\n') t && (not (null n.comments.after) || nextLines) ->
             n {content = ScalarLinesContent DoubleQuoted t starts}
       _ -> n
 
@@ -162,7 +166,13 @@ renderSyntax opts = emptyLines . B.runBuilder . go True
         , if directives
             then
               foldMap
-                (\v -> "%YAML " <> B.fromUnboundedDec v.major <> "." <> B.fromUnboundedDec v.minor <> "\n")
+                ( \v ->
+                    "%YAML "
+                      <> B.fromUnboundedDec v.major
+                      <> "."
+                      <> B.fromUnboundedDec v.minor
+                      <> "\n"
+                )
                 version
                 <> foldMap tagDirective handles
             else mempty
@@ -184,7 +194,9 @@ renderSyntax opts = emptyLines . B.runBuilder . go True
         -- The end of the document above takes the comments right below it.
         -- The lines above the first entry of a block root come first too.
         gap :: B.Builder
-        gap = case if null doc.docComments.before && not marker then aboveIndicator opts r else doc.docComments.before of
+        gap = case if null doc.docComments.before && not marker
+          then aboveIndicator opts r
+          else doc.docComments.before of
           Comment _ : _ -> lines_ 0 [EmptyLine]
           _ -> mempty
 
@@ -217,14 +229,16 @@ renderSyntax opts = emptyLines . B.runBuilder . go True
         -- line, which keeps the lines above it from the first entry.
         propsLine :: Maybe B.Builder
         propsLine = case props r of
-          Just p | isBlock opts r, Just c <- r.comments.inline -> Just (p <> comment (Just c))
+          Just p
+            | isBlock opts r, Just c <- r.comments.inline -> Just (p <> comment (Just c))
           _ -> Nothing
 
         -- The marker line holds one comment. The comment of a block
         -- collection goes below it if the document has one too.
         (markerComment, rootLines) = case (doc.docComments.inline, r.comments.inline) of
           (dc, _) | isJust propsLine -> (dc, r.comments.before)
-          (Just dc, Just rc) | isBlock opts r -> (Just dc, inlineLine rc : r.comments.before)
+          (Just dc, Just rc)
+            | isBlock opts r -> (Just dc, inlineLine rc : r.comments.before)
           (dc, rc) -> (dc <|> (if isBlock opts r then rc else Nothing), r.comments.before)
 
         startMarker :: B.Builder
@@ -246,14 +260,28 @@ renderSyntax opts = emptyLines . B.runBuilder . go True
                    <> block opts 0 0 True (not (firstStartsBelow opts r)) False [] r
           | isBlock opts r =
               startMarker
-                <> lines_ 0 (separated rootLines ++ (if isJust (props r) then firstLines opts r else []))
+                <> lines_
+                  0
+                  ( separated rootLines
+                      ++ (if isJust (props r) then firstLines opts r else [])
+                  )
                 <> maybe mempty (<> "\n") (props r)
-                <> block opts 0 0 True (isJust (props r) && not (firstStartsBelow opts r)) False [] r
+                <> block
+                  opts
+                  0
+                  0
+                  True
+                  (isJust (props r) && not (firstStartsBelow opts r))
+                  False
+                  []
+                  r
           | otherwise = scalarBody <> linesBelow 0 r
 
         scalarBody :: B.Builder
         scalarBody
-          | isEmpty r = let (c, ls) = emptyRootLines doc in "---" <> comment c <> "\n" <> lines_ 0 ls
+          | isEmpty r =
+              let (c, ls) = emptyRootLines doc
+              in "---" <> comment c <> "\n" <> lines_ 0 ls
           | marker =
               "---"
                 <> comment doc.docComments.inline
@@ -261,7 +289,10 @@ renderSyntax opts = emptyLines . B.runBuilder . go True
                 <> lines_ 0 r.comments.before
                 <> inline opts InValue indentStep r r.comments.inline
                 <> "\n"
-          | otherwise = lines_ 0 r.comments.before <> inline opts InValue indentStep r r.comments.inline <> "\n"
+          | otherwise =
+              lines_ 0 r.comments.before
+                <> inline opts InValue indentStep r r.comments.inline
+                <> "\n"
 
 -- | The node with every flow collection that has a comment inside
 -- in the block style, so that every comment has a line. The comments of a
@@ -281,7 +312,9 @@ commentedBlocks = fst . go
       MappingContent style kvs ->
         let ys = map (bimap go go) kvs
             has = linesAfter || any (\(k, v) -> inner k || inner v) ys
-        in (n {content = MappingContent (styleOf has style) (map (bimap fst fst) ys)}, has)
+        in ( n {content = MappingContent (styleOf has style) (map (bimap fst fst) ys)}
+           , has
+           )
       _ -> (n, linesAfter)
       where
         linesAfter :: Bool
@@ -313,7 +346,9 @@ validAnchors doc
         ScalarContent _ _ -> acc
 
     newNames :: M.Map T.Text T.Text
-    newNames = (\(_, _, m) -> m) $ L.foldl' add (S.fromList (filter isAnchorName names), M.empty, M.empty) names
+    newNames =
+      (\(_, _, m) -> m) $
+        L.foldl' add (S.fromList (filter isAnchorName names), M.empty, M.empty) names
 
     -- The state has the used names, the next suffix to try for each base, and
     -- the new names. A suffix below the next one is used already, so the
@@ -325,7 +360,10 @@ validAnchors doc
     add (used, next, m) a
       | isAnchorName a || M.member a m = (used, next, m)
       | otherwise =
-          let base = if T.null a then "anchor" else T.map (\c -> if isAnchorChar c then c else '_') a
+          let base =
+                if T.null a
+                  then "anchor"
+                  else T.map (\c -> if isAnchorChar c then c else '_') a
               (new, i) = fresh used base (M.findWithDefault firstSuffix base next)
           in (S.insert new used, M.insert base i next, M.insert a new m)
 
@@ -350,7 +388,8 @@ validAnchors doc
         , content = case n.content of
             AliasContent a -> AliasContent (newName a)
             SequenceContent style xs -> SequenceContent style (map rename xs)
-            MappingContent style kvs -> MappingContent style (map (bimap rename rename) kvs)
+            MappingContent style kvs ->
+              MappingContent style (map (bimap rename rename) kvs)
             c -> c
         }
 
@@ -380,8 +419,9 @@ hasDirectives doc = isJust (supportedVersion doc) || not (null (tagHandles doc.r
 -- Without the marker, the lines at the end of the document read back as the
 -- root's, unless the root is a flow collection. Before the next document,
 -- an empty line at the end of the root, or below a flow collection root,
--- would end the lines of the document, and a literal block scalar with the keep indicator at the end would take the
--- empty line above the lines of the next document in.
+-- would end the lines of the document, and a literal block scalar with the
+-- keep indicator at the end would take the empty line above the lines of the
+-- next document in.
 writesEnd :: RenderOptions -> Bool -> Bool -> Document -> Bool
 writesEnd opts next nextLines doc =
   doc.explicitEnd
@@ -421,7 +461,8 @@ writesEnd opts next nextLines doc =
       | otherwise = case n.content of
           ScalarContent Literal t -> isJust (literalBlock 0 t) && hasKeepIndicator t
           SequenceContent _ xs | isBlock opts n, x : _ <- reverse xs -> endsWithKeep x
-          MappingContent _ kvs | isBlock opts n, (_, v) : _ <- reverse kvs -> endsWithKeep v
+          MappingContent _ kvs
+            | isBlock opts n, (_, v) : _ <- reverse kvs -> endsWithKeep v
           _ -> False
 
 -- | The comment on the start marker line of a document with an empty root,
@@ -453,11 +494,15 @@ isFlowCollection opts n = case n.content of
 -- caller wrote the lines of the first entries of the chain that starts with
 -- the first entry, as in @indicatorLines@. The given lines go to the first
 -- entry if it starts below its indicator.
-block :: RenderOptions -> Int -> Int -> Bool -> Bool -> Bool -> [Line] -> Node -> B.Builder
-block opts indent afterColumn atLineStart hoisted chainWritten carried n = case n.content of
-  SequenceContent _ xs -> mconcat (zipWith item [0 :: Int ..] xs) <> lines_ afterColumn n.comments.after
-  MappingContent _ kvs -> mconcat (zipWith entry [0 :: Int ..] kvs) <> lines_ afterColumn n.comments.after
-  _ -> mempty
+block
+  :: RenderOptions -> Int -> Int -> Bool -> Bool -> Bool -> [Line] -> Node -> B.Builder
+block opts indent afterColumn atLineStart hoisted chainWritten carried n =
+  case n.content of
+    SequenceContent _ xs ->
+      mconcat (zipWith item [0 :: Int ..] xs) <> lines_ afterColumn n.comments.after
+    MappingContent _ kvs ->
+      mconcat (zipWith entry [0 :: Int ..] kvs) <> lines_ afterColumn n.comments.after
+    _ -> mempty
   where
     start :: Int -> [Line] -> B.Builder
     start i ls
@@ -470,9 +515,15 @@ block opts indent afterColumn atLineStart hoisted chainWritten carried n = case 
     item :: Int -> Node -> B.Builder
     item i x
       | startsBelow opts x =
-          let (above, below, rest, written) = indicatorLines (i == 0) (if i == 0 then carried else []) x
-          in start i above <> "-" <> after opts indent (indent + indentStep) written below rest x
-      | otherwise = start i (aboveIndicator opts x) <> "-" <> after opts indent (indent + indentStep) False [] [] x
+          let (above, below, rest, written) =
+                indicatorLines (i == 0) (if i == 0 then carried else []) x
+          in start i above
+               <> "-"
+               <> after opts indent (indent + indentStep) written below rest x
+      | otherwise =
+          start i (aboveIndicator opts x)
+            <> "-"
+            <> after opts indent (indent + indentStep) False [] [] x
 
     entry :: Int -> (Node, Node) -> B.Builder
     entry i (k, v) = case implicitKey opts k of
@@ -480,7 +531,8 @@ block opts indent afterColumn atLineStart hoisted chainWritten carried n = case 
         let (above, lineComment, below) = entryComments opts k v
         in start i above <> key <> ":" <> value v lineComment below
       Nothing ->
-        let (keyAbove, keyBelow, keyRest, keyWritten) = indicatorLines (i == 0) (if i == 0 then carried else []) k
+        let (keyAbove, keyBelow, keyRest, keyWritten) =
+              indicatorLines (i == 0) (if i == 0 then carried else []) k
             (valueAbove, valueBelow, valueRest, valueWritten) = indicatorLines False [] v
         in start i keyAbove
              <> "?"
@@ -488,7 +540,14 @@ block opts indent afterColumn atLineStart hoisted chainWritten carried n = case 
              <> lines_ indent valueAbove
              <> spaces indent
              <> ":"
-             <> after opts indent (indent + indentStep) valueWritten valueBelow valueRest v
+             <> after
+               opts
+               indent
+               (indent + indentStep)
+               valueWritten
+               valueBelow
+               valueRest
+               v
 
     -- The lines above the indicator of a sequence item or an explicit entry,
     -- the lines below it, and the lines for the first entry of a block
@@ -528,13 +587,19 @@ block opts indent afterColumn atLineStart hoisted chainWritten carried n = case 
                    in if
                         | isFirst && chainWritten -> ([], own, rest, True)
                         | aboveFirst, Just ls' <- lifted -> (ls', [], [], True)
-                        | not isFirst, Just ls' <- lifted -> (separated ls ++ ls', [], [], True)
+                        | not isFirst
+                        , Just ls' <- lifted ->
+                            (separated ls ++ ls', [], [], True)
                         | null x.comments.before -> ([], own, rest, False)
-                        | isJust x.comments.inline, not isFirst || null own && lineStart -> (ls, [], [], False)
+                        | isJust x.comments.inline
+                        , not isFirst || null own && lineStart ->
+                            (ls, [], [], False)
                         | isFirst -> ([], separated ls, [], False)
                         | otherwise -> (separated ls, [], [], False)
                | isFirst && chainWritten -> ([], separated ls, [], False)
-               | aboveFirst, Just ls' <- liftable (Just (firstLines opts x)) -> (ls', [], [], False)
+               | aboveFirst
+               , Just ls' <- liftable (Just (firstLines opts x)) ->
+                   (ls', [], [], False)
                -- An empty line above the indicator would give the lines up to
                -- it to the collection around, and one below it would give them
                -- to this collection.
@@ -574,11 +639,18 @@ block opts indent afterColumn atLineStart hoisted chainWritten carried n = case 
                 -- scalar as the last item takes in every line that is deeper
                 -- than the key.
                 SequenceContent _ xs
-                  | not (hasCommentLine v.comments.after) || not (endsWithBlock xs) -> indent
+                  | not (hasCommentLine v.comments.after) || not (endsWithBlock xs) ->
+                      indent
                 _ -> indent + indentStep
-          in header <> lines_ column below <> block opts column (indent + indentStep) True False False rest v
+          in header
+               <> lines_ column below
+               <> block opts column (indent + indentStep) True False False rest v
       | isEmpty v = comment lineComment <> "\n" <> entryBelow
-      | otherwise = " " <> inline opts InValue (indent + indentStep) v lineComment <> "\n" <> entryBelow
+      | otherwise =
+          " "
+            <> inline opts InValue (indent + indentStep) v lineComment
+            <> "\n"
+            <> entryBelow
       where
         -- The lines after a block scalar end it at the column of the key.
         -- Without the first case, the render benchmark of the config input
@@ -622,12 +694,33 @@ after opts indent column chainWritten below rest n
             <> comment n.comments.inline
             <> "\n"
             <> lines_ (indent + indentStep) below
-            <> block opts (indent + indentStep) (indent + indentStep) True (not (firstStartsBelow opts n)) chainWritten rest n
-        else " " <> block opts (indent + indentStep) (indent + indentStep) False True False [] n
+            <> block
+              opts
+              (indent + indentStep)
+              (indent + indentStep)
+              True
+              (not (firstStartsBelow opts n))
+              chainWritten
+              rest
+              n
+        else
+          " "
+            <> block
+              opts
+              (indent + indentStep)
+              (indent + indentStep)
+              False
+              True
+              False
+              []
+              n
   | isEmpty n = comment n.comments.inline <> "\n" <> linesBelow column n
   | otherwise =
       let column' = if isBlockScalarNode n then indent else column
-      in " " <> inline opts InValue (indent + indentStep) n n.comments.inline <> "\n" <> linesBelow column' n
+      in " "
+           <> inline opts InValue (indent + indentStep) n n.comments.inline
+           <> "\n"
+           <> linesBelow column' n
 
 -- | The lines of a block collection that go directly above its first entry.
 -- The parser gives the lines there to the entry, so the lines of the
@@ -642,7 +735,8 @@ separated ls = case reverse ls of
 -- lines above the first entry of a block collection after the indicator go
 -- there too.
 aboveIndicator :: RenderOptions -> Node -> [Line]
-aboveIndicator opts x = x.comments.before ++ if isBlock opts x then firstLines opts x else []
+aboveIndicator opts x =
+  x.comments.before ++ if isBlock opts x then firstLines opts x else []
 
 -- | The lines above the first entry of a collection, unless the entry starts
 -- below its indicator and has the lines there.
@@ -707,13 +801,16 @@ startsBelow opts x
 -- would be exponential in the length of a chain of first entries.
 belowIndicator :: RenderOptions -> Node -> (Bool, Bool)
 belowIndicator opts x =
-  (isBlock opts x && (isJust (props x) || isJust x.comments.inline || firstHasLines), noFirstLines)
+  ( isBlock opts x && (isJust (props x) || isJust x.comments.inline || firstHasLines)
+  , noFirstLines
+  )
   where
     firstHasLines, noFirstLines :: Bool
     (firstHasLines, noFirstLines) = case x.content of
       SequenceContent _ (y : _) -> entry y y.comments.before
       MappingContent _ ((k, v) : _) -> case implicitKey opts k of
-        Just _ -> let (above, _, _) = entryComments opts k v in (endsWithLine above, null above)
+        Just _ ->
+          let (above, _, _) = entryComments opts k v in (endsWithLine above, null above)
         Nothing -> entry k k.comments.before
       _ -> (False, True)
 
@@ -761,11 +858,17 @@ entryComments opts k v
       (Just kc, Just vc) -> (k.comments.before, Just kc, keyAfter ++ [inlineLine vc])
       (kc, vc) -> (k.comments.before, kc <|> vc, keyAfter)
   -- For a scalar value, only the place of the lines after the key differs.
-  | not (isScalarLike v) || not (null keyAfter) && isBlockScalarNode v = case (k.comments.inline, v.comments.inline) of
-      (Just kc, Just vc) -> (k.comments.before ++ keyAfter ++ v.comments.before ++ [inlineLine kc], Just vc, [])
-      (kc, vc) -> (k.comments.before ++ keyAfter ++ v.comments.before, vc <|> kc, [])
+  | not (isScalarLike v) || not (null keyAfter) && isBlockScalarNode v =
+      case (k.comments.inline, v.comments.inline) of
+        (Just kc, Just vc) ->
+          ( k.comments.before ++ keyAfter ++ v.comments.before ++ [inlineLine kc]
+          , Just vc
+          , []
+          )
+        (kc, vc) -> (k.comments.before ++ keyAfter ++ v.comments.before, vc <|> kc, [])
   | otherwise = case (k.comments.inline, v.comments.inline) of
-      (Just kc, Just vc) -> (k.comments.before ++ v.comments.before ++ [inlineLine kc], Just vc, keyAfter)
+      (Just kc, Just vc) ->
+        (k.comments.before ++ v.comments.before ++ [inlineLine kc], Just vc, keyAfter)
       (kc, vc) -> (k.comments.before ++ v.comments.before, vc <|> kc, keyAfter)
   where
     keyAfter :: [Line]
@@ -823,8 +926,12 @@ inline opts pos indent n lineComment = case n.content of
     content_ :: B.Builder
     content_ = case n.content of
       ScalarLinesContent style t starts -> scalar (if inKey then [] else starts) style t
-      SequenceContent _ [] | hasEndLines n -> "[\n" <> lines_ indent (fst (bracketLines n)) <> spaces indent <> "]"
-      MappingContent _ [] | hasEndLines n -> "{\n" <> lines_ indent (fst (bracketLines n)) <> spaces indent <> "}"
+      SequenceContent _ []
+        | hasEndLines n ->
+            "[\n" <> lines_ indent (fst (bracketLines n)) <> spaces indent <> "]"
+      MappingContent _ []
+        | hasEndLines n ->
+            "{\n" <> lines_ indent (fst (bracketLines n)) <> spaces indent <> "}"
       SequenceContent _ xs -> "[" <> commas (map (flowValue . flowItem) xs) <> "]"
       MappingContent _ kvs -> "{" <> commas (map flowEntry kvs) <> "}"
       AliasContent {} -> mempty
@@ -875,7 +982,8 @@ inline opts pos indent n lineComment = case n.content of
           -- A short scalar without properties fits even in two quotes with
           -- each character as the longest escape, \U and its digits.
           (Props Nothing NoTag, ScalarContent _ t)
-            | T.compareLength t ((maxImplicitKeyLength - 2) `div` (2 + bigUEscapeDigits)) /= GT -> (True, rendered)
+            | T.compareLength t ((maxImplicitKeyLength - 2) `div` (2 + bigUEscapeDigits)) /= GT ->
+                (True, rendered)
           _
             | longerThan maxImplicitKeyLength k -> (False, rendered)
             | otherwise ->
@@ -910,7 +1018,8 @@ inline opts pos indent n lineComment = case n.content of
         | null starts -> if plainSyntax inFlow t then B.fromText t else quotedPlain t
         | Just b <- plainLines inFlow indent starts t -> b
         | otherwise -> quotedPlainLines indent starts t
-      SingleQuoted -> fromMaybe (doubleQuotedLines indent starts t) (singleQuotedLines indent starts t)
+      SingleQuoted ->
+        fromMaybe (doubleQuotedLines indent starts t) (singleQuotedLines indent starts t)
       _ -> doubleQuotedLines indent starts t
       where
         inFlow :: Bool
@@ -969,7 +1078,9 @@ implicitKey opts k
     key :: T.Text
     key = case (k.props, k.content) of
       (Props Nothing NoTag, ScalarContent Plain t) | plainSyntax False t -> t
-      _ -> B.runBuilder $ inline opts InKey 0 k Nothing <> if endsWithName k then " " else mempty
+      _ ->
+        B.runBuilder $
+          inline opts InKey 0 k Nothing <> if endsWithName k then " " else mempty
 
     isEmptyCollection :: Bool
     isEmptyCollection = case k.content of
@@ -1092,7 +1203,8 @@ emptyLine = "\0"
 -- | The text of a comment with a replacement for the characters that YAML
 -- does not allow.
 printable :: T.Text -> T.Text
-printable = T.map $ \c -> if c == '\t' || isCommentBreak c || isPrintable c then c else '\xFFFD'
+printable = T.map $ \c ->
+  if c == '\t' || isCommentBreak c || isPrintable c then c else '\xFFFD'
 
 -- | A line break in the text of a comment. YAML 1.1 reads U+0085, U+2028 and
 -- U+2029 as line breaks, so the rest of a comment after one of them would

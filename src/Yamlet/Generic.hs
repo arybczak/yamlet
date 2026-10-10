@@ -532,7 +532,9 @@ checkDefault :: forall a. (GenericYamlOptions a, GDatatype (Rep a)) => ()
 checkDefault = case yamlDefault @a of
   Just d
     | isNothing (defaultField d) ->
-        error $ "requiredField in a strict field or a newtype of the default of " ++ gDatatypeName @(Rep a)
+        error $
+          "requiredField in a strict field or a newtype of the default of "
+            ++ gDatatypeName @(Rep a)
   _ -> ()
 -- Without the pragma, the derived encoders and decoders of lists and fields
 -- keep the generic dictionaries, and their inspection tests fail.
@@ -627,7 +629,10 @@ instance GConstructors V1 where
 -- | The error for a type without constructors, whose representation is 'V1'.
 type NoConstructors = Text "A type without constructors cannot derive FromYaml or ToYaml"
 
-instance (KnownSymbol name, GFields f) => GConstructors (C1 (MetaCons name fixity isRecord) f) where
+instance
+  (KnownSymbol name, GFields f)
+  => GConstructors (C1 (MetaCons name fixity isRecord) f)
+  where
   gConstructorNames = [symbolVal (Proxy @name)]
 
   gConstructorCount = 1
@@ -686,7 +691,8 @@ type family SeveralFieldsFix (e :: SumEncodingKind) :: ErrorMessage where
   SeveralFieldsFix TaggedFlat = FlatFieldsFix
   SeveralFieldsFix e = Text "Give the fields names."
 
-type FlatFieldsFix = Text "Put the fields in a record type, and make it the one field of the constructor."
+type FlatFieldsFix =
+  Text "Put the fields in a record type, and make it the one field of the constructor."
 
 type family CombineShapes (a :: Shape) (b :: Shape) :: Shape where
   CombineShapes NoFields b = b
@@ -704,7 +710,8 @@ type family MixedFields (named :: Symbol) (unnamed :: Symbol) :: Shape where
           :<>: Text " has named fields and the constructor "
           :<>: Text unnamed
           :<>: Text " has one field without a name."
-          :$$: Text "Give them the same kind of fields, or use the sum encoding SingleField, where each constructor has its own value."
+          :$$: Text
+                 "Give them the same kind of fields, or use the sum encoding SingleField, where each constructor has its own value."
       )
 
 -- | The shape is valid. The instances match on the shape, so that GHC
@@ -857,7 +864,9 @@ genericToYaml x =
       -- the inspection test of encodeShape shows. GHC before 9.12 keeps it
       -- also with the bang.
       !opts = yamlOptions @a
-  in enc `seq` checkDefault @a `seq` gToYaml opts enc (gUnwrap . from <$> yamlDefault @a) (gUnwrap (from x))
+  in enc
+       `seq` checkDefault @a
+       `seq` gToYaml opts enc (gUnwrap . from <$> yamlDefault @a) (gUnwrap (from x))
 {-# INLINE genericToYaml #-}
 
 -- The encoder takes the default for 'omitNullFields': it leaves out a null
@@ -923,7 +932,8 @@ instance
 
   gToConstructor opts tagging def c@(M1 x) = case tagging of
     Just SingleField
-      | gNamed @f -> mapping [(string (gTag opts c), mapping (gToEntries opts (unM1 <$> def) x))]
+      | gNamed @f ->
+          mapping [(string (gTag opts c), mapping (gToEntries opts (unM1 <$> def) x))]
       | otherwise -> case gToValue x of
           Nothing -> string (gTag opts c)
           Just _ -> mapping [gToEntry (string (gTag opts c)) x]
@@ -932,7 +942,9 @@ instance
       | otherwise -> case gToValue x of
           Nothing -> mapping (withTagEntry [])
           Just v
-            | enc == TaggedFlat, Just entries <- flatEntries v -> mapping (withTagEntry entries)
+            | enc == TaggedFlat
+            , Just entries <- flatEntries v ->
+                mapping (withTagEntry entries)
             | otherwise -> mapping (withTagEntry [gToEntry (string opts.contentsKey) x])
     Nothing
       | gNamed @f -> mapping (gToEntries opts (unM1 <$> def) x)
@@ -952,7 +964,8 @@ instance
         S.MappingContent _ kvs
           | null kvs -> Nothing
           | isJust v.props.anchor -> Nothing
-          | any (\(k, _) -> isKey opts.tagKey k || isKey opts.contentsKey k) kvs -> Nothing
+          | any (\(k, _) -> isKey opts.tagKey k || isKey opts.contentsKey k) kvs ->
+              Nothing
           | otherwise -> Just kvs
         _ -> Nothing
   {-# INLINE gToConstructor #-}
@@ -994,7 +1007,12 @@ instance
   => GToFields (S1 (MetaSel (Just name) u s d) (Rec0 a))
   where
   gToEntries opts def (M1 (K1 x))
-    | opts.omitNullFields && isNullNode (snd entry) && uncommented && unanchored && nullDefault = []
+    | opts.omitNullFields
+        && isNullNode (snd entry)
+        && uncommented
+        && unanchored
+        && nullDefault =
+        []
     | otherwise = [entry]
     where
       entry :: (S.Node, S.Node)
@@ -1002,7 +1020,8 @@ instance
 
       -- The comments would go away with the entry.
       uncommented :: Bool
-      uncommented = (fst entry).comments == S.noComments && (snd entry).comments == S.noComments
+      uncommented =
+        (fst entry).comments == S.noComments && (snd entry).comments == S.noComments
 
       -- An alias elsewhere can refer to the anchor.
       unanchored :: Bool
@@ -1073,7 +1092,14 @@ genericParseYaml n =
   -- Forcing the encoding forces the check of the shape, e.g. with deferred
   -- type errors in a test of the errors.
   let enc = gEncoding @(SumEncoding a) @f
-  in enc `seq` checkDefault @a `seq` gParseYaml (yamlOptions @a) enc (gUnwrap . from <$> yamlDefault @a) (to . gWrap) n
+  in enc
+       `seq` checkDefault @a
+       `seq` gParseYaml
+         (yamlOptions @a)
+         enc
+         (gUnwrap . from <$> yamlDefault @a)
+         (to . gWrap)
+         n
 {-# INLINE genericParseYaml #-}
 
 -- Each constructor applies 'to' to its own representation, e.g.
@@ -1131,7 +1157,11 @@ gParseYaml opts enc def k n
     -- A string that is the tag of a constructor with fields.
     withoutValue :: T.Text -> Parser a
     withoutValue t
-      | t `elem` tags = failAt n $ "expected a mapping with the key " ++ showText t ++ ", because the constructor has fields"
+      | t `elem` tags =
+          failAt n $
+            "expected a mapping with the key "
+              ++ showText t
+              ++ ", because the constructor has fields"
       | otherwise = unknown n "constructor" t
 
     unknown :: S.Node -> String -> T.Text -> Parser a
@@ -1148,11 +1178,24 @@ class GFromConstructor f where
 
   -- | The constructor with the tag, from the mapping that holds the tag, with
   -- the flag of 'TaggedFlat'.
-  gFromTagged :: YamlOptions -> Bool -> Maybe (f p) -> (f p -> a) -> T.Text -> Object -> Maybe (Parser a)
+  gFromTagged
+    :: YamlOptions
+    -> Bool
+    -> Maybe (f p)
+    -> (f p -> a)
+    -> T.Text
+    -> Object
+    -> Maybe (Parser a)
 
   -- | The constructor with the tag, from the only entry of a mapping, for
   -- 'SingleField'.
-  gFromSingle :: YamlOptions -> Maybe (f p) -> (f p -> a) -> T.Text -> (S.Node, S.Node) -> Maybe (Parser a)
+  gFromSingle
+    :: YamlOptions
+    -> Maybe (f p)
+    -> (f p -> a)
+    -> T.Text
+    -> (S.Node, S.Node)
+    -> Maybe (Parser a)
 
   -- | The only constructor, without a tag.
   gFromUntagged :: YamlOptions -> Maybe (f p) -> (f p -> a) -> S.Node -> Parser a
@@ -1208,19 +1251,28 @@ instance
   {-# INLINE gFromTag #-}
 
   gFromTagged opts flat def k t o
-    | t == constructorTagOf @name opts = Just (k . M1 <$> fromObject opts flat [opts.tagKey] (unM1 <$> def) o)
+    | t == constructorTagOf @name opts =
+        Just (k . M1 <$> fromObject opts flat [opts.tagKey] (unM1 <$> def) o)
     | otherwise = Nothing
   {-# INLINE gFromTagged #-}
 
   gFromSingle opts def k t entry@(kn, v)
     | t /= constructorTagOf @name opts = Nothing
-    | gNamed @f = Just (withMapping (fmap (k . M1) . fromObject opts False [] (unM1 <$> def)) v)
-    | gArity @f == 0 = Just (failAt kn $ "expected the string " ++ showText t ++ ", because the constructor has no fields")
+    | gNamed @f =
+        Just (withMapping (fmap (k . M1) . fromObject opts False [] (unM1 <$> def)) v)
+    | gArity @f == 0 =
+        Just
+          ( failAt kn $
+              "expected the string "
+                ++ showText t
+                ++ ", because the constructor has no fields"
+          )
     | otherwise = Just (k . M1 <$> gFromEntry entry)
   {-# INLINE gFromSingle #-}
 
   gFromUntagged opts def k n
-    | gNamed @f || gArity @f == 0 = withMapping (fmap (k . M1) . fromObject opts False [] (unM1 <$> def)) n
+    | gNamed @f || gArity @f == 0 =
+        withMapping (fmap (k . M1) . fromObject opts False [] (unM1 <$> def)) n
     | otherwise = k . M1 <$> gFromValue n
   {-# INLINE gFromUntagged #-}
 
@@ -1241,7 +1293,11 @@ fromObject opts flat keys def o
   | flat
   , not (null others)
   , not (any (isKey opts.contentsKey . fst) others) =
-      flatField ("without the key " ++ showText opts.contentsKey ++ ", the other keys of this mapping are the field")
+      flatField
+        ( "without the key "
+            ++ showText opts.contentsKey
+            ++ ", the other keys of this mapping are the field"
+        )
   | otherwise = checked [opts.contentsKey] $ case M.lookup opts.contentsKey o.index of
       Just entry -> gFromEntry entry
       -- A missing contents key is null, if the fields accept null. A flat
@@ -1252,15 +1308,22 @@ fromObject opts flat keys def o
         | isJust def, not flat -> missingKey o opts.contentsKey
         | flat ->
             maybe
-              (flatField ("the mapping has no key " ++ showText opts.contentsKey ++ " and no other keys for the field"))
+              ( flatField
+                  ( "the mapping has no key "
+                      ++ showText opts.contentsKey
+                      ++ " and no other keys for the field"
+                  )
+              )
               pure
               (succeeds gFromValue nullNode)
-        | otherwise -> maybe (missingKey o opts.contentsKey) pure (succeeds gFromValue nullNode)
+        | otherwise ->
+            maybe (missingKey o opts.contentsKey) pure (succeeds gFromValue nullNode)
   where
     -- The fields, with the errors of the unknown keys if the options reject
     -- them.
     checked :: [T.Text] -> Parser (f p) -> Parser (f p)
-    checked fields = (when opts.rejectUnknownFields (rejectUnknownKeys (keys ++ fields) o) *>)
+    checked fields =
+      (when opts.rejectUnknownFields (rejectUnknownKeys (keys ++ fields) o) *>)
 
     -- An error at the mapping itself, e.g. of a field that is not a mapping,
     -- does not show that the field is the mapping, so a note at the tag says
@@ -1280,7 +1343,14 @@ fromObject opts flat keys def o
           style = case n.content of
             S.MappingContent s _ -> s
             _ -> S.Block
-      in gFromValue (S.Node n.offset n.endOffset n.props S.noComments (S.MappingContent style others))
+      in gFromValue
+           ( S.Node
+               n.offset
+               n.endOffset
+               n.props
+               S.noComments
+               (S.MappingContent style others)
+           )
 
     -- The duplicates of a key go too. The mapping has their errors, and a
     -- field of a recursive type would give them again at each level.
@@ -1306,7 +1376,8 @@ fromObject opts flat keys def o
 class GFromFields f where
   -- | The fields from a mapping, with the given default for missing keys.
   gFromObject :: YamlOptions -> Maybe (f p) -> Object -> Parser (f p)
-  gFromObject _ _ o = fail $ "expected a field without a name in " ++ describeNode (objectNode o)
+  gFromObject _ _ o =
+    fail $ "expected a field without a name in " ++ describeNode (objectNode o)
 
   -- | The only field without a name from its value.
   gFromValue :: S.Node -> Parser (f p)
@@ -1349,7 +1420,8 @@ instance
           | Just x <- defaultField d -> x <$ findKey o key
           | otherwise -> missingKey o key
         -- A missing field is null, if its type accepts null.
-        Nothing -> maybe (missingKey o key) (<$ findKey o key) (succeeds parseYaml nullNode)
+        Nothing ->
+          maybe (missingKey o key) (<$ findKey o key) (succeeds parseYaml nullNode)
     where
       key :: T.Text
       key = fieldKey @name opts

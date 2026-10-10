@@ -37,40 +37,57 @@ unexpected input i = (tabCause, other)
   where
     tabCause :: Maybe Int
     tabCause = case indentationTab (i - 1) Nothing of
-      Nothing | byteAt e i == COLON && firstColonFrom contentStart -> firstTab e lineStart contentStart
+      Nothing
+        | byteAt e i == COLON && firstColonFrom contentStart ->
+            firstTab e lineStart contentStart
       t -> t
 
     other :: (Int, String)
     other
       | Just start <- propertiesLine =
-          (start, "an anchor or a tag cannot be on a line of its own here, write it after the key or the '-'")
+          ( start
+          , "an anchor or a tag cannot be on a line of its own here, write it after the key or the '-'"
+          )
       | Just r <- blockMistake = r
-      | afterComment = (i, "a comment ends a plain scalar, so this line cannot continue it")
+      | afterComment =
+          (i, "a comment ends a plain scalar, so this line cannot continue it")
       | Just colon <- aliasColon =
-          (colon, "the name of the alias includes the ':', write a space before ':' if the alias is a key")
+          ( colon
+          , "the name of the alias includes the ':', write a space before ':' if the alias is a key"
+          )
       | otherwise = (i,) $ case byteAt e i of
           w
-            | byteBefore e i == STAR && not (isAnchorChar w) -> "expected an alias name after '*'"
-            | byteBefore e i == AMP && not (isAnchorChar w) -> "expected an anchor name after '&'"
+            | byteBefore e i == STAR && not (isAnchorChar w) ->
+                "expected an alias name after '*'"
+            | byteBefore e i == AMP && not (isAnchorChar w) ->
+                "expected an anchor name after '&'"
             | w == 0 -> "unexpected end of input"
             | indented, Just msg <- indentationMistake -> msg
             | indented, Just msg <- mistakeIn e False i -> msg
             | indented, not alignedWithEntry -> "unexpected indentation"
             | isBreak w -> "unexpected end of line"
-            | i > e.base && isBreak (byteBefore e i), Just msg <- indentationMistake -> msg
+            | i > e.base && isBreak (byteBefore e i)
+            , Just msg <- indentationMistake ->
+                msg
             | w == COLON && firstColon && not (fitsKey e entryStart i) -> keyLengthMessage
-            | w == COLON && multiLineKey -> "unexpected ':', a key must be on a single line"
+            | w == COLON && multiLineKey ->
+                "unexpected ':', a key must be on a single line"
             | w == COLON && firstColon && valueColon && onStartMarkerLine ->
                 "unexpected ':', a mapping cannot start on the line of '---'"
             -- A colon on the first line of a key does not fail, so the scalar
             -- before this one started on a line above.
-            | w == COLON && firstColon && valueColon && isJust (lineAbove (lineStartAt e i)) ->
+            | w == COLON
+                && firstColon
+                && valueColon
+                && isJust (lineAbove (lineStartAt e i)) ->
                 "unexpected ':', this line continues the scalar from the line above, check the indentation and the line above"
             | w == COLON && valueColon ->
                 "unexpected ':', quote the value if it contains \": \""
             | itemAfterKey -> "unexpected '-', a list cannot start on the line of its key"
-            | itemAfterProperty -> "unexpected '-', a list cannot start on the line of its anchor or tag"
-            | itemAfterStartMarker -> "unexpected '-', a list cannot start on the line of '---'"
+            | itemAfterProperty ->
+                "unexpected '-', a list cannot start on the line of its anchor or tag"
+            | itemAfterStartMarker ->
+                "unexpected '-', a list cannot start on the line of '---'"
             | Just msg <- mistakeIn e False i -> msg
             | Just node <- endBefore -> unexpectedChar e i ++ " after the end of " ++ node
             | otherwise -> unexpectedChar e i
@@ -190,7 +207,8 @@ unexpected input i = (tabCause, other)
     -- here on one line does not fail.
     multiLineKey :: Bool
     multiLineKey =
-      multiLineCollection || firstColon && (byteBefore e i == DQUOTE || byteBefore e i == SQUOTE)
+      multiLineCollection
+        || firstColon && (byteBefore e i == DQUOTE || byteBefore e i == SQUOTE)
 
     -- A flow collection ends before the index and starts on a line above.
     multiLineCollection :: Bool
@@ -202,7 +220,8 @@ unexpected input i = (tabCause, other)
         go j depth crossed
           | j < e.base = False
           | c == RBRACKET || c == RBRACE = go (j - 1) (depth + 1) crossed
-          | c == LBRACKET || c == LBRACE = if depth == 1 then crossed else go (j - 1) (depth - 1) crossed
+          | c == LBRACKET || c == LBRACE =
+              if depth == 1 then crossed else go (j - 1) (depth - 1) crossed
           | otherwise = go (j - 1) depth (crossed || isBreak c)
           where
             c :: Word8
@@ -247,7 +266,9 @@ unexpected input i = (tabCause, other)
 
     itemAfterStartMarker :: Bool
     itemAfterStartMarker =
-      isListItem i && onStartMarkerLine && skipBackWhites e i == lineStartAt e i + markerLength
+      isListItem i
+        && onStartMarkerLine
+        && skipBackWhites e i == lineStartAt e i + markerLength
 
     -- A colon that ends a word and precedes white space, as in an unquoted
     -- value like "Error: file not found".
@@ -320,7 +341,9 @@ unexpected input i = (tabCause, other)
       if
         | isListItem k && byteAt e start == MINUS && stop == start + 1 ->
             Just (stop, "expected a space after '-'")
-        | not (isListItem k) && (w == 0 || isBreak w || stop < i) && not (any isKeyColon [afterKey .. stop - 1]) ->
+        | not (isListItem k)
+            && (w == 0 || isBreak w || stop < i)
+            && not (any isKeyColon [afterKey .. stop - 1]) ->
             Just $ case (keyEnd, filter tightColon [afterKey .. stop - 1]) of
               (Nothing, _) -> (start, "unterminated " ++ quotedName ++ " scalar")
               (Just end, _) | end > stop -> (stop, "a key must be on a single line")
@@ -345,7 +368,8 @@ unexpected input i = (tabCause, other)
             closing :: Int -> Maybe Int
             closing j
               | j >= e.end = Nothing
-              | quote == SQUOTE && b == SQUOTE && byteAt e (j + 1) == SQUOTE = closing (j + 2)
+              | quote == SQUOTE && b == SQUOTE && byteAt e (j + 1) == SQUOTE =
+                  closing (j + 2)
               | quote == DQUOTE && b == BACKSLASH = closing (j + 2)
               | b == quote = Just (j + 1)
               | otherwise = closing (j + 1)
@@ -417,11 +441,14 @@ unexpected input i = (tabCause, other)
             | indent > column -> go (lineStartAt e k)
             | indent < column ->
                 if endsWithBlockHeader k
-                  then Just "unexpected indentation, the line has less indentation than the block scalar above it"
+                  then
+                    Just
+                      "unexpected indentation, the line has less indentation than the block scalar above it"
                   else Nothing
             | isListItem k && not (isListItem i) && not (isFlowIndicator (byteAt e i)) ->
                 Just "unexpected key among list items"
-            | not (isListItem k) && isListItem i -> Just "unexpected list item among mapping entries"
+            | not (isListItem k) && isListItem i ->
+                Just "unexpected list item among mapping entries"
             | otherwise -> Nothing
 
     -- The line from the content at the index ends with the header of a block
@@ -449,11 +476,15 @@ unexpected input i = (tabCause, other)
 
     -- A colon that ends an implicit key is at the index.
     isKeyColon :: Int -> Bool
-    isKeyColon j = byteAt e j == COLON && (let b = byteAt e (j + 1) in b == 0 || isWhite b || isBreak b)
+    isKeyColon j =
+      byteAt e j == COLON
+        && (let b = byteAt e (j + 1) in b == 0 || isWhite b || isBreak b)
 
     -- A block sequence entry starts at the index.
     isListItem :: Int -> Bool
-    isListItem j = byteAt e j == MINUS && (let b = byteAt e (j + 1) in b == 0 || isWhite b || isBreak b)
+    isListItem j =
+      byteAt e j == MINUS
+        && (let b = byteAt e (j + 1) in b == 0 || isWhite b || isBreak b)
 
 -- | The error for a common mistake at the index inside a flow collection, if
 -- the character there shows one.
@@ -473,25 +504,37 @@ mistakeIn e flow i
   -- parser, so here it follows the end of another node, e.g. "x"#c.
   | w == HASH && isNsChar (byteBefore e i) =
       Just "unexpected '#', a comment needs a space before it"
-  | w == COMMA && (let b = byteBefore e (skipBack i) in b == COMMA || b == LBRACKET || b == LBRACE) =
+  | w == COMMA
+      && ( let b = byteBefore e (skipBack i)
+           in b == COMMA || b == LBRACKET || b == LBRACE
+         ) =
       Just "unexpected ',', a flow collection cannot have an empty entry"
   -- In the block style, these characters start a block scalar.
   | flow && (w == PIPE || w == GREATER) =
       Just $ unexpectedChar e i ++ ", a block scalar cannot be inside a flow collection"
-  | w == STAR && not (isAnchorChar (byteAt e (i + 1))) = Just "expected an alias name after '*'"
-  | w == STAR && (let b = byteAt e (wordStart e (skipBackWhites e i)) in b == AMP || b == EXCL) =
+  | w == STAR && not (isAnchorChar (byteAt e (i + 1))) =
+      Just "expected an alias name after '*'"
+  | w == STAR
+      && (let b = byteAt e (wordStart e (skipBackWhites e i)) in b == AMP || b == EXCL) =
       Just "unexpected '*', an alias cannot have an anchor or a tag"
-  | w == AMP && not (isAnchorChar (byteAt e (i + 1))) = Just "expected an anchor name after '&'"
+  | w == AMP && not (isAnchorChar (byteAt e (i + 1))) =
+      Just "expected an anchor name after '&'"
   | afterQuote SQUOTE =
-      Just $ unexpectedChar e i ++ " after a single-quoted scalar, write '' for a quote inside it"
+      Just $
+        unexpectedChar e i
+          ++ " after a single-quoted scalar, write '' for a quote inside it"
   | afterQuote DQUOTE =
-      Just $ unexpectedChar e i ++ " after a double-quoted scalar, write \\\" for a quote inside it"
+      Just $
+        unexpectedChar e i
+          ++ " after a double-quoted scalar, write \\\" for a quote inside it"
   -- A '%' at the start of a line in the block style starts a directive.
   | not flow && w == PERCENT && isStartOfLine e i && isNsChar (byteAt e (i + 1)) =
-      Just "unexpected '%', a directive needs '...' on a line above it to end the document"
+      Just
+        "unexpected '%', a directive needs '...' on a line above it to end the document"
   -- Other indicators start a node of another kind, e.g. '&' an anchor.
   | w == AT || w == GRAVE || w == PERCENT =
-      Just $ unexpectedChar e i ++ ", a plain scalar cannot start with it, quote the value"
+      Just $
+        unexpectedChar e i ++ ", a plain scalar cannot start with it, quote the value"
   | otherwise = Nothing
   where
     w :: Word8
@@ -508,7 +551,11 @@ mistakeIn e flow i
     -- quote, so the quote closes a quoted scalar. A colon there ends a key.
     afterQuote :: Word8 -> Bool
     afterQuote q =
-      byteBefore e i == q && isNsChar w && not (isFlowIndicator w) && w /= COLON && not quoteInTag
+      byteBefore e i == q
+        && isNsChar w
+        && not (isFlowIndicator w)
+        && w /= COLON
+        && not quoteInTag
 
     -- A quote can be a character of a tag, as in "!'".
     quoteInTag :: Bool

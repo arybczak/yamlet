@@ -36,7 +36,8 @@ main = do
     ]
   where
     printSize :: String -> BS.ByteString -> IO ()
-    printSize name bs = putStrLn $ name ++ ": " ++ show (BS.length bs `div` 1024) ++ " KiB"
+    printSize name bs =
+      putStrLn $ name ++ ": " ++ show (BS.length bs `div` 1024) ++ " KiB"
 
     configInput :: BS.ByteString
     configInput = T.encodeUtf8 $ config 5000
@@ -45,17 +46,28 @@ main = do
     jsonInput = T.encodeUtf8 $ json 5000
 
 -- | The benchmarks that decode an input into a value of the type.
-decoding :: forall a. (NFData a, FromYaml a, J.FromJSON a) => String -> BS.ByteString -> Benchmark
+decoding
+  :: forall a
+   . (NFData a, FromYaml a, J.FromJSON a)
+  => String
+  -> BS.ByteString
+  -> Benchmark
 decoding name bs =
   bgroup
     name
     [ bench "yamlet" $ nf (either (error . show) id . decode @a) bs
-    , bench "yamlet-aeson" $ nf (either (error . show) (\(ViaAeson a) -> a) . decode @(ViaAeson a)) bs
+    , bench "yamlet-aeson" $
+        nf (either (error . show) (\(ViaAeson a) -> a) . decode @(ViaAeson a)) bs
     , bench "yaml" $ nf (either (error . show) id . Y.decodeEither' @a) bs
     ]
 
 -- | The benchmarks that encode the value of an input, decoded as the type.
-encoding :: forall a. (NFData a, FromYaml a, ToYaml a, J.ToJSON a) => String -> BS.ByteString -> Benchmark
+encoding
+  :: forall a
+   . (NFData a, FromYaml a, ToYaml a, J.ToJSON a)
+  => String
+  -> BS.ByteString
+  -> Benchmark
 encoding name bs =
   bgroup
     name

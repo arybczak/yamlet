@@ -49,7 +49,8 @@ encodeTests =
       -- explicit entry. 10000 cases take about 0.2 s.
       localOption (QuickCheckTests 10000) $ testProperty "fast renderer" prop_fastRenderer
     , testProperty "fast renderer of several documents" prop_fastRendererAll
-    , localOption (QuickCheckTests 10000) $ testProperty "fast renderer of syntax trees" prop_fastRendererNodes
+    , localOption (QuickCheckTests 10000) $
+        testProperty "fast renderer of syntax trees" prop_fastRendererNodes
     , testCase "containers" test_containers
     , testCase "base" test_base
     , testCase "time" test_time
@@ -59,48 +60,115 @@ encodeTests =
 
 test_containers :: Assertion
 test_containers = do
-  assertEqual "set" "- 1\n- 2\n- 3\n" (encodeText (Set.fromList @Int [3, 1, 2]))
-  assertEqual "int set" "- 1\n- 2\n- 3\n" (encodeText (IS.fromList [3, 1, 2]))
-  assertEqual "left" "Left: 1\n" (encodeText (Left @Int @T.Text 1))
-  assertEqual "right" "Right: a\n" (encodeText (Right @Int @T.Text "a"))
+  assertEqual
+    "set"
+    "- 1\n- 2\n- 3\n"
+    (encodeText (Set.fromList @Int [3, 1, 2]))
+  assertEqual
+    "int set"
+    "- 1\n- 2\n- 3\n"
+    (encodeText (IS.fromList [3, 1, 2]))
+  assertEqual
+    "left"
+    "Left: 1\n"
+    (encodeText (Left @Int @T.Text 1))
+  assertEqual
+    "right"
+    "Right: a\n"
+    (encodeText (Right @Int @T.Text "a"))
   roundTrip "int map" (IM.fromList @T.Text [(1, "a"), (-2, "b")])
-  assertEqual "map with an empty list key" "? []\n: a\n? - 1\n: b\n" (encodeText (M.fromList @[Int] @T.Text [([], "a"), ([1], "b")]))
+  assertEqual
+    "map with an empty list key"
+    "? []\n: a\n? - 1\n: b\n"
+    (encodeText (M.fromList @[Int] @T.Text [([], "a"), ([1], "b")]))
   roundTrip "sequence" (Seq.fromList @Int [1, 2, 3])
   -- Only a String is text.
-  assertEqual "string" "ab\n" (encodeText @String "ab")
-  assertEqual "set of characters" "- a\n- b\n" (encodeText (Set.fromList "ba"))
+  assertEqual
+    "string"
+    "ab\n"
+    (encodeText @String "ab")
+  assertEqual
+    "set of characters"
+    "- a\n- b\n"
+    (encodeText (Set.fromList "ba"))
   roundTrip "set of characters" (Set.fromList "ab")
   roundTrip "non-empty list of characters" ('a' NE.:| "b")
   roundTrip "sequence of characters" (Seq.fromList "ab")
   roundTrip @[Either Int T.Text] "either" [Left 1, Right "a"]
   let tree = Tree.Node 'a' [Tree.Node 'b' [], Tree.Node 'c' [Tree.Node 'd' []]]
-  assertEqual "tree" "- a\n- - - b\n    - []\n  - - c\n    - - - d\n        - []\n" (encodeText tree)
+  assertEqual
+    "tree"
+    "- a\n- - - b\n    - []\n  - - c\n    - - - d\n        - []\n"
+    (encodeText tree)
   roundTrip "tree" tree
   let uuid = UUID.fromWords 0x123e4567 0xe89b12d3 0xa4564266 0x14174000
-  assertEqual "UUID" "123e4567-e89b-12d3-a456-426614174000\n" (encodeText uuid)
+  assertEqual
+    "UUID"
+    "123e4567-e89b-12d3-a456-426614174000\n"
+    (encodeText uuid)
   roundTrip "UUIDs" [uuid, UUID.nil]
-  roundTrip @(Int, Char, Bool, T.Text, Double, [Int], Maybe Char, (), Char, Int) "tuple of 10" (1, 'a', True, "b", 2.5, [1], Just 'c', (), 'd', -1)
+  roundTrip @(Int, Char, Bool, T.Text, Double, [Int], Maybe Char, (), Char, Int)
+    "tuple of 10"
+    (1, 'a', True, "b", 2.5, [1], Just 'c', (), 'd', -1)
 
 test_base :: Assertion
 test_base = do
-  assertEqual "ordering" "- LT\n- EQ\n- GT\n" (encodeText [LT, EQ, GT])
-  assertEqual "unit" "[]\n" (encodeText ())
+  assertEqual
+    "ordering"
+    "- LT\n- EQ\n- GT\n"
+    (encodeText [LT, EQ, GT])
+  assertEqual
+    "unit"
+    "[]\n"
+    (encodeText ())
   roundTrip "unit" ()
-  assertEqual "ratio" "numerator: 1\ndenominator: 3\n" (encodeText @Rational (1 % 3))
-  assertEqual "fixed" "1.25\n" (encodeText @Centi 1.25)
-  assertEqual "fixed with a trailing zero" "1.5\n" (encodeText @Milli 1.5)
-  assertEqual "whole fixed" "3.0\n" (encodeText @Uni 3)
-  assertEqual "newtype" "- 1\n- 2\n" (encodeText (Identity @[Int] [1, 2]))
-  assertEqual "string in a newtype" "ab\n" (encodeText (Sem.Min @String "ab"))
+  assertEqual
+    "ratio"
+    "numerator: 1\ndenominator: 3\n"
+    (encodeText @Rational (1 % 3))
+  assertEqual
+    "fixed"
+    "1.25\n"
+    (encodeText @Centi 1.25)
+  assertEqual
+    "fixed with a trailing zero"
+    "1.5\n"
+    (encodeText @Milli 1.5)
+  assertEqual
+    "whole fixed"
+    "3.0\n"
+    (encodeText @Uni 3)
+  assertEqual
+    "newtype"
+    "- 1\n- 2\n"
+    (encodeText (Identity @[Int] [1, 2]))
+  assertEqual
+    "string in a newtype"
+    "ab\n"
+    (encodeText (Sem.Min @String "ab"))
   roundTrip "ordering" [LT, EQ, GT]
   roundTrip @Rational "negative ratio" (negate 7 % 4)
   roundTrip @Milli "fixed" (-123.456)
   roundTrip @Nano "nano" 0.000000001
   roundTrip @(Fixed Quarters) "resolution of a power of 2" (MkFixed 3)
-  assertEqual "resolution of 2s and 5s" "0.025\n" (encodeText @(Fixed Fortieths) (MkFixed 1))
+  assertEqual
+    "resolution of 2s and 5s"
+    "0.025\n"
+    (encodeText @(Fixed Fortieths) (MkFixed 1))
   roundTrip @(Fixed Fortieths) "resolution of 2s and 5s" (MkFixed 7)
-  assertEqual "resolution without a decimal form" "0.3\n" (encodeText @(Fixed Thirds) (MkFixed 1))
-  roundTrip "newtypes" (Down 'a', Sem.Max @Int 1, Mon.First (Just True), Sem.Sum @Double 2.5, Sem.All False, Const @Int @Bool 3)
+  assertEqual
+    "resolution without a decimal form"
+    "0.3\n"
+    (encodeText @(Fixed Thirds) (MkFixed 1))
+  roundTrip
+    "newtypes"
+    ( Down 'a'
+    , Sem.Max @Int 1
+    , Mon.First (Just True)
+    , Sem.Sum @Double 2.5
+    , Sem.All False
+    , Const @Int @Bool 3
+    )
 
 -- | A resolution of 1/4, which has an exact decimal form.
 data Quarters
@@ -111,15 +179,42 @@ instance HasResolution Quarters where
 test_time :: Assertion
 test_time = do
   let noon = LocalTime (fromGregorian 2026 9 25) (TimeOfDay 12 30 5.25)
-  assertEqual "day" "2026-09-25\n" (encodeText (fromGregorian 2026 9 25))
-  assertEqual "time, a base-60 number in YAML 1.1" "'12:30:00'\n" (encodeText (TimeOfDay 12 30 0))
-  assertEqual "time without trailing zeros" "'12:30:15.000001'\n" (encodeText (TimeOfDay 12 30 15.000001))
-  assertEqual "time with picoseconds" "'12:30:15.000000000001'\n" (encodeText (TimeOfDay 12 30 15.000000000001))
-  assertEqual "local time" "2026-09-25T12:30:05.25\n" (encodeText noon)
-  assertEqual "UTC time" "2026-09-25T12:30:00Z\n" (encodeText (UTCTime (fromGregorian 2026 9 25) (12 * 3600 + 30 * 60)))
-  assertEqual "zoned time" "2026-09-25T12:30:05.25-02:30\n" (encodeText (ZonedTime noon (minutesToTimeZone (-150))))
-  assertEqual "day of the year 0, which PyYAML cannot build" "'0000-01-01'\n" (encodeText (fromGregorian 0 1 1))
-  assertEqual "day of the year 10000" "10000-01-01\n" (encodeText (fromGregorian 10000 1 1))
+  assertEqual
+    "day"
+    "2026-09-25\n"
+    (encodeText (fromGregorian 2026 9 25))
+  assertEqual
+    "time, a base-60 number in YAML 1.1"
+    "'12:30:00'\n"
+    (encodeText (TimeOfDay 12 30 0))
+  assertEqual
+    "time without trailing zeros"
+    "'12:30:15.000001'\n"
+    (encodeText (TimeOfDay 12 30 15.000001))
+  assertEqual
+    "time with picoseconds"
+    "'12:30:15.000000000001'\n"
+    (encodeText (TimeOfDay 12 30 15.000000000001))
+  assertEqual
+    "local time"
+    "2026-09-25T12:30:05.25\n"
+    (encodeText noon)
+  assertEqual
+    "UTC time"
+    "2026-09-25T12:30:00Z\n"
+    (encodeText (UTCTime (fromGregorian 2026 9 25) (12 * 3600 + 30 * 60)))
+  assertEqual
+    "zoned time"
+    "2026-09-25T12:30:05.25-02:30\n"
+    (encodeText (ZonedTime noon (minutesToTimeZone (-150))))
+  assertEqual
+    "day of the year 0, which PyYAML cannot build"
+    "'0000-01-01'\n"
+    (encodeText (fromGregorian 0 1 1))
+  assertEqual
+    "day of the year 10000"
+    "10000-01-01\n"
+    (encodeText (fromGregorian 10000 1 1))
   assertEqual
     "UTC leap second"
     "'2016-12-31T23:59:60.5Z'\n"
@@ -131,7 +226,12 @@ test_time = do
   assertEqual
     "zoned time of the year 0"
     "'0000-06-01T12:00:00+01:00'\n"
-    (encodeText (ZonedTime (LocalTime (fromGregorian 0 6 1) (TimeOfDay 12 0 0)) (hoursToTimeZone 1)))
+    ( encodeText
+        ( ZonedTime
+            (LocalTime (fromGregorian 0 6 1) (TimeOfDay 12 0 0))
+            (hoursToTimeZone 1)
+        )
+    )
   assertEqual
     "hour 24"
     "'2024-01-01T24:00:00'\n"
@@ -139,22 +239,51 @@ test_time = do
   assertEqual
     "time zone of 25 hours"
     "'2024-01-01T12:00:00+25:00'\n"
-    (encodeText (ZonedTime (LocalTime (fromGregorian 2024 1 1) (TimeOfDay 12 0 0)) (hoursToTimeZone 25)))
+    ( encodeText
+        ( ZonedTime
+            (LocalTime (fromGregorian 2024 1 1) (TimeOfDay 12 0 0))
+            (hoursToTimeZone 25)
+        )
+    )
   assertBool
     "time zone of 25 hours does not read back"
     (isLeft (decodeText @ZonedTime (encodeText (ZonedTime noon (hoursToTimeZone 25)))))
   roundTrip "leap second" (UTCTime (fromGregorian 2016 12 31) 86400.5)
-  assertEqual "duration" "1.5\n" (encodeText @NominalDiffTime 1.5)
+  assertEqual
+    "duration"
+    "1.5\n"
+    (encodeText @NominalDiffTime 1.5)
   roundTrip "local time" noon
   roundTrip "UTC time" (UTCTime (fromGregorian (-44) 3 15) 0.000000000001)
   roundTrip "diff time" (picosecondsToDiffTime 123456789)
-  assertEqual "month" "2026-09\n" (encodeText (YearMonth 2026 9))
-  assertEqual "month of a negative year" "-0044-03\n" (encodeText (YearMonth (-44) 3))
-  assertEqual "quarter" "2026-q3\n" (encodeText (YearQuarter 2026 Q3))
-  assertEqual "quarter of a year" "q3\n" (encodeText Q3)
-  assertEqual "day of the week" "monday\n" (encodeText Monday)
-  assertEqual "calendar days" "months: 1\ndays: 2\n" (encodeText (CalendarDiffDays 1 2))
-  assertEqual "calendar time" "months: 1\ntime: 1.5\n" (encodeText (CalendarDiffTime 1 1.5))
+  assertEqual
+    "month"
+    "2026-09\n"
+    (encodeText (YearMonth 2026 9))
+  assertEqual
+    "month of a negative year"
+    "-0044-03\n"
+    (encodeText (YearMonth (-44) 3))
+  assertEqual
+    "quarter"
+    "2026-q3\n"
+    (encodeText (YearQuarter 2026 Q3))
+  assertEqual
+    "quarter of a year"
+    "q3\n"
+    (encodeText Q3)
+  assertEqual
+    "day of the week"
+    "monday\n"
+    (encodeText Monday)
+  assertEqual
+    "calendar days"
+    "months: 1\ndays: 2\n"
+    (encodeText (CalendarDiffDays 1 2))
+  assertEqual
+    "calendar time"
+    "months: 1\ntime: 1.5\n"
+    (encodeText (CalendarDiffTime 1 1.5))
   roundTrip "months" [YearMonth 2026 1, YearMonth 12345 12, YearMonth (-1) 6]
   roundTrip "quarters" [YearQuarter 2026 Q1, YearQuarter (-5) Q4]
   roundTrip "quarters of a year" [Q1, Q2, Q3, Q4]
@@ -169,7 +298,11 @@ test_time = do
     )
 
 test_blockStyle :: Assertion
-test_blockStyle = assertEqual "output" expected (encodeText value)
+test_blockStyle =
+  assertEqual
+    "output"
+    expected
+    (encodeText value)
   where
     value :: S.Node
     value =
@@ -207,7 +340,11 @@ test_blockStyle = assertEqual "output" expected (encodeText value)
 test_quoting :: Assertion
 test_quoting = do
   let check :: T.Text -> T.Text -> Assertion
-      check expected s = assertEqual (show s) (expected <> "\n") (encodeText s)
+      check expected s =
+        assertEqual
+          (show s)
+          (expected <> "\n")
+          (encodeText s)
   check "dist-newstyle" "dist-newstyle"
   check "-foo" "-foo"
   check "'-'" "-"
@@ -265,47 +402,110 @@ test_quoting = do
   check "2024-01" "2024-01"
   check "\"a\\u2028b\"" "a\x2028\&b"
   check "\"a\\u2029b\"" "a\x2029\&b"
-  assertEqual "YAML 1.1 boolean as a key" "'NO': Norway\n" (encodeText (mapping ["NO" .= ("Norway" :: T.Text)]))
+  assertEqual
+    "YAML 1.1 boolean as a key"
+    "'NO': Norway\n"
+    (encodeText (mapping ["NO" .= ("Norway" :: T.Text)]))
 
 -- | A float reads back as a float, not as an integer.
 test_floats :: Assertion
 test_floats = do
-  assertEqual "integral double" "12.0\n" (encodeText @Double 12)
-  assertEqual "double" "0.1\n" (encodeText @Double 0.1)
-  assertEqual "small double" "0.01\n" (encodeText @Double 0.01)
-  assertEqual "smallest decimal notation" "0.000001\n" (encodeText @Double 1e-6)
-  assertEqual "below decimal notation" "1.0e-7\n" (encodeText @Double 1e-7)
-  assertEqual "largest decimal notation" "100000000000000000000.0\n" (encodeText @Double 1e20)
-  assertEqual "above decimal notation" "1.0e+21\n" (encodeText @Double 1e21)
-  assertEqual "large scientific" "1.0e+30\n" (encodeText (Sci.scientific 1 30))
+  assertEqual
+    "integral double"
+    "12.0\n"
+    (encodeText @Double 12)
+  assertEqual
+    "double"
+    "0.1\n"
+    (encodeText @Double 0.1)
+  assertEqual
+    "small double"
+    "0.01\n"
+    (encodeText @Double 0.01)
+  assertEqual
+    "smallest decimal notation"
+    "0.000001\n"
+    (encodeText @Double 1e-6)
+  assertEqual
+    "below decimal notation"
+    "1.0e-7\n"
+    (encodeText @Double 1e-7)
+  assertEqual
+    "largest decimal notation"
+    "100000000000000000000.0\n"
+    (encodeText @Double 1e20)
+  assertEqual
+    "above decimal notation"
+    "1.0e+21\n"
+    (encodeText @Double 1e21)
+  assertEqual
+    "large scientific"
+    "1.0e+30\n"
+    (encodeText (Sci.scientific 1 30))
   assertEqual
     "exact scientific"
     "12345678901234567890.123\n"
     (encodeText (Sci.scientific 12345678901234567890123 (-3)))
-  assertEqual "exponent beyond the limit" "1.0e+10001\n" (encodeText (Sci.scientific 1 10001))
-  assertEqual "exponent beyond Int" "1.0e+9223372036854775808\n" (encodeText (Sci.scientific 10 maxBound))
-  assertEqual "negative exponent beyond Int" "-1.23e+9223372036854775810\n" (encodeText (Sci.scientific (-1230) maxBound))
-  assertEqual "zero with a large exponent" "0.0\n" (encodeText (Sci.scientific 0 maxBound))
-  assertEqual "infinity" "-.inf\n" (encodeText @Double (-(1 / 0)))
-  assertEqual "not a number" ".nan\n" (encodeText @Double (0 / 0))
-  assertEqual "float" "0.1\n" (encodeText @Float 0.1)
-  assertEqual "float infinity" "-.inf\n" (encodeText @Float (-(1 / 0)))
-  assertEqual "float not a number" ".nan\n" (encodeText @Float (0 / 0))
-  assertEqual "negative zero" "-0.0\n" (encodeText @Double (-0))
-  assertEqual "float negative zero" "-0.0\n" (encodeText @Float (-0))
+  assertEqual
+    "exponent beyond the limit"
+    "1.0e+10001\n"
+    (encodeText (Sci.scientific 1 10001))
+  assertEqual
+    "exponent beyond Int"
+    "1.0e+9223372036854775808\n"
+    (encodeText (Sci.scientific 10 maxBound))
+  assertEqual
+    "negative exponent beyond Int"
+    "-1.23e+9223372036854775810\n"
+    (encodeText (Sci.scientific (-1230) maxBound))
+  assertEqual
+    "zero with a large exponent"
+    "0.0\n"
+    (encodeText (Sci.scientific 0 maxBound))
+  assertEqual
+    "infinity"
+    "-.inf\n"
+    (encodeText @Double (-(1 / 0)))
+  assertEqual
+    "not a number"
+    ".nan\n"
+    (encodeText @Double (0 / 0))
+  assertEqual
+    "float"
+    "0.1\n"
+    (encodeText @Float 0.1)
+  assertEqual
+    "float infinity"
+    "-.inf\n"
+    (encodeText @Float (-(1 / 0)))
+  assertEqual
+    "float not a number"
+    ".nan\n"
+    (encodeText @Float (0 / 0))
+  assertEqual
+    "negative zero"
+    "-0.0\n"
+    (encodeText @Double (-0))
+  assertEqual
+    "float negative zero"
+    "-0.0\n"
+    (encodeText @Float (-0))
 
 -- | A float has decimal notation from 10^-6 up to 10^21, as Number::toString
 -- of ECMAScript, and exponential notation otherwise, with the sign of the
 -- exponent.
 prop_floatFormat :: Integer -> Property
-prop_floatFormat c = forAll ((,) <$> chooseInt (0, 3) <*> chooseInt (-30, 30)) $ \(zeros, e) ->
-  let s = Sci.scientific (c * 10 ^ zeros) e
-      expected
-        | s == 0 || (abs s >= Sci.scientific 1 (-6) && abs s < Sci.scientific 1 21) = Sci.formatScientific Sci.Fixed Nothing s
-        | otherwise = case break (== 'e') (Sci.formatScientific Sci.Exponent Nothing s) of
-            (m, 'e' : ex@(d : _)) | d /= '-' -> m ++ "e+" ++ ex
-            _ -> Sci.formatScientific Sci.Exponent Nothing s
-  in encodeText s === T.pack expected <> "\n"
+prop_floatFormat c =
+  forAll ((,) <$> chooseInt (0, 3) <*> chooseInt (-30, 30)) $ \(zeros, e) ->
+    let s = Sci.scientific (c * 10 ^ zeros) e
+        expected
+          | s == 0 || (abs s >= Sci.scientific 1 (-6) && abs s < Sci.scientific 1 21) =
+              Sci.formatScientific Sci.Fixed Nothing s
+          | otherwise =
+              case break (== 'e') (Sci.formatScientific Sci.Exponent Nothing s) of
+                (m, 'e' : ex@(d : _)) | d /= '-' -> m ++ "e+" ++ ex
+                _ -> Sci.formatScientific Sci.Exponent Nothing s
+    in encodeText s === T.pack expected <> "\n"
 
 -- | The time to check if YAML 1.1 parsers read a string as another value is
 -- linear in its length.
@@ -313,8 +513,14 @@ test_longNumberLikeStrings :: Assertion
 test_longNumberLikeStrings = do
   let underscores = T.replicate 20000 "1_" <> "x"
       base60 = "1" <> T.replicate 60000 ":55" <> "x"
-  assertEqual "underscores" (underscores <> "\n") (encodeText underscores)
-  assertEqual "base 60" (base60 <> "\n") (encodeText base60)
+  assertEqual
+    "underscores"
+    (underscores <> "\n")
+    (encodeText underscores)
+  assertEqual
+    "base 60"
+    (base60 <> "\n")
+    (encodeText base60)
 
 -- | The time to write a float is not quadratic in the number of its digits.
 test_longFloats :: Assertion
@@ -331,15 +537,42 @@ test_longFloats = do
 
 test_literal :: Assertion
 test_literal = do
-  assertEqual "clip" "key: |\n  a\n  b\n" (encodeText (mapping ["key" .= ("a\nb\n" :: T.Text)]))
-  assertEqual "strip" "key: |-\n  a\n  b\n" (encodeText (mapping ["key" .= ("a\nb" :: T.Text)]))
-  assertEqual "keep" "key: |+\n  a\n\n" (encodeText (mapping ["key" .= ("a\n\n" :: T.Text)]))
-  assertEqual "only line breaks" "key: \"\\n\\n\"\n" (encodeText (mapping ["key" .= ("\n\n" :: T.Text)]))
-  assertEqual "indentation indicator" "- |2-\n    a\n  b\n" (encodeText @[T.Text] ["  a\nb"])
-  assertEqual "indentation indicator for a tab" "- |2-\n  \ta\n  b\n" (encodeText @[T.Text] ["\ta\nb"])
-  assertEqual "indentation indicator after empty lines" "- |2\n\n  \ta\n" (encodeText @[T.Text] ["\n\ta\n"])
-  assertEqual "no indentation indicator at the top level" "\" a\\nb\"\n" (encodeText @T.Text " a\nb")
-  assertEqual "no indentation indicator for a tab at the top level" "\"\\ta\\nb\"\n" (encodeText @T.Text "\ta\nb")
+  assertEqual
+    "clip"
+    "key: |\n  a\n  b\n"
+    (encodeText (mapping ["key" .= ("a\nb\n" :: T.Text)]))
+  assertEqual
+    "strip"
+    "key: |-\n  a\n  b\n"
+    (encodeText (mapping ["key" .= ("a\nb" :: T.Text)]))
+  assertEqual
+    "keep"
+    "key: |+\n  a\n\n"
+    (encodeText (mapping ["key" .= ("a\n\n" :: T.Text)]))
+  assertEqual
+    "only line breaks"
+    "key: \"\\n\\n\"\n"
+    (encodeText (mapping ["key" .= ("\n\n" :: T.Text)]))
+  assertEqual
+    "indentation indicator"
+    "- |2-\n    a\n  b\n"
+    (encodeText @[T.Text] ["  a\nb"])
+  assertEqual
+    "indentation indicator for a tab"
+    "- |2-\n  \ta\n  b\n"
+    (encodeText @[T.Text] ["\ta\nb"])
+  assertEqual
+    "indentation indicator after empty lines"
+    "- |2\n\n  \ta\n"
+    (encodeText @[T.Text] ["\n\ta\n"])
+  assertEqual
+    "no indentation indicator at the top level"
+    "\" a\\nb\"\n"
+    (encodeText @T.Text " a\nb")
+  assertEqual
+    "no indentation indicator for a tab at the top level"
+    "\"\\ta\\nb\"\n"
+    (encodeText @T.Text "\ta\nb")
   let keep = mapping ["key" .= ("a\n\n" :: T.Text), "next" .= ("b" :: T.Text)]
   assertEqual
     "keep in a syntax tree"
@@ -349,13 +582,23 @@ test_literal = do
 test_tags :: Assertion
 test_tags = do
   let local = Tagged "!point" (Mapping [(String "x", Int 1)])
-  assertEqual "local tag" "!point\nx: 1\n" (encodeText local)
+  assertEqual
+    "local tag"
+    "!point\nx: 1\n"
+    (encodeText local)
   let str = Tagged "!name" (String "foo")
-  assertEqual "tagged scalar" "- !name foo\n" (encodeText [str])
+  assertEqual
+    "tagged scalar"
+    "- !name foo\n"
+    (encodeText [str])
   let readBack :: T.Text -> Either (NE.NonEmpty Error) T.Text
       readBack t = valueTag <$> decodeText @Value (encodeText (Tagged t (String "x")))
       exact :: T.Text -> Assertion
-      exact t = assertEqual (T.unpack t) (Right t) (readBack t)
+      exact t =
+        assertEqual
+          (T.unpack t)
+          (Right t)
+          (readBack t)
   exact "!a b!c%"
   exact "!!x"
   exact "tag:yaml.org,2002:a,b é"
@@ -367,7 +610,10 @@ test_tags = do
   exact "tag:example.com,2000:a%20b"
   -- libyaml, PyYAML and go-yaml reject a # in a tag, and they decode the
   -- escapes of a verbatim tag.
-  assertEqual "hash in a local tag" "!point%232d x\n" (encodeText (Tagged "!point#2d" (String "x")))
+  assertEqual
+    "hash in a local tag"
+    "!point%232d x\n"
+    (encodeText (Tagged "!point#2d" (String "x")))
   assertEqual
     "hash in a global tag"
     "%TAG !t68! %68\n---\n!t68!ttp://example.com/a%23b x\n"
@@ -376,23 +622,37 @@ test_tags = do
     "percent in a global tag"
     "%TAG !t74! %74\n---\n!t74!ag:example.com%2C2000:a%2520b x\n"
     (encodeText (Tagged "tag:example.com,2000:a%20b" (String "x")))
-  assertEqual "verbatim tag" "!<http://example.com/a> x\n" (encodeText (Tagged "http://example.com/a" (String "x")))
+  assertEqual
+    "verbatim tag"
+    "!<http://example.com/a> x\n"
+    (encodeText (Tagged "http://example.com/a" (String "x")))
   -- YAML 1.1 parsers read the non-specific tag ! as no tag, e.g. "! 12" as
   -- an integer, and YAML 1.2 as a string.
-  assertEqual "empty tag" "12\n" (encodeText (Tagged "" (Int 12)))
-  assertEqual "tag of one character" "'yes'\n" (encodeText (Tagged "!" (String "yes")))
-  assertEqual "empty tag around a tag" "!b x\n" (encodeText (Tagged "" (Tagged "!b" (String "x"))))
+  assertEqual
+    "empty tag"
+    "12\n"
+    (encodeText (Tagged "" (Int 12)))
+  assertEqual
+    "tag of one character"
+    "'yes'\n"
+    (encodeText (Tagged "!" (String "yes")))
+  assertEqual
+    "empty tag around a tag"
+    "!b x\n"
+    (encodeText (Tagged "" (Tagged "!b" (String "x"))))
   assertEqual
     "directives after a document"
     (Right [strTag, "foo"])
-    (map valueTag <$> decodeAllText @Value (encodeAllText [String "a", Tagged "foo" (String "b")]))
+    ( map valueTag
+        <$> decodeAllText @Value (encodeAllText [String "a", Tagged "foo" (String "b")])
+    )
 
 test_syntax :: Assertion
 test_syntax =
-  assertEqual "output" expected $
-    S.renderSyntax
-      S.defaultRenderOptions
-      [S.document (edit value)]
+  assertEqual
+    "output"
+    expected
+    (S.renderSyntax S.defaultRenderOptions [S.document (edit value)])
   where
     value :: S.Node
     value = mapping ["name" .= ("x" :: T.Text), "paths" .= ["a" :: T.Text, "b"]]
@@ -405,7 +665,10 @@ test_syntax =
           { S.content =
               S.MappingContent
                 style
-                [ (k1 {S.comments = S.noComments {S.before = [S.Comment "The name."]}}, v1)
+                [
+                  ( k1 {S.comments = S.noComments {S.before = [S.Comment "The name."]}}
+                  , v1
+                  )
                 , (k2, v2 {S.content = flow v2.content})
                 ]
           }
@@ -437,8 +700,14 @@ test_keptNodes = do
   case decodeText @Workflow input of
     Left errs -> assertFailure (unlines (map (prettyError "input") (NE.toList errs)))
     Right w -> do
-      assertEqual "decoded field" "demo" w.name
-      assertEqual "output" expected (encodeText (Workflow w.name 8 w.matrix))
+      assertEqual
+        "decoded field"
+        "demo"
+        w.name
+      assertEqual
+        "output"
+        expected
+        (encodeText (Workflow w.name 8 w.matrix))
   assertEqual
     "kept nodes in a list"
     (Right "- ['9.10', \"9.12\"] # versions\n- {a: 1}\n")
@@ -455,7 +724,9 @@ test_keptNodes = do
   assertEqual
     "lines above the first key of a mapping"
     (Right (M.fromList [("b", [Comment "c2"])]))
-    (M.map (.comments.before) <$> decodeText @(M.Map T.Text (Commented Int)) "# c1\n\n# c2\nb: 1\n")
+    ( M.map (.comments.before)
+        <$> decodeText @(M.Map T.Text (Commented Int)) "# c1\n\n# c2\nb: 1\n"
+    )
   assertEqual
     "comment after the tag of a list"
     (Right "- 1\n")
@@ -464,7 +735,9 @@ test_keptNodes = do
   assertEqual
     "lines above the first item of a value"
     (Right "# c1\nk:\n# c2\n\n# c3\n- 1\n")
-    (encodeText <$> decodeText @(M.Map T.Text (Commented (Commented [Commented Int]))) valueLines)
+    ( encodeText
+        <$> decodeText @(M.Map T.Text (Commented (Commented [Commented Int]))) valueLines
+    )
   -- The lines belong to the list, and the comments of the entry have no place
   -- for them.
   assertEqual
@@ -472,7 +745,10 @@ test_keptNodes = do
     (Right "# c1\nk:\n# c3\n- 1\n")
     (encodeText <$> decodeText @(M.Map T.Text (Commented [Commented Int])) valueLines)
   let scalarRoot = "|\n  text\n# end\n"
-  assertEqual "lines at the end of a scalar root" (Right scalarRoot) (encodeText <$> decodeText @Node scalarRoot)
+  assertEqual
+    "lines at the end of a scalar root"
+    (Right scalarRoot)
+    (encodeText <$> decodeText @Node scalarRoot)
   assertEqual
     "scalar root in a list"
     (Right "- |\n  text\n# end\n- 1\n")
@@ -522,12 +798,23 @@ instance ToYaml Job where
 
 test_commentedKeys :: Assertion
 test_commentedKeys = do
-  let job = T.unlines ["name: build", "# The test reporter writes check runs.", "permissions: # read-only", "  contents: read"]
-  assertEqual "record" (Right job) (encodeText <$> decodeText @Job job)
+  let job =
+        T.unlines
+          [ "name: build"
+          , "# The test reporter writes check runs."
+          , "permissions: # read-only"
+          , "  contents: read"
+          ]
+  assertEqual
+    "record"
+    (Right job)
+    (encodeText <$> decodeText @Job job)
   assertEqual
     "map"
     (Right "# one\na: 1\nb: 2 # two\n")
-    (encodeText <$> decodeText @(M.Map T.Text (Commented Int)) "# one\na: 1\nb: 2 # two\n")
+    ( encodeText
+        <$> decodeText @(M.Map T.Text (Commented Int)) "# one\na: 1\nb: 2 # two\n"
+    )
   -- The parser gives the lines before the marker and at the end to the
   -- document, and the decoder gives them to the root. The renderer separates
   -- the lines of a block root from its first entry, so that they read back
@@ -536,7 +823,9 @@ test_commentedKeys = do
   assertEqual
     "comments of the document"
     (Right top)
-    (encodeText <$> decodeText @(Commented (M.Map T.Text Int)) "# top\n---\na: 1\n# end\n")
+    ( encodeText
+        <$> decodeText @(Commented (M.Map T.Text Int)) "# top\n---\na: 1\n# end\n"
+    )
   assertEqual
     "comments of the document read back"
     (Right top)
@@ -547,7 +836,10 @@ test_commentedKeys = do
     (Right either_)
     (encodeText <$> decodeText @(Either (Commented T.Text) Int) either_)
   let set = "# first\n- a # one\n- b\n"
-  assertEqual "set" (Right set) (encodeText <$> decodeText @(Set.Set (Commented T.Text)) set)
+  assertEqual
+    "set"
+    (Right set)
+    (encodeText <$> decodeText @(Set.Set (Commented T.Text)) set)
   -- The comment after 1 belongs to the value, which an integer cannot keep.
   assertEqual
     "keys of a map"
@@ -557,7 +849,9 @@ test_commentedKeys = do
   assertEqual
     "keys and values of a map"
     (Right "# above\na: 1 # c\n")
-    (encodeText <$> decodeText @(M.Map (Commented T.Text) (Commented Int)) "# above\na: 1 # c\n")
+    ( encodeText
+        <$> decodeText @(M.Map (Commented T.Text) (Commented Int)) "# above\na: 1 # c\n"
+    )
   let nodes = "os: [a, b] # two\nsteps:\n- x\n  # end\n"
   assertEqual
     "nodes keep their comments once"
@@ -569,26 +863,46 @@ test_commentedKeys = do
     (map (.comments) <$> decodeText @[Commented Int] "# c\n- 1\n- 2 # d\n")
   -- The comment after the list belongs to the entry, and the comment above
   -- the first item belongs to the item.
-  let branches = "branches: # which branches\n# the main branch\n- main # the old default\n- dev\n  # more later\n"
+  let branches =
+        "branches: # which branches\n# the main branch\n- main # the old default\n- dev\n  # more later\n"
   assertEqual
     "commented items"
     (Right branches)
     (encodeText <$> decodeText @(M.Map T.Text (Commented [Commented T.Text])) branches)
   let commentedRoot = "# c1\n1 # c2\n# c3\n"
-  assertEqual "commented scalar root" (Right commentedRoot) (encodeText <$> decodeText @(Commented Int) commentedRoot)
-  let linesAfter = M.fromList @T.Text @(Commented Int) [("a", Commented 1 noComments {after = [Comment "c"]}), ("b", Commented 2 noComments)]
-  assertEqual "lines after a commented scalar value" "a: 1\n  # c\nb: 2\n" (encodeText linesAfter)
+  assertEqual
+    "commented scalar root"
+    (Right commentedRoot)
+    (encodeText <$> decodeText @(Commented Int) commentedRoot)
+  let linesAfter =
+        M.fromList @T.Text @(Commented Int)
+          [ ("a", Commented 1 noComments {after = [Comment "c"]})
+          , ("b", Commented 2 noComments)
+          ]
+  assertEqual
+    "lines after a commented scalar value"
+    "a: 1\n  # c\nb: 2\n"
+    (encodeText linesAfter)
   assertEqual
     "lines after a commented scalar value read back"
     (Right (M.map (.comments) linesAfter))
-    (M.map (.comments) <$> decodeText @(M.Map T.Text (Commented Int)) (encodeText linesAfter))
+    ( M.map (.comments)
+        <$> decodeText @(M.Map T.Text (Commented Int)) (encodeText linesAfter)
+    )
   let quotedLinesAfter = "a: \"x\\r\\ny\"\n  # c\nb: d\n"
   assertEqual
     "lines after a text of several lines in double quotes"
     (Right quotedLinesAfter)
     (encodeText <$> decodeText @(M.Map T.Text (Commented T.Text)) quotedLinesAfter)
-  let linesAbove = [Commented @[Int] [1, 2] noComments {before = [Comment "above"], inline = Just "inline"}]
-  assertEqual "lines above a commented list item" "# above\n- # inline\n  - 1\n  - 2\n" (encodeText linesAbove)
+  let linesAbove =
+        [ Commented @[Int]
+            [1, 2]
+            noComments {before = [Comment "above"], inline = Just "inline"}
+        ]
+  assertEqual
+    "lines above a commented list item"
+    "# above\n- # inline\n  - 1\n  - 2\n"
+    (encodeText linesAbove)
   assertEqual
     "lines above a commented list item read back"
     (Right [noComments {before = [Comment "above"], inline = Just "inline"}])
@@ -598,10 +912,19 @@ test_commentedKeys = do
   -- entry.
   let above = noComments {before = [Comment "c"]}
       nestedItem = [[Commented @Int 1 above]]
-      firstKey = [M.fromList @T.Text [("a", Commented @Int 1 above), ("b", Commented 2 noComments)]]
-  assertEqual "lines above a nested first item" "# c\n-\n  - 1\n" (encodeText nestedItem)
+      firstKey =
+        [ M.fromList @T.Text
+            [("a", Commented @Int 1 above), ("b", Commented 2 noComments)]
+        ]
+  assertEqual
+    "lines above a nested first item"
+    "# c\n-\n  - 1\n"
+    (encodeText nestedItem)
   roundTrip "lines above a nested first item read back" nestedItem
-  assertEqual "lines above a first key" "# c\n-\n  a: 1\n  b: 2\n" (encodeText firstKey)
+  assertEqual
+    "lines above a first key"
+    "# c\n-\n  a: 1\n  b: 2\n"
+    (encodeText firstKey)
   roundTrip "lines above a first key read back" firstKey
 
 -- | The faster renderer of the encoder gives the same output as the renderer
@@ -613,7 +936,8 @@ prop_fastRenderer (Doc n) =
 -- | The same for several documents.
 prop_fastRendererAll :: [Doc] -> Property
 prop_fastRendererAll docs =
-  encodeAllText ns === S.renderSyntax S.defaultRenderOptions (map (S.document . toYaml) ns)
+  encodeAllText ns
+    === S.renderSyntax S.defaultRenderOptions (map (S.document . toYaml) ns)
   where
     ns :: [Value]
     ns = [n | Doc n <- docs]
@@ -640,7 +964,12 @@ instance Arbitrary SimpleNode where
             frequency
               [ (3, genScalar)
               , (1, collection S.sequenceNode (genNode (size `div` 3)))
-              , (1, collection S.mappingNode ((,) <$> genNode (size `div` 3) <*> genNode (size `div` 3)))
+              ,
+                ( 1
+                , collection
+                    S.mappingNode
+                    ((,) <$> genNode (size `div` 3) <*> genNode (size `div` 3))
+                )
               , (1, elements [S.sequenceNode [], S.mappingNode []] >>= withTag)
               ]
 
@@ -659,13 +988,34 @@ instance Arbitrary SimpleNode where
 
       withTag :: S.Node -> Gen S.Node
       withTag n = do
-        tag <- frequency [(4, pure S.NoTag), (1, S.Tag <$> elements ["!t", "xy", "tag:yaml.org,2002:str", "", "a#b"])]
+        tag <-
+          frequency
+            [ (4, pure S.NoTag)
+            , (1, S.Tag <$> elements ["!t", "xy", "tag:yaml.org,2002:str", "", "a#b"])
+            ]
         pure n {S.props = S.Props Nothing tag}
 
       genText :: Gen T.Text
       genText =
         oneof
-          [ elements ["", " ", " a", "\ta", "a\n", "\n", " lead\nx", "-", "a: b", "#", "yes", "x'y", "a\x2028b", "a\x01", "---", "a\n\n"]
+          [ elements
+              [ ""
+              , " "
+              , " a"
+              , "\ta"
+              , "a\n"
+              , "\n"
+              , " lead\nx"
+              , "-"
+              , "a: b"
+              , "#"
+              , "yes"
+              , "x'y"
+              , "a\x2028b"
+              , "a\x01"
+              , "---"
+              , "a\n\n"
+              ]
           , T.pack <$> listOf (elements "ab :#\n\t'\"-")
           , pure (T.replicate 1030 "k")
           ]

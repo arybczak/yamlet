@@ -201,21 +201,34 @@ runParser :: (S.Node -> Parser a) -> S.Node -> Either (NE.NonEmpty (S.Offset, St
 runParser f n0 = firstOfResult $ runParserWithin (aliasLimit [n0]) 0 f n0
 
 -- | 'runParser' with the visits of the aliases as for 'prepareWithin'.
-runParserWithin :: Int -> Int -> (S.Node -> Parser a) -> S.Node -> Either (NE.NonEmpty (S.Offset, String)) (a, Int)
+runParserWithin
+  :: Int
+  -> Int
+  -> (S.Node -> Parser a)
+  -> S.Node
+  -> Either (NE.NonEmpty (S.Offset, String)) (a, Int)
 runParserWithin limit added f n0 = case prepareWithin limit added n0 of
   Left err -> Left err
   Right (n, added') -> case runChecked f n of
     Result NoErrors a -> Right (a, added')
-    Result e _ -> Left (NE.fromList (map (withMergeHint (mergeValues n)) (sortedErrors e)))
+    Result e _ ->
+      Left (NE.fromList (map (withMergeHint (mergeValues n)) (sortedErrors e)))
   where
     -- The errors in the order of their offsets, each with its notes after it.
     -- Errors at the same offset keep their order. An error comes only once:
     -- the nodes inside an alias have the offset of the alias, so the same
     -- error in several of them repeats at that offset.
     sortedErrors :: Errors -> [(S.Offset, String)]
-    sortedErrors = concatMap (\(off, msg, notes) -> (off, msg) : notes) . nubOrd . L.sortOn (\(off, _, _) -> off) . flip go []
+    sortedErrors =
+      concatMap (\(off, msg, notes) -> (off, msg) : notes)
+        . nubOrd
+        . L.sortOn (\(off, _, _) -> off)
+        . flip go []
       where
-        go :: Errors -> [(S.Offset, String, [(S.Offset, String)])] -> [(S.Offset, String, [(S.Offset, String)])]
+        go
+          :: Errors
+          -> [(S.Offset, String, [(S.Offset, String)])]
+          -> [(S.Offset, String, [(S.Offset, String)])]
         go = \case
           NoErrors -> id
           OneError off msg notes -> ((off, msg, notes) :)
@@ -231,7 +244,8 @@ runParserWithin limit added f n0 = case prepareWithin limit added n0 of
     mergeValues :: S.Node -> Set.Set S.Offset
     mergeValues n = case n.content of
       S.SequenceContent _ xs -> foldMap mergeValues xs
-      S.MappingContent _ kvs -> foldMap (\(k, v) -> mergeValue k v <> mergeValues k <> mergeValues v) kvs
+      S.MappingContent _ kvs ->
+        foldMap (\(k, v) -> mergeValue k v <> mergeValues k <> mergeValues v) kvs
       _ -> Set.empty
 
     mergeValue :: S.Node -> S.Node -> Set.Set S.Offset
@@ -282,7 +296,8 @@ mismatchMessage expected n = "expected " ++ expected ++ ", but got " ++ describe
 
 -- | The null node for a missing value.
 nullNode :: S.Node
-nullNode = S.Node S.noOffset S.noOffset S.noProps S.noComments (S.ScalarContent S.Plain "")
+nullNode =
+  S.Node S.noOffset S.noOffset S.noProps S.noComments (S.ScalarContent S.Plain "")
 
 -- | Run the second parser if the first one fails. A port can be a number or
 -- a name:
@@ -384,7 +399,10 @@ withText f = parseNode $ \n -> case view n of
 withName :: [T.Text] -> (T.Text -> Parser a) -> S.Node -> Parser a
 withName names f = parseNode $ \n -> case (view n, n.content) of
   (StringView t, _) -> f t
-  (_, S.ScalarContent S.Plain t) | S.NoTag <- n.props.tag, t `elem` names -> failAt n (stringMismatch n)
+  (_, S.ScalarContent S.Plain t)
+    | S.NoTag <- n.props.tag
+    , t `elem` names ->
+        failAt n (stringMismatch n)
   _ | null names -> failAt n "no value is accepted"
   _ -> typeMismatch ("one of: " ++ L.intercalate ", " (map T.unpack names)) n
 
@@ -409,7 +427,8 @@ withName names f = parseNode $ \n -> case (view n, n.content) of
 -- 1 | lage
 --   | ^
 oneOf :: [(T.Text, a)] -> S.Node -> Parser a
-oneOf choices n = withName names (\t -> maybe (unknownName "value" names n t) pure (lookup t choices)) n
+oneOf choices n =
+  withName names (\t -> maybe (unknownName "value" names n t) pure (lookup t choices)) n
   where
     names :: [T.Text]
     names = map fst choices
@@ -524,10 +543,22 @@ withMapping f = parseNode $ \n -> case n.content of
           kv@(k, _) : rest -> case stringValue k of
             Just t -> case M.insertLookupWithKey (\_ _ old -> old) t kv m of
               (Just (first, _), _) ->
-                go m (bothErrors errs (OneError k.offset ("duplicate key " ++ showText t) [(first.offset, "the first key " ++ showText t)])) others rest
+                go
+                  m
+                  ( bothErrors
+                      errs
+                      ( OneError
+                          k.offset
+                          ("duplicate key " ++ showText t)
+                          [(first.offset, "the first key " ++ showText t)]
+                      )
+                  )
+                  others
+                  rest
               (Nothing, m') -> go m' errs others rest
             Nothing -> case k.content of
-              S.ScalarContent style t -> go m errs ((k, scalarValue k.props.tag style t) : others) rest
+              S.ScalarContent style t ->
+                go m errs ((k, scalarValue k.props.tag style t) : others) rest
               _ -> go m errs others rest
 
 -- | A mapping with fast access to the values of string keys.
@@ -736,7 +767,8 @@ entryFieldMaybe p o key =
 
 -- | The value of a key that can be missing, with the given parser for the
 -- entry.
-entryFieldIfPresent :: ((S.Node, S.Node) -> Parser a) -> Object -> T.Text -> Parser (Maybe a)
+entryFieldIfPresent
+  :: ((S.Node, S.Node) -> Parser a) -> Object -> T.Text -> Parser (Maybe a)
 entryFieldIfPresent p o key = findKey o key >>= traverse p
 
 -- | The value of an entry, with errors that point to the value.
@@ -750,7 +782,9 @@ findKey :: Object -> T.Text -> Parser (Maybe (S.Node, S.Node))
 findKey o key = case M.lookup key o.index of
   Just entry -> pure (Just entry)
   Nothing -> case L.find (\(_, v) -> v == plain) o.otherKeys of
-    Just (k, v) -> failAt k $ "the key " ++ T.unpack (written k) ++ " is " ++ describe v ++ ", not a string"
+    Just (k, v) ->
+      failAt k $
+        "the key " ++ T.unpack (written k) ++ " is " ++ describe v ++ ", not a string"
     Nothing -> pure Nothing
   where
     plain :: Value
@@ -771,7 +805,8 @@ missingKey o key = Parser $ \off ->
   let Parser g = findKey o key
   in case g off of
        Result NoErrors _
-         | M.member "<<" o.index -> failure o.node.offset ("missing key " ++ showText key ++ noMergeKeys)
+         | M.member "<<" o.index ->
+             failure o.node.offset ("missing key " ++ showText key ++ noMergeKeys)
          | otherwise -> failure o.node.offset ("missing key " ++ showText key)
        Result e _ -> Result e failed
 
@@ -789,7 +824,9 @@ rejectUnknownKeys known o
   -- again, which saves the allocation of their text in the benchmarks
   -- derive.*.parseYaml.generic. The index has every key if the keys are
   -- strings without duplicates.
-  | M.size o.index == length o.entries && M.foldlWithKey' (\r k _ -> r && isKnown k) True o.index = pure ()
+  | M.size o.index == length o.entries
+      && M.foldlWithKey' (\r k _ -> r && isKnown k) True o.index =
+      pure ()
   | otherwise = go True o.entries
   where
     -- 'elem' is not specialized to 'T.Text' here, see the Core at -O, so it
@@ -814,7 +851,15 @@ rejectUnknownKeys known o
           | isKnown t -> go unlisted rest
           | t == "<<" -> unknown k t noMergeKeys *> go unlisted rest
           | Just s <- closeName known t -> unknown k t (didYouMean s) *> go unlisted rest
-          | unlisted -> unknown k t (if null known then ", the mapping must be empty" else expectedOneOf known) *> go False rest
+          | unlisted ->
+              unknown
+                k
+                t
+                ( if null known
+                    then ", the mapping must be empty"
+                    else expectedOneOf known
+                )
+                *> go False rest
           | otherwise -> unknown k t "" *> go False rest
         _
           | any (\r -> r.offset == k.offset) reported -> go unlisted rest
@@ -844,7 +889,15 @@ expectedOneOf known = ", expected one of: " ++ L.intercalate ", " (map T.unpack 
 -- | The known name that is close to the name, e.g. "host" for "hots".
 closeName :: [T.Text] -> T.Text -> Maybe T.Text
 closeName known t =
-  case L.sortOn fst [(d, s) | s <- known, abs (T.length s - n) <= maxEdits, let d = distance (T.unpack t) (T.unpack s), d <= maxEdits, d < n] of
+  case L.sortOn
+    fst
+    [ (d, s)
+    | s <- known
+    , abs (T.length s - n) <= maxEdits
+    , let d = distance (T.unpack t) (T.unpack s)
+    , d <= maxEdits
+    , d < n
+    ] of
     (_, s) : _ -> Just s
     [] -> Nothing
   where
@@ -950,7 +1003,8 @@ instance FromYaml a => FromYaml (S.Commented a) where
     flip S.Commented (S.copyComments v.comments)
       <$!> parseYaml (S.withComments S.noComments v)
   parseYamlField k v =
-    flip S.Commented (S.copyComments (S.Comments before inline v.comments.after)) <$!> parseYaml value
+    flip S.Commented (S.copyComments (S.Comments before inline v.comments.after))
+      <$!> parseYaml value
     where
       -- The lines above a value on the line of its key or in the flow style go
       -- above the entry, as the renderer writes them. The lines above the
@@ -1084,7 +1138,10 @@ instance FromYaml DiffTime where
 
 -- | The text form with hyphens, e.g. @123e4567-e89b-12d3-a456-426614174000@.
 instance FromYaml UUID.UUID where
-  parseYaml = withText $ maybe (fail "expected a UUID such as 123e4567-e89b-12d3-a456-426614174000") pure . UUID.fromText
+  parseYaml =
+    withText $
+      maybe (fail "expected a UUID such as 123e4567-e89b-12d3-a456-426614174000") pure
+        . UUID.fromText
 
 -- | @YYYY-MM@, e.g. @2026-09@.
 instance FromYaml Month where
@@ -1201,14 +1258,28 @@ instance FromYaml v => FromYaml (IM.IntMap v) where
 instance (Ord a, FromYaml a) => FromYaml (Set.Set a) where
   parseYaml =
     withSequence $
-      insertUnique id (parseNode parseYaml) id (Set.alterF (,True)) Set.empty ("duplicate element" ++) ("the first element" ++)
+      insertUnique
+        id
+        (parseNode parseYaml)
+        id
+        (Set.alterF (,True))
+        Set.empty
+        ("duplicate element" ++)
+        ("the first element" ++)
 
 -- | A list. Two elements that convert to the same value, e.g. @1@ and @0x1@,
 -- are an error.
 instance FromYaml IS.IntSet where
   parseYaml =
     withSequence $
-      insertUnique id (parseNode parseYaml) id (IS.alterF (,True)) IS.empty ("duplicate element" ++) ("the first element" ++)
+      insertUnique
+        id
+        (parseNode parseYaml)
+        id
+        (IS.alterF (,True))
+        IS.empty
+        ("duplicate element" ++)
+        ("the first element" ++)
 
 -- | A map from the entries of a mapping, with the alter function and the empty
 -- map of its type. Two keys that convert to the same key are an error.
@@ -1218,7 +1289,15 @@ uniqueEntries
 uniqueEntries alter none = parseNode $ \n -> case n.content of
   -- The index of 'withMapping' would be of no use here.
   S.MappingContent _ kvs ->
-    insertUnique fst entry fst (\(k, v) -> alter (\old -> (isJust old, old <|> Just v)) k) none (\t -> "duplicate key" ++ t ++ " after conversion") ("the first key" ++) kvs
+    insertUnique
+      fst
+      entry
+      fst
+      (\(k, v) -> alter (\old -> (isJust old, old <|> Just v)) k)
+      none
+      (\t -> "duplicate key" ++ t ++ " after conversion")
+      ("the first key" ++)
+      kvs
   _ -> typeMismatch "a mapping" n
   where
     entry :: (FromYaml k, FromYaml v) => (S.Node, S.Node) -> Parser (k, v)
@@ -1241,25 +1320,33 @@ insertUnique
   -> (String -> String)
   -> [a]
   -> Parser s
-insertUnique node item key insert start msg note xs = Parser $ \off -> go off start NoErrors [] [] xs
+insertUnique node item key insert start msg note xs =
+  Parser $ \off -> go off start NoErrors [] [] xs
   where
     -- The duplicates and the failed items are in reverse.
     go :: S.Offset -> s -> Errors -> [(c, S.Node)] -> [S.Offset] -> [a] -> Result s
     go off !acc errs dups fails = \case
       [] -> case (errs, dups) of
         (NoErrors, []) -> Result NoErrors acc
-        _ -> Result (L.foldl' bothErrors errs (map (duplicateError (firsts off fails)) dups)) failed
+        _ ->
+          Result
+            (L.foldl' bothErrors errs (map (duplicateError (firsts off fails)) dups))
+            failed
       a : rest ->
         let Parser p = item a
         in case p off of
              Result NoErrors x -> case insert x acc of
                (False, acc') -> go off acc' errs dups fails rest
                (True, acc') -> go off acc' errs ((key x, node a) : dups) fails rest
-             Result e _ -> go off acc (bothErrors errs e) dups ((node a).offset : fails) rest
+             Result e _ ->
+               go off acc (bothErrors errs e) dups ((node a).offset : fails) rest
 
     duplicateError :: M.Map c S.Node -> (c, S.Node) -> Errors
     duplicateError fs (c, n) =
-      OneError n.offset (msg (text n)) [(first.offset, note (text first)) | Just first <- [M.lookup c fs]]
+      OneError
+        n.offset
+        (msg (text n))
+        [(first.offset, note (text first)) | Just first <- [M.lookup c fs]]
 
     text :: S.Node -> String
     text = maybe "" (' ' :) . inputText
@@ -1306,7 +1393,10 @@ instance (Integral a, FromYaml a) => FromYaml (Ratio a) where
   parseYaml = withMapping $ \o -> do
     (n, d) <-
       rejectUnknownKeys ["numerator", "denominator"] o
-        *> ((,) <$> parseField @a o "numerator" <*> parseFieldWith nonZero o "denominator")
+        *> ( (,)
+               <$> parseField @a o "numerator"
+               <*> parseFieldWith nonZero o "denominator"
+           )
     -- The reduction happens in Integer, where the gcd is fast. For another
     -- type, the gcd takes quadratic time in the number of digits, and in a
     -- bounded type, a negation can overflow, e.g. of minBound.
@@ -1343,7 +1433,11 @@ instance HasResolution a => FromYaml (Fixed a) where
       -- 0.03 for 1/40 and 0.4 for 1/3.
       step :: String
       step = case decimalPlaces res of
-        Just places -> Sci.formatScientific Sci.Fixed (Just places) (Sci.scientific (10 ^ places `div` res) (negate places))
+        Just places ->
+          Sci.formatScientific
+            Sci.Fixed
+            (Just places)
+            (Sci.scientific (10 ^ places `div` res) (negate places))
         Nothing -> "1/" ++ show res
 
 -- | The value inside.
@@ -1410,7 +1504,10 @@ instance (FromYaml a1, FromYaml a2, FromYaml a3) => FromYaml (a1, a2, a3) where
     [a1, a2, a3] -> (,,) <$> element a1 <*> element a2 <*> element a3
     xs -> tupleSize 3 xs
 
-instance (FromYaml a1, FromYaml a2, FromYaml a3, FromYaml a4) => FromYaml (a1, a2, a3, a4) where
+instance
+  (FromYaml a1, FromYaml a2, FromYaml a3, FromYaml a4)
+  => FromYaml (a1, a2, a3, a4)
+  where
   parseYaml = withSequence $ \case
     [a1, a2, a3, a4] -> (,,,) <$> element a1 <*> element a2 <*> element a3 <*> element a4
     xs -> tupleSize 4 xs
@@ -1440,7 +1537,14 @@ instance
     xs -> tupleSize 6 xs
 
 instance
-  (FromYaml a1, FromYaml a2, FromYaml a3, FromYaml a4, FromYaml a5, FromYaml a6, FromYaml a7)
+  ( FromYaml a1
+  , FromYaml a2
+  , FromYaml a3
+  , FromYaml a4
+  , FromYaml a5
+  , FromYaml a6
+  , FromYaml a7
+  )
   => FromYaml (a1, a2, a3, a4, a5, a6, a7)
   where
   parseYaml = withSequence $ \case
@@ -1456,7 +1560,15 @@ instance
     xs -> tupleSize 7 xs
 
 instance
-  (FromYaml a1, FromYaml a2, FromYaml a3, FromYaml a4, FromYaml a5, FromYaml a6, FromYaml a7, FromYaml a8)
+  ( FromYaml a1
+  , FromYaml a2
+  , FromYaml a3
+  , FromYaml a4
+  , FromYaml a5
+  , FromYaml a6
+  , FromYaml a7
+  , FromYaml a8
+  )
   => FromYaml (a1, a2, a3, a4, a5, a6, a7, a8)
   where
   parseYaml = withSequence $ \case
@@ -1534,7 +1646,8 @@ element = parseNode parseYaml
 
 -- | The error for a list with the wrong number of elements for a tuple.
 tupleSize :: Int -> [S.Node] -> Parser a
-tupleSize n xs = fail $ "expected a list of " ++ show n ++ " elements, but got " ++ show (length xs)
+tupleSize n xs =
+  fail $ "expected a list of " ++ show n ++ " elements, but got " ++ show (length xs)
 
 -- $setup
 -- >>> import Yamlet

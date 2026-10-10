@@ -36,11 +36,19 @@ parsing name bs =
     , bgroup
         "HsYAML"
         [ bench "events" $ nf HE.parseEvents lazy
-        , bench "nodes" $ nf (foldMap (\(H.Doc n) -> forceNode n) . either (error . show) id . H.decodeNode) lazy
+        , bench "nodes" $
+            nf
+              ( foldMap (\(H.Doc n) -> forceNode n)
+                  . either (error . show) id
+                  . H.decodeNode
+              )
+              lazy
         ]
     , bgroup
         "yaml"
-        [bench "aeson value" $ nf (either (error . show) id . Y.decodeEither' @J.Value) bs]
+        [ bench "aeson value" $
+            nf (either (error . show) id . Y.decodeEither' @J.Value) bs
+        ]
     ]
   where
     lazy :: BL.ByteString
@@ -62,7 +70,8 @@ parsing name bs =
 
 -- | The benchmark that renders the syntax tree of an input.
 rendering :: String -> BS.ByteString -> Benchmark
-rendering name bs = bgroup name [bench "yamlet" $ nf (S.renderSyntax S.defaultRenderOptions) trees]
+rendering name bs =
+  bgroup name [bench "yamlet" $ nf (S.renderSyntax S.defaultRenderOptions) trees]
   where
     trees :: [S.Document]
     trees = either (error . show) id $ S.parseDocuments bs
@@ -109,7 +118,8 @@ aesonDecoding :: forall a. (NFData a, J.FromJSON a) => BS.ByteString -> Benchmar
 aesonDecoding bs = bench "aeson" $ nf (either error id . J.eitherDecodeStrict' @a) bs
 
 -- | The benchmark that encodes the value of a JSON input as JSON with aeson.
-aesonEncoding :: forall a. (NFData a, FromYaml a, J.ToJSON a) => BS.ByteString -> Benchmark
+aesonEncoding
+  :: forall a. (NFData a, FromYaml a, J.ToJSON a) => BS.ByteString -> Benchmark
 aesonEncoding bs = bench "aeson" $ nf J.encode value
   where
     value :: a

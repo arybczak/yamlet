@@ -17,11 +17,17 @@ typeErrorTests =
   testGroup
     "Type errors"
     [ testCase "several fields without names" $ do
-        rejects "The constructor Pair has several fields without names." (encodeText (Pair 1 "a"))
-        rejects "The constructor Pair has several fields without names." (decodeText @Pair "[1, a]")
+        rejects
+          "The constructor Pair has several fields without names."
+          (encodeText (Pair 1 "a"))
+        rejects
+          "The constructor Pair has several fields without names."
+          (decodeText @Pair "[1, a]")
         rejects "Give the fields names." (encodeText (Pair 1 "a"))
     , testCase "several fields without names in a sum" $
-        rejects "The constructor Line has several fields without names." (encodeText (Line 1 2))
+        rejects
+          "The constructor Line has several fields without names."
+          (encodeText (Line 1 2))
     , testCase "named fields and a field without a name" $ do
         rejects
           "The constructor Circle has named fields and the constructor Label has one field without a name."
@@ -33,7 +39,9 @@ typeErrorTests =
           (encodeText (Jump 1))
         rejects flatFieldsFix (encodeText (Jump 1))
     , testCase "flat several fields without names" $ do
-        rejects "The constructor Leap has several fields without names." (encodeText (Leap 1 2))
+        rejects
+          "The constructor Leap has several fields without names."
+          (encodeText (Leap 1 2))
         rejects flatFieldsFix (encodeText (Leap 1 2))
     , testCase "flat named fields and a field without a name" $ do
         rejects
@@ -41,9 +49,13 @@ typeErrorTests =
           (encodeText (Wait 1))
         rejects flatFieldsFix (encodeText (Wait 1))
     , testCase "several fields without names in a single field" $
-        rejects "The constructor Coords has several fields without names." (encodeText (Coords 1 2))
+        rejects
+          "The constructor Coords has several fields without names."
+          (encodeText (Coords 1 2))
     , testCase "no constructors" $
-        rejects "A type without constructors cannot derive FromYaml or ToYaml" (decodeText @Empty "null")
+        rejects
+          "A type without constructors cannot derive FromYaml or ToYaml"
+          (decodeText @Empty "null")
     ]
 
 data Pair = Pair Int T.Text
@@ -83,7 +95,8 @@ instance GenericYamlOptions FlatMixed where
   type SumEncoding FlatMixed = TaggedFlat
 
 flatFieldsFix :: String
-flatFieldsFix = "Put the fields in a record type, and make it the one field of the constructor."
+flatFieldsFix =
+  "Put the fields in a record type, and make it the one field of the constructor."
 
 data Place = Coords Double Double | Nowhere
   deriving stock (Generic)
@@ -102,5 +115,7 @@ rejects :: String -> a -> Assertion
 rejects expected x =
   try (evaluate x) >>= \case
     Left (TypeError msg) ->
-      assertBool ("the message contains " ++ show expected ++ ":\n" ++ msg) (expected `L.isInfixOf` msg)
+      assertBool
+        ("the message contains " ++ show expected ++ ":\n" ++ msg)
+        (expected `L.isInfixOf` msg)
     Right _ -> assertFailure "expected a type error"
