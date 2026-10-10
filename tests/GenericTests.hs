@@ -37,9 +37,9 @@ genericTests =
     , testCase "modifiers" test_modifiers
     , testCase "commented fields" test_commentedFields
     , testCase "commented values" test_commentedValues
-    , testProperty "snakeCase is camelTo2 of aeson" $ forAll name $ \s ->
+    , testProperty "snakeCase is camelTo2 of aeson" . forAll name $ \s ->
         snakeCase s === A.camelTo2 '_' s
-    , testProperty "kebabCase is camelTo2 of aeson" $ forAll name $ \s ->
+    , testProperty "kebabCase is camelTo2 of aeson" . forAll name $ \s ->
         kebabCase s === A.camelTo2 '-' s
     ]
   where
@@ -718,7 +718,7 @@ test_parameters = do
   assertEqual
     "null field with a comment"
     "name: a\n# b\nextra: null\n"
-    $ encodeText
+    . encodeText
     $ Sparse "a" (Commented (Nothing @Int) (Comments [Comment "b"] Nothing []))
   assertEqual
     "null field without comments left out"

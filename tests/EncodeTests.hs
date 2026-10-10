@@ -226,7 +226,7 @@ test_time = do
   assertEqual
     "zoned time of the year 0"
     "'0000-06-01T12:00:00+01:00'\n"
-    $ encodeText
+    . encodeText
     $ ZonedTime
       (LocalTime (fromGregorian 0 6 1) (TimeOfDay 12 0 0))
       (hoursToTimeZone 1)
@@ -237,7 +237,7 @@ test_time = do
   assertEqual
     "time zone of 25 hours"
     "'2024-01-01T12:00:00+25:00'\n"
-    $ encodeText
+    . encodeText
     $ ZonedTime
       (LocalTime (fromGregorian 2024 1 1) (TimeOfDay 12 0 0))
       (hoursToTimeZone 25)

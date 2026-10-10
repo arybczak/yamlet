@@ -108,9 +108,8 @@ numberWithin limit added root = do
            S.AliasContent name -> case M.lookup name st.anchors of
              Just (Just (v, i, visits))
                | st.added + visits > limit ->
-                   Left
-                     $ failure off
-                     $ "the aliases add more than "
+                   Left . failure off $
+                     "the aliases add more than "
                        ++ show limit
                        ++ " nodes and characters"
                | otherwise ->
@@ -119,13 +118,10 @@ numberWithin limit added root = do
                      , st {visits = st.visits + visits, added = st.added + visits}
                      )
              Just Nothing ->
-               Left
-                 $ failure off
-                 $ "the alias *" ++ T.unpack name ++ " refers to a node that contains it"
+               Left . failure off $
+                 "the alias *" ++ T.unpack name ++ " refers to a node that contains it"
              Nothing ->
-               Left
-                 $ failure off
-                 $ "undefined alias *" ++ T.unpack name
+               Left . failure off $ "undefined alias *" ++ T.unpack name
            S.ScalarContent style t -> do
              v <- scalar off props style t
              let visits = ownVisits sn
@@ -454,9 +450,8 @@ scalar off props style t = case props.tag of
         Left _
           | off == S.noOffset -> Left $ failure off exponentOutOfRange
           | otherwise ->
-              Left
-                $ failure off
-                $ exponentOutOfRange
+              Left . failure off $
+                exponentOutOfRange
                   ++ ", quote the value if it is a string, e.g. '"
                   ++ T.unpack t
                   ++ "'"
@@ -464,18 +459,16 @@ scalar off props style t = case props.tag of
   S.NonSpecificTag -> Right (String t)
   S.Tag tag
     | tag == seqTag || tag == mapTag ->
-        Left
-          $ failure off
-          $ "the tag !!"
+        Left . failure off $
+          "the tag !!"
             ++ T.unpack (T.drop (T.length coreTagPrefix) tag)
             ++ " cannot be used on a scalar"
     | otherwise -> case resolveTaggedExact tag t of
         Just (Right v) -> Right (withTag tag v)
         Just (Left _) -> Left $ failure off exponentOutOfRange
         Nothing ->
-          Left
-            $ failure off
-            $ "invalid value for the tag !!"
+          Left . failure off $
+            "invalid value for the tag !!"
               ++ T.unpack (T.drop (T.length coreTagPrefix) tag)
               ++ if tag == boolTag && isYaml11Bool t
                 then ", " ++ showText t ++ " is a boolean only in YAML 1.1"
@@ -488,9 +481,8 @@ collectionTag off props def = case props.tag of
   S.Tag tag
     | tag == def || not (isCoreTag tag) -> Right tag
     | otherwise ->
-        Left
-          $ failure off
-          $ "the tag !!"
+        Left . failure off $
+          "the tag !!"
             ++ T.unpack (T.drop (T.length coreTagPrefix) tag)
             ++ " cannot be used on a "
             ++ (if def == seqTag then "sequence" else "mapping")

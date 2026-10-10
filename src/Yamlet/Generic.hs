@@ -1261,9 +1261,8 @@ instance
     | gNamed @f =
         Just (withMapping (fmap (k . M1) . fromObject opts False [] (unM1 <$> def)) v)
     | gArity @f == 0 =
-        Just
-          $ failAt kn
-          $ "expected the string "
+        Just . failAt kn $
+          "expected the string "
             ++ showText t
             ++ ", because the constructor has no fields"
     | otherwise = Just (k . M1 <$> gFromEntry entry)

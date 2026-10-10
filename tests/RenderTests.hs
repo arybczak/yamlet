@@ -259,7 +259,7 @@ test_fallbacks = do
   assertEqual
     "keep indicator"
     "- |+\n  a\n\n- b\n"
-    $ render
+    . render
     $ sequenceNode
       [ scalarNode Literal "a\n\n"
       , (plainNode "b") {comments = noComments {before = [EmptyLine]}}
@@ -273,7 +273,7 @@ test_fallbacks = do
   assertEqual
     "empty item of a flow sequence"
     "[!!null , a, !!null ]\n"
-    $ render
+    . render
     $ contentNode (SequenceContent Flow [plainNode "", plainNode "a", plainNode ""])
   assertEqual
     "empty tagged values in flow collections"
@@ -285,8 +285,8 @@ test_fallbacks = do
   assertEqual
     "indicators in plain scalars of a flow collection"
     "['?a', 'a?b', ':a', 'a:?', a:b, -a]\n"
-    $ render
-    $ contentNode
+    . render
+    . contentNode
     $ SequenceContent Flow (map plainNode ["?a", "a?b", ":a", "a:?", "a:b", "-a"])
   rendersAs
     "empty keys and values in flow mappings"
@@ -321,8 +321,8 @@ test_fallbacks = do
   assertEqual
     "flow key that a tag makes long, without a value"
     ("{? " <> longTag <> " , b: c}\n")
-    $ render
-    $ contentNode
+    . render
+    . contentNode
     $ MappingContent Flow [(longTagged, plainNode ""), (plainNode "b", plainNode "c")]
   assertEqual
     "long flow keys read back"
@@ -332,7 +332,8 @@ test_fallbacks = do
         , Mapping [(String (T.replicate 1020 "a"), Int 1)]
         ]
     )
-    $ decodeAllText @Value . renderSyntax defaultRenderOptions
+    . decodeAllText @Value
+    . renderSyntax defaultRenderOptions
     $ map
       document
       [ flowEntry (plainNode long) (plainNode "1")
@@ -397,7 +398,8 @@ test_fallbacks = do
   assertEqual
     "invalid anchor names"
     "[&a_b x, *a_b, &a_b_2 y, *a_b_2, &anchor z, *anchor]\n"
-    $ render . contentNode
+    . render
+    . contentNode
     $ SequenceContent
       Flow
       [ anchored "a b" (plainNode "x")
@@ -453,7 +455,7 @@ test_fallbacks = do
   assertEqual
     "taken anchor name"
     "- &a_b x\n- &a_b_2 y\n- *a_b_2\n"
-    $ render
+    . render
     $ sequenceNode
       [ anchored "a_b" (plainNode "x")
       , anchored "a b" (plainNode "y")
@@ -462,7 +464,7 @@ test_fallbacks = do
   assertEqual
     "anchor names with line separators"
     "- &a_b x\n- &c_d y\n- *a_b\n- *c_d\n"
-    $ render
+    . render
     $ sequenceNode
       [ anchored "a\x2028\&b" (plainNode "x")
       , anchored "c\x2029\&d" (plainNode "y")
@@ -814,7 +816,7 @@ test_documents = do
     "k: v\n\n# c\n...\n---\nb\n"
     [[("", "after", "c")], []]
     [ document
-        $ withLines noComments {after = [Comment "c"]}
+        . withLines noComments {after = [Comment "c"]}
         $ mappingNode
           [
             ( plainNode "k"
@@ -1536,12 +1538,12 @@ test_movedComments = do
   assertEqual
     "lines after a scalar key"
     "# b\nk: 1\n  # a\n"
-    $ render
+    . render
     $ mappingNode [(withAfter "a" (withBefore "b" (plainNode "k")), plainNode "1")]
   assertEqual
     "lines after a scalar key with a block scalar value"
     "# a\nk: |\n  text\n"
-    $ render
+    . render
     $ mappingNode
       [
         ( withAfter "a" (plainNode "k")
@@ -1551,7 +1553,7 @@ test_movedComments = do
   assertEqual
     "lines after a block scalar value"
     "k: |\n  text\n# a\nx: 1\n"
-    $ render
+    . render
     $ mappingNode
       [
         ( plainNode "k"
@@ -1562,13 +1564,13 @@ test_movedComments = do
   assertEqual
     "lines after a list item"
     "- 1\n  # a\n- 2\n"
-    $ render
-    $ contentNode
+    . render
+    . contentNode
     $ SequenceContent Block [withAfter "a" (plainNode "1"), plainNode "2"]
   assertEqual
     "empty lines at the end of an empty flow collection"
     "a: [\n  # c\n  ]\n\nb: 1\n"
-    $ render
+    . render
     $ mappingNode
       [
         ( plainNode "a"
@@ -1581,18 +1583,18 @@ test_movedComments = do
   assertEqual
     "two comments on one line"
     "# k\na: 1 # v\n"
-    $ render
+    . render
     $ mappingNode [(withInline "k" (plainNode "a"), withInline "v" (plainNode "1"))]
   assertEqual
     "two comments on one line, one with a line break"
     "# k l\na: 1 # v\n"
-    $ render
+    . render
     $ mappingNode
       [(withInline "k\nl" (plainNode "a"), withInline "v" (plainNode "1"))]
   assertEqual
     "comment in a flow sequence"
     "a:\n- 1 # c\n- 2\n"
-    $ render
+    . render
     $ mappingNode
       [
         ( plainNode "a"
@@ -1603,7 +1605,7 @@ test_movedComments = do
   assertEqual
     "YAML 1.1 line breaks in comments"
     "# a\n# b\n# c\n# d\nk: v # e f g h\n"
-    $ render
+    . render
     $ mappingNode
       [
         ( withBefore "a\x85\&b\x2028\&c\x2029\&d" (plainNode "k")

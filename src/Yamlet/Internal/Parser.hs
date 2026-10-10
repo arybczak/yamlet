@@ -574,9 +574,8 @@ directives = go Nothing defaultHandles Set.empty
               go (Just v) hs defined
             "TAG" -> do
               (handle, prefix) <- tagDirective
-              when (handle `Set.member` defined)
-                $ throwAt p
-                $ "duplicate %TAG directive for " ++ T.unpack handle
+              when (handle `Set.member` defined) . throwAt p $
+                "duplicate %TAG directive for " ++ T.unpack handle
               sLComments <|> throwAfter "unexpected content after the tag prefix"
               go version (M.insert handle prefix hs) (Set.insert handle defined)
             _ -> do
@@ -623,9 +622,8 @@ directives = go Nothing defaultHandles Set.empty
       minor <- number v
       w' <- peek
       when (isNsChar w') $ throwAt v badVersion
-      when (major /= 1)
-        $ throwAt p
-        $ "unsupported YAML version " ++ show major ++ "." ++ show minor
+      when (major /= 1) . throwAt p $
+        "unsupported YAML version " ++ show major ++ "." ++ show minor
       pure $ YamlVersion major minor
       where
         badVersion :: String
@@ -839,9 +837,8 @@ cNsTagProperty = do
           unless (M.lookup handle defaultHandles == Just prefix) $ do
             added <- addTagBytes (T.lengthWord8 prefix)
             let limit = max minExpansion (e.streamEnd - e.base)
-            when (added > limit)
-              $ throwAt p
-              $ "the prefixes of %TAG directives add more than "
+            when (added > limit) . throwAt p $
+              "the prefixes of %TAG directives add more than "
                 ++ show limit
                 ++ " bytes to the tags"
           case percentDecode (prefix <> slice e q r) of

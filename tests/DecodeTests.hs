@@ -610,7 +610,7 @@ test_time = do
     assertEqual
       ("duration with the exponent " ++ show ex)
       (Left "the exponent of the number is out of the range from -1000 to 1000")
-      $ first (snd . NE.head)
+      . first (snd . NE.head)
       $ runParser
         (parseYaml @NominalDiffTime)
         (toYaml (Float (Finite (Sci.scientific 1 ex))))
@@ -2274,12 +2274,12 @@ test_typeErrors = do
   assertEqual
     "negation of minBound"
     (Just (1, 1, "the fraction is out of the range of the type"))
-    $ errorOf
+    . errorOf
     $ decodeText @(Ratio Int) "{numerator: -9223372036854775808, denominator: -1}"
   assertEqual
     "minBound as the denominator"
     (Just (1, 1, "the fraction is out of the range of the type"))
-    $ errorOf
+    . errorOf
     $ decodeText @(Ratio Int) "{numerator: 1, denominator: -9223372036854775808}"
   assertEqual
     "minBound reduced"
@@ -2328,7 +2328,7 @@ test_typeErrors = do
   assertEqual
     "fixed with a huge exponent"
     (Left "the exponent of the number is out of the range from -1000 to 1000")
-    $ first (snd . NE.head)
+    . first (snd . NE.head)
     $ runParser
       (parseYaml @Centi)
       (toYaml (Float (Finite (Sci.scientific 1 maxBound))))
@@ -2574,8 +2574,8 @@ test_keyErrors = do
   assertEqual
     "duplicate among many scalar keys"
     (Just ((21, 1, "duplicate key \"k1\""), (1, 1, "the first key \"k1\"")))
-    $ errorWithNote
-    $ decodeAllText @Value
+    . errorWithNote
+    . decodeAllText @Value
     $ T.unlines [T.pack ("k" ++ show i ++ ": 1") | i <- [1 .. 20 :: Int] ++ [1]]
   assertEqual
     "duplicate scalar key after a collection key"
@@ -2813,8 +2813,8 @@ test_longNumbers = do
         , (1, 2, "the first key 0.1" ++ T.unpack zeros)
         )
     )
-    $ errorWithNote
-    $ decodeAllText @Value
+    . errorWithNote
+    . decodeAllText @Value
     $ "{0.1" <> zeros <> ": a, 0.5" <> zeros <> ": b, 0.1" <> zeros <> "0: c}"
   -- The gcd of a reduction takes quadratic time for most types.
   let big = 3 ^ (1000000 :: Int) :: Integer
@@ -2872,13 +2872,13 @@ test_manyKeys = do
   assertEqual
     "large equal keys"
     (Just ((3, 3, "duplicate key"), (1, 3, "the first key")))
-    $ errorWithNote
+    . errorWithNote
     $ decodeAllText @Value ("? " <> large <> "\n: 1\n? " <> large <> "\n: 2\n")
   let deep = nestedKey 14 "0"
   assertEqual
     "nested equal keys"
     (Just ((3, 3, "duplicate key"), (1, 3, "the first key")))
-    $ errorWithNote
+    . errorWithNote
     $ decodeAllText @Value ("? " <> deep <> "\n: 1\n? " <> deep <> "\n: 2\n")
   where
     -- Two mappings as keys that differ only in their last value.

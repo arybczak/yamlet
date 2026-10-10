@@ -219,9 +219,8 @@ decodeWithDocument :: FromYaml a => T.Text -> Either (NE.NonEmpty Error) (a, S.D
 decodeWithDocument input =
   single (parseStream input) >>= \case
     [] ->
-      withDocument
-        $ S.document
-        $ S.Node
+      withDocument . S.document $
+        S.Node
           (S.Offset 0)
           (S.Offset 0)
           S.noProps
