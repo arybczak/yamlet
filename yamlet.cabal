@@ -157,10 +157,26 @@ test-suite test
     main-is:        Main.hs
 
     other-modules:  Yamlet.Test.Decode
+                    Yamlet.Test.Decode.Errors
+                    Yamlet.Test.Decode.Helpers
+                    Yamlet.Test.Decode.Input
+                    Yamlet.Test.Decode.Limits
+                    Yamlet.Test.Decode.Scalars
+                    Yamlet.Test.Decode.SyntaxErrors
+                    Yamlet.Test.Decode.Values
                     Yamlet.Test.Encode
+                    Yamlet.Test.Encode.Comments
+                    Yamlet.Test.Encode.Properties
+                    Yamlet.Test.Encode.Values
                     Yamlet.Test.Generic
                     Yamlet.Test.Helpers
                     Yamlet.Test.Render
+                    Yamlet.Test.Render.Attachment
+                    Yamlet.Test.Render.Comments
+                    Yamlet.Test.Render.Documents
+                    Yamlet.Test.Render.Helpers
+                    Yamlet.Test.Render.Properties
+                    Yamlet.Test.Render.Styles
                     Yamlet.Test.Thunks
                     Yamlet.Test.TypeError
                     Yamlet.Test.YamlTestSuite
