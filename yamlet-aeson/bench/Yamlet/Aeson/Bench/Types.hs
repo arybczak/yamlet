@@ -1,6 +1,6 @@
 -- | The types that the inputs decode into, with written instances of yamlet
 -- and aeson, the same as in the benchmarks of yamlet.
-module Types
+module Yamlet.Aeson.Bench.Types
   ( Config (..)
   , Nested (..)
   , Json (..)
@@ -14,7 +14,7 @@ import Data.Scientific qualified as Sci
 import Data.Text qualified as T
 import Yamlet
 
--- | An entry of 'Inputs.config'.
+-- | An entry of 'Yamlet.Aeson.Bench.Inputs.config'.
 data Config = Config
   { name :: T.Text
   , itemId :: Int
@@ -35,7 +35,7 @@ data Nested = Nested
   deriving stock (Generic)
   deriving anyclass (NFData)
 
--- | An entry of 'Inputs.json'.
+-- | An entry of 'Yamlet.Aeson.Bench.Inputs.json'.
 data Json = Json
   { itemId :: Int
   , name :: T.Text

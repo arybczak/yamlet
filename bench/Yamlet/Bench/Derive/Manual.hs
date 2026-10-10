@@ -1,5 +1,5 @@
--- | The types of "Derive.Generic" with written instances.
-module Derive.Manual
+-- | The types of "Yamlet.Bench.Derive.Generic" with written instances.
+module Yamlet.Bench.Derive.Manual
   ( A (..)
   , B (..)
   , C (..)
@@ -12,8 +12,8 @@ module Derive.Manual
 import Control.DeepSeq
 import Data.Text qualified as T
 
-import Derive.Fields
 import Yamlet
+import Yamlet.Bench.Derive.Fields
 
 data A = A
   { a01 :: T.Text

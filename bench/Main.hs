@@ -6,10 +6,10 @@ import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
 import Test.Tasty.Bench
 
-import Derive
-import Inputs
-import Libraries
-import Types
+import Yamlet.Bench.Derive
+import Yamlet.Bench.Inputs
+import Yamlet.Bench.Libraries
+import Yamlet.Bench.Types
 
 -- | The benchmarks are grouped by the operation, so that the times of the
 -- libraries for one operation and input are next to each other.

@@ -1,6 +1,6 @@
--- | The values of the benchmark types, shared by "Derive.Generic" and
--- "Derive.Manual".
-module Derive.Fields
+-- | The values of the benchmark types, shared by "Yamlet.Bench.Derive.Generic" and
+-- "Yamlet.Bench.Derive.Manual".
+module Yamlet.Bench.Derive.Fields
   ( fields
   ) where
 

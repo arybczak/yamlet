@@ -12,9 +12,9 @@ import Data.Yaml qualified as Y
 import Test.Tasty.Bench
 import Yamlet
 
-import Inputs
-import Types
 import Yamlet.Aeson
+import Yamlet.Aeson.Bench.Inputs
+import Yamlet.Aeson.Bench.Types
 
 -- | The benchmarks are grouped by the operation, so that the times of the
 -- libraries for one operation and input are next to each other.

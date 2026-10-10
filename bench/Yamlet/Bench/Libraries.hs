@@ -1,7 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
 -- | The benchmarks that compare yamlet with the other libraries.
-module Libraries
+module Yamlet.Bench.Libraries
   ( parsing
   , rendering
   , decoding

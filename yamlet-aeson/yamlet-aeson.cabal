@@ -134,5 +134,5 @@ benchmark bench
     type:           exitcode-stdio-1.0
     main-is:        Main.hs
 
-    other-modules:  Inputs
-                    Types
+    other-modules:  Yamlet.Aeson.Bench.Inputs
+                    Yamlet.Aeson.Bench.Types

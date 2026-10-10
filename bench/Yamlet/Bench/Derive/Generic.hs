@@ -1,6 +1,6 @@
--- | The benchmark types with generic instances. "Derive.Manual" has the
+-- | The benchmark types with generic instances. "Yamlet.Bench.Derive.Manual" has the
 -- same types with written instances, which give the same YAML.
-module Derive.Generic
+module Yamlet.Bench.Derive.Generic
   ( A (..)
   , B (..)
   , C (..)
@@ -13,8 +13,8 @@ module Derive.Generic
 import Control.DeepSeq
 import Data.Text qualified as T
 
-import Derive.Fields
 import Yamlet
+import Yamlet.Bench.Derive.Fields
 
 data A = A
   { a01 :: T.Text

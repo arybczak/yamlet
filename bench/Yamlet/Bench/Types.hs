@@ -1,6 +1,6 @@
 -- | The types that the inputs decode into, with written instances for each
 -- library.
-module Types
+module Yamlet.Bench.Types
   ( Config (..)
   , Nested (..)
   , Json (..)
@@ -16,7 +16,7 @@ import Data.YAML qualified as H
 
 import Yamlet
 
--- | An entry of 'Inputs.config'.
+-- | An entry of 'Yamlet.Bench.Inputs.config'.
 data Config = Config
   { name :: T.Text
   , itemId :: Int
@@ -37,7 +37,7 @@ data Nested = Nested
   deriving stock (Generic)
   deriving anyclass (NFData)
 
--- | An entry of 'Inputs.json'.
+-- | An entry of 'Yamlet.Bench.Inputs.json'.
 data Json = Json
   { itemId :: Int
   , name :: T.Text

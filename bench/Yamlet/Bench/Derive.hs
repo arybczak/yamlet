@@ -1,5 +1,5 @@
 -- | The benchmarks that compare generic instances with written ones.
-module Derive
+module Yamlet.Bench.Derive
   ( checkDerived
   , derived
   ) where
@@ -9,9 +9,9 @@ import Control.Monad
 import Data.ByteString qualified as BS
 import Test.Tasty.Bench
 
-import Derive.Generic qualified as G
-import Derive.Manual qualified as M
 import Yamlet
+import Yamlet.Bench.Derive.Generic qualified as G
+import Yamlet.Bench.Derive.Manual qualified as M
 
 -- | Fail if the two versions of a type give different YAML.
 checkDerived :: IO ()

@@ -1,8 +1,8 @@
--- | The generated YAML inputs of the benchmarks, the same as in the
--- benchmarks of yamlet.
-module Inputs
+-- | The generated YAML inputs of the benchmarks.
+module Yamlet.Bench.Inputs
   ( config
   , json
+  , text
   ) where
 
 import Data.Text qualified as T
@@ -40,6 +40,25 @@ json n = "[" <> T.intercalate ",\n " (map record [1 .. n]) <> "]\n"
         , ", \"name\": \"item "
         , num i
         , "\", \"values\": [1, 2.5, true, null], \"child\": {\"a\": \"b\"}}"
+        ]
+
+-- | Block scalars and multi-line plain scalars.
+text :: Int -> T.Text
+text n = T.concat $ map entry [1 .. n]
+  where
+    entry :: Int -> T.Text
+    entry i =
+      T.unlines
+        [ "key" <> num i <> ": |"
+        , "  Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+        , "  Sed do eiusmod tempor incididunt ut labore et dolore."
+        , ""
+        , "    Ut enim ad minim veniam, quis nostrud exercitation."
+        , "folded" <> num i <> ": >-"
+        , "  Duis aute irure dolor in reprehenderit in voluptate velit"
+        , "  esse cillum dolore eu fugiat nulla pariatur."
+        , "plain" <> num i <> ": Excepteur sint occaecat cupidatat non proident,"
+        , "  sunt in culpa qui officia deserunt mollit anim id est laborum."
         ]
 
 num :: Int -> T.Text

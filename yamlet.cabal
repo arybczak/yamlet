@@ -227,10 +227,10 @@ benchmark bench
     type:           exitcode-stdio-1.0
     main-is:        Main.hs
 
-    other-modules:  Derive
-                    Derive.Fields
-                    Derive.Generic
-                    Derive.Manual
-                    Inputs
-                    Libraries
-                    Types
+    other-modules:  Yamlet.Bench.Derive
+                    Yamlet.Bench.Derive.Fields
+                    Yamlet.Bench.Derive.Generic
+                    Yamlet.Bench.Derive.Manual
+                    Yamlet.Bench.Inputs
+                    Yamlet.Bench.Libraries
+                    Yamlet.Bench.Types
