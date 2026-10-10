@@ -195,6 +195,22 @@ test_encodings = do
     (1, 4, "unterminated flow sequence")
     "\xFEFF\xFEFF\&a: [\n"
   errorAfterBom
+    "BOM at the end of a line"
+    (1, 6, "unexpected byte order mark")
+    "key: \xFEFF\n  sub: x\n"
+  errorAfterBom
+    "BOM at the end of a line in a flow sequence"
+    (1, 2, "unexpected byte order mark")
+    "[\xFEFF\nfoo: bar\n]\n"
+  errorAfterBom
+    "mapping after a BOM and a marker"
+    (3, 6, "unexpected ':', a mapping cannot start on the line of '---'")
+    "a\n...\n\xFEFF--- c: d\n"
+  errorAfterBom
+    "list after a BOM and a marker"
+    (3, 5, "unexpected '-', a list cannot start on the line of '---'")
+    "a\n...\n\xFEFF--- - c\n"
+  errorAfterBom
     "tab below a BOM and a comment"
     (2, 2, "unexpected '%', a plain scalar cannot start with it, quote the value")
     "\xFEFF# c\n\t%x\n"
@@ -247,6 +263,10 @@ test_byteOrderMarks = do
     "BOM at the start of a key"
     (2, 1)
     "a: 1\n\xFEFF b: 2\n"
+  bom
+    "BOM at the start of a value"
+    (1, 6)
+    "key: \xFEFFvalue\n"
   bom
     "BOM in a plain scalar"
     (1, 5)

@@ -228,7 +228,11 @@ unexpected input i = (tabCause, other)
             c = byteAt e j
 
     onStartMarkerLine :: Bool
-    onStartMarkerLine = isStartMarker e (lineStartAt e i)
+    onStartMarkerLine = isStartMarker e markerStart
+
+    -- A byte order mark can come before a marker.
+    markerStart :: Int
+    markerStart = skipBoms e (lineStartAt e i)
 
     -- The start of the entry on the line, after any "- ".
     entryStart :: Int
@@ -268,7 +272,7 @@ unexpected input i = (tabCause, other)
     itemAfterStartMarker =
       isListItem i
         && onStartMarkerLine
-        && skipBackWhites e i == lineStartAt e i + markerLength
+        && skipBackWhites e i == markerStart + markerLength
 
     -- A colon that ends a word and precedes white space, as in an unquoted
     -- value like "Error: file not found".
@@ -500,6 +504,7 @@ afterBoms e = e {base = skipBoms e e.base}
 -- | The flag tells if the index is inside a flow collection.
 mistakeIn :: Env -> Bool -> Int -> Maybe String
 mistakeIn e flow i
+  | isBom e i = Just "unexpected byte order mark"
   -- Inside a plain scalar, a '#' after other content does not stop the
   -- parser, so here it follows the end of another node, e.g. "x"#c.
   | w == HASH && isNsChar (byteBefore e i) =

@@ -1173,9 +1173,11 @@ escape e i = case chr (fromIntegral (byteAt e i)) of
 nsPlain :: Int -> Ctx -> Props -> P Node
 nsPlain n c props = withScan $ \e p ->
   let w0 = byteAt e p
+      -- A byte order mark in a plain scalar is an error after the parse, but
+      -- a scalar that starts with one would take in the lines below it.
       firstOk =
         not (startsPrefix e p)
-          && ( (isNsChar w0 && not (isIndicator w0))
+          && ( (isNsChar w0 && not (isIndicator w0) && not (isBom e p))
                  || ( (w0 == QUESTION || w0 == COLON || w0 == MINUS)
                         && isPlainSafe (isFlowCtx c) (byteAt e (p + 1))
                     )
