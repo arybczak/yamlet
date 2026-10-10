@@ -54,9 +54,9 @@ parseStream :: T.Text -> Either Error [Document]
 parseStream input@(T.Text arr off len) = case prescan of
   Left i -> Left $ invalidCharacter i
   Right (markers, restricted) -> case runParser e start (lYamlStream markers) of
-    Left (ParseError i msg) -> Left $ parseError restricted i msg
+    Left (ParseError i msg) -> Left $ parseError markers restricted i msg
     Left (UnexpectedParseError de i) ->
-      Left $ uncurry (parseError restricted) (furthestError markers de i)
+      Left $ uncurry (parseError markers restricted) (furthestError markers de i)
     Right (Just docs, _, _) ->
       let ranges = scalarRanges docs
       in case filter (not . allowed ranges) restricted of
@@ -65,7 +65,7 @@ parseStream input@(T.Text arr off len) = case prescan of
            QuotedRestricted i : _ -> Left $ invalidCharacter i
            [] -> Right docs
     Right (Nothing, _, fu) ->
-      Left $ uncurry (parseError restricted) (furthestError markers e fu)
+      Left $ uncurry (parseError markers restricted) (furthestError markers e fu)
   where
     invalidCharacter :: Int -> Error
     invalidCharacter i =
@@ -85,6 +85,7 @@ parseStream input@(T.Text arr off len) = case prescan of
       (_, other)
         | Just tab <- tabAbove
         , parsesPast
+            markers
             (lineEndAt e i)
             blankStart
             (withSpaces (T.Text arr blankStart (s - blankStart)))
@@ -94,9 +95,9 @@ parseStream input@(T.Text arr off len) = case prescan of
       where
         tabCause :: Bool
         tabCause =
-          parsesPast i s (withSpaces (T.Text arr s (i - s))) i
+          parsesPast markers i s (withSpaces (T.Text arr s (i - s))) i
             || or
-              [ parsesPast i s (T.replicate n " ") indentEnd
+              [ parsesPast markers i s (T.replicate n " ") indentEnd
               | indentEnd <= i
               , isJust (firstTab e s indentEnd)
               , Just above <- [contentLineAbove e s]
@@ -124,52 +125,54 @@ parseStream input@(T.Text arr off len) = case prescan of
         withSpaces :: T.Text -> T.Text
         withSpaces = T.map (\c -> if c == '\t' then ' ' else c)
 
-        -- The parser gets past the first index with the text in place of the
-        -- input from the second index to the third.
-        parsesPast :: Int -> Int -> T.Text -> Int -> Bool
-        parsesPast target from replacement upto =
-          case runParser spaced (moved start) (lYamlStream (map moved markers)) of
-            Left (ParseError j _) -> j > moved target
-            Left (UnexpectedParseError _ j) -> j > moved target
-            Right (Nothing, _, j) -> j > moved target
-            Right (Just _, _, _) -> True
-          where
-            T.Text _ _ replacementLen = replacement
-            T.Text spacedArr spacedOff spacedLen =
-              T.copy $
-                T.concat
-                  [ T.Text arr off (from - off)
-                  , replacement
-                  , T.Text arr upto (off + len - upto)
-                  ]
+    -- The parser gets past the first index with the text in place of the
+    -- input from the second index to the third.
+    parsesPast :: [Int] -> Int -> Int -> T.Text -> Int -> Bool
+    parsesPast markers target from replacement upto =
+      case runParser spaced (moved start) (lYamlStream (map moved markers)) of
+        Left (ParseError j _) -> j > moved target
+        Left (UnexpectedParseError _ j) -> j > moved target
+        Right (Nothing, _, j) -> j > moved target
+        Right (Just _, _, _) -> True
+      where
+        T.Text _ _ replacementLen = replacement
+        T.Text spacedArr spacedOff spacedLen =
+          T.copy $
+            T.concat
+              [ T.Text arr off (from - off)
+              , replacement
+              , T.Text arr upto (off + len - upto)
+              ]
 
-            spaced :: Env
-            spaced =
-              e
-                { array = spacedArr
-                , base = spacedOff
-                , end = spacedOff + spacedLen
-                , streamEnd = spacedOff + spacedLen
-                }
+        spaced :: Env
+        spaced =
+          e
+            { array = spacedArr
+            , base = spacedOff
+            , end = spacedOff + spacedLen
+            , streamEnd = spacedOff + spacedLen
+            }
 
-            -- The index in the input with the replacement.
-            moved :: Int -> Int
-            moved j
-              | j < upto = j - off + spacedOff
-              | otherwise = j - upto + spacedOff + (from - off) + replacementLen
+        -- The index in the input with the replacement.
+        moved :: Int -> Int
+        moved j
+          | j < upto = j - off + spacedOff
+          | otherwise = j - upto + spacedOff + (from - off) + replacementLen
 
     -- A byte order mark at the start of the line of an error is the likely
     -- cause if the parser fails before the content of the line, unless a
-    -- document without a marker can start on the line. A failure after the
-    -- content shows that the mark is in a quoted scalar.
-    parseError :: [Restricted] -> Int -> String -> Error
-    parseError restricted i msg
+    -- document without a marker can start on the line. The mark can also be
+    -- a character of a quoted scalar, so it is the cause only if the parser
+    -- gets past the error without it.
+    parseError :: [Int] -> [Restricted] -> Int -> String -> Error
+    parseError markers restricted i msg
       | any (\case QuotedRestricted j -> j == i; _ -> False) restricted =
           invalidCharacter i
       | let s = lineStartAt e i
       , bomBeforeContent e s
       , i <= skipWhites e (skipBoms e s)
-      , not (inPrefix s) =
+      , not (inPrefix s)
+      , parsesPast markers i s T.empty (skipBoms e s) =
           errorAt input (toOffset e s) "unexpected byte order mark"
       | otherwise = errorAt input (toOffset e i) msg
 
