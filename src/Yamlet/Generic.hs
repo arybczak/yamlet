@@ -1292,10 +1292,7 @@ fromObject opts flat keys def o
   | flat
   , not (null others)
   , not (any (isKey opts.contentsKey . fst) others) =
-      flatField $
-        "without the key "
-          ++ showText opts.contentsKey
-          ++ ", the other keys of this mapping are the field"
+      merged
   | otherwise = checked [opts.contentsKey] $ case M.lookup opts.contentsKey o.index of
       Just entry -> gFromEntry entry
       -- A missing contents key is null, if the fields accept null. A flat
@@ -1304,15 +1301,7 @@ fromObject opts flat keys def o
       Nothing
         | Just fields <- gDefaultValue =<< def -> pure fields
         | isJust def, not flat -> missingKey o opts.contentsKey
-        | flat ->
-            maybe
-              ( flatField $
-                  "the mapping has no key "
-                    ++ showText opts.contentsKey
-                    ++ " and no other keys for the field"
-              )
-              pure
-              (succeeds gFromValue nullNode)
+        | flat -> maybe onlyTag pure (succeeds gFromValue nullNode)
         | otherwise ->
             maybe (missingKey o opts.contentsKey) pure (succeeds gFromValue nullNode)
   where
@@ -1322,15 +1311,28 @@ fromObject opts flat keys def o
     checked fields =
       (when opts.rejectUnknownFields (rejectUnknownKeys (keys ++ fields) o) *>)
 
-    -- An error at the mapping itself, e.g. of a field that is not a mapping,
-    -- does not show that the field is the mapping, so a note at the tag says
-    -- it.
-    flatField :: String -> Parser (f p)
-    flatField note =
+    -- A mapping with only the tag gives the field an empty mapping. Its error
+    -- does not show that, so a note at the tag says it. Each error of the
+    -- field is at the mapping, because the empty mapping has no other nodes.
+    onlyTag :: Parser (f p)
+    onlyTag =
       withNote
         (objectNode o).offset
-        (maybe S.noOffset (.offset) (lookupKey opts.tagKey o), note)
+        ( maybe S.noOffset (.offset) tag
+        , "the mapping has no key "
+            ++ showText opts.contentsKey
+            ++ " and no other keys for the field of "
+            ++ maybe "" constructorName tag
+        )
         merged
+      where
+        tag :: Maybe S.Node
+        tag = lookupKey opts.tagKey o
+
+        constructorName :: S.Node -> String
+        constructorName n = case n.content of
+          S.ScalarContent _ t -> T.unpack t
+          _ -> ""
 
     -- The field decodes from the mapping without the given keys, and without
     -- the comments of the mapping, which the record drops.

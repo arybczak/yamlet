@@ -997,30 +997,29 @@ test_flatten = do
     "missing field"
     (Right (Ahead (Distance Nothing)))
     (decodeText "step: Ahead\n")
-  let flatNote :: Int -> (Int, Int, String)
-      flatNote column =
-        (1, column, "without the key \"contents\", the other keys of this mapping are the field")
-      onlyTagNote :: Int -> (Int, Int, String)
-      onlyTagNote column =
-        (1, column, "the mapping has no key \"contents\" and no other keys for the field")
+  let onlyTagNote :: String -> Int -> (Int, Int, String)
+      onlyTagNote constructor column =
+        ( 1
+        , column
+        , "the mapping has no key \"contents\" and no other keys for the field of " ++ constructor
+        )
   assertEqual
     "error in a field"
-    [(1, 1, "missing key \"speed\""), onlyTagNote 7]
+    [(1, 1, "missing key \"speed\""), onlyTagNote "Accelerate" 7]
     (errorsOf (decodeText @Step "step: Accelerate\n"))
   assertEqual
     "only the tag for a field that is not a mapping"
-    [(1, 1, "expected an integer, but got a mapping"), onlyTagNote 7]
+    [(1, 1, "expected an integer, but got a mapping"), onlyTagNote "Wait" 7]
     (errorsOf (decodeText @Step "step: Wait\n"))
   assertEqual
     "misspelled field"
     [ (1, 1, "missing key \"speed\"")
-    , flatNote 7
     , (2, 1, "unknown key \"sped\", did you mean \"speed\"?")
     ]
     (errorsOf (decodeText @Step "step: Accelerate\nsped: 2\n"))
   assertEqual
     "misspelled contents key"
-    [(1, 1, "expected an integer, but got a mapping"), flatNote 7]
+    [(1, 1, "expected an integer, but got a mapping")]
     (errorsOf (decodeText @Step "step: Wait\ncontnets: 5\n"))
   assertEqual
     "error in a field with a key close to the contents key"
@@ -1060,13 +1059,12 @@ test_flatten = do
   assertEqual
     "misspelled field with unknown keys ignored by the outer type only"
     [ (1, 1, "missing key \"speed\"")
-    , flatNote 6
     , (2, 1, "unknown key \"sped\", did you mean \"speed\"?")
     ]
     (errorsOf (decodeText @Order "tag: Hasten\nsped: 2\n"))
   assertEqual
     "misspelled contents key with unknown keys ignored"
-    [(1, 1, "expected an integer, but got a mapping"), flatNote 6]
+    [(1, 1, "expected an integer, but got a mapping")]
     (errorsOf (decodeText @Order "tag: Hold\ncontnets: 5\n"))
   assertEqual
     "other key next to the contents key with unknown keys ignored"
@@ -1076,7 +1074,7 @@ test_flatten = do
   assertEqual
     "duplicate tag keys reported once"
     [ (1, 1, "missing key \"step\"")
-    , onlyTagNote 7
+    , onlyTagNote "Again" 7
     , (2, 4, "duplicate key \"step\"")
     , (1, 1, "the first key \"step\"")
     , (3, 4, "duplicate key \"step\"")
