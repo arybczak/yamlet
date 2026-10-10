@@ -1,11 +1,5 @@
 module Yamlet.Test.Decode.Scalars
-  ( test_coreSchema
-  , test_plainSafe
-  , prop_floats
-  , test_exactFloats
-  , test_blockScalars
-  , test_values
-  , test_time
+  ( scalarTests
   ) where
 
 import Control.Monad
@@ -17,12 +11,26 @@ import Data.Text qualified as T
 import Data.Time
 import Data.Time.Calendar.Month
 import Data.Time.Calendar.Quarter
+import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 
 import Yamlet
 import Yamlet.Schema
 import Yamlet.Test.Helpers
+
+scalarTests :: TestTree
+scalarTests =
+  testGroup
+    "scalars"
+    [ testCase "core schema" test_coreSchema
+    , testProperty "floats" prop_floats
+    , testCase "exact floats" test_exactFloats
+    , testCase "plain scalars" test_plainSafe
+    , testCase "values" test_values
+    , testCase "block scalars" test_blockScalars
+    , slow $ testCase "time" test_time
+    ]
 
 test_coreSchema :: Assertion
 test_coreSchema = do

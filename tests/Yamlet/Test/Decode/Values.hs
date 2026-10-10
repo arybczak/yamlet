@@ -1,14 +1,8 @@
+-- | Decoding into the types of the library and of the user with the
+-- functions of the parser, and the decoded values: their locations, and that
+-- they hold no thunks and no slices of the input.
 module Yamlet.Test.Decode.Values
-  ( test_noThunks
-  , test_notFollowedBy
-  , test_containers
-  , test_record
-  , test_copies
-  , test_json
-  , test_aliases
-  , test_optionalKeys
-  , test_located
-  , test_syntaxTree
+  ( valueTests
   ) where
 
 import Control.Exception
@@ -21,6 +15,7 @@ import Data.Sequence qualified as Seq
 import Data.Set qualified as Set
 import Data.Text qualified as T
 import Data.Text.Internal qualified as T
+import Test.Tasty
 import Test.Tasty.HUnit
 
 import Yamlet
@@ -29,6 +24,22 @@ import Yamlet.Syntax qualified as S
 import Yamlet.Test.Decode.Helpers
 import Yamlet.Test.Helpers
 import Yamlet.Test.Helpers.Thunks
+
+valueTests :: TestTree
+valueTests =
+  testGroup
+    "values"
+    [ testCase "record" test_record
+    , testCase "notFollowedBy" test_notFollowedBy
+    , testCase "containers" test_containers
+    , testCase "copies" test_copies
+    , testCase "JSON" test_json
+    , testCase "aliases" test_aliases
+    , testCase "optional keys" test_optionalKeys
+    , testCase "located values" test_located
+    , testCase "syntax tree" test_syntaxTree
+    , testCase "no thunks" test_noThunks
+    ]
 
 -- | The decoders of the types that the library defines return values without
 -- thunks.

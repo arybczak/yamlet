@@ -1,19 +1,30 @@
 -- | The properties of the encoder on random values and syntax trees.
 module Yamlet.Test.Encode.Properties
-  ( prop_fastRenderer
-  , prop_fastRendererAll
-  , prop_fastRendererNodes
-  , prop_roundTrip
-  , prop_syntaxRoundTrip
+  ( propertyTests
   ) where
 
 import Data.List qualified as L
 import Data.Scientific qualified as Sci
 import Data.Text qualified as T
+import Test.Tasty
 import Test.Tasty.QuickCheck
 
 import Yamlet
 import Yamlet.Syntax qualified as S
+
+propertyTests :: TestTree
+propertyTests =
+  testGroup
+    "properties"
+    [ -- The renderers differ only in rare cases, e.g. for a key that needs an
+      -- explicit entry. 10000 cases take about 0.2 s.
+      localOption (QuickCheckTests 10000) $ testProperty "fast renderer" prop_fastRenderer
+    , testProperty "fast renderer of several documents" prop_fastRendererAll
+    , localOption (QuickCheckTests 10000) $
+        testProperty "fast renderer of syntax trees" prop_fastRendererNodes
+    , testProperty "round trip" prop_roundTrip
+    , testProperty "syntax round trip" prop_syntaxRoundTrip
+    ]
 
 -- | The faster renderer of the encoder gives the same output as the renderer
 -- of syntax trees.

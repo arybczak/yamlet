@@ -1,17 +1,24 @@
--- | The properties of rendering generated documents.
 module Yamlet.Test.Render.Properties
-  ( prop_noThunks
-  , prop_roundTrip
+  ( propertyTests
   ) where
 
 import Data.List qualified as L
 import Data.Maybe
 import Data.Text qualified as T
+import Test.Tasty
 import Test.Tasty.QuickCheck
 
 import Yamlet.Syntax
 import Yamlet.Test.Helpers.Thunks
 import Yamlet.Test.Render.Helpers
+
+propertyTests :: TestTree
+propertyTests =
+  testGroup
+    "properties"
+    [ testProperty "no thunks in generated documents" prop_noThunks
+    , testProperty "round trip" prop_roundTrip
+    ]
 
 prop_noThunks :: Tree -> Property
 prop_noThunks (Tree doc) =

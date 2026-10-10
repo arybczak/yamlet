@@ -1,23 +1,32 @@
 -- | The styles of the rendered nodes and their fallbacks.
 module Yamlet.Test.Render.Styles
-  ( test_workflow
-  , test_styles
-  , test_fallbacks
-  , test_manyAnchors
-  , test_deepComment
-  , test_nestedKeys
-  , test_commentsAboveNesting
-  , test_escapedBreaks
-  , test_forceBlock
-  , test_scalarLines
+  ( styleTests
   ) where
 
 import Data.Text qualified as T
+import Test.Tasty
 import Test.Tasty.HUnit
 
 import Yamlet hiding (Commented (..))
 import Yamlet.Syntax
+import Yamlet.Test.Helpers
 import Yamlet.Test.Render.Helpers
+
+styleTests :: TestTree
+styleTests =
+  testGroup
+    "styles"
+    [ testCase "workflow" test_workflow
+    , testCase "styles" test_styles
+    , testCase "fallbacks" test_fallbacks
+    , testCase "force block" test_forceBlock
+    , testCase "lines of scalars" test_scalarLines
+    , slow $ testCase "many invalid anchor names" test_manyAnchors
+    , slow $ testCase "deep comment" test_deepComment
+    , slow $ testCase "nested keys" test_nestedKeys
+    , slow $ testCase "comments above nesting" test_commentsAboveNesting
+    , slow $ testCase "many escaped line breaks" test_escapedBreaks
+    ]
 
 -- | A generated file with a header, and empty lines between the jobs and
 -- between the steps. The header is on the root, so the file has no start

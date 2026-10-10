@@ -1,8 +1,7 @@
+-- | The bytes before parsing: the Unicode encodings, byte order marks, an
+-- empty stream, and the file functions.
 module Yamlet.Test.Decode.Input
-  ( test_files
-  , test_emptyStream
-  , test_encodings
-  , test_byteOrderMarks
+  ( inputTests
   ) where
 
 import Control.Exception
@@ -14,11 +13,22 @@ import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
 import System.Directory
 import System.IO
+import Test.Tasty
 import Test.Tasty.HUnit
 
 import Yamlet
 import Yamlet.Syntax qualified as S
 import Yamlet.Test.Helpers
+
+inputTests :: TestTree
+inputTests =
+  testGroup
+    "input"
+    [ testCase "empty stream" test_emptyStream
+    , testCase "encodings" test_encodings
+    , testCase "byte order marks" test_byteOrderMarks
+    , testCase "files" test_files
+    ]
 
 -- | The file functions write UTF-8 and read back what they wrote.
 test_files :: Assertion

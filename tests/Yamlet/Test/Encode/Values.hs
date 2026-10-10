@@ -1,16 +1,5 @@
--- | The encodings of values.
 module Yamlet.Test.Encode.Values
-  ( test_containers
-  , test_base
-  , test_time
-  , test_blockStyle
-  , test_quoting
-  , test_floats
-  , prop_floatFormat
-  , test_longNumberLikeStrings
-  , test_longFloats
-  , test_literal
-  , test_tags
+  ( valueTests
   ) where
 
 import Data.Either
@@ -34,12 +23,30 @@ import Data.Time.Calendar.Month
 import Data.Time.Calendar.Quarter
 import Data.Tree qualified as Tree
 import Data.UUID.Types qualified as UUID
+import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck hiding (Fixed)
 
 import Yamlet
 import Yamlet.Syntax qualified as S
 import Yamlet.Test.Helpers
+
+valueTests :: TestTree
+valueTests =
+  testGroup
+    "values"
+    [ testCase "block style" test_blockStyle
+    , testCase "quoting" test_quoting
+    , testCase "floats" test_floats
+    , testProperty "float format" prop_floatFormat
+    , slow $ testCase "long floats" test_longFloats
+    , slow $ testCase "long strings like numbers" test_longNumberLikeStrings
+    , testCase "literal block scalars" test_literal
+    , testCase "tags" test_tags
+    , testCase "containers" test_containers
+    , testCase "base" test_base
+    , testCase "time" test_time
+    ]
 
 test_containers :: Assertion
 test_containers = do

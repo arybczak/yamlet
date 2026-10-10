@@ -1,14 +1,8 @@
+-- | Large inputs: deep nesting, many keys or errors, long scalars, and the
+-- expansion of aliases and tag prefixes. Decoding stays linear in the size of
+-- the input, or a limit stops it.
 module Yamlet.Test.Decode.Limits
-  ( test_nesting
-  , test_aliasKeys
-  , test_aliasLimit
-  , test_tagPrefixLimit
-  , test_longNumbers
-  , test_longUnknownNames
-  , test_manyKeys
-  , test_nestedDuplicates
-  , test_manyErrors
-  , test_deepErrors
+  ( limitTests
   ) where
 
 import Data.Either
@@ -19,12 +13,31 @@ import Data.Ratio
 import Data.Scientific qualified as Sci
 import Data.Set qualified as Set
 import Data.Text qualified as T
+import Test.Tasty
 import Test.Tasty.HUnit
 
 import Yamlet
 import Yamlet.Syntax qualified as S
 import Yamlet.Test.Decode.Helpers
 import Yamlet.Test.Helpers
+
+limitTests :: TestTree
+limitTests =
+  testGroup
+    "limits"
+    [ slow $ testCase "nesting" test_nesting
+    , slow $ testCase "many keys" test_manyKeys
+    , slow $ testCase "nested duplicates" test_nestedDuplicates
+    , slow $ testCase "alias keys" test_aliasKeys
+    , slow $ testCase "alias limit" test_aliasLimit
+    , testCase "tag prefix limit" test_tagPrefixLimit
+    , slow $ testCase "long numbers" test_longNumbers
+    , -- 0.2 s with the check of the lengths, 8 s without it.
+      localOption (mkTimeout 2000000) $
+        testCase "long unknown names" test_longUnknownNames
+    , slow $ testCase "many errors" test_manyErrors
+    , slow $ testCase "deep errors" test_deepErrors
+    ]
 
 -- | The time to parse nested flow sequences is linear in the depth.
 test_nesting :: Assertion

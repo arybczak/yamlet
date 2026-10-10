@@ -1,14 +1,18 @@
 -- | The markers, directives and comments between the documents of a stream.
 module Yamlet.Test.Render.Documents
-  ( test_documents
+  ( documentTests
   ) where
 
 import Control.Monad
 import Data.Text qualified as T
+import Test.Tasty
 import Test.Tasty.HUnit
 
 import Yamlet.Syntax
 import Yamlet.Test.Render.Helpers
+
+documentTests :: TestTree
+documentTests = testCase "documents" test_documents
 
 test_documents :: Assertion
 test_documents = do

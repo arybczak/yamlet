@@ -1,19 +1,27 @@
 -- | The encodings of syntax trees, kept nodes and comments.
 module Yamlet.Test.Encode.Comments
-  ( test_syntax
-  , test_keptNodes
-  , test_commentedKeys
+  ( commentTests
   ) where
 
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict qualified as M
 import Data.Set qualified as Set
 import Data.Text qualified as T
+import Test.Tasty
 import Test.Tasty.HUnit
 
 import Yamlet
 import Yamlet.Syntax qualified as S
 import Yamlet.Test.Helpers
+
+commentTests :: TestTree
+commentTests =
+  testGroup
+    "comments"
+    [ testCase "syntax tree" test_syntax
+    , testCase "kept nodes" test_keptNodes
+    , testCase "comments of keys" test_commentedKeys
+    ]
 
 test_syntax :: Assertion
 test_syntax =

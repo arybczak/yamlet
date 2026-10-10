@@ -1,11 +1,5 @@
 module Yamlet.Test.Decode.Errors
-  ( test_typeErrors
-  , test_collectedErrors
-  , test_keyErrors
-  , test_errorPaths
-  , prop_errorsAt
-  , test_nodePaths
-  , test_prettyError
+  ( errorTests
   ) where
 
 import Control.Monad
@@ -26,6 +20,7 @@ import Data.Text.Encoding qualified as T
 import Data.Time
 import Data.UUID.Types qualified as UUID
 import Data.Void
+import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck hiding (Fixed)
 
@@ -33,6 +28,19 @@ import Yamlet
 import Yamlet.Syntax qualified as S
 import Yamlet.Test.Decode.Helpers
 import Yamlet.Test.Helpers
+
+errorTests :: TestTree
+errorTests =
+  testGroup
+    "errors"
+    [ testCase "types" test_typeErrors
+    , testCase "keys" test_keyErrors
+    , testCase "collected" test_collectedErrors
+    , testCase "pretty" test_prettyError
+    , testCase "paths" test_errorPaths
+    , testProperty "locations of several errors" prop_errorsAt
+    , testCase "paths of several errors" test_nodePaths
+    ]
 
 -- | A value written as an empty mapping.
 data EmptyDir = EmptyDir

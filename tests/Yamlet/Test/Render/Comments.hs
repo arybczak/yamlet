@@ -1,20 +1,28 @@
 -- | The comments that rendering writes and moves.
 module Yamlet.Test.Render.Comments
-  ( test_noThunks
-  , test_configuration
-  , test_commentRoundTrip
-  , test_hashes
-  , test_linesAfterList
-  , test_linesBelowIndicator
-  , test_movedComments
+  ( commentTests
   ) where
 
 import Data.Text qualified as T
+import Test.Tasty
 import Test.Tasty.HUnit
 
 import Yamlet.Syntax
 import Yamlet.Test.Helpers.Thunks
 import Yamlet.Test.Render.Helpers
+
+commentTests :: TestTree
+commentTests =
+  testGroup
+    "comments"
+    [ testCase "configuration" test_configuration
+    , testCase "round trip" test_commentRoundTrip
+    , testCase "several hashes" test_hashes
+    , testCase "moved comments" test_movedComments
+    , testCase "lines after a list" test_linesAfterList
+    , testCase "lines below an indicator" test_linesBelowIndicator
+    , testCase "no thunks" test_noThunks
+    ]
 
 -- | The parser returns documents with comments without thunks, as it does for
 -- documents without comments.

@@ -1,13 +1,17 @@
 -- | The rules that attach comment lines to the nodes.
 module Yamlet.Test.Render.Attachment
-  ( test_attachment
+  ( attachmentTests
   ) where
 
 import Data.Text qualified as T
+import Test.Tasty
 import Test.Tasty.HUnit
 
 import Yamlet.Syntax
 import Yamlet.Test.Render.Helpers
+
+attachmentTests :: TestTree
+attachmentTests = testCase "attachment" test_attachment
 
 -- | Each rule of the documentation.
 test_attachment :: Assertion

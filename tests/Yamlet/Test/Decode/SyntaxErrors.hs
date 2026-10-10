@@ -1,15 +1,23 @@
 module Yamlet.Test.Decode.SyntaxErrors
-  ( test_syntaxErrors
-  , test_directiveErrors
+  ( syntaxErrorTests
   ) where
 
 import Control.Monad
 import Data.Text qualified as T
+import Test.Tasty
 import Test.Tasty.HUnit
 
 import Yamlet
 import Yamlet.Syntax qualified as S
 import Yamlet.Test.Helpers
+
+syntaxErrorTests :: TestTree
+syntaxErrorTests =
+  testGroup
+    "syntax errors"
+    [ testCase "syntax" test_syntaxErrors
+    , testCase "directives and tags" test_directiveErrors
+    ]
 
 test_syntaxErrors :: Assertion
 test_syntaxErrors = do
