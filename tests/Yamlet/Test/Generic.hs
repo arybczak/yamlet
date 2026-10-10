@@ -1052,6 +1052,14 @@ test_flatten = do
           ]
     )
     (decodeText @Value route)
+  let fieldProps :: Shared -> Maybe S.Props
+      fieldProps = \case
+        Shared n -> Just n.props
+        Unshared -> Nothing
+  assertEqual
+    "tag and anchor of the mapping, not of the field"
+    (Right (Just S.noProps))
+    (fieldProps <$> decodeText "!foo &x {tag: Shared, k: v}\n")
   assertEqual
     "other key next to the contents key"
     [(3, 1, "unknown key \"extra\", expected one of: step, contents")]

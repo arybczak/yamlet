@@ -1335,7 +1335,9 @@ fromObject opts flat keys def o
           _ -> ""
 
     -- The field decodes from the mapping without the given keys, and without
-    -- the comments of the mapping, which the record drops.
+    -- the comments, the tag and the anchor of the mapping. The record drops
+    -- the comments, and the tag and the anchor belong to the value of the
+    -- sum type, as with 'TaggedObject'.
     merged :: Parser (f p)
     merged =
       let n = objectNode o
@@ -1346,7 +1348,7 @@ fromObject opts flat keys def o
            S.Node
              { S.offset = n.offset
              , S.endOffset = n.endOffset
-             , S.props = n.props
+             , S.props = S.noProps
              , S.comments = S.noComments
              , S.content = S.MappingContent style others
              }
