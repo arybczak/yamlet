@@ -340,6 +340,10 @@ test_syntaxErrors = do
     (3, 2, "unexpected '@', a plain scalar cannot start with it, quote the value")
     "a\n...\n\t@\n"
   check
+    "content after spaces after an end marker"
+    (2, 7, "unexpected content after the document end marker (...)")
+    "--- a\n...   x\n"
+  check
     "unterminated string"
     (1, 6, "unterminated double-quoted scalar")
     "key: \"abc\n"

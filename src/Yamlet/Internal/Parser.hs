@@ -545,8 +545,10 @@ lDocumentPrefix = many_ $ do
 lDocumentSuffix :: P ()
 lDocumentSuffix = do
   advance markerLength
+  e <- env
   p <- pos
-  sBComment <|> throwAt p "unexpected content after the document end marker (...)"
+  sBComment
+    <|> throwAt (skipWhites e p) "unexpected content after the document end marker (...)"
 
 -- | l-directive, repeated, with the version and the tag handles they define.
 directives :: P (Maybe YamlVersion, M.Map T.Text T.Text)
