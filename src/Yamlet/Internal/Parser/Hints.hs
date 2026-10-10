@@ -152,18 +152,15 @@ unexpected input i = (tabCause, other)
             go j = case lineAbove (lineStartAt e j) of
               Nothing -> False
               Just above
-                | indentation above < indentation k -> endsWithBlockHeader above
+                | columnOf above < columnOf k -> endsWithBlockHeader above
                 | otherwise -> go above
-
-            indentation :: Int -> Int
-            indentation j = j - lineStartAt e j
 
         commentAbove :: Int -> Bool
         commentAbove start
           | start <= e.base = False
           | otherwise =
               let prev = lineStartAt e (start - 1)
-                  k = skipWhites e prev
+                  k = skipWhites e (skipBoms e prev)
               in if isBreak (byteAt e k) then commentAbove prev else hasComment k
 
         -- A quoted scalar can contain " #", as in "\"x #y\"", so a quote
@@ -295,7 +292,7 @@ unexpected input i = (tabCause, other)
     -- the content is the mistake, not the indentation. A line of a block
     -- scalar above is neither.
     alignedWithEntry :: Bool
-    alignedWithEntry = case entryAbove (i - lineStartAt e i) (lineStartAt e i) of
+    alignedWithEntry = case entryAbove (columnOf i) (lineStartAt e i) of
       Just k -> isListItem k || any isKeyColon [k .. lineContentEnd e k - 1]
       Nothing -> False
 
@@ -416,11 +413,11 @@ unexpected input i = (tabCause, other)
     entryAbove :: Int -> Int -> Maybe Int
     entryAbove column from = do
       k <- lineAbove from
-      let indent = k - lineStartAt e k
+      let indent = columnOf k
           entry = skipListItems k
       if
         | indent == column -> Just k
-        | entry - lineStartAt e k == column -> Just entry
+        | columnOf entry == column -> Just entry
         | indent < column -> Nothing
         | otherwise -> entryAbove column (lineStartAt e k)
 
@@ -432,14 +429,14 @@ unexpected input i = (tabCause, other)
     indentationMistake = go (lineStartAt e i)
       where
         column :: Int
-        column = i - lineStartAt e i
+        column = columnOf i
 
         -- Look at the lines above, up to the first line with less
         -- indentation.
         go :: Int -> Maybe String
         go start = do
           k <- lineAbove start
-          let indent = k - lineStartAt e k
+          let indent = columnOf k
           if
             | indent > column -> go (lineStartAt e k)
             | indent < column ->
@@ -471,7 +468,12 @@ unexpected input i = (tabCause, other)
     -- The first content of the closest line above the line that starts at the
     -- index. Blank lines and comment lines do not count.
     lineAbove :: Int -> Maybe Int
-    lineAbove start = skipSpaces e <$> contentLineAbove e start
+    lineAbove start = skipSpaces e . skipBoms e <$> contentLineAbove e start
+
+    -- A byte order mark can start the first line of a document, before its
+    -- indentation.
+    columnOf :: Int -> Int
+    columnOf j = j - skipBoms e (lineStartAt e j)
 
     -- The index after the "- " indicators at the index, as in "- - key: value".
     skipListItems :: Int -> Int

@@ -257,6 +257,10 @@ test_byteOrderMarks = do
     "error after a BOM in a quoted scalar"
     (Just (2, 1, "invalid escape sequence, write \\\\ for a backslash or use single quotes"))
     (errorOf (decodeAllText @Value "\"a\n\xFEFF\\q\"\n"))
+  assertEqual
+    "error below a BOM that starts a document"
+    (Just (4, 1, "unexpected key among list items"))
+    (errorOf (decodeAllText @Value "x\n...\n\xFEFF- a\nb: c\n"))
   let bom :: String -> (Int, Int) -> T.Text -> Assertion
       bom preface (l, c) input =
         assertEqual
