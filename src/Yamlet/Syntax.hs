@@ -311,10 +311,8 @@ foldedNode ls = contentNode (ScalarLinesContent Folded t starts)
 -- >>> printComments input
 -- root.user (key) before: [Comment "b"]
 --
--- Thus the text has no place for the lines after a block scalar. The
--- renderer writes them at the column of the key or the @-@ of the entry, and
--- they read back as the lines of the node below, or of the end of an outer
--- collection.
+-- Thus the text has no place for the lines after a block scalar. They read
+-- back as the lines of the node below, or of the end of an outer collection.
 --
 -- Below a scalar or an alias key after @?@, such a line belongs to the value:
 -- as a line above it if the @:@ of the value follows, and as a line after it
@@ -340,8 +338,7 @@ foldedNode ls = contentNode (ScalarLinesContent Folded t starts)
 -- root.? (key) after: [Comment "d"]
 --
 -- Thus the text has no place for the lines after a scalar or an alias key.
--- They read back as lines of the value: after it if the renderer writes the
--- key on the line of the value, otherwise above it.
+-- They read back as lines of the value.
 --
 -- A comment after the last entry of a block collection belongs to the end of
 -- the collection if it is indented at least as deep as the entries, and
@@ -458,12 +455,9 @@ foldedNode ls = contentNode (ScalarLinesContent Folded t starts)
 -- document after: [Comment "a"]
 --
 -- The renderer writes the markers and the empty lines that these rules
--- need, so that the lines read back at the same places. One case is an
--- exception: if the lines at the end of a document end with empty lines,
--- the renderer does not write the root as a flow collection, and another
--- document follows, these empty lines read back as the lines of the next
--- document. A @...@ marker would keep them, but the text reads back the
--- same without it.
+-- need, so that the lines read back at the same places. One exception: the
+-- empty lines at the end of a document can read back as the lines of the
+-- next document.
 
 -- $emptyLines
 -- Empty lines go with the node below them, or with the end of the document.
@@ -501,12 +495,10 @@ foldedNode ls = contentNode (ScalarLinesContent Folded t starts)
 -- root.user (key) before: [EmptyLine]
 --
 -- One place is an exception. Above the first entry of a block collection,
--- the last empty line stays with the collection. The renderer writes the
--- lines of a block collection there if the collection is the root, the
--- value of a key or a first list item that starts below its @-@. If these
--- lines do not end with an empty line, e.g. lines that a program added, the
--- renderer writes one below them, so that they read back as the lines of
--- the collection. The added empty line reads back as their last line.
+-- the last empty line stays with the collection. If the lines of a block
+-- collection do not end with an empty line, e.g. lines that a program added,
+-- the renderer can write one below them, so that they read back as the lines
+-- of the collection. The added empty line reads back as their last line.
 --
 -- >>> input = "# The file.\n\nhost: localhost\n"
 --
