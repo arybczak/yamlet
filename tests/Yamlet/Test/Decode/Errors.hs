@@ -509,6 +509,24 @@ test_keyErrors = do
     "string key that is missing"
     (Just "missing key \"a\"")
     (lookupError "a" "b: 1\n")
+  assertEqual
+    "key that is not a string with the value of the key"
+    (Just "missing key \"3.10\"")
+    (lookupError "3.10" "3.1: x\n")
+  assertEqual
+    "known key with the value of a key that is not a string"
+    ( Right
+        ( Left
+            [ "expected a string as the key, but got a floating-point number"
+            , "missing key \"3.10\""
+            ]
+        )
+    )
+    ( first (map snd . toList)
+        . runParser
+          (withMapping $ \o -> rejectUnknownKeys ["3.10"] o *> parseField @T.Text o "3.10")
+        <$> decodeText "3.1: x\n"
+    )
   let withKeys :: [T.Text] -> T.Text
       withKeys ks = T.unlines $ map (<> ": 1") ks
   assertEqual

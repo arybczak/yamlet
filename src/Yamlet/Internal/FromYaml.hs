@@ -762,25 +762,20 @@ parseEntry (k, v) = parseNode (parseYamlField k) v
 
 -- | The entry of a string key, or 'Nothing' if the key is missing. A key with
 -- the same text that is not a string, e.g. 404, is an error, so that its
--- value does not go away.
+-- value does not go away. Only the same text counts, e.g. not True for true,
+-- because quotes would not make True the key true.
 findKey :: Object -> T.Text -> Parser (Maybe (S.Node, S.Node))
 findKey o key = case M.lookup key o.index of
   Just entry -> pure (Just entry)
-  Nothing -> case L.find (\(_, v) -> v == plain) o.otherKeys of
+  Nothing -> case L.find (sameText . fst) o.otherKeys of
     Just (k, v) ->
-      failAt k $
-        "the key " ++ T.unpack (written k) ++ " is " ++ describe v ++ ", not a string"
+      failAt k $ "the key " ++ T.unpack key ++ " is " ++ describe v ++ ", not a string"
     Nothing -> pure Nothing
   where
-    plain :: Value
-    plain = resolvePlain key
-
-    -- The text of the key in the input can differ from the key, e.g. True
-    -- for true.
-    written :: S.Node -> T.Text
-    written k = case k.content of
-      S.ScalarLinesContent _ t _ -> t
-      _ -> key
+    sameText :: S.Node -> Bool
+    sameText k = case k.content of
+      S.ScalarContent _ t -> t == key
+      _ -> False
 
 -- | The error for a string key that 'lookupKey' does not find. As for
 -- 'findKey', a key with the same text that is not a string is the error
@@ -824,8 +819,13 @@ rejectUnknownKeys known o
       [ k
       | key <- known
       , not (M.member key o.index)
-      , Just (k, _) <- [L.find (\(_, v) -> v == resolvePlain key) o.otherKeys]
+      , Just (k, _) <- [L.find (sameText key . fst) o.otherKeys]
       ]
+
+    sameText :: T.Text -> S.Node -> Bool
+    sameText key k = case k.content of
+      S.ScalarContent _ t -> t == key
+      _ -> False
 
     -- The flag tells if no error listed the known keys yet.
     go :: Bool -> [(S.Node, S.Node)] -> Parser ()

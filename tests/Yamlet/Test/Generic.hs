@@ -691,8 +691,8 @@ test_record = do
     (Just (1, 1, "the key true is a boolean, not a string"))
     (errorOf (decodeText @DefaultSwitch "true: 1\n"))
   assertEqual
-    "key that is not a string, as the input writes it"
-    (Just (1, 1, "the key True is a boolean, not a string"))
+    "key that is not a string with another text"
+    (Just (1, 1, "expected a string as the key, but got a boolean"))
     (errorOf (decodeText @Switch "True: 1\n"))
   assertEqual
     "quoted key"
