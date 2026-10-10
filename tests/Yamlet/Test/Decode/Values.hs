@@ -28,7 +28,7 @@ import Yamlet.Internal.Parser.Monad qualified as P
 import Yamlet.Syntax qualified as S
 import Yamlet.Test.Decode.Helpers
 import Yamlet.Test.Helpers
-import Yamlet.Test.Thunks
+import Yamlet.Test.Helpers.Thunks
 
 -- | The decoders of the types that the library defines return values without
 -- thunks.

@@ -43,7 +43,7 @@ import System.IO
 import System.Mem
 
 import Yamlet
-import Yamlet.Test.Thunks
+import Yamlet.Test.Helpers.Thunks
 
 -- | Run the checks, and fail if one of them fails.
 main :: IO ()

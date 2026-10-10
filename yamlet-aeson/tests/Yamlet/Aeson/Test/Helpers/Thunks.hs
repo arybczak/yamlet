@@ -1,5 +1,5 @@
 -- | A check that a value is fully evaluated.
-module Thunks
+module Yamlet.Aeson.Test.Helpers.Thunks
   ( thunks
   ) where
 

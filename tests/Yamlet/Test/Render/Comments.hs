@@ -13,8 +13,8 @@ import Data.Text qualified as T
 import Test.Tasty.HUnit
 
 import Yamlet.Syntax
+import Yamlet.Test.Helpers.Thunks
 import Yamlet.Test.Render.Helpers
-import Yamlet.Test.Thunks
 
 -- | The parser returns documents with comments without thunks, as it does for
 -- documents without comments.

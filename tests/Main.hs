@@ -5,6 +5,7 @@ import Test.Tasty
 import Yamlet.Test.Decode
 import Yamlet.Test.Encode
 import Yamlet.Test.Generic
+import Yamlet.Test.Inspection
 import Yamlet.Test.Render
 import Yamlet.Test.TypeError
 import Yamlet.Test.YamlTestSuite
@@ -18,6 +19,7 @@ main = do
       [ decodeTests
       , encodeTests
       , genericTests
+      , inspectionTests
       , renderTests
       , typeErrorTests
       , suite

@@ -100,12 +100,12 @@ test-suite retention
                     , yamlet
                     , yamlet-aeson
 
-    hs-source-dirs: retention
+    hs-source-dirs: tests
 
     type:           exitcode-stdio-1.0
-    main-is:        Main.hs
+    main-is:        Retention.hs
 
-    other-modules:  Thunks
+    other-modules:  Yamlet.Aeson.Test.Helpers.Thunks
 
 benchmark bench
     import:         language

@@ -10,8 +10,8 @@ import Data.Text qualified as T
 import Test.Tasty.QuickCheck
 
 import Yamlet.Syntax
+import Yamlet.Test.Helpers.Thunks
 import Yamlet.Test.Render.Helpers
-import Yamlet.Test.Thunks
 
 prop_noThunks :: Tree -> Property
 prop_noThunks (Tree doc) =

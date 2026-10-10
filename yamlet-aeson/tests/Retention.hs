@@ -28,8 +28,8 @@ import System.IO
 import System.Mem
 import Yamlet
 
-import Thunks
 import Yamlet.Aeson
+import Yamlet.Aeson.Test.Helpers.Thunks
 
 -- | Run the checks, and fail if one of them fails.
 main :: IO ()

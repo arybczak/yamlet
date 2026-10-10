@@ -141,11 +141,13 @@ test-suite test
                     , directory
                     , filepath
                     , ghc-heap
+                    , inspection-testing
                     , yamlet
                     , scientific
                     , tasty
                     , tasty-hunit >= 0.10
                     , tasty-quickcheck >= 0.8.1
+                    , template-haskell
                     , text
                     , time
                     , uuid-types
@@ -170,6 +172,9 @@ test-suite test
                     Yamlet.Test.Encode.Values
                     Yamlet.Test.Generic
                     Yamlet.Test.Helpers
+                    Yamlet.Test.Helpers.Thunks
+                    Yamlet.Test.Inspection
+                    Yamlet.Test.Inspection.Obligations
                     Yamlet.Test.Render
                     Yamlet.Test.Render.Attachment
                     Yamlet.Test.Render.Comments
@@ -177,7 +182,6 @@ test-suite test
                     Yamlet.Test.Render.Helpers
                     Yamlet.Test.Render.Properties
                     Yamlet.Test.Render.Styles
-                    Yamlet.Test.Thunks
                     Yamlet.Test.TypeError
                     Yamlet.Test.YamlTestSuite
                     Yamlet.Test.YamlTestSuite.Events
@@ -194,31 +198,12 @@ test-suite retention
                     , text
                     , time
 
-    -- The checks share the thunk walk of the tests.
-    hs-source-dirs: retention tests
+    hs-source-dirs: tests
 
     type:           exitcode-stdio-1.0
-    main-is:        Main.hs
+    main-is:        Retention.hs
 
-    other-modules:  Yamlet.Test.Thunks
-
-test-suite inspection
-    import:         language
-
-    build-depends:    base
-                    , inspection-testing
-                    , tasty
-                    , tasty-hunit
-                    , template-haskell
-                    , text
-                    , yamlet
-
-    hs-source-dirs: inspection
-
-    type:           exitcode-stdio-1.0
-    main-is:        Main.hs
-
-    other-modules:  Obligations
+    other-modules:  Yamlet.Test.Helpers.Thunks
 
 benchmark bench
     import:         language

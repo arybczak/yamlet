@@ -8,7 +8,7 @@
 -- moment, e.g. 'assertFailureIf' and 'ghcVersion' when no test expects a
 -- failure. A later change to the library or a new version of GHC can need
 -- them again.
-module Obligations
+module Yamlet.Test.Inspection.Obligations
   ( hasNoGenericRep
   , hasNoGenericDictionaries
   , assertSuccess

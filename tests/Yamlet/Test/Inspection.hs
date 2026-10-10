@@ -5,15 +5,15 @@
 --
 -- The module exports every binding, because GHC 9.14 removes an unused
 -- binding before the plugin checks it.
-module Main where
+module Yamlet.Test.Inspection where
 
 import Data.Text qualified as T
 import Test.Inspection
 import Test.Tasty
 import Test.Tasty.HUnit
 
-import Obligations
 import Yamlet
+import Yamlet.Test.Inspection.Obligations
 
 -- Each type has a test for each method. The encoder of Step is a known
 -- failure with every GHC, and the encoder of Shape with GHC before 9.12,
@@ -21,209 +21,208 @@ import Yamlet
 -- constructor without fields, Halt or Dot, to the top level. Then the code of
 -- the last constructors is in a function with two callers, which takes their
 -- representation.
-main :: IO ()
-main =
-  defaultMain $
-    testGroup
-      "Inspection"
-      [ testGroup
-          "Server"
-          [ testCase "encode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'encodeServer)
-          , testCase "decode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeServer)
-          , testCase "encode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeServerList)
-          , testCase "decode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeServerList)
-          , testCase "encode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeServerField)
-          , testCase "decode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeServerField)
-          ]
-      , testGroup
-          "Wide"
-          [ testCase "encode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'encodeWide)
-          , testCase "decode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeWide)
-          , testCase "encode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeWideList)
-          , testCase "decode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeWideList)
-          , testCase "encode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeWideField)
-          , testCase "decode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeWideField)
-          ]
-      , testGroup
-          "Name"
-          [ testCase "encode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'encodeName)
-          , testCase "decode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeName)
-          , testCase "encode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeNameList)
-          , testCase "decode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeNameList)
-          , testCase "encode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeNameField)
-          , testCase "decode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeNameField)
-          ]
-      , testGroup
-          "Box"
-          [ testCase "encode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'encodeBox)
-          , testCase "decode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeBox)
-          , testCase "encode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeBoxList)
-          , testCase "decode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeBoxList)
-          , testCase "encode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeBoxField)
-          , testCase "decode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeBoxField)
-          ]
-      , testGroup
-          "Velocity"
-          [ testCase "encode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'encodeVelocity)
-          , testCase "decode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeVelocity)
-          , testCase "encode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeVelocityList)
-          , testCase "decode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeVelocityList)
-          , testCase "encode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeVelocityField)
-          , testCase "decode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeVelocityField)
-          ]
-      , testGroup
-          "Distance"
-          [ testCase "encode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'encodeDistance)
-          , testCase "decode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeDistance)
-          , testCase "encode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeDistanceList)
-          , testCase "decode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeDistanceList)
-          , testCase "encode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeDistanceField)
-          , testCase "decode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeDistanceField)
-          ]
-      , testGroup
-          "Speed"
-          [ testCase "encode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'encodeSpeed)
-          , testCase "decode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeSpeed)
-          , testCase "encode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeSpeedList)
-          , testCase "decode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeSpeedList)
-          , testCase "encode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeSpeedField)
-          , testCase "decode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeSpeedField)
-          ]
-      , testGroup
-          "Config"
-          [ testCase "encode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'encodeConfig)
-          , testCase "decode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeConfig)
-          , testCase "encode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeConfigList)
-          , testCase "decode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeConfigList)
-          , testCase "encode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeConfigField)
-          , testCase "decode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeConfigField)
-          ]
-      , testGroup
-          "Preset"
-          [ testCase "encode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'encodePreset)
-          , testCase "decode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'decodePreset)
-          , testCase "encode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodePresetList)
-          , testCase "decode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodePresetList)
-          , testCase "encode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodePresetField)
-          , testCase "decode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodePresetField)
-          ]
-      , testGroup
-          "Turn"
-          [ testCase "encode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'encodeTurn)
-          , testCase "decode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeTurn)
-          , testCase "encode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeTurnList)
-          , testCase "decode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeTurnList)
-          , testCase "encode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeTurnField)
-          , testCase "decode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeTurnField)
-          ]
-      , testGroup
-          "Shape"
-          [ testCase "encode" $
-              assertFailureIf
-                (ghcVersion < (9, 12))
-                $(inspectTest $ hasNoGenericRep 'encodeShape)
-          , testCase "decode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeShape)
-          , testCase "encode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeShapeList)
-          , testCase "decode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeShapeList)
-          , testCase "encode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeShapeField)
-          , testCase "decode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeShapeField)
-          ]
-      , testGroup
-          "Step"
-          [ testCase "encode" $
-              assertFailureIf True $(inspectTest $ hasNoGenericRep 'encodeStep)
-          , testCase "decode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeStep)
-          , testCase "encode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeStepList)
-          , testCase "decode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeStepList)
-          , testCase "encode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeStepField)
-          , testCase "decode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeStepField)
-          ]
-      , testGroup
-          "Figure"
-          [ testCase "encode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'encodeFigure)
-          , testCase "decode" $
-              assertSuccess $(inspectTest $ hasNoGenericRep 'decodeFigure)
-          , testCase "encode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeFigureList)
-          , testCase "decode a list" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeFigureList)
-          , testCase "encode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeFigureField)
-          , testCase "decode a field" $
-              assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeFigureField)
-          ]
-      ]
+inspectionTests :: TestTree
+inspectionTests =
+  testGroup
+    "Inspection"
+    [ testGroup
+        "Server"
+        [ testCase "encode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'encodeServer)
+        , testCase "decode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'decodeServer)
+        , testCase "encode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeServerList)
+        , testCase "decode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeServerList)
+        , testCase "encode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeServerField)
+        , testCase "decode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeServerField)
+        ]
+    , testGroup
+        "Wide"
+        [ testCase "encode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'encodeWide)
+        , testCase "decode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'decodeWide)
+        , testCase "encode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeWideList)
+        , testCase "decode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeWideList)
+        , testCase "encode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeWideField)
+        , testCase "decode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeWideField)
+        ]
+    , testGroup
+        "Name"
+        [ testCase "encode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'encodeName)
+        , testCase "decode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'decodeName)
+        , testCase "encode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeNameList)
+        , testCase "decode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeNameList)
+        , testCase "encode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeNameField)
+        , testCase "decode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeNameField)
+        ]
+    , testGroup
+        "Box"
+        [ testCase "encode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'encodeBox)
+        , testCase "decode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'decodeBox)
+        , testCase "encode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeBoxList)
+        , testCase "decode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeBoxList)
+        , testCase "encode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeBoxField)
+        , testCase "decode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeBoxField)
+        ]
+    , testGroup
+        "Velocity"
+        [ testCase "encode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'encodeVelocity)
+        , testCase "decode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'decodeVelocity)
+        , testCase "encode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeVelocityList)
+        , testCase "decode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeVelocityList)
+        , testCase "encode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeVelocityField)
+        , testCase "decode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeVelocityField)
+        ]
+    , testGroup
+        "Distance"
+        [ testCase "encode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'encodeDistance)
+        , testCase "decode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'decodeDistance)
+        , testCase "encode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeDistanceList)
+        , testCase "decode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeDistanceList)
+        , testCase "encode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeDistanceField)
+        , testCase "decode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeDistanceField)
+        ]
+    , testGroup
+        "Speed"
+        [ testCase "encode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'encodeSpeed)
+        , testCase "decode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'decodeSpeed)
+        , testCase "encode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeSpeedList)
+        , testCase "decode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeSpeedList)
+        , testCase "encode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeSpeedField)
+        , testCase "decode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeSpeedField)
+        ]
+    , testGroup
+        "Config"
+        [ testCase "encode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'encodeConfig)
+        , testCase "decode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'decodeConfig)
+        , testCase "encode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeConfigList)
+        , testCase "decode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeConfigList)
+        , testCase "encode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeConfigField)
+        , testCase "decode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeConfigField)
+        ]
+    , testGroup
+        "Preset"
+        [ testCase "encode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'encodePreset)
+        , testCase "decode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'decodePreset)
+        , testCase "encode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodePresetList)
+        , testCase "decode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodePresetList)
+        , testCase "encode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodePresetField)
+        , testCase "decode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodePresetField)
+        ]
+    , testGroup
+        "Turn"
+        [ testCase "encode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'encodeTurn)
+        , testCase "decode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'decodeTurn)
+        , testCase "encode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeTurnList)
+        , testCase "decode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeTurnList)
+        , testCase "encode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeTurnField)
+        , testCase "decode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeTurnField)
+        ]
+    , testGroup
+        "Shape"
+        [ testCase "encode" $
+            assertFailureIf
+              (ghcVersion < (9, 12))
+              $(inspectTest $ hasNoGenericRep 'encodeShape)
+        , testCase "decode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'decodeShape)
+        , testCase "encode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeShapeList)
+        , testCase "decode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeShapeList)
+        , testCase "encode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeShapeField)
+        , testCase "decode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeShapeField)
+        ]
+    , testGroup
+        "Step"
+        [ testCase "encode" $
+            assertFailureIf True $(inspectTest $ hasNoGenericRep 'encodeStep)
+        , testCase "decode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'decodeStep)
+        , testCase "encode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeStepList)
+        , testCase "decode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeStepList)
+        , testCase "encode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeStepField)
+        , testCase "decode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeStepField)
+        ]
+    , testGroup
+        "Figure"
+        [ testCase "encode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'encodeFigure)
+        , testCase "decode" $
+            assertSuccess $(inspectTest $ hasNoGenericRep 'decodeFigure)
+        , testCase "encode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeFigureList)
+        , testCase "decode a list" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeFigureList)
+        , testCase "encode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'encodeFigureField)
+        , testCase "decode a field" $
+            assertSuccess $(inspectTest $ hasNoGenericDictionaries 'decodeFigureField)
+        ]
+    ]
 
 ----------------------------------------
 -- Products
