@@ -545,13 +545,11 @@ withMapping f = parseNode $ \n -> case n.content of
               (Just (first, _), _) ->
                 go
                   m
-                  ( bothErrors
-                      errs
-                      ( OneError
-                          k.offset
-                          ("duplicate key " ++ showText t)
-                          [(first.offset, "the first key " ++ showText t)]
-                      )
+                  ( bothErrors errs $
+                      OneError
+                        k.offset
+                        ("duplicate key " ++ showText t)
+                        [(first.offset, "the first key " ++ showText t)]
                   )
                   others
                   rest

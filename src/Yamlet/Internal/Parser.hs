@@ -1330,13 +1330,11 @@ closing c start w kind entries msg = do
                 throwAt lineStart "unexpected byte order mark"
             | Just tab <- firstTab e lineStart q -> throwAt tab tabMessage
             | byteAt e q == w ->
-                throwAt
-                  q
-                  ( "'"
-                      ++ [chr (fromIntegral w)]
-                      ++ "' is indented too little to end the "
-                      ++ kind
-                  )
+                throwAt q $
+                  "'"
+                    ++ [chr (fromIntegral w)]
+                    ++ "' is indented too little to end the "
+                    ++ kind
             | closedLater e q ->
                 throwAt q ("the line is indented too little to continue the " ++ kind)
           Nothing | Just m <- cutByMarker e w -> throwAt m (markerInside e kind)
@@ -1912,15 +1910,14 @@ sLBlockNode n c = do
     flowOnly e p =
       not (isStartOfLine e p)
         && let w = byteAt e (skipWhites e p)
-           in not
-                ( w == 0
-                    || isBreak w
-                    || w == HASH
-                    || w == PIPE
-                    || w == GREATER
-                    || w == EXCL
-                    || w == AMP
-                )
+           in not $
+                w == 0
+                  || isBreak w
+                  || w == HASH
+                  || w == PIPE
+                  || w == GREATER
+                  || w == EXCL
+                  || w == AMP
 
 -- | s-l+flow-in-block(n)
 sLFlowInBlock :: Int -> P Node

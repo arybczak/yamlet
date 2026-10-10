@@ -60,10 +60,9 @@ test_scalarKeys :: Assertion
 test_scalarKeys =
   assertEqual
     "the text of each key"
-    ( Right
-        ( A.object
-            ["0x10" A..= 'a', "true" A..= 'b', "~" A..= 'c', "" A..= 'd', "1.0" A..= 'e']
-        )
+    ( Right $
+        A.object
+          ["0x10" A..= 'a', "true" A..= 'b', "~" A..= 'c', "" A..= 'd', "1.0" A..= 'e']
     )
     (decodeText @A.Value "0x10: a\ntrue: b\n~: c\n'': d\n'1.0': e\n")
 
@@ -102,10 +101,9 @@ test_tags :: Assertion
 test_tags =
   assertEqual
     "the values without tags"
-    ( Right
-        ( A.object
-            ["x" A..= ("abc" :: T.Text), "y" A..= ("1" :: T.Text), "z" A..= (2 :: Int)]
-        )
+    ( Right $
+        A.object
+          ["x" A..= ("abc" :: T.Text), "y" A..= ("1" :: T.Text), "z" A..= (2 :: Int)]
     )
     (decodeText @A.Value "!point {x: !secret abc, y: !!str 1, z: !!int 2}")
 
@@ -242,9 +240,8 @@ test_encodeSpecialFloats = do
   assertEqual
     "the values read back as from JSON"
     (Right (map show <$> A.decode @[Double] (A.encode ds)))
-    ( (\(ViaAeson xs) -> Just (map (show @Double) xs))
-        <$> decodeText (encodeText (ViaAeson ds))
-    )
+    $ (\(ViaAeson xs) -> Just (map (show @Double) xs))
+      <$> decodeText (encodeText (ViaAeson ds))
 
 test_zeros :: Assertion
 test_zeros =

@@ -429,12 +429,10 @@ attachNode e limit minColumn known above n items0 = node `seq` items5 `seq` (nod
     -- lines between them.
     blockAfter :: [Item] -> ([Line], [Item])
     blockAfter =
-      takeLines
-        ( \i ->
-            i.at < limit
-              && i.own
-              && (isEmptyLine i || i.at - i.lineStart >= max column minColumn)
-        )
+      takeLines $ \i ->
+        i.at < limit
+          && i.own
+          && (isEmptyLine i || i.at - i.lineStart >= max column minColumn)
 
     -- The lines of the items from the start that pass the check, without the
     -- empty lines at their end, which stay with the next items.

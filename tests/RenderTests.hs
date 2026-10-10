@@ -223,9 +223,8 @@ test_fallbacks = do
   assertEqual
     "literal of only line breaks with a line below at the top level"
     (Right [(ScalarContent DoubleQuoted "\n", [("", "after", "c")])])
-    ( map (\d -> (d.root.content, commentsOf d))
-        <$> parseDocumentsText (render (withLineBelow (scalarNode Literal "\n")))
-    )
+    $ map (\d -> (d.root.content, commentsOf d))
+      <$> parseDocumentsText (render (withLineBelow (scalarNode Literal "\n")))
   assertEqual
     "literal with a line below in a list"
     "- |-\n# c\n"
@@ -260,13 +259,11 @@ test_fallbacks = do
   assertEqual
     "keep indicator"
     "- |+\n  a\n\n- b\n"
-    ( render
-        ( sequenceNode
-            [ scalarNode Literal "a\n\n"
-            , (plainNode "b") {comments = noComments {before = [EmptyLine]}}
-            ]
-        )
-    )
+    $ render
+    $ sequenceNode
+      [ scalarNode Literal "a\n\n"
+      , (plainNode "b") {comments = noComments {before = [EmptyLine]}}
+      ]
   assertEqual
     "block scalar in a flow collection"
     "[\"a\\n\"]\n"
@@ -276,25 +273,21 @@ test_fallbacks = do
   assertEqual
     "empty item of a flow sequence"
     "[!!null , a, !!null ]\n"
-    ( render
-        (contentNode (SequenceContent Flow [plainNode "", plainNode "a", plainNode ""]))
-    )
+    $ render
+    $ contentNode (SequenceContent Flow [plainNode "", plainNode "a", plainNode ""])
   assertEqual
     "empty tagged values in flow collections"
     (Right "[80, !!str , 443]\n---\n{a: !!str , b: !!str }\n")
-    ( renderSyntax defaultRenderOptions
-        <$> parseDocumentsText "[80, !!str , 443]\n---\n{a: !!str , b: !!str }\n"
-    )
+    $ renderSyntax defaultRenderOptions
+      <$> parseDocumentsText "[80, !!str , 443]\n---\n{a: !!str , b: !!str }\n"
   -- YAML 1.1 parsers misread or reject these plain scalars, empty keys and
   -- empty values in flow collections.
   assertEqual
     "indicators in plain scalars of a flow collection"
     "['?a', 'a?b', ':a', 'a:?', a:b, -a]\n"
-    ( render
-        ( contentNode
-            (SequenceContent Flow (map plainNode ["?a", "a?b", ":a", "a:?", "a:b", "-a"]))
-        )
-    )
+    $ render
+    $ contentNode
+    $ SequenceContent Flow (map plainNode ["?a", "a?b", ":a", "a:?", "a:b", "-a"])
   rendersAs
     "empty keys and values in flow mappings"
     "{k: , a: 1}\n---\n{? : x}\n---\n{? }\n"
@@ -328,14 +321,9 @@ test_fallbacks = do
   assertEqual
     "flow key that a tag makes long, without a value"
     ("{? " <> longTag <> " , b: c}\n")
-    ( render
-        ( contentNode
-            ( MappingContent
-                Flow
-                [(longTagged, plainNode ""), (plainNode "b", plainNode "c")]
-            )
-        )
-    )
+    $ render
+    $ contentNode
+    $ MappingContent Flow [(longTagged, plainNode ""), (plainNode "b", plainNode "c")]
   assertEqual
     "long flow keys read back"
     ( Right
@@ -344,14 +332,13 @@ test_fallbacks = do
         , Mapping [(String (T.replicate 1020 "a"), Int 1)]
         ]
     )
-    ( decodeAllText @Value . renderSyntax defaultRenderOptions $
-        map
-          document
-          [ flowEntry (plainNode long) (plainNode "1")
-          , flowEntry (plainNode long) (plainNode "")
-          , flowEntry anchoredKey (plainNode "1")
-          ]
-    )
+    $ decodeAllText @Value . renderSyntax defaultRenderOptions
+    $ map
+      document
+      [ flowEntry (plainNode long) (plainNode "1")
+      , flowEntry (plainNode long) (plainNode "")
+      , flowEntry anchoredKey (plainNode "1")
+      ]
   assertEqual
     "empty key"
     "?\n: a\n"
@@ -396,33 +383,30 @@ test_fallbacks = do
   assertEqual
     "comment in an empty key reads back"
     (Right [[("/?:key", "after", "c")]])
-    ( map commentsOf
-        <$> parseDocumentsText (render (mappingNode [(emptyWithComment, plainNode "v")]))
-    )
+    $ map commentsOf
+      <$> parseDocumentsText (render (mappingNode [(emptyWithComment, plainNode "v")]))
   assertEqual
     "white space at the end of a comment"
     "# y\na # x\n"
-    ( render
-        (plainNode "a")
-          { comments = noComments {before = [Comment "y\t"], inline = Just "x "}
-          }
-    )
+    $ render
+      (plainNode "a")
+        { comments = noComments {before = [Comment "y\t"], inline = Just "x "}
+        }
   let anchored :: T.Text -> Node -> Node
       anchored a n = n {props = noProps {anchor = Just a}}
   assertEqual
     "invalid anchor names"
     "[&a_b x, *a_b, &a_b_2 y, *a_b_2, &anchor z, *anchor]\n"
-    ( render . contentNode $
-        SequenceContent
-          Flow
-          [ anchored "a b" (plainNode "x")
-          , contentNode (AliasContent "a b")
-          , anchored "a]b" (plainNode "y")
-          , contentNode (AliasContent "a]b")
-          , anchored "" (plainNode "z")
-          , contentNode (AliasContent "")
-          ]
-    )
+    $ render . contentNode
+    $ SequenceContent
+      Flow
+      [ anchored "a b" (plainNode "x")
+      , contentNode (AliasContent "a b")
+      , anchored "a]b" (plainNode "y")
+      , contentNode (AliasContent "a]b")
+      , anchored "" (plainNode "z")
+      , contentNode (AliasContent "")
+      ]
   let tagged :: T.Text -> Node
       tagged t = (plainNode "x") {props = noProps {tag = Tag t}}
       tagOf :: T.Text -> Either String [Tag]
@@ -460,36 +444,31 @@ test_fallbacks = do
   assertEqual
     "directives after a document"
     (Right [(NoTag, ScalarContent Plain "a"), (Tag "foo", ScalarContent Plain "x")])
-    ( map (\d -> (d.root.props.tag, d.root.content))
-        <$> parseDocumentsText
-          ( renderSyntax
-              defaultRenderOptions
-              [document (plainNode "a"), document (tagged "foo")]
-          )
-    )
+    $ map (\d -> (d.root.props.tag, d.root.content))
+      <$> parseDocumentsText
+        ( renderSyntax
+            defaultRenderOptions
+            [document (plainNode "a"), document (tagged "foo")]
+        )
   assertEqual
     "taken anchor name"
     "- &a_b x\n- &a_b_2 y\n- *a_b_2\n"
-    ( render
-        ( sequenceNode
-            [ anchored "a_b" (plainNode "x")
-            , anchored "a b" (plainNode "y")
-            , contentNode (AliasContent "a b")
-            ]
-        )
-    )
+    $ render
+    $ sequenceNode
+      [ anchored "a_b" (plainNode "x")
+      , anchored "a b" (plainNode "y")
+      , contentNode (AliasContent "a b")
+      ]
   assertEqual
     "anchor names with line separators"
     "- &a_b x\n- &c_d y\n- *a_b\n- *c_d\n"
-    ( render
-        ( sequenceNode
-            [ anchored "a\x2028\&b" (plainNode "x")
-            , anchored "c\x2029\&d" (plainNode "y")
-            , contentNode (AliasContent "a\x2028\&b")
-            , contentNode (AliasContent "c\x2029\&d")
-            ]
-        )
-    )
+    $ render
+    $ sequenceNode
+      [ anchored "a\x2028\&b" (plainNode "x")
+      , anchored "c\x2029\&d" (plainNode "y")
+      , contentNode (AliasContent "a\x2028\&b")
+      , contentNode (AliasContent "c\x2029\&d")
+      ]
 
 -- | The new names of many invalid anchor names with one base take linear
 -- time, not quadratic.
@@ -501,10 +480,9 @@ test_manyAnchors = do
   assertEqual
     "first and last names"
     ["- &______ x", "- &_______" <> T.pack (show (length names)) <> " x"]
-    ( case T.lines (render tree) of
-        first : rest -> first : take 1 (reverse rest)
-        [] -> []
-    )
+    $ case T.lines (render tree) of
+      first : rest -> first : take 1 (reverse rest)
+      [] -> []
 
 -- | The time to render nested flow collections with a comment inside is
 -- linear in the depth.
@@ -591,9 +569,8 @@ test_forceBlock = do
   assertEqual
     "collection in a key"
     (Right "? - a\n  - b\n: 1\n")
-    ( renderSyntax defaultRenderOptions {forceBlock = True}
-        <$> parseDocumentsText "[a, b]: 1\n"
-    )
+    $ renderSyntax defaultRenderOptions {forceBlock = True}
+      <$> parseDocumentsText "[a, b]: 1\n"
   where
     input :: T.Text
     input = "list: [a, [b, c], {d: e}]\nkey: [[f]]\n"
@@ -715,27 +692,24 @@ test_documents = do
   assertEqual
     "comment after a byte order mark between documents"
     (Right [[("document", "after", "c")], [("document", "before", "d")]])
-    ( map commentsOf
-        <$> parseDocumentsText "a: 1\n...\n\xFEFF# c\n\n\xFEFF# d\n---\nb: 2\n"
-    )
+    $ map commentsOf
+      <$> parseDocumentsText "a: 1\n...\n\xFEFF# c\n\n\xFEFF# d\n---\nb: 2\n"
   let commented :: Document -> Document
       commented d = d {docComments = noComments {before = [Comment "c"]}}
   assertEqual
     "comment above a document without an end marker above it"
     "a\n\n# c\n---\nb\n"
-    ( renderSyntax
-        defaultRenderOptions
-        [document (plainNode "a"), commented (document (plainNode "b"))]
-    )
+    $ renderSyntax
+      defaultRenderOptions
+      [document (plainNode "a"), commented (document (plainNode "b"))]
   assertEqual
     "comment above a document with directives"
     "a\n...\n\n# c\n%YAML 1.2\n---\nb\n"
-    ( renderSyntax
-        defaultRenderOptions
-        [ document (plainNode "a")
-        , commented (document (plainNode "b")) {version = Just (YamlVersion 1 2)}
-        ]
-    )
+    $ renderSyntax
+      defaultRenderOptions
+      [ document (plainNode "a")
+      , commented (document (plainNode "b")) {version = Just (YamlVersion 1 2)}
+      ]
   let flowWithLines =
         (document (contentNode (SequenceContent Flow [plainNode "a"])))
           { docComments = noComments {after = [Comment "c"]}
@@ -754,20 +728,18 @@ test_documents = do
     assertEqual
       ("comment above a document below an empty " ++ show style ++ " root")
       "\"\"\n\n# c\n---\nb\n"
-      ( renderSyntax
-          defaultRenderOptions
-          [document (scalarNode style ""), commented (document (plainNode "b"))]
-      )
+      $ renderSyntax
+        defaultRenderOptions
+        [document (scalarNode style ""), commented (document (plainNode "b"))]
   let keyComment :: Document
       keyComment =
-        document
-          ( mappingNode
-              [
-                ( (plainNode "k") {comments = noComments {before = [Comment "c"]}}
-                , plainNode "v"
-                )
-              ]
-          )
+        document $
+          mappingNode
+            [
+              ( (plainNode "k") {comments = noComments {before = [Comment "c"]}}
+              , plainNode "v"
+              )
+            ]
       afterEnd :: T.Text
       afterEnd =
         renderSyntax
@@ -831,11 +803,10 @@ test_documents = do
     "empty line at the end of a block root before a document"
     "k: v\n\n# c\n...\n---\nb\n"
     [[("", "after", "c")], []]
-    [ document
-        ( withLines
-            noComments {after = [EmptyLine, Comment "c"]}
-            (mappingNode [(plainNode "k", plainNode "v")])
-        )
+    [ document $
+        withLines
+          noComments {after = [EmptyLine, Comment "c"]}
+          (mappingNode [(plainNode "k", plainNode "v")])
     , document (plainNode "b")
     ]
   boundary
@@ -843,16 +814,13 @@ test_documents = do
     "k: v\n\n# c\n...\n---\nb\n"
     [[("", "after", "c")], []]
     [ document
-        ( withLines
-            noComments {after = [Comment "c"]}
-            ( mappingNode
-                [
-                  ( plainNode "k"
-                  , withLines noComments {after = [EmptyLine]} (plainNode "v")
-                  )
-                ]
+        $ withLines noComments {after = [Comment "c"]}
+        $ mappingNode
+          [
+            ( plainNode "k"
+            , withLines noComments {after = [EmptyLine]} (plainNode "v")
             )
-        )
+          ]
     , document (plainNode "b")
     ]
   boundary
@@ -868,14 +836,13 @@ test_documents = do
     "empty line after the last key of a block root before a document"
     "k: v\n\n  # c\n...\n---\nb\n"
     [[("/k", "after", "c")], []]
-    [ document
-        ( mappingNode
-            [
-              ( withLines noComments {after = [EmptyLine, Comment "c"]} (plainNode "k")
-              , plainNode "v"
-              )
-            ]
-        )
+    [ document $
+        mappingNode
+          [
+            ( withLines noComments {after = [EmptyLine, Comment "c"]} (plainNode "k")
+            , plainNode "v"
+            )
+          ]
     , document (plainNode "b")
     ]
   boundary
@@ -1153,22 +1120,20 @@ test_attachment = do
   assertEqual
     "empty lines"
     (Right [EmptyLine, EmptyLine])
-    ( ( \case
+    $ ( \case
           [d] | MappingContent _ [_, (k, _)] <- d.root.content -> k.comments.before
           _ -> []
       )
-        <$> parseDocumentsText "a: 1\n\n\nb: 2\n"
-    )
+      <$> parseDocumentsText "a: 1\n\n\nb: 2\n"
   assertEqual
     "empty line below the end of a collection"
     (Right [([Comment "c"], [EmptyLine])])
-    ( map
-        ( \d -> case d.root.content of
-            MappingContent _ [(_, v), (k, _)] -> (v.comments.after, k.comments.before)
-            _ -> ([], [])
-        )
-        <$> parseDocumentsText "a:\n  b: 1\n  # c\n\nd: 2\n"
-    )
+    $ map
+      ( \d -> case d.root.content of
+          MappingContent _ [(_, v), (k, _)] -> (v.comments.after, k.comments.before)
+          _ -> ([], [])
+      )
+      <$> parseDocumentsText "a:\n  b: 1\n  # c\n\nd: 2\n"
   assertEqual
     "empty line below an explicit key without a value"
     (Right "a:\n\n# c\nb:\n")
@@ -1176,27 +1141,25 @@ test_attachment = do
   assertEqual
     "empty line at the end of the root"
     (Right [([Comment "c"], [EmptyLine, Comment "d"], [])])
-    ( map
-        ( \d -> case d.root.content of
-            MappingContent _ [(_, v)] ->
-              (v.comments.after, d.root.comments.after, d.docComments.after)
-            _ -> ([], [], [])
-        )
-        <$> parseDocumentsText "a:\n  b: 1\n  # c\n\n# d\n"
-    )
+    $ map
+      ( \d -> case d.root.content of
+          MappingContent _ [(_, v)] ->
+            (v.comments.after, d.root.comments.after, d.docComments.after)
+          _ -> ([], [], [])
+      )
+      <$> parseDocumentsText "a:\n  b: 1\n  # c\n\n# d\n"
   let between :: String -> [([Line], [Line])] -> T.Text -> Assertion
       between preface expected input =
         assertEqual
           preface
           (Right expected)
-          ( map
-              ( \d ->
-                  ( d.root.comments.after ++ d.docComments.after
-                  , d.docComments.before ++ d.root.comments.before
-                  )
-              )
-              <$> parseDocumentsText input
-          )
+          $ map
+            ( \d ->
+                ( d.root.comments.after ++ d.docComments.after
+                , d.docComments.before ++ d.root.comments.before
+                )
+            )
+            <$> parseDocumentsText input
   between
     "above the marker of the next document"
     [([Comment "c"], []), ([], [])]
@@ -1224,9 +1187,8 @@ test_attachment = do
   assertEqual
     "empty lines above the first key"
     (Right [([Comment "a", EmptyLine, Comment "b", EmptyLine, EmptyLine], [Comment "c"])])
-    ( map (\d -> (d.root.comments.before, firstKey d.root))
-        <$> parseDocumentsText "# a\n\n# b\n\n\n# c\nk: v\n"
-    )
+    $ map (\d -> (d.root.comments.before, firstKey d.root))
+      <$> parseDocumentsText "# a\n\n# b\n\n\n# c\nk: v\n"
   where
     firstKey :: Node -> [Line]
     firstKey n = case n.content of
@@ -1359,25 +1321,23 @@ test_hashes = do
   assertEqual
     "lines"
     (Right [[CommentLine 2 "a", CommentLine 3 "b ###", CommentLine 4 "", Comment "#c"]])
-    ( map
-        ( \d -> case d.root.content of
-            MappingContent _ ((k, _) : _) -> k.comments.before
-            _ -> []
-        )
-        <$> parseDocumentsText input
-    )
+    $ map
+      ( \d -> case d.root.content of
+          MappingContent _ ((k, _) : _) -> k.comments.before
+          _ -> []
+      )
+      <$> parseDocumentsText input
   assertEqual
     "inline and below a value"
     (Right [(Just "#d", [CommentLine 2 "e"])])
-    ( map
-        ( ( \case
-              MappingContent _ [(_, v)] -> (v.comments.inline, v.comments.after)
-              _ -> (Nothing, [])
-          )
-            . (.root.content)
+    $ map
+      ( ( \case
+            MappingContent _ [(_, v)] -> (v.comments.inline, v.comments.after)
+            _ -> (Nothing, [])
         )
-        <$> parseDocumentsText input
-    )
+          . (.root.content)
+      )
+      <$> parseDocumentsText input
   assertEqual
     "rendered"
     (Right "## a\n### b ###\n####\n# #c\nk: 1 # #d\n  ## e\n")
@@ -1385,13 +1345,12 @@ test_hashes = do
   assertEqual
     "count below 1"
     "# a\n---\nk: 1\n"
-    ( renderSyntax
-        defaultRenderOptions
-        [ (document (mappingNode [(plainNode "k", plainNode "1")]))
-            { docComments = noComments {before = [CommentLine (-1) "a"]}
-            }
-        ]
-    )
+    $ renderSyntax
+      defaultRenderOptions
+      [ (document (mappingNode [(plainNode "k", plainNode "1")]))
+          { docComments = noComments {before = [CommentLine (-1) "a"]}
+          }
+      ]
 
 -- | The lines after a list under a key stay at the end of the list. Without
 -- indentation, a block collection as the last item would take them in.
@@ -1534,26 +1493,23 @@ test_linesBelowIndicator = do
   assertEqual
     "lines of a first item below its indicator"
     (Right [[("/0", "before", "a"), ("/0", "inline", "i")]])
-    ( map commentsOf
-        <$> parseDocumentsText
-          ( render
-              ( sequenceNode
-                  [ list
-                      { comments = noComments {before = [Comment "a"], inline = Just "i"}
-                      }
-                  ]
-              )
-          )
-    )
+    $ map commentsOf
+      <$> parseDocumentsText
+        ( render $
+            sequenceNode
+              [ list
+                  { comments = noComments {before = [Comment "a"], inline = Just "i"}
+                  }
+              ]
+        )
   let anchored :: Node -> Node
       anchored n = n {props = noProps {anchor = Just "x"}}
   assertEqual
     "lines of a first item with nested first items"
     (Right [[("/0", "before", "a")]])
-    ( map commentsOf
-        <$> parseDocumentsText
-          (render (sequenceNode [withAbove (anchored (sequenceNode [anchored list]))]))
-    )
+    $ map commentsOf
+      <$> parseDocumentsText
+        (render (sequenceNode [withAbove (anchored (sequenceNode [anchored list]))]))
   assertEqual
     "lines of a block value below its key"
     "k:\n# a\n\n- 1\n"
@@ -1561,9 +1517,8 @@ test_linesBelowIndicator = do
   assertEqual
     "lines of a block value below its key read back"
     (Right [[("/k", "before", "a")]])
-    ( map commentsOf
-        <$> parseDocumentsText (render (mappingNode [(plainNode "k", withAbove list)]))
-    )
+    $ map commentsOf
+      <$> parseDocumentsText (render (mappingNode [(plainNode "k", withAbove list)]))
 
 -- | A comment without a place at its node moves to one that has it.
 test_movedComments :: Assertion
@@ -1581,96 +1536,80 @@ test_movedComments = do
   assertEqual
     "lines after a scalar key"
     "# b\nk: 1\n  # a\n"
-    ( render
-        (mappingNode [(withAfter "a" (withBefore "b" (plainNode "k")), plainNode "1")])
-    )
+    $ render
+    $ mappingNode [(withAfter "a" (withBefore "b" (plainNode "k")), plainNode "1")]
   assertEqual
     "lines after a scalar key with a block scalar value"
     "# a\nk: |\n  text\n"
-    ( render
-        ( mappingNode
-            [
-              ( withAfter "a" (plainNode "k")
-              , contentNode (ScalarContent Literal "text\n")
-              )
-            ]
+    $ render
+    $ mappingNode
+      [
+        ( withAfter "a" (plainNode "k")
+        , contentNode (ScalarContent Literal "text\n")
         )
-    )
+      ]
   assertEqual
     "lines after a block scalar value"
     "k: |\n  text\n# a\nx: 1\n"
-    ( render
-        ( mappingNode
-            [
-              ( plainNode "k"
-              , withAfter "a" (contentNode (ScalarContent Literal "text\n"))
-              )
-            , (plainNode "x", plainNode "1")
-            ]
+    $ render
+    $ mappingNode
+      [
+        ( plainNode "k"
+        , withAfter "a" (contentNode (ScalarContent Literal "text\n"))
         )
-    )
+      , (plainNode "x", plainNode "1")
+      ]
   assertEqual
     "lines after a list item"
     "- 1\n  # a\n- 2\n"
-    ( render
-        ( contentNode
-            (SequenceContent Block [withAfter "a" (plainNode "1"), plainNode "2"])
-        )
-    )
+    $ render
+    $ contentNode
+    $ SequenceContent Block [withAfter "a" (plainNode "1"), plainNode "2"]
   assertEqual
     "empty lines at the end of an empty flow collection"
     "a: [\n  # c\n  ]\n\nb: 1\n"
-    ( render
-        ( mappingNode
-            [
-              ( plainNode "a"
-              , (contentNode (SequenceContent Flow []))
-                  { comments = noComments {after = [Comment "c", EmptyLine]}
-                  }
-              )
-            , (plainNode "b", plainNode "1")
-            ]
+    $ render
+    $ mappingNode
+      [
+        ( plainNode "a"
+        , (contentNode (SequenceContent Flow []))
+            { comments = noComments {after = [Comment "c", EmptyLine]}
+            }
         )
-    )
+      , (plainNode "b", plainNode "1")
+      ]
   assertEqual
     "two comments on one line"
     "# k\na: 1 # v\n"
-    ( render
-        (mappingNode [(withInline "k" (plainNode "a"), withInline "v" (plainNode "1"))])
-    )
+    $ render
+    $ mappingNode [(withInline "k" (plainNode "a"), withInline "v" (plainNode "1"))]
   assertEqual
     "two comments on one line, one with a line break"
     "# k l\na: 1 # v\n"
-    ( render
-        ( mappingNode
-            [(withInline "k\nl" (plainNode "a"), withInline "v" (plainNode "1"))]
-        )
-    )
+    $ render
+    $ mappingNode
+      [(withInline "k\nl" (plainNode "a"), withInline "v" (plainNode "1"))]
   assertEqual
     "comment in a flow sequence"
     "a:\n- 1 # c\n- 2\n"
-    ( render
-        ( mappingNode
-            [
-              ( plainNode "a"
-              , contentNode
-                  (SequenceContent Flow [withInline "c" (plainNode "1"), plainNode "2"])
-              )
-            ]
+    $ render
+    $ mappingNode
+      [
+        ( plainNode "a"
+        , contentNode
+            (SequenceContent Flow [withInline "c" (plainNode "1"), plainNode "2"])
         )
-    )
+      ]
   assertEqual
     "YAML 1.1 line breaks in comments"
     "# a\n# b\n# c\n# d\nk: v # e f g h\n"
-    ( render
-        ( mappingNode
-            [
-              ( withBefore "a\x85\&b\x2028\&c\x2029\&d" (plainNode "k")
-              , withInline "e\x85\&f\x2028\&g\x2029\&h" (plainNode "v")
-              )
-            ]
+    $ render
+    $ mappingNode
+      [
+        ( withBefore "a\x85\&b\x2028\&c\x2029\&d" (plainNode "k")
+        , withInline "e\x85\&f\x2028\&g\x2029\&h" (plainNode "v")
         )
-    )
+      ]
   assertEqual
     "comment on a block root"
     "--- # c\na: 1\n"
@@ -1695,13 +1634,12 @@ test_movedComments = do
   assertEqual
     "comment on a block root below the comment of the marker"
     "--- # d\n# c\n\na: 1\n"
-    ( renderSyntax
-        defaultRenderOptions
-        [ (document (withInline "c" (mappingNode [(plainNode "a", plainNode "1")])))
-            { docComments = noComments {inline = Just "d"}
-            }
-        ]
-    )
+    $ renderSyntax
+      defaultRenderOptions
+      [ (document (withInline "c" (mappingNode [(plainNode "a", plainNode "1")])))
+          { docComments = noComments {inline = Just "d"}
+          }
+      ]
   let list :: Node -> Node
       list item =
         mappingNode
@@ -1964,13 +1902,11 @@ genComments =
     genLines :: Gen [Line]
     genLines = do
       k <- choose (0, 2)
-      vectorOf
-        k
-        ( frequency
-            [ (3, CommentLine <$> elements [1, 1, 2, 3] <*> genCommentText)
-            , (1, pure EmptyLine)
-            ]
-        )
+      vectorOf k $
+        frequency
+          [ (3, CommentLine <$> elements [1, 1, 2, 3] <*> genCommentText)
+          , (1, pure EmptyLine)
+          ]
 
     genCommentText :: Gen T.Text
     genCommentText =

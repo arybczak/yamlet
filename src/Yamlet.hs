@@ -220,15 +220,13 @@ decodeWithDocument input =
   single (parseStream input) >>= \case
     [] ->
       withDocument
-        ( S.document
-            ( S.Node
-                (S.Offset 0)
-                (S.Offset 0)
-                S.noProps
-                S.noComments
-                (S.ScalarContent S.Plain "")
-            )
-        )
+        $ S.document
+        $ S.Node
+          (S.Offset 0)
+          (S.Offset 0)
+          S.noProps
+          S.noComments
+          (S.ScalarContent S.Plain "")
     [doc] -> withDocument doc
     docs@(_ : doc : _) -> do
       let limit = aliasLimit (map (.root) docs)

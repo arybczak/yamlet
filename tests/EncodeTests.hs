@@ -226,12 +226,10 @@ test_time = do
   assertEqual
     "zoned time of the year 0"
     "'0000-06-01T12:00:00+01:00'\n"
-    ( encodeText
-        ( ZonedTime
-            (LocalTime (fromGregorian 0 6 1) (TimeOfDay 12 0 0))
-            (hoursToTimeZone 1)
-        )
-    )
+    $ encodeText
+    $ ZonedTime
+      (LocalTime (fromGregorian 0 6 1) (TimeOfDay 12 0 0))
+      (hoursToTimeZone 1)
   assertEqual
     "hour 24"
     "'2024-01-01T24:00:00'\n"
@@ -239,12 +237,10 @@ test_time = do
   assertEqual
     "time zone of 25 hours"
     "'2024-01-01T12:00:00+25:00'\n"
-    ( encodeText
-        ( ZonedTime
-            (LocalTime (fromGregorian 2024 1 1) (TimeOfDay 12 0 0))
-            (hoursToTimeZone 25)
-        )
-    )
+    $ encodeText
+    $ ZonedTime
+      (LocalTime (fromGregorian 2024 1 1) (TimeOfDay 12 0 0))
+      (hoursToTimeZone 25)
   assertBool
     "time zone of 25 hours does not read back"
     (isLeft (decodeText @ZonedTime (encodeText (ZonedTime noon (hoursToTimeZone 25)))))
@@ -293,9 +289,8 @@ test_time = do
   assertEqual
     "zoned time with a large offset"
     (Right (noon, 900))
-    ( (\z -> (zonedTimeToLocalTime z, timeZoneMinutes (zonedTimeZone z)))
-        <$> decodeText (encodeText (ZonedTime noon (minutesToTimeZone 900)))
-    )
+    $ (\z -> (zonedTimeToLocalTime z, timeZoneMinutes (zonedTimeZone z)))
+      <$> decodeText (encodeText (ZonedTime noon (minutesToTimeZone 900)))
 
 test_blockStyle :: Assertion
 test_blockStyle =
@@ -643,9 +638,8 @@ test_tags = do
   assertEqual
     "directives after a document"
     (Right [strTag, "foo"])
-    ( map valueTag
-        <$> decodeAllText @Value (encodeAllText [String "a", Tagged "foo" (String "b")])
-    )
+    $ map valueTag
+      <$> decodeAllText @Value (encodeAllText [String "a", Tagged "foo" (String "b")])
 
 test_syntax :: Assertion
 test_syntax =
@@ -724,9 +718,8 @@ test_keptNodes = do
   assertEqual
     "lines above the first key of a mapping"
     (Right (M.fromList [("b", [Comment "c2"])]))
-    ( M.map (.comments.before)
-        <$> decodeText @(M.Map T.Text (Commented Int)) "# c1\n\n# c2\nb: 1\n"
-    )
+    $ M.map (.comments.before)
+      <$> decodeText @(M.Map T.Text (Commented Int)) "# c1\n\n# c2\nb: 1\n"
   assertEqual
     "comment after the tag of a list"
     (Right "- 1\n")
@@ -735,9 +728,8 @@ test_keptNodes = do
   assertEqual
     "lines above the first item of a value"
     (Right "# c1\nk:\n# c2\n\n# c3\n- 1\n")
-    ( encodeText
-        <$> decodeText @(M.Map T.Text (Commented (Commented [Commented Int]))) valueLines
-    )
+    $ encodeText
+      <$> decodeText @(M.Map T.Text (Commented (Commented [Commented Int]))) valueLines
   -- The lines belong to the list, and the comments of the entry have no place
   -- for them.
   assertEqual
@@ -812,9 +804,8 @@ test_commentedKeys = do
   assertEqual
     "map"
     (Right "# one\na: 1\nb: 2 # two\n")
-    ( encodeText
-        <$> decodeText @(M.Map T.Text (Commented Int)) "# one\na: 1\nb: 2 # two\n"
-    )
+    $ encodeText
+      <$> decodeText @(M.Map T.Text (Commented Int)) "# one\na: 1\nb: 2 # two\n"
   -- The parser gives the lines before the marker and at the end to the
   -- document, and the decoder gives them to the root. The renderer separates
   -- the lines of a block root from its first entry, so that they read back
@@ -823,9 +814,8 @@ test_commentedKeys = do
   assertEqual
     "comments of the document"
     (Right top)
-    ( encodeText
-        <$> decodeText @(Commented (M.Map T.Text Int)) "# top\n---\na: 1\n# end\n"
-    )
+    $ encodeText
+      <$> decodeText @(Commented (M.Map T.Text Int)) "# top\n---\na: 1\n# end\n"
   assertEqual
     "comments of the document read back"
     (Right top)
@@ -849,9 +839,8 @@ test_commentedKeys = do
   assertEqual
     "keys and values of a map"
     (Right "# above\na: 1 # c\n")
-    ( encodeText
-        <$> decodeText @(M.Map (Commented T.Text) (Commented Int)) "# above\na: 1 # c\n"
-    )
+    $ encodeText
+      <$> decodeText @(M.Map (Commented T.Text) (Commented Int)) "# above\na: 1 # c\n"
   let nodes = "os: [a, b] # two\nsteps:\n- x\n  # end\n"
   assertEqual
     "nodes keep their comments once"
@@ -886,9 +875,8 @@ test_commentedKeys = do
   assertEqual
     "lines after a commented scalar value read back"
     (Right (M.map (.comments) linesAfter))
-    ( M.map (.comments)
-        <$> decodeText @(M.Map T.Text (Commented Int)) (encodeText linesAfter)
-    )
+    $ M.map (.comments)
+      <$> decodeText @(M.Map T.Text (Commented Int)) (encodeText linesAfter)
   let quotedLinesAfter = "a: \"x\\r\\ny\"\n  # c\nb: d\n"
   assertEqual
     "lines after a text of several lines in double quotes"

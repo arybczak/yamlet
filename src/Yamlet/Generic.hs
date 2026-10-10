@@ -1262,11 +1262,10 @@ instance
         Just (withMapping (fmap (k . M1) . fromObject opts False [] (unM1 <$> def)) v)
     | gArity @f == 0 =
         Just
-          ( failAt kn $
-              "expected the string "
-                ++ showText t
-                ++ ", because the constructor has no fields"
-          )
+          $ failAt kn
+          $ "expected the string "
+            ++ showText t
+            ++ ", because the constructor has no fields"
     | otherwise = Just (k . M1 <$> gFromEntry entry)
   {-# INLINE gFromSingle #-}
 
@@ -1293,11 +1292,10 @@ fromObject opts flat keys def o
   | flat
   , not (null others)
   , not (any (isKey opts.contentsKey . fst) others) =
-      flatField
-        ( "without the key "
-            ++ showText opts.contentsKey
-            ++ ", the other keys of this mapping are the field"
-        )
+      flatField $
+        "without the key "
+          ++ showText opts.contentsKey
+          ++ ", the other keys of this mapping are the field"
   | otherwise = checked [opts.contentsKey] $ case M.lookup opts.contentsKey o.index of
       Just entry -> gFromEntry entry
       -- A missing contents key is null, if the fields accept null. A flat
@@ -1308,11 +1306,10 @@ fromObject opts flat keys def o
         | isJust def, not flat -> missingKey o opts.contentsKey
         | flat ->
             maybe
-              ( flatField
-                  ( "the mapping has no key "
-                      ++ showText opts.contentsKey
-                      ++ " and no other keys for the field"
-                  )
+              ( flatField $
+                  "the mapping has no key "
+                    ++ showText opts.contentsKey
+                    ++ " and no other keys for the field"
               )
               pure
               (succeeds gFromValue nullNode)
@@ -1343,14 +1340,13 @@ fromObject opts flat keys def o
           style = case n.content of
             S.MappingContent s _ -> s
             _ -> S.Block
-      in gFromValue
-           ( S.Node
-               n.offset
-               n.endOffset
-               n.props
-               S.noComments
-               (S.MappingContent style others)
-           )
+      in gFromValue $
+           S.Node
+             n.offset
+             n.endOffset
+             n.props
+             S.noComments
+             (S.MappingContent style others)
 
     -- The duplicates of a key go too. The mapping has their errors, and a
     -- field of a recursive type would give them again at each level.

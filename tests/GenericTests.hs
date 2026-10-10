@@ -703,10 +703,9 @@ test_parameters = do
   assertEqual
     "path of an error"
     (Left ["right"])
-    ( first
-        (map (renderPath . (.path)) . NE.toList)
-        (decodeText @(Pair Int) "left: 1\nright: x\n")
-    )
+    $ first
+      (map (renderPath . (.path)) . NE.toList)
+      (decodeText @(Pair Int) "left: 1\nright: x\n")
   assertEqual
     "null field left out"
     "name: a\n"
@@ -719,9 +718,8 @@ test_parameters = do
   assertEqual
     "null field with a comment"
     "name: a\n# b\nextra: null\n"
-    ( encodeText
-        (Sparse "a" (Commented (Nothing @Int) (Comments [Comment "b"] Nothing [])))
-    )
+    $ encodeText
+    $ Sparse "a" (Commented (Nothing @Int) (Comments [Comment "b"] Nothing []))
   assertEqual
     "null field without comments left out"
     "name: a\n"

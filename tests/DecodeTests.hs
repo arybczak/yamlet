@@ -307,9 +307,8 @@ test_exactFloats = do
   assertEqual
     "negative and positive zero keys"
     (Right [Float (Finite 0), Float NegativeZero])
-    ( (\case Mapping kvs -> map fst kvs; v -> [v])
-        <$> decodeText @Value "{0.0: a, -0.0: b}"
-    )
+    $ (\case Mapping kvs -> map fst kvs; v -> [v])
+      <$> decodeText @Value "{0.0: a, -0.0: b}"
   assertEqual
     "infinity as a scientific"
     (Just (1, 1, "expected a finite number"))
@@ -393,13 +392,12 @@ test_values = do
     (decodeText @Value "a: [1, 2]")
   assertEqual
     "tags"
-    ( Right
-        ( Sequence
-            [ Tagged "!point" (Mapping [(String "x", Int 1)])
-            , Tagged "!secret" (String "abc")
-            , Int 1
-            ]
-        )
+    ( Right $
+        Sequence
+          [ Tagged "!point" (Mapping [(String "x", Int 1)])
+          , Tagged "!secret" (String "abc")
+          , Int 1
+          ]
     )
     (decodeText @Value "- !point {x: 1}\n- !secret abc\n- !!int 1\n")
 
@@ -464,9 +462,8 @@ test_containers = do
   assertEqual
     "tuple of 10"
     (Right (1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
-    ( decodeText @(Int, Int, Int, Int, Int, Int, Int, Int, Int, Int)
-        "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]"
-    )
+    $ decodeText @(Int, Int, Int, Int, Int, Int, Int, Int, Int, Int)
+      "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]"
   assertEqual
     "tuple of 10 with the wrong size"
     (Just (1, 1, "expected a list of 10 elements, but got 1"))
@@ -583,9 +580,8 @@ test_time = do
   assertEqual
     "zoned time"
     (Right (noon, 120))
-    ( (\z -> (zonedTimeToLocalTime z, timeZoneMinutes (zonedTimeZone z)))
-        <$> decodeText "2026-09-25T12:30:00+02:00"
-    )
+    $ (\z -> (zonedTimeToLocalTime z, timeZoneMinutes (zonedTimeZone z)))
+      <$> decodeText "2026-09-25T12:30:00+02:00"
   assertEqual
     "duration"
     (Right 1.5)
@@ -614,20 +610,16 @@ test_time = do
     assertEqual
       ("duration with the exponent " ++ show ex)
       (Left "the exponent of the number is out of the range from -1000 to 1000")
-      ( first
-          (snd . NE.head)
-          ( runParser
-              (parseYaml @NominalDiffTime)
-              (toYaml (Float (Finite (Sci.scientific 1 ex))))
-          )
-      )
+      $ first (snd . NE.head)
+      $ runParser
+        (parseYaml @NominalDiffTime)
+        (toYaml (Float (Finite (Sci.scientific 1 ex))))
   assertEqual
     "zero duration with a large exponent"
     (Right 0)
-    ( runParser
-        (parseYaml @DiffTime)
-        (toYaml (Float (Finite (Sci.scientific 0 maxBound))))
-    )
+    $ runParser
+      (parseYaml @DiffTime)
+      (toYaml (Float (Finite (Sci.scientific 0 maxBound))))
 
 test_record :: Assertion
 test_record = do
@@ -726,9 +718,8 @@ test_json = do
   assertEqual
     "characters beyond C0 that only quoted scalars can contain"
     (Right (M.fromList [("k\x9F", ["x\DEL", "\x80", "\xFFFE\xFFFF", "'\DEL'"])]))
-    ( decodeText @(M.Map T.Text [T.Text])
-        "{\"k\x9F\": [\"x\DEL\", \"\x80\", \"\xFFFE\xFFFF\", '''\DEL''']}"
-    )
+    $ decodeText @(M.Map T.Text [T.Text])
+      "{\"k\x9F\": [\"x\DEL\", \"\x80\", \"\xFFFE\xFFFF\", '''\DEL''']}"
   assertEqual
     "surrogate pair"
     (Right ["\x1F600", "a\x10000z"])
@@ -778,12 +769,11 @@ test_aliases = do
   assertEqual
     "path of an error inside an alias"
     (Left [(2, 3, [Index 1])])
-    ( first
-        ( map (\err -> (err.location.line, err.location.column, pathElements err.path))
-            . NE.toList
-        )
-        (decodeText @([T.Text], [Int]) "- &x [a, b]\n- *x\n")
-    )
+    $ first
+      ( map (\err -> (err.location.line, err.location.column, pathElements err.path))
+          . NE.toList
+      )
+      (decodeText @([T.Text], [Int]) "- &x [a, b]\n- *x\n")
 
 -- | The time to parse nested flow sequences is linear in the depth.
 test_nesting :: Assertion
@@ -820,10 +810,9 @@ test_nesting = do
   assertEqual
     "block sequences on an indented line with a comment above"
     (Right 400000)
-    ( depth
-        <$> decodeText
-          ("# c\n" <> T.replicate 400000 " " <> T.replicate 400000 "- " <> "x\n")
-    )
+    $ depth
+      <$> decodeText
+        ("# c\n" <> T.replicate 400000 " " <> T.replicate 400000 "- " <> "x\n")
   assertEqual
     "block sequences with empty lines below"
     (Right 20000)
@@ -840,14 +829,13 @@ test_optionalKeys = do
         assertEqual
           preface
           (Right (Right expected))
-          ( runParser
-              ( withMapping $ \o ->
-                  (,)
-                    <$> parseFieldMaybe o "a"
-                    <*> parseFieldIfPresent o "a"
-              )
-              <$> decodeText input
-          )
+          $ runParser
+            ( withMapping $ \o ->
+                (,)
+                  <$> parseFieldMaybe o "a"
+                  <*> parseFieldIfPresent o "a"
+            )
+            <$> decodeText input
   check
     "missing"
     (Nothing, Nothing)
@@ -869,15 +857,14 @@ test_optionalKeys = do
         assertEqual
           preface
           (Right expected)
-          ( runParser
-              ( withMapping $ \o ->
-                  (,,)
-                    <$> parseFieldWith small o "a"
-                    <*> parseFieldMaybeWith small o "b"
-                    <*> parseFieldIfPresentWith (parseYaml @(Maybe Int)) o "b"
-              )
-              <$> decodeText input
-          )
+          $ runParser
+            ( withMapping $ \o ->
+                (,,)
+                  <$> parseFieldWith small o "a"
+                  <*> parseFieldMaybeWith small o "b"
+                  <*> parseFieldIfPresentWith (parseYaml @(Maybe Int)) o "b"
+            )
+            <$> decodeText input
       small :: Node -> Parser Int
       small = withInt $ \i -> if i < 10 then pure (fromInteger i) else fail "too large"
   explicit
@@ -952,10 +939,9 @@ test_located = do
       assertEqual
         "error without an offset"
         ["conf.yml: not from the input"]
-        ( map
-            (prettyError "conf.yml")
-            (documentErrors input doc [(noOffset, "not from the input")])
-        )
+        $ map
+          (prettyError "conf.yml")
+          (documentErrors input doc [(noOffset, "not from the input")])
     Left errs -> assertFailure (show errs)
   assertEqual
     "second document"
@@ -965,23 +951,21 @@ test_located = do
     "empty stream"
     ( Right
         ( Nothing
-        , S.document
-            ( S.Node
-                (Offset 0)
-                (Offset 0)
-                S.noProps
-                S.noComments
-                (S.ScalarContent S.Plain "")
-            )
+        , S.document $
+            S.Node
+              (Offset 0)
+              (Offset 0)
+              S.noProps
+              S.noComments
+              (S.ScalarContent S.Plain "")
         )
     )
     (decodeWithDocument @(Maybe Int) "")
   assertEqual
     "comments of the key"
     (Right (Just (Offset 3, Just "c")))
-    ( fmap (\l -> (l.offset, l.value.comments.inline)) . M.lookup "a"
-        <$> decodeText @(M.Map T.Text (Located (Commented T.Text))) "a: x # c\n"
-    )
+    $ fmap (\l -> (l.offset, l.value.comments.inline)) . M.lookup "a"
+      <$> decodeText @(M.Map T.Text (Located (Commented T.Text))) "a: x # c\n"
   assertEqual
     "encoded"
     "a: 1\n"
@@ -1018,11 +1002,10 @@ test_syntaxTree = do
   assertEqual
     "built, rendered"
     (Left ["built.yaml: duplicate key \"a\"", "built.yaml: the first key \"a\""])
-    ( either
-        (Left . map (prettyError "built.yaml") . NE.toList)
-        (const (Right ()))
-        (decodeDocument @Value "" built)
-    )
+    $ either
+      (Left . map (prettyError "built.yaml") . NE.toList)
+      (const (Right ()))
+      (decodeDocument @Value "" built)
   assertEqual
     "decoder error in a built node"
     (Just (0, 0, "expected an integer, but got a string"))
@@ -1173,11 +1156,10 @@ test_encodings = do
   assertEqual
     "source line after a BOM"
     (Left "]")
-    ( either
-        (Left . (.sourceLine) . NE.head)
-        (const (Right ()))
-        (decode @Value "\xEF\xBB\xBF]")
-    )
+    $ either
+      (Left . (.sourceLine) . NE.head)
+      (const (Right ()))
+      (decode @Value "\xEF\xBB\xBF]")
   assertEqual
     "source line at the line feed of a CRLF"
     "a: 1"
@@ -2091,9 +2073,8 @@ test_directiveErrors = do
   assertEqual
     "character from the escapes of the prefix and the suffix"
     (Right ["tag:\xE9"])
-    ( map (\d -> case d.root.props.tag of S.Tag t -> t; _ -> "")
-        <$> S.parseDocumentsText "%TAG !e! tag:%C3\n--- !e!%A9 a\n"
-    )
+    $ map (\d -> case d.root.props.tag of S.Tag t -> t; _ -> "")
+      <$> S.parseDocumentsText "%TAG !e! tag:%C3\n--- !e!%A9 a\n"
   assertEqual
     "valid verbatim tags"
     (Right ["!bar", "tag:yaml.org,2002:str"])
@@ -2101,9 +2082,8 @@ test_directiveErrors = do
   assertEqual
     "escapes of verbatim tags"
     (Right ["!foo!", "tag:example.com,2000:\xE9"])
-    ( map valueTag
-        <$> decodeText @[Value] "[!<!foo%21> a, !<tag:example.com,2000:%C3%A9> b]"
-    )
+    $ map valueTag
+      <$> decodeText @[Value] "[!<!foo%21> a, !<tag:example.com,2000:%C3%A9> b]"
   check
     "invalid UTF-8 in a verbatim tag"
     (1, 1, "the escapes of the tag are not valid UTF-8")
@@ -2294,15 +2274,13 @@ test_typeErrors = do
   assertEqual
     "negation of minBound"
     (Just (1, 1, "the fraction is out of the range of the type"))
-    ( errorOf
-        (decodeText @(Ratio Int) "{numerator: -9223372036854775808, denominator: -1}")
-    )
+    $ errorOf
+    $ decodeText @(Ratio Int) "{numerator: -9223372036854775808, denominator: -1}"
   assertEqual
     "minBound as the denominator"
     (Just (1, 1, "the fraction is out of the range of the type"))
-    ( errorOf
-        (decodeText @(Ratio Int) "{numerator: 1, denominator: -9223372036854775808}")
-    )
+    $ errorOf
+    $ decodeText @(Ratio Int) "{numerator: 1, denominator: -9223372036854775808}"
   assertEqual
     "minBound reduced"
     (Right (negate 4611686018427387904 % 1))
@@ -2350,13 +2328,10 @@ test_typeErrors = do
   assertEqual
     "fixed with a huge exponent"
     (Left "the exponent of the number is out of the range from -1000 to 1000")
-    ( first
-        (snd . NE.head)
-        ( runParser
-            (parseYaml @Centi)
-            (toYaml (Float (Finite (Sci.scientific 1 maxBound))))
-        )
-    )
+    $ first (snd . NE.head)
+    $ runParser
+      (parseYaml @Centi)
+      (toYaml (Float (Finite (Sci.scientific 1 maxBound))))
   assertEqual
     "zero fixed with a huge exponent"
     (Right 0)
@@ -2534,9 +2509,8 @@ test_keyErrors = do
   assertEqual
     "key missing next to a merge key"
     (Right (Left (pure (Offset 0, "missing key \"x\", merge keys are not supported"))))
-    ( runParser (withMapping (\o -> parseField @Int o "x"))
-        <$> decodeText @Node "<<: {x: 1}\n"
-    )
+    $ runParser (withMapping (\o -> parseField @Int o "x"))
+      <$> decodeText @Node "<<: {x: 1}\n"
   assertEqual
     "two merge keys"
     ( Just
@@ -2600,11 +2574,9 @@ test_keyErrors = do
   assertEqual
     "duplicate among many scalar keys"
     (Just ((21, 1, "duplicate key \"k1\""), (1, 1, "the first key \"k1\"")))
-    ( errorWithNote
-        ( decodeAllText @Value
-            (T.unlines [T.pack ("k" ++ show i ++ ": 1") | i <- [1 .. 20 :: Int] ++ [1]])
-        )
-    )
+    $ errorWithNote
+    $ decodeAllText @Value
+    $ T.unlines [T.pack ("k" ++ show i ++ ": 1") | i <- [1 .. 20 :: Int] ++ [1]]
   assertEqual
     "duplicate scalar key after a collection key"
     (Just ((3, 1, "duplicate key \"a\""), (1, 1, "the first key \"a\"")))
@@ -2786,15 +2758,14 @@ laughs :: Int -> T.Text
 laughs k =
   T.unlines $
     "a0: &a0 [x, x, x, x, x, x, x, x, x, x]"
-      : [ T.pack
-            ( "a"
-                ++ show i
-                ++ ": &a"
-                ++ show i
-                ++ " ["
-                ++ L.intercalate ", " (replicate 10 ("*a" ++ show (i - 1)))
-                ++ "]"
-            )
+      : [ T.pack $
+            "a"
+              ++ show i
+              ++ ": &a"
+              ++ show i
+              ++ " ["
+              ++ L.intercalate ", " (replicate 10 ("*a" ++ show (i - 1)))
+              ++ "]"
         | i <- [1 .. k]
         ]
 
@@ -2842,25 +2813,22 @@ test_longNumbers = do
         , (1, 2, "the first key 0.1" ++ T.unpack zeros)
         )
     )
-    ( errorWithNote
-        ( decodeAllText @Value
-            ("{0.1" <> zeros <> ": a, 0.5" <> zeros <> ": b, 0.1" <> zeros <> "0: c}")
-        )
-    )
+    $ errorWithNote
+    $ decodeAllText @Value
+    $ "{0.1" <> zeros <> ": a, 0.5" <> zeros <> ": b, 0.1" <> zeros <> "0: c}"
   -- The gcd of a reduction takes quadratic time for most types.
   let big = 3 ^ (1000000 :: Int) :: Integer
   assertEqual
     "fraction"
     (Right big)
-    ( numerator
-        <$> decodeText @Rational
-          ( "{numerator: "
-              <> T.pack (show big)
-              <> ", denominator: "
-              <> T.pack (show @Integer (7 ^ (600000 :: Int)))
-              <> "}"
-          )
-    )
+    $ numerator
+      <$> decodeText @Rational
+        ( "{numerator: "
+            <> T.pack (show big)
+            <> ", denominator: "
+            <> T.pack (show @Integer (7 ^ (600000 :: Int)))
+            <> "}"
+        )
   assertEqual
     "float with a long integer part"
     (Right (Float (Finite (Sci.scientific (10 ^ (1000000 :: Int) - 1) (-999000)))))
@@ -2904,16 +2872,14 @@ test_manyKeys = do
   assertEqual
     "large equal keys"
     (Just ((3, 3, "duplicate key"), (1, 3, "the first key")))
-    ( errorWithNote
-        (decodeAllText @Value ("? " <> large <> "\n: 1\n? " <> large <> "\n: 2\n"))
-    )
+    $ errorWithNote
+    $ decodeAllText @Value ("? " <> large <> "\n: 1\n? " <> large <> "\n: 2\n")
   let deep = nestedKey 14 "0"
   assertEqual
     "nested equal keys"
     (Just ((3, 3, "duplicate key"), (1, 3, "the first key")))
-    ( errorWithNote
-        (decodeAllText @Value ("? " <> deep <> "\n: 1\n? " <> deep <> "\n: 2\n"))
-    )
+    $ errorWithNote
+    $ decodeAllText @Value ("? " <> deep <> "\n: 1\n? " <> deep <> "\n: 2\n")
   where
     -- Two mappings as keys that differ only in their last value.
     nestedKey :: Int -> T.Text -> T.Text
@@ -3019,10 +2985,9 @@ test_errorPaths = do
   assertEqual
     "path elements"
     (Left [CollectionKey, Index 1])
-    ( first
-        (pathElements . (.path) . NE.head)
-        (decodeText @(M.Map [Int] [Int]) "? [1, 2]\n: [3, y]\n")
-    )
+    $ first
+      (pathElements . (.path) . NE.head)
+      (decodeText @(M.Map [Int] [Int]) "? [1, 2]\n: [3, y]\n")
   check
     "empty value at the end of its key"
     (Right "a")
