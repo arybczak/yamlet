@@ -451,10 +451,12 @@ test_collectedErrors = do
 
 test_keyErrors :: Assertion
 test_keyErrors = do
+  -- Every node of an alias has the offset of the alias, so an error at the
+  -- value of a merge key cannot tell the value from the nodes inside it.
   let merged = "base: &b\n  x: 1\nc:\n  <<: *b\n"
   assertEqual
     "value of a merge key"
-    (Just (4, 7, "expected an integer, but got a mapping, merge keys are not supported"))
+    (Just (4, 7, "expected an integer, but got a mapping"))
     (errorOf (decodeText @(M.Map T.Text (M.Map T.Text Int)) merged))
   assertEqual
     "unknown merge key"

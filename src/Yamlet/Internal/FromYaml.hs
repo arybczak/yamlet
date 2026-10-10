@@ -211,8 +211,7 @@ runParserWithin limit added f n0 = case prepareWithin limit added n0 of
   Left err -> Left err
   Right (n, added') -> case runChecked f n of
     Result NoErrors a -> Right (a, added')
-    Result e _ ->
-      Left (NE.fromList (map (withMergeHint (mergeValues n)) (sortedErrors e)))
+    Result e _ -> Left (NE.fromList (sortedErrors e))
   where
     -- The errors in the order of their offsets, each with its notes after it.
     -- Errors at the same offset keep their order. An error comes only once:
@@ -233,26 +232,6 @@ runParserWithin limit added f n0 = case prepareWithin limit added n0 of
           NoErrors -> id
           OneError off msg notes -> ((off, msg, notes) :)
           BothErrors e1 e2 -> go e1 . go e2
-
-    -- An error at the value of a key << that is a collection, e.g. an alias of
-    -- a mapping, is likely from a merge key of YAML 1.1.
-    withMergeHint :: Set.Set S.Offset -> (S.Offset, String) -> (S.Offset, String)
-    withMergeHint offs (off, msg)
-      | off `Set.member` offs = (off, msg ++ noMergeKeys)
-      | otherwise = (off, msg)
-
-    mergeValues :: S.Node -> Set.Set S.Offset
-    mergeValues n = case n.content of
-      S.SequenceContent _ xs -> foldMap mergeValues xs
-      S.MappingContent _ kvs ->
-        foldMap (\(k, v) -> mergeValue k v <> mergeValues k <> mergeValues v) kvs
-      _ -> Set.empty
-
-    mergeValue :: S.Node -> S.Node -> Set.Set S.Offset
-    mergeValue k v = case (stringValue k, v.content) of
-      (Just "<<", S.MappingContent {}) -> Set.singleton v.offset
-      (Just "<<", S.SequenceContent {}) -> Set.singleton v.offset
-      _ -> Set.empty
 
 -- | Run a parser on a node that passed 'prepareWithin'.
 runChecked :: (S.Node -> Parser a) -> S.Node -> Result a
