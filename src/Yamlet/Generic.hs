@@ -498,12 +498,9 @@ class GenericYamlOptions a where
 -- you use them. To require the key of a type with one field, declare it with
 -- @data@.
 --
--- With 'TaggedFlat', a field without a name has no key of its own, because
--- its keys are next to the tag. Thus the type of the field decides about
--- these keys. E.g. for a mapping with only the tag, the decoder reports the
--- missing keys of that type, or takes them from the 'yamlDefault' of that
--- type. To require a key of the field, use 'requiredField' in the default of
--- the type of the field.
+-- With 'TaggedFlat', the keys of a field without a name are next to the tag,
+-- so the type of the field decides about them. To require one of them, use
+-- 'requiredField' in the default of the type of the field.
 requiredField :: a
 requiredField = throw RequiredField
 
@@ -577,14 +574,14 @@ separateWords sep = map toLower . afterLower . beforeLower
 ----------------------------------------
 -- Constructors
 
+-- An equality such as @Rep a ~ D1 d f@ would do the same as this class, but
+-- for a type without a 'Generic' instance, GHC would report that the equality
+-- fails instead of the missing instance.
+
 -- | The layer of the data type at the top of a representation, and the
 -- constructors below it. This class and the others of the representation
 -- appear in the constraints of 'genericToYaml' and 'genericParseYaml'. Their
 -- methods are internal.
---
--- An equality such as @Rep a ~ D1 d f@ would do the same, but for a type
--- without a 'Generic' instance, GHC would report that the equality fails
--- instead of the missing instance.
 class GDatatype (r :: Type -> Type) where
   type Constructors r :: Type -> Type
 
@@ -639,9 +636,10 @@ instance
 
   gNullary = gArity @f == 0
 
--- | The value of 'SumEncoding', if the constructors allow it. The instances
--- also check the shape of the constructors, because every derived instance
--- needs this class.
+-- The instances check the shape of the constructors, because every derived
+-- instance needs this class.
+
+-- | The value of 'SumEncoding', if the constructors allow it.
 class GEncoding (e :: SumEncodingKind) f where
   gEncoding :: SumEncodingKind
 
