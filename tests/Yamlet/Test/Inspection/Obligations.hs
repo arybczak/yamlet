@@ -42,8 +42,9 @@ hasNoGenericRep name =
 
 -- | The code passes no dictionaries of the generic classes, e.g. to a method
 -- of the instance for t'Yamlet.GenericYaml' that GHC did not inline at the
--- type. That method keeps the generic representation, and 'hasNoGenericRep'
--- does not see it, because it is in another module.
+-- type. That method keeps the generic representation in another module.
+-- 'hasNoGenericRep' sees such a call only through the 'G.Generic' instance
+-- of a type in the module of the test.
 hasNoGenericDictionaries :: Name -> Obligation
 hasNoGenericDictionaries name =
   mkObligation name $
