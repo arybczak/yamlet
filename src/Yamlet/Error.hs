@@ -122,7 +122,9 @@ data Location = Location
 
 -- | Render an error in the format that editors recognize. The result does not
 -- end with a line break. If the line is longer than 80 characters, the
--- excerpt shows only the 80 characters around the column.
+-- excerpt shows only the 80 characters around the column. A control
+-- character other than a tab shows as its symbol, e.g. U+241B for escape, or
+-- as U+FFFD if Unicode has no symbol for it.
 --
 -- >>> either printErrors print (decodeText @(M.Map T.Text [[Int]]) "jobs:\n  - [1]\n  - 42\n")
 -- input.yaml:3:5: jobs[1]: expected a list, but got an integer
@@ -191,15 +193,26 @@ prettyError file err
 
     shown :: String
     shown
-      | short = T.unpack err.sourceLine
+      | short = map visible (T.unpack err.sourceLine)
       | otherwise =
           (if cutBefore then ellipsis else "")
-            ++ T.unpack (T.Text arr excerptStart (excerptEnd - excerptStart))
+            ++ map visible (T.unpack (T.Text arr excerptStart (excerptEnd - excerptStart)))
             ++ (if cutAfter then ellipsis else "")
       where
         excerptStart, excerptEnd :: Int
         excerptStart = snd (stepBack inExcerpt)
         excerptEnd = snd (stepAhead (width - inExcerpt))
+
+    -- A terminal would act on a control character, e.g. on an escape
+    -- sequence. The block Control Pictures has a symbol for each C0 control
+    -- character, at its code point plus 0x2400, and one for DEL.
+    visible :: Char -> Char
+    visible c
+      | c == '\t' = c
+      | c == '\DEL' = '\x2421'
+      | c < ' ' = chr (ord c + 0x2400)
+      | isControl c = '\xFFFD'
+      | otherwise = c
 
     ellipsis :: String
     ellipsis = "..."

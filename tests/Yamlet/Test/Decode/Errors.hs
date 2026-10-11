@@ -741,6 +741,20 @@ test_prettyError = do
         [["  | " ++ replicate 4 ' ' ++ "^"]]
         (map (drop 3 . lines . prettyError "f") (NE.toList errs))
     Right _ -> assertFailure "expected an error"
+  case decodeText @Value "a: \"\ESC[2J\x7F\"\n" of
+    Left errs ->
+      assertEqual
+        "C0 control character and DEL"
+        [["1 | a: \"\x241B[2J\x2421\"", "  | " ++ replicate 4 ' ' ++ "^"]]
+        (map (drop 2 . lines . prettyError "f") (NE.toList errs))
+    Right _ -> assertFailure "expected an error"
+  case decodeText @(M.Map T.Text Int) "k: a\x85\&b\n" of
+    Left errs ->
+      assertEqual
+        "C1 control character"
+        [["1 | k: a\xFFFD\&b", "  | " ++ replicate 3 ' ' ++ "^"]]
+        (map (drop 2 . lines . prettyError "f") (NE.toList errs))
+    Right _ -> assertFailure "expected an error"
   where
     -- The excerpt and the caret from a scan of the whole line.
     excerpt :: Error -> [String]
