@@ -79,9 +79,10 @@ defaultRenderOptions =
 --   inline comment.
 --
 -- * An anchor name with a character that YAML does not allow in it, e.g. a
---   space, or that YAML 1.1 reads as a line break, becomes a new name in the
---   anchor and in its aliases. Names that only some parsers reject stay,
---   e.g. @é@, which libyaml rejects.
+--   space, or that YAML 1.1 parsers read as the end of the name, e.g. @:@
+--   or a line separator, becomes a new name in the anchor and in its
+--   aliases. Names that only some parsers reject stay, e.g. @é@, which
+--   libyaml rejects.
 --
 -- * A version that the parser does not support, e.g. 2.0, has no @%YAML@
 --   directive.
@@ -400,8 +401,15 @@ validAnchors doc
     isAnchorName :: T.Text -> Bool
     isAnchorName a = not (T.null a) && T.all isAnchorChar a
 
+    -- libyaml, PyYAML and go-yaml v2 end an anchor name at ':' and '?' and
+    -- read the rest as content, without an error.
     isAnchorChar :: Char -> Bool
-    isAnchorChar c = isScalarChar c && c /= ' ' && not (asciiChar isFlowIndicator c)
+    isAnchorChar c =
+      isScalarChar c
+        && c /= ' '
+        && c /= ':'
+        && c /= '?'
+        && not (asciiChar isFlowIndicator c)
 
 -- | The version of the document if the parser accepts it. The parser
 -- rejects the other versions.

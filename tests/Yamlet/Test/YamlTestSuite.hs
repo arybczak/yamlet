@@ -11,6 +11,7 @@ import Data.Attoparsec.ByteString.Char8 qualified as A
 import Data.ByteString qualified as BS
 import Data.List qualified as L
 import Data.List.NonEmpty qualified as NE
+import Data.Map.Strict qualified as M
 import Data.Maybe
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
@@ -203,23 +204,6 @@ runTest path = do
     jsonValues :: A.Parser [J.Value]
     jsonValues = many (A.skipSpace *> J.json') <* A.skipSpace <* A.endOfInput
 
-    -- The events that the renderer keeps. It writes a start marker for every
-    -- document after the first one.
-    rendered :: [Event] -> [Event]
-    rendered = \case
-      DocumentEnd explicit : DocumentStart _ : rest ->
-        DocumentEnd explicit : DocumentStart True : rendered rest
-      e : rest -> withoutStyle e : rendered rest
-      [] -> []
-
-    -- The renderer can change the styles.
-    withoutStyle :: Event -> Event
-    withoutStyle = \case
-      SequenceStart props _ -> SequenceStart props Block
-      MappingStart props _ -> MappingStart props Block
-      ScalarEvent props _ t -> ScalarEvent props Plain t
-      e -> e
-
     -- The JSON form of a value. The keys of the mappings in the tests with
     -- JSON are strings.
     toJson :: Y.Value -> J.Value
@@ -284,3 +268,44 @@ runTest path = do
           '\b' -> "\\b"
           '\r' -> "\\r"
           c -> [c]
+
+-- | The events that the renderer keeps. It writes a start marker for every
+-- document after the first one. It can rename an anchor, so a name becomes
+-- the number of the names before its first use in the document.
+rendered :: [Event] -> [Event]
+rendered = go M.empty
+  where
+    go :: M.Map T.Text Int -> [Event] -> [Event]
+    go names = \case
+      DocumentEnd explicit : DocumentStart _ : rest ->
+        DocumentEnd explicit : DocumentStart True : go M.empty rest
+      e : rest ->
+        let (names', e') = numbered names (withoutStyle e)
+        in e' : go names' rest
+      [] -> []
+
+    numbered :: M.Map T.Text Int -> Event -> (M.Map T.Text Int, Event)
+    numbered names = \case
+      SequenceStart props style -> (`SequenceStart` style) <$> numberedProps props
+      MappingStart props style -> (`MappingStart` style) <$> numberedProps props
+      ScalarEvent props style t -> (\p -> ScalarEvent p style t) <$> numberedProps props
+      AliasEvent a -> AliasEvent <$> number a
+      e -> (names, e)
+      where
+        numberedProps :: Props -> (M.Map T.Text Int, Props)
+        numberedProps props = case props.anchor of
+          Just a -> (\n -> props {anchor = Just n}) <$> number a
+          Nothing -> (names, props)
+
+        number :: T.Text -> (M.Map T.Text Int, T.Text)
+        number a = case M.lookup a names of
+          Just i -> (names, T.pack (show i))
+          Nothing -> (M.insert a (M.size names) names, T.pack (show (M.size names)))
+
+    -- The renderer can change the styles.
+    withoutStyle :: Event -> Event
+    withoutStyle = \case
+      SequenceStart props _ -> SequenceStart props Block
+      MappingStart props _ -> MappingStart props Block
+      ScalarEvent props _ t -> ScalarEvent props Plain t
+      e -> e

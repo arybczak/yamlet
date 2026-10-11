@@ -445,6 +445,15 @@ test_fallbacks = do
       , contentNode (AliasContent "a\x2028\&b")
       , contentNode (AliasContent "c\x2029\&d")
       ]
+  assertEqual
+    "anchor names that YAML 1.1 parsers end early"
+    "k: &a_b x\nl: &c_ y\nm: *a_b\n"
+    . render
+    $ mappingNode
+      [ (plainNode "k", anchored "a:b" (plainNode "x"))
+      , (plainNode "l", anchored "c?" (plainNode "y"))
+      , (plainNode "m", contentNode (AliasContent "a:b"))
+      ]
 
 -- | The new names of many invalid anchor names with one base take linear
 -- time, not quadratic.
