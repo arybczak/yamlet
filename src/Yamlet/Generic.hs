@@ -490,17 +490,19 @@ class GenericYamlOptions a where
 -- of type 'Maybe'. The encoder with 'Yamlet.Generic.omitNullFields' keeps
 -- such a field.
 --
--- The value throws an exception if it is evaluated, e.g. if you use
--- 'yamlDefault' directly. So the field must be 'requiredField' itself, not a
--- value that contains it, and the field must be lazy. The field of a newtype
--- is not lazy, because the newtype is the value of its field. With a strict
--- field or a newtype, the decoder and the encoder of the type throw each time
--- you use them. To require the key of a type with one field, declare it with
--- @data@.
+-- The value throws an exception when it is evaluated, also in your own code
+-- that uses 'yamlDefault'. The generic instances evaluate each field of the
+-- default to find the required fields, so:
 --
--- With 'TaggedFlat', the keys of a field without a name are next to the tag,
--- so the type of the field decides about them. To require one of them, use
--- 'requiredField' in the default of the type of the field.
+-- * The field must be 'requiredField' itself, e.g. @Just requiredField@ is not
+--   a valid default value for the field of type @Maybe Text@.
+--
+-- * The field must be lazy and not a field of a newtype.
+--
+-- With 'TaggedFlat', the keys next to the tag can belong to a field without
+-- a name, e.g. @distance@ in @{tag: Ahead, distance: 10}@ for
+-- @Ahead (Distance 10)@. To require such a key, use 'requiredField' in the
+-- default of the type of the field, e.g. @Distance@, not of the sum type.
 requiredField :: a
 requiredField = throw RequiredField
 
