@@ -1,6 +1,9 @@
 # yamlet
 
 [![CI](https://github.com/arybczak/yamlet/actions/workflows/haskell-gha.yaml/badge.svg?branch=master)](https://github.com/arybczak/yamlet/actions/workflows/haskell-gha.yaml?query=branch%3Amaster)
+[![Hackage](https://img.shields.io/hackage/v/yamlet.svg)](https://hackage.haskell.org/package/yamlet)
+[![Stackage LTS](https://www.stackage.org/package/yamlet/badge/lts)](https://www.stackage.org/lts/package/yamlet)
+[![Stackage Nightly](https://www.stackage.org/package/yamlet/badge/nightly)](https://www.stackage.org/nightly/package/yamlet)
 
 A YAML 1.2.2 library written in Haskell. Main features:
 

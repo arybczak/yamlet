@@ -1,5 +1,10 @@
 # yamlet-aeson
 
+[![CI](https://github.com/arybczak/yamlet/actions/workflows/haskell-gha.yaml/badge.svg?branch=master)](https://github.com/arybczak/yamlet/actions/workflows/haskell-gha.yaml?query=branch%3Amaster)
+[![Hackage](https://img.shields.io/hackage/v/yamlet-aeson.svg)](https://hackage.haskell.org/package/yamlet-aeson)
+[![Stackage LTS](https://www.stackage.org/package/yamlet-aeson/badge/lts)](https://www.stackage.org/lts/package/yamlet-aeson)
+[![Stackage Nightly](https://www.stackage.org/package/yamlet-aeson/badge/nightly)](https://www.stackage.org/nightly/package/yamlet-aeson)
+
 Use the `FromJSON` and `ToJSON` instances of
 [aeson](https://hackage.haskell.org/package/aeson) with
 [yamlet](https://hackage.haskell.org/package/yamlet), for the types that have
