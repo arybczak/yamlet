@@ -201,8 +201,9 @@ contentNode c =
     , content = c
     }
 
--- | A scalar in the given style. If the style cannot hold the text,
--- 'Yamlet.Syntax.renderSyntax' uses quotes.
+-- | A scalar in the given style. 'Yamlet.Syntax.renderSyntax' uses quotes if
+-- the style cannot hold the text, and for a block scalar that is a key or an
+-- entry of a flow collection.
 --
 -- >>> T.putStr (renderSyntax defaultRenderOptions [document (mappingNode [(plainNode "key", scalarNode Plain "a: b")])])
 -- key: 'a: b'
