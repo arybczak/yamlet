@@ -807,35 +807,26 @@ rejectUnknownKeys known o
   | M.size o.index == length o.entries
       && M.foldlWithKey' (\r k _ -> r && isKnown k) True o.index =
       pure ()
-  | otherwise = go True o.entries
+  | otherwise = go True [] o.entries
   where
     -- 'elem' is not specialized to 'T.Text' here, see the Core at -O, so it
     -- compares through the dictionary of 'Eq'.
     isKnown :: T.Text -> Bool
     isKnown t = any (== t) known
 
-    reported :: [S.Node]
-    reported =
-      [ k
-      | key <- known
-      , not (M.member key o.index)
-      , Just (k, _) <- [L.find (sameText key . fst) o.otherKeys]
-      ]
-
-    sameText :: T.Text -> S.Node -> Bool
-    sameText key k = case k.content of
-      S.ScalarContent _ t -> t == key
-      _ -> False
-
-    -- The flag tells if no error listed the known keys yet.
-    go :: Bool -> [(S.Node, S.Node)] -> Parser ()
-    go unlisted = \case
+    -- The flag tells if no error listed the known keys yet. The list has the
+    -- texts of the keys that a lookup reports: for each text, the first key
+    -- that is not a string. The keys in a copy of an alias share one offset,
+    -- so an offset cannot tell them apart.
+    go :: Bool -> [T.Text] -> [(S.Node, S.Node)] -> Parser ()
+    go unlisted reported = \case
       [] -> pure ()
       (k, _) : rest -> case stringValue k of
         Just t
-          | isKnown t -> go unlisted rest
-          | t == "<<" -> unknown k t noMergeKeys *> go unlisted rest
-          | Just s <- closeName known t -> unknown k t (didYouMean s) *> go unlisted rest
+          | isKnown t -> go unlisted reported rest
+          | t == "<<" -> unknown k t noMergeKeys *> go unlisted reported rest
+          | Just s <- closeName known t ->
+              unknown k t (didYouMean s) *> go unlisted reported rest
           | unlisted ->
               unknown
                 k
@@ -844,11 +835,16 @@ rejectUnknownKeys known o
                     then ", the mapping must be empty"
                     else expectedOneOf known
                 )
-                *> go False rest
-          | otherwise -> unknown k t "" *> go False rest
+                *> go False reported rest
+          | otherwise -> unknown k t "" *> go False reported rest
         _
-          | any (\r -> r.offset == k.offset) reported -> go unlisted rest
-          | otherwise -> typeMismatch "a string as the key" k *> go unlisted rest
+          | S.ScalarContent _ t <- k.content
+          , isKnown t
+          , not (M.member t o.index)
+          , not (any (== t) reported) ->
+              go unlisted (t : reported) rest
+          | otherwise ->
+              typeMismatch "a string as the key" k *> go unlisted reported rest
 
     unknown :: S.Node -> T.Text -> String -> Parser ()
     unknown k t hint = failAt k $ "unknown key " ++ showText t ++ hint
@@ -1315,11 +1311,13 @@ insertUnique
   -> [a]
   -> Parser s
 insertUnique node item key insert start msg note xs =
-  Parser $ \off -> go off start NoErrors [] [] xs
+  Parser $ \off -> go off start NoErrors [] [] 0 xs
   where
-    -- The duplicates and the failed items are in reverse.
-    go :: S.Offset -> s -> Errors -> [(c, S.Node)] -> [S.Offset] -> [a] -> Result s
-    go off !acc errs dups fails = \case
+    -- The duplicates and the positions of the failed items are in reverse.
+    -- The items in a copy of an alias share one offset, so an offset cannot
+    -- tell the failed items apart.
+    go :: S.Offset -> s -> Errors -> [(c, S.Node)] -> [Int] -> Int -> [a] -> Result s
+    go off !acc errs dups fails !i = \case
       [] -> case (errs, dups) of
         (NoErrors, []) -> Result NoErrors acc
         _ ->
@@ -1330,10 +1328,10 @@ insertUnique node item key insert start msg note xs =
         let Parser p = item a
         in case p off of
              Result NoErrors x -> case insert x acc of
-               (False, acc') -> go off acc' errs dups fails rest
-               (True, acc') -> go off acc' errs ((key x, node a) : dups) fails rest
+               (False, acc') -> go off acc' errs dups fails (i + 1) rest
+               (True, acc') -> go off acc' errs ((key x, node a) : dups) fails (i + 1) rest
              Result e _ ->
-               go off acc (bothErrors errs e) dups ((node a).offset : fails) rest
+               go off acc (bothErrors errs e) dups (i : fails) (i + 1) rest
 
     duplicateError :: M.Map c S.Node -> (c, S.Node) -> Errors
     duplicateError fs (c, n) =
@@ -1349,19 +1347,19 @@ insertUnique node item key insert start msg note xs =
     -- skips the failed items, because an item with a duplicate inside would
     -- decode its own items twice again, which doubles the time with each
     -- level of nesting.
-    firsts :: S.Offset -> [S.Offset] -> M.Map c S.Node
+    firsts :: S.Offset -> [Int] -> M.Map c S.Node
     firsts off fails =
       M.fromListWith
         (\_ old -> old)
         [ (key x, node a)
-        | a <- xs
-        , not ((node a).offset `Set.member` failedSet)
+        | (i, a) <- zip [0 ..] xs
+        , not (i `IS.member` failedSet)
         , let Parser p = item a
         , Result NoErrors x <- [p off]
         ]
       where
-        failedSet :: Set.Set S.Offset
-        failedSet = Set.fromList fails
+        failedSet :: IS.IntSet
+        failedSet = IS.fromList fails
 
 instance FromYaml a => FromYaml (Seq.Seq a) where
   parseYaml = withSequence (fmap Seq.fromList . parseItems parseYaml)

@@ -397,6 +397,18 @@ test_collectedErrors = do
     ]
     (errorsOf (decodeText @(Set.Set Double) "[1, 1.0, x]"))
   assertEqual
+    "duplicate and invalid elements of a set in a copy of an alias"
+    [ (1, 11, "expected an integer, but got a string")
+    , (1, 14, "duplicate element 1")
+    , (1, 8, "the first element 1")
+    , (2, 4, "expected an integer, but got a string")
+    , (2, 4, "duplicate element 1")
+    , (2, 4, "the first element 1")
+    ]
+    ( errorsOf
+        (decodeText @(M.Map T.Text (Set.Set Int)) "a: &s [1, x, 1]\nb: *s\n")
+    )
+  assertEqual
     "duplicate elements of an int set"
     [ (1, 5, "duplicate element 0x1")
     , (1, 2, "the first element 1")
@@ -536,6 +548,22 @@ test_keyErrors = do
     "lookup of a key that is not a string, with the unknown keys rejected"
     (Left ["the key \"404\" is an integer, not a string"])
     (lookupResult "404" "404: not found\n")
+  let rejecting :: Node -> Parser (Maybe T.Text)
+      rejecting = withMapping $ \o ->
+        rejectUnknownKeys ["404"] o *> parseFieldMaybe o "404"
+  assertEqual
+    "keys that are not strings in a copy of an alias"
+    ( Right
+        ( Left
+            [ "expected a string as the key, but got a boolean"
+            , "the key \"404\" is an integer, not a string"
+            ]
+        )
+    )
+    ( first (map snd . toList)
+        . runParser (withMapping $ \o -> parseFieldWith rejecting o "b")
+        <$> decodeText "a: &m {404: x, true: y}\nb: *m\n"
+    )
   assertEqual
     "key that is not a string with the value of the key"
     (Just "missing key \"3.10\"")
