@@ -988,7 +988,10 @@ inline opts pos indent n lineComment = case n.content of
             | longerThan maxImplicitKeyLength k -> (False, rendered)
             | otherwise ->
                 let t = B.runBuilder rendered
-                in (T.compareLength t maxImplicitKeyLength /= GT, B.fromText t)
+                    -- The space before the colon after a name is part of
+                    -- the key for the limit.
+                    limit = maxImplicitKeyLength - (if endsWithName k then 1 else 0)
+                in (T.compareLength t limit /= GT, B.fromText t)
 
         rendered :: B.Builder
         rendered = inline opts InFlowKey indent k Nothing

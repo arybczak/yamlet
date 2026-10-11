@@ -280,6 +280,16 @@ test_fallbacks = do
     "flow key that an anchor makes long"
     ("{? &anchor " <> T.replicate 1020 "a" <> " : 1}\n")
     (render (flowEntry anchoredKey (plainNode "1")))
+  let emptyTagged :: Int -> Node
+      emptyTagged n = (plainNode "") {props = noProps {tag = Tag ("!" <> T.replicate (n - 1) "t")}}
+  assertEqual
+    "flow key with a tag and a space of the longest length"
+    ("{!" <> T.replicate 1022 "t" <> " : 1}\n")
+    (render (flowEntry (emptyTagged 1023) (plainNode "1")))
+  assertEqual
+    "flow key that the space after a tag makes long"
+    ("{? !" <> T.replicate 1023 "t" <> " : 1}\n")
+    (render (flowEntry (emptyTagged 1024) (plainNode "1")))
   let longTag = "!" <> T.replicate 1100 "t"
       longTagged = (plainNode "") {props = noProps {tag = Tag longTag}}
   assertEqual
