@@ -769,7 +769,7 @@ findKey o key = case M.lookup key o.index of
   Just entry -> pure (Just entry)
   Nothing -> case L.find (sameText . fst) o.otherKeys of
     Just (k, v) ->
-      failAt k $ "the key " ++ T.unpack key ++ " is " ++ describe v ++ ", not a string"
+      failAt k $ "the key " ++ showText key ++ " is " ++ describe v ++ ", not a string"
     Nothing -> pure Nothing
   where
     sameText :: S.Node -> Bool

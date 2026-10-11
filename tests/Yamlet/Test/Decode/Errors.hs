@@ -499,12 +499,16 @@ test_keyErrors = do
              _ -> Nothing
   assertEqual
     "integer key"
-    (Just "the key 404 is an integer, not a string")
+    (Just "the key \"404\" is an integer, not a string")
     (lookupError "404" "200: ok\n404: not found\n")
   assertEqual
     "boolean key"
-    (Just "the key true is a boolean, not a string")
+    (Just "the key \"true\" is a boolean, not a string")
     (lookupError "true" "true: 1\n")
+  assertEqual
+    "empty null key"
+    (Just "the key \"\" is null, not a string")
+    (lookupError "" "? \n: 1\n")
   assertEqual
     "string key that is missing"
     (Just "missing key \"a\"")
@@ -530,7 +534,7 @@ test_keyErrors = do
     (lookupResult "404" "{}\n")
   assertEqual
     "lookup of a key that is not a string, with the unknown keys rejected"
-    (Left ["the key 404 is an integer, not a string"])
+    (Left ["the key \"404\" is an integer, not a string"])
     (lookupResult "404" "404: not found\n")
   assertEqual
     "key that is not a string with the value of the key"

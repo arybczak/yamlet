@@ -385,7 +385,7 @@ test_optionalKeys = do
           (runParser (withMapping (`op` "404")))
           (decodeText "200: 1\n404: 2\n")
       integerKey :: Either (NE.NonEmpty (Offset, String)) (Maybe Int)
-      integerKey = Left (pure (Offset 7, "the key 404 is an integer, not a string"))
+      integerKey = Left (pure (Offset 7, "the key \"404\" is an integer, not a string"))
   assertEqual
     "optional integer key"
     integerKey

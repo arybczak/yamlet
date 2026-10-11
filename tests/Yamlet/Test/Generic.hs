@@ -684,11 +684,11 @@ test_record = do
     (errorOf (decodeText @Server "host: a\n"))
   assertEqual
     "optional field with a key that is not a string"
-    (Just (1, 1, "the key true is a boolean, not a string"))
+    (Just (1, 1, "the key \"true\" is a boolean, not a string"))
     (errorOf (decodeText @Switch "true: 1\n"))
   assertEqual
     "field with a default and a key that is not a string"
-    (Just (1, 1, "the key true is a boolean, not a string"))
+    (Just (1, 1, "the key \"true\" is a boolean, not a string"))
     (errorOf (decodeText @DefaultSwitch "true: 1\n"))
   assertEqual
     "key that is not a string with another text"
