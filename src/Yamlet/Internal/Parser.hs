@@ -978,7 +978,9 @@ cQuoted style n c props = withScan $ \e p ->
       badIndent :: Int -> Scanned Content
       badIndent i
         | nextContent i >= e.end = endOfDocument i
-        | not (hasClosingQuote (nextContent i)) = unterminated
+        -- Without a closing quote, the line with a wrong indentation more
+        -- likely follows a missing quote.
+        | not (closingQuoteFrom e quote (nextContent i)) = unterminated
         | Just tab <- firstTab e (foldStop i) (skipWhites e (foldStop i)) =
             Failed tab tabMessage
         | otherwise =
@@ -1005,16 +1007,6 @@ cQuoted style n c props = withScan $ \e p ->
       skipBlankLines i =
         let j = skipWhites e (breakEnd e i)
         in if isBreak (byteAt e j) then skipBlankLines j else breakEnd e i
-
-      -- The line from the index contains a closing quote. If it does not, a
-      -- line with a wrong indentation more likely follows a missing quote.
-      hasClosingQuote :: Int -> Bool
-      hasClosingQuote i = case byteAt e i of
-        w
-          | w == quote -> True
-          | w == BACKSLASH && double -> hasClosingQuote (i + 2)
-          | w == 0 || isBreak w -> False
-          | otherwise -> hasClosingQuote (i + 1)
 
       -- Add the pieces of the current line, in reverse order, and start a new
       -- line after them.
@@ -1057,24 +1049,25 @@ cutByMarker e w
     unpaired :: Bool
     unpaired
       | w == RBRACKET || w == RBRACE = unmatchedClosing e w e.end e.streamEnd
-      | otherwise = closes e.end
+      | otherwise = closingQuoteFrom e {end = e.streamEnd} w e.end
 
-    -- The scalar continues after the marker up to a closing quote. Content
-    -- right after that quote shows that it is not the closing quote, e.g.
-    -- the quote in "it's" of a plain scalar in the next document.
-    closes :: Int -> Bool
-    closes i
-      | i >= stream.end = False
-      | b == w && w == SQUOTE && byteAt stream (i + 1) == SQUOTE = closes (i + 2)
-      | b == w = canEndFlowNode stream (i + 1)
-      | b == BACKSLASH && w == DQUOTE = closes (i + 2)
-      | otherwise = closes (i + 1)
+-- | The first quote from the index closes a quoted scalar with that quote.
+-- Content right after the quote shows that it is not the closing quote, e.g.
+-- the quote in "it's" of a plain scalar, or the opening quote of the next
+-- scalar.
+closingQuoteFrom :: Env -> Word8 -> Int -> Bool
+closingQuoteFrom e w = go
+  where
+    go :: Int -> Bool
+    go i
+      | i >= e.end = False
+      | b == w && w == SQUOTE && byteAt e (i + 1) == SQUOTE = go (i + 2)
+      | b == w = canEndFlowNode e (i + 1)
+      | b == BACKSLASH && w == DQUOTE = go (i + 2)
+      | otherwise = go (i + 1)
       where
         b :: Word8
-        b = byteAt stream i
-
-    stream :: Env
-    stream = e {end = e.streamEnd}
+        b = byteAt e i
 
 -- | A closing bracket without an opening bracket of its own is in the input
 -- from the first index to the second. Content right after a closing bracket

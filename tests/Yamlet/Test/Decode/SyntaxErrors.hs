@@ -216,6 +216,26 @@ test_syntaxErrors = do
     (2, 1, "invalid indentation of a line in a single-quoted scalar")
     "name: 'abc\nnext'\n"
   check
+    "missing closing quote before a quoted value"
+    (1, 7, "unterminated double-quoted scalar")
+    "name: \"web\nimage: \"nginx:1.25\"\n"
+  check
+    "missing closing quote before a single-quoted value"
+    (1, 7, "unterminated single-quoted scalar")
+    "name: 'web\nimage: 'nginx:1.25'\n"
+  check
+    "badly indented quoted line before the closing quote"
+    (2, 1, "invalid indentation of a line in a double-quoted scalar")
+    "key: \"first line\nsecond line\nthird line\"\n"
+  check
+    "badly indented quoted line before an escaped quote"
+    (2, 1, "invalid indentation of a line in a double-quoted scalar")
+    "key: \"first\nsay \\\"hi\\\" now\"\n"
+  check
+    "badly indented quoted line before a doubled quote"
+    (2, 1, "invalid indentation of a line in a single-quoted scalar")
+    "key: 'first\nit''s here'\n"
+  check
     "missing colon"
     (2, 4, "expected ':' after the key")
     "a: 1\nb 2\nc: 3\n"

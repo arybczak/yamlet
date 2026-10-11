@@ -125,7 +125,7 @@
 # Q4CL: Trailing content after quoted value
 2:17: unexpected 't' after the end of a quoted scalar
 # QB6E: Wrong indented multiline quoted scalar
-2:9: unterminated double-quoted scalar
+3:1: invalid indentation of a line in a double-quoted scalar
 # QLJ7: Tag shorthand used in documents but only defined in the first
 4:5: undefined tag handle !prefix!
 # RHX7: YAML directive without document end marker
