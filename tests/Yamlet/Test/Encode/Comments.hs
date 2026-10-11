@@ -223,6 +223,25 @@ test_commentedKeys = do
     (Right "# above\na: 1 # c\n")
     $ encodeText
       <$> decodeText @(M.Map (Commented T.Text) (Commented Int)) "# above\na: 1 # c\n"
+  assertEqual
+    "comments of an explicit key and its value"
+    (Right "# above\n# k\na: 1 # v\n")
+    $ encodeText
+      <$> decodeText @(M.Map (Commented T.Text) (Commented Int)) "# above\n? a # k\n: 1 # v\n"
+  assertEqual
+    "built keys keep the comments that their values lack"
+    "# on key\na: 1 # k\n# on value\nb: 2 # k\n"
+    . encodeText
+    $ M.fromList
+      [
+        ( Commented @T.Text "a" noComments {before = [Comment "on key"], inline = Just "k"}
+        , Commented @Int 1 noComments
+        )
+      ,
+        ( Commented "b" noComments {inline = Just "k"}
+        , Commented 2 noComments {before = [Comment "on value"]}
+        )
+      ]
   let nodes = "os: [a, b] # two\nsteps:\n- x\n  # end\n"
   assertEqual
     "nodes keep their comments once"

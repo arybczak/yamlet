@@ -106,8 +106,9 @@ instance ToYaml S.Node where toYaml = id
 instance ToYaml Value where toYaml = toSyntax
 
 -- | The value with the comments of its entry. The lines above and the comment
--- of the first line go on the key, or on the value without a key. The lines
--- after the value replace its own.
+-- of the first line go on the key, or on the value without a key. A key
+-- keeps its own lines above, or its own comment, if the value has none. The
+-- lines after the value replace its own.
 instance ToYaml a => ToYaml (S.Commented a) where
   toYaml c =
     let v = withLinesAfter c.comments.after (toYaml c.value)
@@ -120,15 +121,31 @@ instance ToYaml a => ToYaml (S.Commented a) where
          v
   toYamlField k c = (key, withLinesAfter c.comments.after (toYaml c.value))
     where
+      -- In the syntax tree, the comments of an entry are on its key. The
+      -- decoder gives them to the value too, because a key is not always a
+      -- Haskell value. E.g. in
+      --
+      --   # c1
+      --   permissions: # c2
+      --     contents: read
+      --
+      -- a record field permissions :: Commented Node gets c1 and c2, and the
+      -- encoder puts them back on the key.
+      --
+      -- A key that is a Haskell value gets them as well. E.g. in "a: 1 # c"
+      -- decoded as Map (Commented Text) (Commented Int), the key and the
+      -- value both have c. Comments that add up would be written twice, so
+      -- those of the value replace those of the key.
+      --
+      -- A key keeps its own comments if the value has none, e.g. in a map
+      -- that a program built with a comment only on the key.
       key :: S.Node
       key =
         S.withComments
-          ( S.Comments
-              { S.before = c.comments.before
-              , S.inline = c.comments.inline
-              , S.after = k.comments.after
-              }
-          )
+          k.comments
+            { S.before = if null c.comments.before then k.comments.before else c.comments.before
+            , S.inline = c.comments.inline <|> k.comments.inline
+            }
           k
 
 -- | The value alone. The key of an entry goes to the value inside, e.g. for a
