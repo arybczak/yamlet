@@ -39,6 +39,10 @@ description:
   * Safe for untrusted input. The time of a decode is close to linear in the
     size of the input, and the memory is linear.
 
+  See also <https://hackage.haskell.org/package/yamlet-aeson yamlet-aeson>,
+  which decodes and encodes YAML with the @FromJSON@ and @ToJSON@ instances of
+  aeson, e.g. in a program that moves from the yaml package to yamlet.
+
 extra-doc-files:
   CHANGELOG.md
   README.md
