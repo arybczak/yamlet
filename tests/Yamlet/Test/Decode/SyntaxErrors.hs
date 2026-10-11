@@ -119,7 +119,7 @@ test_syntaxErrors = do
     $ \(node, input) ->
       check
         ("line after a comment on an empty " ++ node)
-        (2, 1, "unexpected key among list items")
+        (2, 1, "unexpected value among list items")
         input
   check
     "line after a comment below the header of a block scalar"
@@ -561,6 +561,14 @@ test_syntaxErrors = do
     "key among indented list items after a comment"
     (5, 3, "unexpected key among list items")
     "a:\n  - x\n\n  # c\n  b: 1\n"
+  check
+    "explicit key among list items"
+    (2, 1, "unexpected key among list items")
+    "- a\n? b\n"
+  check
+    "value among indented list items"
+    (3, 3, "unexpected value among list items")
+    "a:\n  - x\n  y\n"
   check
     "list item among keys"
     (3, 3, "unexpected list item among mapping entries")

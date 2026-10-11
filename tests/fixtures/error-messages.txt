@@ -29,7 +29,7 @@
 # 6JTT: Flow sequence without closing bracket
 2:1: unterminated flow sequence
 # 6S55: Invalid scalar at the end of sequence
-4:2: unexpected key among list items
+4:2: unexpected value among list items
 # 7LBH: Multiline double quoted implicit keys
 2:3: a key must be on a single line
 # 7MNF: Missing colon
@@ -149,7 +149,7 @@
 # T833: Flow mapping missing a separating comma
 4:5: expected ',' or '}'
 # TD5N: Invalid scalar after sequence
-3:1: unexpected key among list items
+3:1: unexpected value among list items
 # U44R: Bad indentation in mapping (2)
 3:4: unexpected indentation
 # U99R: Invalid comma in tag

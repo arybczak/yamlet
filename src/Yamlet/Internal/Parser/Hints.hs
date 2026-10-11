@@ -446,7 +446,10 @@ unexpected input i = (tabCause, other)
                       "unexpected indentation, the line has less indentation than the block scalar above it"
                   else Nothing
             | isListItem k && not (isListItem i) && not (isFlowIndicator (byteAt e i)) ->
-                Just "unexpected key among list items"
+                Just $
+                  if hasKey i
+                    then "unexpected key among list items"
+                    else "unexpected value among list items"
             | not (isListItem k) && isListItem i ->
                 Just "unexpected list item among mapping entries"
             | otherwise -> Nothing
@@ -484,6 +487,13 @@ unexpected input i = (tabCause, other)
     isKeyColon j =
       byteAt e j == COLON
         && (let b = byteAt e (j + 1) in b == 0 || isWhite b || isBreak b)
+
+    -- The line from the content at the index has a key, explicit or
+    -- implicit.
+    hasKey :: Int -> Bool
+    hasKey j =
+      (byteAt e j == QUESTION && (let b = byteAt e (j + 1) in b == 0 || isWhite b || isBreak b))
+        || any isKeyColon [j .. lineContentEnd e j - 1]
 
     -- A block sequence entry starts at the index.
     isListItem :: Int -> Bool
