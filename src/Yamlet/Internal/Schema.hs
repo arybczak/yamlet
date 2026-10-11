@@ -51,8 +51,8 @@ resolvePlain = either id id . resolvePlainExact
 --
 -- A float beyond the limit becomes infinity or zero, as in 'resolvePlain'.
 --
--- >>> [resolveTagged floatTag "1", resolveTagged intTag "abc", resolveTagged "!point" "1"]
--- [Just (Float (Finite 1.0)),Nothing,Just (String "1")]
+-- >>> [resolveTagged floatTag "1", resolveTagged intTag "abc", resolveTagged seqTag "x", resolveTagged "!point" "1"]
+-- [Just (Float (Finite 1.0)),Nothing,Nothing,Just (String "1")]
 resolveTagged :: T.Text -> T.Text -> Maybe Value
 resolveTagged tag t = either id id <$> resolveTaggedExact tag t
 
@@ -82,6 +82,7 @@ resolveTaggedExact tag t
   | tag == boolTag = Right . Bool <$> readBool t
   | tag == intTag = Right . Int <$> readInt t
   | tag == floatTag = bimap Float Float <$> readFloat t
+  | tag == seqTag || tag == mapTag = Nothing
   | otherwise = Just . Right $ String t
 
 -- | A plain scalar with the text is a string, e.g. @9.10.3@ is a string, but
