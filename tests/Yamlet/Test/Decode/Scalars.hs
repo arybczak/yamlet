@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 module Yamlet.Test.Decode.Scalars
   ( scalarTests
   ) where
@@ -300,10 +302,7 @@ test_time = do
     "fraction of 13 digits"
     (Just (1, 1, "expected a time such as 12:30:00"))
     (errorOf (decodeText @TimeOfDay "12:30:05.1234567890123"))
-  assertEqual
-    "end of a day"
-    (Right (TimeOfDay 24 0 0))
-    (decodeText "24:00")
+  assertEndOfDay
   assertEqual
     "invalid time"
     (Just (1, 1, "expected a time such as 12:30:00"))
@@ -401,3 +400,19 @@ test_time = do
     $ runParser
       (parseYaml @DiffTime)
       (toYaml (Float (Finite (Sci.scientific 0 maxBound))))
+
+-- At top level, because fourmolu cannot format CPP inside a do block.
+assertEndOfDay :: Assertion
+#if MIN_VERSION_text_iso8601(0,2,0)
+assertEndOfDay =
+  assertEqual
+    "end of a day"
+    (Right (TimeOfDay 24 0 0))
+    (decodeText "24:00")
+#else
+assertEndOfDay =
+  assertEqual
+    "end of a day"
+    (Just (1, 1, "expected a time such as 12:30:00"))
+    (errorOf (decodeText @TimeOfDay "24:00"))
+#endif
