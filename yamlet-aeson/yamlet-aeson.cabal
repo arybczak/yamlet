@@ -4,7 +4,7 @@ name:               yamlet-aeson
 version:            1.0.0.1
 license:            BSD-3-Clause
 license-file:       LICENSE
-category:           Text, Data, JSON
+category:           JSON, YAML
 maintainer:         andrzej@rybczak.net
 author:             Andrzej Rybczak
 synopsis:           Use the FromJSON and ToJSON instances of aeson with yamlet.
