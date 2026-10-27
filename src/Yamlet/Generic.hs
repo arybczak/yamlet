@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE CPP #-}
 
 -- | Instances of t'Yamlet.Decode.FromYaml' and t'Yamlet.Encode.ToYaml' from
 -- the t'GHC.Generics.Generic' representation of a type.
@@ -1413,19 +1414,57 @@ instance
   => GFromFields (S1 (MetaSel (Just name) u s d) (Rec0 a))
   where
   gFromObject opts def o =
-    M1 . K1 <$> case M.lookup key o.index of
+    M1 . K1 <$> case lookupIndex key o of
       Just entry -> parseEntry entry
       Nothing -> case def of
-        Just (M1 (K1 d))
-          | Just x <- defaultField d -> x <$ findKey o key
-          | otherwise -> missingKey o key
+        -- For a type without parameters, GHC computes the value once, not at
+        -- each missing key.
+        Just (M1 (K1 d)) -> missingField (defaultField d) o key
         -- A missing field is null, if its type accepts null.
-        Nothing ->
-          maybe (missingKey o key) (<$ findKey o key) (succeeds parseYaml nullNode)
+        Nothing -> missingField (nullValue @a) o key
     where
       key :: T.Text
       key = fieldKey @name opts
   {-# INLINE gFromObject #-}
+
+-- The functions below are not in the instance above, because GHC copies the
+-- instance into the decoder of each field. Taken out, they make the Core of a
+-- derived decoder of a large record much smaller and faster to compile.
+--
+-- The comments on their pragmas come from two measurements. One compiles the
+-- derived decoders of records with 10 to 100 fields with -O1. The other is
+-- the derive benchmarks.
+
+-- | The entry of a string key in a mapping.
+lookupIndex :: T.Text -> Object -> Maybe (S.Node, S.Node)
+lookupIndex key o = M.lookup key o.index
+
+-- Without NOINLINE, the derived decoder of a record decodes slower, more so
+-- with missing keys. GHC 9.12 needs INLINE instead. Without it, the derived
+-- decoders of small records with a field of type 'Maybe' keep the generic
+-- representation, and their inspection tests fail.
+#if __GLASGOW_HASKELL__ == 912
+{-# INLINE lookupIndex #-}
+#else
+{-# NOINLINE lookupIndex #-}
+#endif
+
+-- | The field of a missing key from its value, e.g. from the default or the
+-- value of null, or an error without a value.
+missingField :: Maybe a -> Object -> T.Text -> Parser a
+missingField value o key = maybe (missingKey o key) (<$ findKey o key) value
+-- Without the pragma, GHC copies the function into the decoder of each field,
+-- which then takes longer to compile. With OPAQUE instead, the decoders compile
+-- a little faster, but each missing key allocates more.
+{-# NOINLINE missingField #-}
+
+-- | The value of null for the type, if the type accepts null.
+nullValue :: FromYaml a => Maybe a
+nullValue = succeeds parseYaml nullNode
+-- Without the pragma, GHC copies the decoder of the type into the decoder of
+-- each field. The derived decoders of records without a default then take
+-- longer to compile, and missing keys decode slower.
+{-# NOINLINE nullValue #-}
 
 instance FromYaml a => GFromFields (S1 (MetaSel Nothing u s d) (Rec0 a)) where
   gFromValue n = M1 . K1 <$> parseNode parseYaml n
