@@ -88,6 +88,7 @@ import Data.Tree qualified as Tree
 import Data.UUID.Types qualified as UUID
 import Data.Void
 import Data.Word
+import GHC.Exts (oneShot)
 import GHC.Real
 import Numeric.Natural
 
@@ -129,6 +130,11 @@ import Yamlet.Value
 -- ends with 'pure' into '<*>'. Then they collect errors.
 newtype Parser a = Parser (S.Offset -> Result a)
 
+-- | The parser of the function. GHC treats the function as called at most
+-- once, so it can move work into the function instead of sharing it.
+mkParser :: (S.Offset -> Result a) -> Parser a
+mkParser f = Parser (oneShot f)
+
 -- | The errors of a parser and its value. The value of a parser with errors
 -- is 'failed', so the field of the value is lazy.
 --
@@ -167,14 +173,14 @@ failure :: S.Offset -> String -> Result a
 failure off msg = Result (OneError off msg []) failed
 
 instance Functor Parser where
-  fmap f (Parser g) = Parser $ \off -> case g off of
+  fmap f (Parser g) = mkParser $ \off -> case g off of
     Result e a -> Result e (f a)
 
 -- '<*>' differs from 'ap', and '>>' differs from '*>', in the errors, but not
 -- in the results.
 instance Applicative Parser where
-  pure a = Parser $ \_ -> Result NoErrors a
-  Parser f <*> Parser g = Parser $ \off -> case f off of
+  pure a = mkParser $ \_ -> Result NoErrors a
+  Parser f <*> Parser g = mkParser $ \off -> case f off of
     Result e1 h -> case g off of
       Result e2 a -> Result (bothErrors e1 e2) (h a)
 
@@ -182,12 +188,12 @@ instance Applicative Parser where
 -- index into a list after the check of its length. The default of '>>' uses
 -- '>>=', which stops there.
 instance Monad Parser where
-  Parser g >>= k = Parser $ \off -> case g off of
+  Parser g >>= k = mkParser $ \off -> case g off of
     Result NoErrors a -> let Parser h = k a in h off
     Result e _ -> Result e failed
 
 instance MonadFail Parser where
-  fail msg = Parser $ \off -> failure off msg
+  fail msg = mkParser $ \off -> failure off msg
 
 -- | Run a parser on a node. Each error is the offset of the node that caused
 -- it and the message. The errors are in the order of the offsets, and equal
@@ -248,7 +254,7 @@ succeeds f n = case runChecked f n of
 -- | The parser with the note after each of its errors at the offset, e.g. to
 -- say how the decoder read the node of the error.
 withNote :: S.Offset -> (S.Offset, String) -> Parser a -> Parser a
-withNote off note (Parser g) = Parser $ \o -> case g o of
+withNote off note (Parser g) = mkParser $ \o -> case g o of
   r@(Result NoErrors _) -> r
   Result e a -> Result (addNote e) a
   where
@@ -260,11 +266,11 @@ withNote off note (Parser g) = Parser $ \o -> case g o of
 
 -- | Run a parser on a node, so that 'fail' points to the node.
 parseNode :: (S.Node -> Parser a) -> S.Node -> Parser a
-parseNode f n = let Parser g = f n in Parser $ \_ -> g n.offset
+parseNode f n = let Parser g = f n in mkParser $ \_ -> g n.offset
 
 -- | Fail with an error that points to the given node.
 failAt :: S.Node -> String -> Parser a
-failAt n msg = Parser $ \_ -> failure n.offset msg
+failAt n msg = mkParser $ \_ -> failure n.offset msg
 
 -- | Fail with an error that the node is not of the expected kind, e.g.
 -- @typeMismatch "a list" n@ gives "expected a list, but got a string".
@@ -304,7 +310,7 @@ nullNode =
 -- 1 | [80]
 --   | ^
 orElse :: Parser a -> Parser a -> Parser a
-orElse (Parser g) (Parser h) = Parser $ \off -> case g off of
+orElse (Parser g) (Parser h) = mkParser $ \off -> case g off of
   r@(Result NoErrors _) -> r
   _ -> h off
 
@@ -460,7 +466,7 @@ withSequence f = parseNode $ \n -> case n.content of
 -- the errors and the values are in accumulators until the end. A decoder of
 -- a list is @withSequence (parseItems parseYaml)@.
 parseItems :: forall a. (S.Node -> Parser a) -> [S.Node] -> Parser [a]
-parseItems p xs0 = Parser $ \off -> go off NoErrors [] xs0
+parseItems p xs0 = mkParser $ \off -> go off NoErrors [] xs0
   where
     go :: S.Offset -> Errors -> [a] -> [S.Node] -> Result [a]
     go off !errs acc = \case
@@ -486,7 +492,7 @@ withMapping f = parseNode $ \n -> case n.content of
     -- reads the value of the first key.
     (errs, o) ->
       let Parser g = f o
-      in Parser $ \off -> case g off of
+      in mkParser $ \off -> case g off of
            Result e _ -> Result (bothErrors errs e) failed
   _ -> typeMismatch "a mapping" n
   where
@@ -781,7 +787,7 @@ findKey o key = case M.lookup key o.index of
 -- 'findKey', a key with the same text that is not a string is the error
 -- instead.
 missingKey :: Object -> T.Text -> Parser a
-missingKey o key = Parser $ \off ->
+missingKey o key = mkParser $ \off ->
   let Parser g = findKey o key
   in case g off of
        Result NoErrors _
@@ -1035,7 +1041,7 @@ instance FromYaml Value where
     -- The value is built lazily. The copy visits a node once per alias of
     -- it, as the limit of 'prepareWithin' allows.
     Right r -> pure $! copy r
-    Left ((off, msg) NE.:| notes) -> Parser $ \_ -> Result (OneError off msg notes) failed
+    Left ((off, msg) NE.:| notes) -> mkParser $ \_ -> Result (OneError off msg notes) failed
     where
       -- The value in normal form, with copies of its texts.
       copy :: Value -> Value
@@ -1311,7 +1317,7 @@ insertUnique
   -> [a]
   -> Parser s
 insertUnique node item key insert start msg note xs =
-  Parser $ \off -> go off start NoErrors [] [] 0 xs
+  mkParser $ \off -> go off start NoErrors [] [] 0 xs
   where
     -- The duplicates and the positions of the failed items are in reverse.
     -- The items in a copy of an alias share one offset, so an offset cannot
