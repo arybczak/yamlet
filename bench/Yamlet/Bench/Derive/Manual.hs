@@ -5,6 +5,10 @@ module Yamlet.Bench.Derive.Manual
   , C (..)
   , X (..)
   , F (..)
+  , D (..)
+  , P (..)
+  , O (..)
+  , E (..)
   , mkX
   , mkF
   ) where
@@ -146,6 +150,148 @@ instance FromYaml C where
       <*> parseFieldMaybe o "c08"
       <*> parseField o "c09"
       <*> parseField o "c10"
+
+data D = D
+  { d01 :: T.Text
+  , d02 :: Maybe Int
+  , d03 :: Int
+  , d04 :: T.Text
+  , d05 :: Maybe Int
+  , d06 :: Int
+  , d07 :: T.Text
+  , d08 :: Maybe Int
+  , d09 :: Int
+  , d10 :: T.Text
+  }
+  deriving stock (Generic)
+  deriving anyclass (NFData)
+
+instance ToYaml D where
+  toYaml x =
+    mapping
+      [ "d01" .= x.d01
+      , "d02" .= x.d02
+      , "d03" .= x.d03
+      , "d04" .= x.d04
+      , "d05" .= x.d05
+      , "d06" .= x.d06
+      , "d07" .= x.d07
+      , "d08" .= x.d08
+      , "d09" .= x.d09
+      , "d10" .= x.d10
+      ]
+
+instance FromYaml D where
+  parseYaml = withMapping $ \o ->
+    D
+      <$> parseField o "d01"
+      <*> parseFieldMaybe o "d02"
+      <*> parseFieldDefault o "d03" 0
+      <*> parseField o "d04"
+      <*> parseFieldMaybe o "d05"
+      <*> parseFieldDefault o "d06" 0
+      <*> parseField o "d07"
+      <*> parseFieldMaybe o "d08"
+      <*> parseFieldDefault o "d09" 0
+      <*> parseField o "d10"
+
+data P a = P
+  { p01 :: T.Text
+  , p02 :: Maybe a
+  , p03 :: a
+  , p04 :: T.Text
+  , p05 :: Maybe a
+  , p06 :: a
+  , p07 :: T.Text
+  , p08 :: Maybe a
+  , p09 :: a
+  , p10 :: T.Text
+  }
+  deriving stock (Generic)
+  deriving anyclass (NFData)
+
+instance ToYaml a => ToYaml (P a) where
+  toYaml x =
+    mapping
+      [ "p01" .= x.p01
+      , "p02" .= x.p02
+      , "p03" .= x.p03
+      , "p04" .= x.p04
+      , "p05" .= x.p05
+      , "p06" .= x.p06
+      , "p07" .= x.p07
+      , "p08" .= x.p08
+      , "p09" .= x.p09
+      , "p10" .= x.p10
+      ]
+
+instance (FromYaml a, Num a) => FromYaml (P a) where
+  parseYaml = withMapping $ \o ->
+    P
+      <$> parseField o "p01"
+      <*> parseFieldMaybe o "p02"
+      <*> parseFieldDefault o "p03" 0
+      <*> parseField o "p04"
+      <*> parseFieldMaybe o "p05"
+      <*> parseFieldDefault o "p06" 0
+      <*> parseField o "p07"
+      <*> parseFieldMaybe o "p08"
+      <*> parseFieldDefault o "p09" 0
+      <*> parseField o "p10"
+
+-- | A record that leaves out its null fields.
+data O = O
+  { o01 :: T.Text
+  , o02 :: Maybe Int
+  , o03 :: Int
+  , o04 :: T.Text
+  , o05 :: Maybe Int
+  , o06 :: Int
+  , o07 :: T.Text
+  , o08 :: Maybe Int
+  , o09 :: Int
+  , o10 :: T.Text
+  }
+
+instance ToYaml O where
+  toYaml x =
+    mapping $
+      ["o01" .= x.o01]
+        ++ present "o02" x.o02
+        ++ ["o03" .= x.o03, "o04" .= x.o04]
+        ++ present "o05" x.o05
+        ++ ["o06" .= x.o06, "o07" .= x.o07]
+        ++ present "o08" x.o08
+        ++ ["o09" .= x.o09, "o10" .= x.o10]
+
+-- | 'O' with a default. Only the generic encoder uses it.
+data E = E
+  { e01 :: T.Text
+  , e02 :: Maybe Int
+  , e03 :: Int
+  , e04 :: T.Text
+  , e05 :: Maybe Int
+  , e06 :: Int
+  , e07 :: T.Text
+  , e08 :: Maybe Int
+  , e09 :: Int
+  , e10 :: T.Text
+  }
+
+instance ToYaml E where
+  toYaml x =
+    mapping $
+      ["e01" .= x.e01]
+        ++ present "e02" x.e02
+        ++ ["e03" .= x.e03, "e04" .= x.e04]
+        ++ present "e05" x.e05
+        ++ ["e06" .= x.e06, "e07" .= x.e07]
+        ++ present "e08" x.e08
+        ++ ["e09" .= x.e09, "e10" .= x.e10]
+
+-- | The entry of a field that is not 'Nothing'.
+present :: ToYaml a => T.Text -> Maybe a -> [(Node, Node)]
+present key = maybe [] (\v -> [key .= v])
 
 -- | A sum of records with the default encoding.
 data X = X1 A | X2 B | X3 C
