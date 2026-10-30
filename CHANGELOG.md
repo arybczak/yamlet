@@ -2,6 +2,8 @@
 * A `FromYaml` instance derived via `GenericYaml` for a type with named fields,
   and a `ToYaml` instance for a record, compile faster with optimization, more
   so for a type with more fields.
+* `parseFieldMaybe` is faster, and so is a `ToYaml` instance derived via
+  `GenericYaml` with `omitNullFields`.
 
 # yamlet-1.0.0.1 (2026-10-12)
 * Allow text-iso8601 0.1.1.2, so that yamlet builds together with packages

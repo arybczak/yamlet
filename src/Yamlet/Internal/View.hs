@@ -84,8 +84,13 @@ describeNode n = case n.content of
 
 -- | The node is null.
 isNullNode :: S.Node -> Bool
-isNullNode n = case view n of
-  NullView -> True
+isNullNode n = case n.content of
+  -- The cases of 'scalarValue' that give null, without resolving the other
+  -- scalars, e.g. a number.
+  S.ScalarContent style t -> case n.props.tag of
+    S.NoTag -> style == S.Plain && isNull t
+    S.NonSpecificTag -> False
+    S.Tag tag -> tag == nullTag && isNull t
   _ -> False
 
 -- | The text of a string node.

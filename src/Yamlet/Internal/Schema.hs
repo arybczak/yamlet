@@ -10,6 +10,7 @@ module Yamlet.Internal.Schema
   , resolvePlainExact
   , resolveTaggedExact
   , startsNumber
+  , isNull
   , isPlainString
   , isPlainSafe
   , isPlainPortable
@@ -115,6 +116,8 @@ isPlainSafe t = plainSyntax False t && isPlainString t
 isPlainPortable :: T.Text -> Bool
 isPlainPortable t = isPlainSafe t && not (isYaml11NonString t)
 
+-- | The text of a null, e.g. @~@ or @null@, in a plain scalar or with the
+-- null tag.
 isNull :: T.Text -> Bool
 isNull t = T.null t || t == "~" || t == "null" || t == "Null" || t == "NULL"
 
