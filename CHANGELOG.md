@@ -1,4 +1,4 @@
-# yamlet-1.0.0.2 (????-??-??)
+# yamlet-1.0.0.2 (2026-11-17)
 * A `FromYaml` instance derived via `GenericYaml` for a type with named fields,
   and a `ToYaml` instance for a record, compile faster with optimization, more
   so for a type with more fields.
