@@ -1,6 +1,7 @@
 # yamlet-1.0.0.2 (????-??-??)
-* A `FromYaml` instance derived via `GenericYaml` for a type with named fields
-  compiles faster with optimization, more so for a type with more fields.
+* A `FromYaml` instance derived via `GenericYaml` for a type with named fields,
+  and a `ToYaml` instance for a record, compile faster with optimization, more
+  so for a type with more fields.
 
 # yamlet-1.0.0.1 (2026-10-12)
 * Allow text-iso8601 0.1.1.2, so that yamlet builds together with packages

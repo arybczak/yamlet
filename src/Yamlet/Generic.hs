@@ -601,11 +601,13 @@ instance KnownSymbol name => GDatatype (D1 (MetaData name m p nt) f) where
 
   gDatatypeName = symbolVal (Proxy @name)
 
--- | The names and the number of the constructors of a representation.
+-- | The constructors of a representation: their names, if there are several,
+-- and if none has fields.
 class GConstructors f where
   gConstructorNames :: [String]
 
-  gConstructorCount :: Int
+  -- | The representation has more than one constructor.
+  gSum :: Bool
 
   -- | No constructor has fields.
   gNullary :: Bool
@@ -613,14 +615,14 @@ class GConstructors f where
 instance (GConstructors f, GConstructors g) => GConstructors (f :+: g) where
   gConstructorNames = gConstructorNames @f ++ gConstructorNames @g
 
-  gConstructorCount = gConstructorCount @f + gConstructorCount @g
+  gSum = True
 
   gNullary = gNullary @f && gNullary @g
 
 instance GConstructors V1 where
   gConstructorNames = []
 
-  gConstructorCount = 0
+  gSum = False
 
   gNullary = True
 
@@ -633,7 +635,7 @@ instance
   where
   gConstructorNames = [symbolVal (Proxy @name)]
 
-  gConstructorCount = 1
+  gSum = False
 
   gNullary = gArity @f == 0
 
@@ -739,7 +741,10 @@ type family EitherShape (a :: Shape) (b :: Shape) :: Shape where
   EitherShape (UnnamedField a) (UnnamedField _) = UnnamedField a
 
 isTagged :: forall f. GConstructors f => YamlOptions -> Bool
-isTagged opts = opts.tagSingleConstructors || gConstructorCount @f > 1
+-- GHC knows the value of 'gSum' at once. It would compare a number of
+-- constructors only in a later pass. Until then, it would keep the fields of
+-- a record once for each way to write the tag, which takes longer to compile.
+isTagged opts = gSum @f || opts.tagSingleConstructors
 
 constructorTag :: YamlOptions -> String -> T.Text
 constructorTag opts = T.pack . opts.constructorTagModifier
